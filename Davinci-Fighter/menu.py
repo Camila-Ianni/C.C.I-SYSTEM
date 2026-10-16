@@ -17,6 +17,7 @@ from settings import (
 )
 from audio_manager import audio_manager
 from title_screen import TitleScreen
+from input_manager import input_manager
 
 __all__ = ["TitleScreen", "MainMenu"]
 
@@ -78,9 +79,38 @@ class MainMenu:
         return None
 
     def update(self, dt=1.0 / 60):
-        """Actualiza animaciones internas del cursor o temporizadores."""
+        """Actualiza animaciones internas del cursor, temporizadores y entrada por gamepad."""
         frames = max(1, int(round(dt * 60))) if dt > 0 else 1
         self.anim_timer += frames
+
+        # Procesar entrada de gamepad para el menú
+        nav = input_manager.get_menu_navigation()
+        if self.showing_controls:
+            if nav.get("confirm") or nav.get("cancel") or nav.get("start"):
+                self.showing_controls = False
+                audio_manager.play_sfx("select")
+            return None
+
+        if nav.get("up"):
+            self.selected_idx = (self.selected_idx - 1) % len(self.options)
+            audio_manager.play_sfx("menu_navigate")
+        elif nav.get("down"):
+            self.selected_idx = (self.selected_idx + 1) % len(self.options)
+            audio_manager.play_sfx("menu_navigate")
+        elif nav.get("confirm") or nav.get("start"):
+            audio_manager.play_sfx("menu_confirm")
+            if self.selected_idx == 0:
+                self.selected_mode = MODE_PVAI
+                return {"action": "start", "mode": MODE_PVAI}
+            elif self.selected_idx == 1:
+                self.selected_mode = MODE_PVP
+                return {"action": "start", "mode": MODE_PVP}
+            elif self.selected_idx == 2:
+                self.showing_controls = True
+                return None
+            elif self.selected_idx == 3:
+                return {"action": "exit"}
+        return None
 
     def draw(self, screen=None):
         """Renderiza el menú principal en pantalla (soporta parámetro screen opcional)."""

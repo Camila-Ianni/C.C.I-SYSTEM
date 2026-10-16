@@ -737,6 +737,15 @@ class PlayingState(BaseState):
         except Exception:
             pass
 
+        # Limpiar módulos en colisión entre juegos (settings, audio_manager, game, menu, etc.)
+        CONFLICTING_MODULES = [
+            "settings", "audio_manager", "game", "menu", "input_manager",
+            "character_select", "player", "intro_cutscene", "title_screen",
+            "vs_screen", "pacman", "main", "constants", "config", "setup", "tools"
+        ]
+        for mod in CONFLICTING_MODULES:
+            sys.modules.pop(mod, None)
+
         if self.game_key == "davinci":
             davinci_dir = os.path.join(root_dir, "Davinci-Fighter")
             if not os.path.exists(davinci_dir):
@@ -749,8 +758,13 @@ class PlayingState(BaseState):
             original_cwd = os.getcwd()
             try:
                 os.chdir(davinci_dir)
-                if davinci_dir not in sys.path:
-                    sys.path.insert(0, davinci_dir)
+                if davinci_dir in sys.path:
+                    sys.path.remove(davinci_dir)
+                sys.path.insert(0, davinci_dir)
+
+                # Purgar específicamente cualquier módulo de settings o juego previo
+                for mod in CONFLICTING_MODULES:
+                    sys.modules.pop(mod, None)
 
                 # Importar módulos de Da Vinci Fighters
                 import settings
@@ -766,6 +780,9 @@ class PlayingState(BaseState):
                 pygame.display.set_caption(settings.TITLE)
                 clock = pygame.time.Clock()
                 fps = settings.FPS
+
+                # Limpiar cualquier evento residual (como ENTER o SPACE) del menú principal
+                pygame.event.clear()
 
                 # Secuencia pre-combate
                 app_state = "intro_cutscene"
@@ -871,6 +888,10 @@ class PlayingState(BaseState):
                         pygame.mixer.stop()
                 except Exception:
                     pass
+                if davinci_dir in sys.path:
+                    sys.path.remove(davinci_dir)
+                for mod in CONFLICTING_MODULES:
+                    sys.modules.pop(mod, None)
                 os.chdir(original_cwd)
 
         elif self.game_key == "metalslug":
@@ -1107,6 +1128,10 @@ class PlayingState(BaseState):
                         pygame.mixer.stop()
                 except Exception:
                     pass
+                if pacman_dir in sys.path:
+                    sys.path.remove(pacman_dir)
+                for mod in CONFLICTING_MODULES:
+                    sys.modules.pop(mod, None)
                 os.chdir(original_cwd)
 
         elif self.game_key == "space_invaders":

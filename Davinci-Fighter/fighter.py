@@ -38,15 +38,20 @@ class Fighter:
         self.quote = char_data["quote"]
 
         self.x = x
-        self.y = y
-        self.width = 80
-        self.height = 140
+        self.width = char_data.get("width", 100)
+        self.height = char_data.get("height", 180)
+        self.y = y if y is not None else (GROUND_Y - self.height)
         self.player_id = player_id
         self.is_p2 = (player_id == 2)
 
         # Barra de Ultimate (Special Meter: 0 a 100)
         self.special_meter = 0
         self.max_special_meter = 100
+
+        # Sistema de combos y racha de golpes (Combo Counter)
+        self.combo_hits = 0
+        self.combo_timer = 0
+        self.max_combo_window = 100  # ~1.6 segundos para encadenar el siguiente golpe
 
         # Física
         self.velocity_x = 0
@@ -82,6 +87,16 @@ class Fighter:
     def gain_special_meter(self, amount):
         self.special_meter = min(self.max_special_meter, self.special_meter + amount)
 
+    def register_hit(self):
+        """Se llama cuando un ataque del personaje conecta exitosamente sobre el rival."""
+        self.combo_hits += 1
+        self.combo_timer = self.max_combo_window
+        self.gain_special_meter(12)
+
+    def is_combo_unlocked(self):
+        """Retorna True si tiene una racha de más de 4 golpes seguidos (> 4, es decir 5 o más)."""
+        return self.combo_hits > 4
+
     def apply_status_effect(self, effect_name, duration=90):
         self.status_effect = effect_name
         self.status_timer = duration
@@ -96,23 +111,45 @@ class Fighter:
         if self.status_effect in ["rooted", "error"]:
             return
 
+        # Restricción especial para Camila, Enith y Martín:
+        # Los ataques especiales y ultimates requieren encadenar más de 4 golpes seguidos (> 4)
+        if self.char_id in ("cami", "enith", "martin") and attack_name in ("special", "ultimate"):
+            if not self.is_combo_unlocked():
+                return
+
         if attack_name == "ultimate":
             if self.special_meter < self.max_special_meter:
                 return
             else:
                 self.special_meter = 0
 
-        if self.state in [FighterState.IDLE, FighterState.WALK] and attack_name in self.attacks:
+        # Permitir atacar desde reposo, caminar, agachado o bloqueo
+        allowed_states = [FighterState.IDLE, FighterState.WALK, FighterState.CROUCH, FighterState.BLOCK]
+        
+        # O permitir encadenar ataque (combo) si el ataque previo ya superó su fase activa
+        can_combo = False
+        if self.current_attack:
+            atk = self.current_attack
+            if self.attack_timer >= (atk.startup + atk.active_time):
+                can_combo = True
+
+        if (self.state in allowed_states or can_combo) and attack_name in self.attacks:
             self.current_attack = self.attacks[attack_name]
             self.attack_timer = 0
             self.has_hit_target = False
             self.active_hitbox = None
             self.velocity_x = 0
+            self.is_crouching = False
+            self.is_blocking = False
             self.set_state(attack_name)
 
     def take_damage(self, damage, knockback_x, stun_duration):
         if self.state == FighterState.KO:
             return
+
+        # Si el personaje recibe daño, se interrumpe su racha de combos
+        self.combo_hits = 0
+        self.combo_timer = 0
 
         self.gain_special_meter(15)
 
@@ -202,6 +239,12 @@ class Fighter:
                 self.facing_right = False
 
     def update(self):
+        # Temporizador de ventana de combo
+        if self.combo_timer > 0:
+            self.combo_timer -= 1
+            if self.combo_timer <= 0:
+                self.combo_hits = 0
+
         if self.status_timer > 0:
             self.status_timer -= 1
             if self.status_timer <= 0:
@@ -217,8 +260,11 @@ class Fighter:
 
         current_height = self.height // 2 if self.is_crouching else self.height
 
-        if not self.is_grounded:
+        # Si el personaje está en el aire por cualquier razón (ej. ataque aéreo o empuje), aplicar gravedad siempre
+        if self.y + current_height < GROUND_Y:
+            self.is_grounded = False
             self.velocity_y += GRAVITY
+
         self.y += self.velocity_y
 
         if self.y + current_height >= GROUND_Y:
@@ -249,14 +295,21 @@ class Fighter:
             else:
                 self.active_hitbox = None
 
+            # Sincronizar el avance del frame visual de ataque con el temporizador del ataque
+            if self.state in self.animations:
+                anim = self.animations[self.state]
+                if len(anim.frames) > 0:
+                    progress = min(0.999, float(self.attack_timer) / max(1, atk.total_duration))
+                    anim.current_frame_idx = progress * len(anim.frames)
+
             if self.attack_timer >= atk.total_duration:
                 self.current_attack = None
                 self.active_hitbox = None
                 self.set_state(FighterState.IDLE)
-
-        if self.state in self.animations:
-            anim = self.animations[self.state]
-            anim.update()
+        else:
+            if self.state in self.animations:
+                anim = self.animations[self.state]
+                anim.update()
 
     def draw(self, screen, camera_x=0):
         """Renderiza al personaje en pantalla aplicando el desplazamiento de la cámara (camera_x)."""
@@ -267,17 +320,15 @@ class Fighter:
             anim = self.animations[self.state]
             frame = anim.get_current_frame(flip_x=not self.facing_right)
             if frame:
-                screen.blit(frame, (int(screen_x), int(screen_y)))
+                # Alinear el sprite con los pies apoyados en la base del rectángulo del luchador (y + height)
+                # y centrado horizontalmente respecto al ancho
+                fw, fh = frame.get_size()
+                draw_x = screen_x + (self.rect.width - fw) // 2
+                draw_y = self.rect.bottom - fh
+                screen.blit(frame, (int(draw_x), int(draw_y)))
 
         if self.status_effect:
             font = pygame.font.Font(None, 20)
             txt_color = (255, 100, 100) if self.status_effect in ["error", "vulnerable"] else (100, 200, 255)
             lbl = font.render(f"[{self.status_effect.upper()}]", True, txt_color)
             screen.blit(lbl, (int(screen_x + self.width // 2 - lbl.get_width() // 2), int(screen_y - 18)))
-
-        if self.active_hitbox:
-            hit_screen_x = self.active_hitbox.x - camera_x
-            hit_surface = pygame.Surface((self.active_hitbox.width, self.active_hitbox.height), pygame.SRCALPHA)
-            hit_surface.fill((255, 50, 50, 160))
-            screen.blit(hit_surface, (int(hit_screen_x), int(self.active_hitbox.y)))
-            pygame.draw.rect(screen, COLOR_YELLOW, (int(hit_screen_x), int(self.active_hitbox.y), self.active_hitbox.width, self.active_hitbox.height), 2)

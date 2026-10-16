@@ -412,7 +412,33 @@ class HUD:
             color = (255, 215, 0) if ratio >= 1.0 else (40, 180, 255)
             pygame.draw.rect(screen, color, fill_rect)
 
-        if ratio >= 1.0:
+        # Estado de desbloqueo de combo para Cami, Enith y Martín
+        is_combo_char = getattr(fighter, "char_id", "") in ("cami", "enith", "martin")
+        combo_unlocked = getattr(fighter, "is_combo_unlocked", lambda: True)()
+        hits = getattr(fighter, "combo_hits", 0)
+
+        if is_combo_char:
+            if combo_unlocked:
+                msg = f"COMBO x{hits} - ¡ESPECIAL ACTIVO!"
+                text_col = (255, 230, 40)
+            elif hits > 0:
+                msg = f"COMBO x{hits}/5 PARA ESPECIAL"
+                text_col = (240, 180, 80)
+            else:
+                msg = "ESPECIAL: ENCADENAR +4 GOLPES"
+                text_col = (180, 180, 200)
+
+            if self.arcade_font and self.arcade_font.loaded:
+                align = "right" if is_p2 else "left"
+                self.arcade_font.render_to(screen, (x + width if is_p2 else x, y + height + 4), msg, scale=0.55, align=align)
+            else:
+                lbl = self.font_tiny.render(msg, True, text_col)
+                if not is_p2:
+                    screen.blit(lbl, (x, y + height + 2))
+                else:
+                    screen.blit(lbl, (x + width - lbl.get_width(), y + height + 2))
+
+        elif ratio >= 1.0:
             msg = "MAX - SPECIAL READY!"
             if self.arcade_font and self.arcade_font.loaded:
                 align = "right" if is_p2 else "left"

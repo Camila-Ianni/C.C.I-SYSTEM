@@ -27,6 +27,7 @@ from settings import (
     MODE_PVP,
 )
 from audio_manager import audio_manager
+from input_manager import input_manager
 
 
 class TitleScreen:
@@ -171,13 +172,26 @@ class TitleScreen:
         return None
 
     def update(self, dt=1.0 / 60):
-        """Actualiza el destello del logo y el parpadeo de INSERT COIN."""
+        """Actualiza el destello del logo, parpadeo de INSERT COIN y entrada por gamepad."""
         frames = max(1, int(round(dt * 60))) if dt > 0 else 1
         self.time += dt
         self.blink_timer += frames
         self.sheen_frame = (self.sheen_frame + frames) % self.sheen_period
         self.sheen_offset = (self.sheen_frame * self.sheen_speed) % self.sweep_width
         self._updated_this_frame = True
+
+        # Lectura de gamepad
+        nav = input_manager.get_menu_navigation()
+        if nav.get("start") or nav.get("confirm"):
+            if nav.get("coin_p2"):
+                self.credits_p2 += 1
+                self.selected_mode = MODE_PVP
+            else:
+                self.credits_p1 += 1
+                self.selected_mode = MODE_PVAI
+            audio_manager.play_sfx("coin")
+            return "start"
+        return None
 
     def _render_sheen(self, target):
         """Renderiza el destello metálico continuo sobre el logotipo."""

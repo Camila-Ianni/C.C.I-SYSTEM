@@ -50,24 +50,40 @@ class AnimationManager:
     Administra y recorta Sprite Sheets para las distintas acciones de un personaje.
     """
     @staticmethod
-    def load_spritesheet(image_path, frame_width, frame_height, frame_count, scale=1.0):
-        """Recorta frames horizontalmente desde una Sprite Sheet."""
+    def load_spritesheet(image_path, frame_width, frame_height, frame_count=None, scale=1.0):
+        """Recorta frames horizontalmente desde una Sprite Sheet, adaptando frame_count si la imagen es más larga."""
         frames = []
         if os.path.exists(image_path):
             try:
-                sheet = pygame.image.load(image_path).convert_alpha()
-                for i in range(frame_count):
-                    rect = pygame.Rect(i * frame_width, 0, frame_width, frame_height)
+                try:
+                    sheet = pygame.image.load(image_path).convert_alpha()
+                except Exception:
+                    sheet = pygame.image.load(image_path)
+                sheet_w, sheet_h = sheet.get_size()
+
+                # Si frame_count está definido y la imagen coincide con ese número de frames
+                if frame_count and frame_count > 0:
+                    slice_w = sheet_w // frame_count
+                    slice_h = sheet_h
+                    count_to_use = frame_count
+                else:
+                    slice_w = frame_width
+                    slice_h = frame_height
+                    count_to_use = sheet_w // frame_width
+
+                for i in range(count_to_use):
+                    rect = pygame.Rect(i * slice_w, 0, slice_w, slice_h)
                     sub_surface = sheet.subsurface(rect)
-                    if scale != 1.0:
+                    if (slice_w, slice_h) != (frame_width, frame_height) or scale != 1.0:
                         target_size = (int(frame_width * scale), int(frame_height * scale))
-                        sub_surface = pygame.transform.scale(sub_surface, target_size)
+                        sub_surface = pygame.transform.smoothscale(sub_surface, target_size)
                     frames.append(sub_surface)
                 return frames
             except Exception as e:
                 print(f"[AnimationManager] Error cargando spritesheet {image_path}: {e}")
 
         return None
+
 
     @staticmethod
     def create_fallback_frames(state_name, color, width=80, height=140, count=4):
@@ -135,17 +151,34 @@ class AnimationManager:
 
         for state, cfg in states_config.items():
             file_path = os.path.join(char_dir, f"{state}.png")
+            # Velocidades calibradas para que el movimiento sea pausado, natural y legible
+            is_8frame = (char_folder_name in ("cami", "enith", "martin"))
+            count_override = 8 if is_8frame else cfg["count"]
+            if is_8frame:
+                if state == "idle":
+                    anim_speed = 0.08   # Respiración calmada y natural (~1.6s el ciclo completo)
+                elif state == "walk":
+                    anim_speed = 0.12   # Pasos firmes sin aceleración irreal
+                elif state == "crouch":
+                    anim_speed = 0.12
+                elif state in ("block", "hurt", "ko"):
+                    anim_speed = 0.14
+                else:
+                    anim_speed = 0.12
+            else:
+                anim_speed = cfg["speed"]
+            
             frames = cls.load_spritesheet(
                 file_path,
                 frame_width=int(width / scale),
                 frame_height=int(height / scale),
-                frame_count=cfg["count"],
+                frame_count=count_override,
                 scale=scale
             )
 
             if not frames:
                 frames = cls.create_fallback_frames(state, base_color, width, height, cfg["count"])
 
-            animations[state] = Animation(frames, speed=cfg["speed"], loop=cfg["loop"])
+            animations[state] = Animation(frames, speed=anim_speed, loop=cfg["loop"])
 
         return animations

@@ -61,8 +61,12 @@ class EnemyAI:
 
             # Distancia Cercana: Atacar, agacharse o retroceder
             else:
-                self.fighter.stop_horizontal()
-                atk_choice = random.choice(["punch_light", "punch_heavy", "kick_light", "kick_heavy", "special"])
+                # Lista de ataques disponibles
+                available_attacks = ["punch_light", "punch_heavy", "kick_light", "kick_heavy"]
+                if self.fighter.char_id not in ("cami", "enith", "martin") or self.fighter.is_combo_unlocked():
+                    available_attacks.append("special")
+
+                atk_choice = random.choice(available_attacks)
 
                 if random.random() < 0.8:
                     self.fighter.execute_attack(atk_choice)

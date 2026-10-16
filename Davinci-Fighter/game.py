@@ -12,6 +12,7 @@ from collision import CollisionManager
 from hud import HUD
 from effects import effect_manager
 from audio_manager import audio_manager
+from input_manager import input_manager
 
 class GameState:
     START_ROUND = "start_round"
@@ -51,8 +52,8 @@ class Game:
         self.offset_x = PILLARBOX_OFFSET_X
 
         # Inicialización de luchadores P1 (x=800) y P2 (x=1300) en el mundo de 2200px
-        self.player1 = Player(x=800, y=GROUND_Y - 140, char_id=self.p1_char, player_id=1)
-        self.player2 = Player(x=1300, y=GROUND_Y - 140, char_id=self.p2_char, player_id=2)
+        self.player1 = Player(x=800, y=None, char_id=self.p1_char, player_id=1)
+        self.player2 = Player(x=1300, y=None, char_id=self.p2_char, player_id=2)
 
         # Controlador de IA si el modo es Player vs AI
         self.ai_controller = None
@@ -76,13 +77,13 @@ class Game:
     def reset_round(self):
         """Restablece posiciones en el mapa expandido, vida y temporizador para el siguiente round."""
         self.player1.x = 800
-        self.player1.y = GROUND_Y - 140
+        self.player1.y = GROUND_Y - self.player1.height
         self.player1.health = self.player1.max_health
         self.player1.set_state("idle")
         self.player1.facing_right = True
 
         self.player2.x = 1300
-        self.player2.y = GROUND_Y - 140
+        self.player2.y = GROUND_Y - self.player2.height
         self.player2.health = self.player2.max_health
         self.player2.set_state("idle")
         self.player2.facing_right = False
@@ -134,20 +135,27 @@ class Game:
         self.player2.rect.x = int(self.player2.x)
 
     def handle_events(self):
-        """Procesa los eventos de entrada de Pygame."""
+        """Procesa los eventos de entrada de Pygame y mandos."""
         for event in pygame.event.get():
+            input_manager.handle_device_event(event)
             if event.type == pygame.QUIT:
                 return "exit"
             elif event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_ESCAPE:
                     self.is_paused = not self.is_paused
 
-        if not self.is_paused and self.game_state == GameState.FIGHTING:
+        # Soporte para pausar con el botón Start del mando
+        nav = input_manager.get_menu_navigation()
+        if nav.get("start"):
+            self.is_paused = not self.is_paused
+
+        if not self.is_paused and self.game_state in (GameState.FIGHTING, GameState.START_ROUND):
             self.player1.handle_input()
             if self.game_mode == MODE_PVP:
                 self.player2.handle_input()
 
         return None
+
 
     def update(self):
         """Actualiza la lógica del juego, cámara, físicas y público animado."""
@@ -306,7 +314,6 @@ class Game:
 
         # Renderizar escenario expandido con desplazamiento de cámara
         self.stage.draw(render_surface, self.camera_x)
-        pygame.draw.line(render_surface, COLOR_GROUND_LINE, (0, GROUND_Y), (self.viewport_w, GROUND_Y), 2)
 
         # Renderizar luchadores y efectos con desplazamiento de cámara
         self.player1.draw(render_surface, self.camera_x)

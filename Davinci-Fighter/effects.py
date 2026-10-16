@@ -105,6 +105,63 @@ class VisualEffect:
             txt = font.render("REQUIREMENTS CHANGED!", True, (200, 100, 240))
             screen.blit(txt, (screen_x - txt.get_width() // 2, self.y - 40))
 
+        elif self.effect_type in ("purple_flame", "overdrive"):
+            # Aura violeta de Camila
+            radius = int(50 + 60 * progress)
+            surf = pygame.Surface((radius * 2, radius * 2), pygame.SRCALPHA)
+            alpha = int(220 * (1.0 - progress))
+            pygame.draw.circle(surf, (180, 40, 255, alpha), (radius, radius), radius)
+            pygame.draw.circle(surf, (230, 120, 255, int(alpha * 0.7)), (radius, radius), int(radius * 0.7))
+            pygame.draw.circle(surf, (255, 255, 255, int(alpha * 0.5)), (radius, radius), int(radius * 0.3))
+            screen.blit(surf, (int(screen_x - radius), int(self.y - radius)))
+
+        elif self.effect_type == "cuy_swarm":
+            # Estampida de Cuyes Andinos de Enith
+            for i in range(5):
+                cuy_progress = (progress + i * 0.15) % 1.0
+                cx = screen_x + (1 if self.facing_right else -1) * (cuy_progress * 180 - 60)
+                cy = self.y + 40 + (i % 2) * 15
+                cuy_surf = pygame.Surface((32, 20), pygame.SRCALPHA)
+                pygame.draw.ellipse(cuy_surf, (160, 95, 45), (0, 0, 30, 18))
+                pygame.draw.circle(cuy_surf, (240, 200, 160), (25 if self.facing_right else 5, 8), 5)
+                pygame.draw.circle(cuy_surf, (20, 20, 20), (27 if self.facing_right else 3, 7), 2)
+                screen.blit(cuy_surf, (int(cx), int(cy)))
+
+        elif self.effect_type == "solar_flare":
+            # Raje Andino / Furia Solar de Enith
+            radius = int(70 + 90 * progress)
+            surf = pygame.Surface((radius * 2, radius * 2), pygame.SRCALPHA)
+            alpha = int(240 * (1.0 - progress))
+            pygame.draw.circle(surf, (255, 170, 20, alpha), (radius, radius), radius)
+            pygame.draw.circle(surf, (255, 240, 80, int(alpha * 0.8)), (radius, radius), int(radius * 0.6))
+            pygame.draw.circle(surf, (255, 255, 255, int(alpha * 0.6)), (radius, radius), int(radius * 0.3))
+            screen.blit(surf, (int(screen_x - radius), int(self.y - radius)))
+
+        elif self.effect_type == "milk_splash":
+            # Salpicadura y Lluvia de Leche de Martín
+            for i in range(12):
+                ang = (i / 12.0) * 3.14159 * 2
+                dist = progress * 95
+                px = screen_x + dist * pygame.math.Vector2(1, 0).rotate_rad(ang).x
+                py = self.y + dist * pygame.math.Vector2(1, 0).rotate_rad(ang).y
+                drop_r = max(2, int(9 * (1.0 - progress)))
+                pygame.draw.circle(screen, (245, 245, 255), (int(px), int(py)), drop_r)
+                pygame.draw.circle(screen, (200, 230, 255), (int(px), int(py)), max(1, drop_r - 2))
+
+        elif self.effect_type == "rainbow_prism":
+            # Prismas del Daltonismo Arcoíris de Martín
+            colors = [
+                (255, 60, 60), (255, 160, 40), (255, 240, 50),
+                (60, 220, 80), (40, 160, 255), (180, 50, 255)
+            ]
+            for idx, col in enumerate(colors):
+                offset_r = int((30 + idx * 16) * (1.0 + progress * 0.8))
+                rect = pygame.Rect(screen_x - offset_r, self.y - offset_r, offset_r * 2, offset_r * 2)
+                alpha = int(220 * (1.0 - progress))
+                s = pygame.Surface((offset_r * 2, offset_r * 2), pygame.SRCALPHA)
+                pygame.draw.rect(s, (*col, alpha), (0, 0, offset_r * 2, offset_r * 2), 3)
+                screen.blit(s, (rect.x, rect.y))
+
 
 class EffectManager:
     """

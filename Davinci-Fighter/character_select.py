@@ -33,6 +33,7 @@ from settings import (
 from character_data import CHARACTERS, get_character_data
 from audio_manager import audio_manager
 from arcade_font import get_arcade_font
+from input_manager import input_manager
 
 
 # Coordenadas y banderas de país para cada profesor en el mapa mundial
@@ -45,6 +46,9 @@ CHARACTER_LOCATIONS = {
     "gamaliel": {"country": "BRASIL",   "flag": "🇧🇷", "stage_name": "Blanka Amazon River (Brazil)", "map_pos": (829, 306), "country_key": "brazil"},
     "blanka":   {"country": "BRASIL",   "flag": "🇧🇷", "stage_name": "Blanka Amazon River (Brazil)", "map_pos": (829, 306), "country_key": "brazil"},
     "sellanes": {"country": "EE. UU.",  "flag": "🇺🇸", "stage_name": "Guile Airbase Hangar (USA)",  "map_pos": (870, 187), "country_key": "usa_low"},
+    "cami":     {"country": "ARGENTINA", "flag": "🇦🇷", "stage_name": "C.C.I. Virtual Core Dojo",   "map_pos": (780, 420), "country_key": "brazil"},
+    "enith":    {"country": "PERÚ",      "flag": "🇵🇪", "stage_name": "Andean Solar Temple",        "map_pos": (740, 360), "country_key": "ussr"},
+    "martin":   {"country": "INDIA",    "flag": "🇮🇳", "stage_name": "Maharajah Palace (India)",    "map_pos": (450, 213), "country_key": "india"},
     "china":    {"country": "CHINA",    "flag": "🇨🇳", "stage_name": "Market Street (China)",        "map_pos": (552, 112), "country_key": "china"},
     "chunli":   {"country": "CHINA",    "flag": "🇨🇳", "stage_name": "Market Street (China)",        "map_pos": (552, 112), "country_key": "china"},
     "ussr":     {"country": "U.S.S.R.", "flag": "☭",  "stage_name": "Industrial Furnace (U.S.S.R.)", "map_pos": (423, 105), "country_key": "ussr"},
@@ -65,11 +69,12 @@ GRID_SLOTS = [
     {"char_id": "romero",  "name": "ROMERO",  "row": 0, "col": 2, "grid_rect": (642, 464, 76, 98),  "country": "japan", "flag_key": "japan_up", "sound": "japan"},
     {"char_id": "gamaliel","name": "GAMALIEL","row": 0, "col": 3, "grid_rect": (722, 464, 75, 98),  "country": "brazil", "flag_key": "brazil", "sound": "brazil"},
     # Fila 1 (Inferior)
-    {"char_id": "sellanes","name": "USA",      "row": 1, "col": 0, "grid_rect": (482, 565, 76, 97),  "country": "usa",   "flag_key": "usa_low", "sound": "usa"},
-    {"char_id": "carloni", "name": "CHINA",    "row": 1, "col": 1, "grid_rect": (562, 565, 76, 97),  "country": "china", "flag_key": "china", "sound": "china"},
-    {"char_id": "cavasso", "name": "U.S.S.R.", "row": 1, "col": 2, "grid_rect": (642, 565, 76, 97),  "country": "ussr",  "flag_key": "ussr",  "sound": "ussr"},
-    {"char_id": "romero",  "name": "INDIA",    "row": 1, "col": 3, "grid_rect": (722, 565, 75, 97),  "country": "india", "flag_key": "india", "sound": "india"},
+    {"char_id": "sellanes","name": "SELLANES", "row": 1, "col": 0, "grid_rect": (482, 565, 76, 97),  "country": "usa",   "flag_key": "usa_low", "sound": "usa"},
+    {"char_id": "cami",    "name": "CAMI",     "row": 1, "col": 1, "grid_rect": (562, 565, 76, 97),  "country": "china", "flag_key": "china",   "sound": "china"},
+    {"char_id": "enith",   "name": "ENITH",    "row": 1, "col": 2, "grid_rect": (642, 565, 76, 97),  "country": "ussr",  "flag_key": "ussr",    "sound": "ussr"},
+    {"char_id": "martin",  "name": "MARTÍN",   "row": 1, "col": 3, "grid_rect": (722, 565, 75, 97),  "country": "india", "flag_key": "india",   "sound": "india"},
 ]
+
 
 # Rectángulos de banderas y regiones interactivas en la imagen original MAP.png (1450 x 1085)
 RAW_FLAG_RECTS = {
@@ -121,7 +126,7 @@ class CharacterSelect:
             else:
                 self.game_mode = MODE_PVAI
 
-        self.char_keys = ["carloni", "cavasso", "romero", "gamaliel", "sellanes"]
+        self.char_keys = ["carloni", "cavasso", "romero", "gamaliel", "sellanes", "cami", "enith", "martin"]
 
         self.font_title = pygame.font.Font(None, 44)
         self.font_header = pygame.font.Font(None, 34)
@@ -137,6 +142,7 @@ class CharacterSelect:
         self.p2_confirmed = False
         self.transition_timer = 0.0
         self.blink_timer = 0.0
+        self.input_delay_timer = 0.0
 
         # Mapeo de país a ranura de la cuadrícula
         self.country_to_slot = {
@@ -230,11 +236,11 @@ class CharacterSelect:
             return "guile"
         if c1 == "ussr" or f1 == "ussr" or self.p1_char == "ussr":
             return "ussr"
-        if c1 == "china" or f1 == "china" or self.p1_char == "china":
+        if c1 == "china" or f1 == "china" or self.p1_char in ("china", "chunli", "cami"):
             return "china"
-        if c1 == "india" or f1 == "india" or self.p1_char == "india":
+        if c1 == "india" or f1 == "india" or self.p1_char in ("india", "dhalsim", "martin"):
             return "india"
-        if c1 == "brazil" or f1 == "brazil" or self.p1_char == "gamaliel":
+        if c1 == "brazil" or f1 == "brazil" or self.p1_char in ("gamaliel", "blanka"):
             return "brazil"
 
         # 2. Si P1 es Carloni (Japón defecto), verificar selección de P2 / CPU
@@ -252,7 +258,7 @@ class CharacterSelect:
             return "china"
         if c2 == "india" or f2 == "india" or self.p2_char == "india":
             return "india"
-        if c2 == "brazil" or f2 == "brazil" or self.p2_char == "gamaliel":
+        if c2 == "brazil" or f2 == "brazil" or self.p2_char in ("gamaliel", "cami"):
             return "brazil"
 
         return None
@@ -331,7 +337,7 @@ class CharacterSelect:
     def _init_character_portraits(self):
         """Carga las fotos/retratos de gran tamaño de los luchadores y mini iconos para la cuadrícula."""
         portrait_dir = os.path.join("assets", "characters", "portraits")
-        char_ids = ["carloni", "cavasso", "romero", "gamaliel", "sellanes", "china", "ussr", "india", "default"]
+        char_ids = ["carloni", "cavasso", "romero", "gamaliel", "sellanes", "cami", "enith", "martin", "china", "ussr", "india", "default"]
 
         for cid in char_ids:
             # Buscar primero arte personalizado en carpeta del personaje
@@ -496,6 +502,9 @@ class CharacterSelect:
             # Controles de Jugador 1
             if not self.p1_confirmed:
                 prev_slot = self.p1_slot_idx
+                r = self.p1_slot_idx // 4
+                c = self.p1_slot_idx % 4
+
                 if self.game_mode == MODE_PVAI or self.credits_p2 == 0:
                     if event.key in (pygame.K_a, pygame.K_LEFT, pygame.K_w, pygame.K_UP):
                         self.p1_slot_idx = (self.p1_slot_idx - 1) % len(GRID_SLOTS)
@@ -525,10 +534,15 @@ class CharacterSelect:
                         }
 
                 else:  # MODE_PVP (Ambos jugadores con créditos)
-                    if event.key in (pygame.K_a, pygame.K_w):
-                        self.p1_slot_idx = (self.p1_slot_idx - 1) % len(GRID_SLOTS)
-                    elif event.key in (pygame.K_d, pygame.K_s):
-                        self.p1_slot_idx = (self.p1_slot_idx + 1) % len(GRID_SLOTS)
+                    if event.key == pygame.K_a:
+                        c = (c - 1) % 4
+                    elif event.key == pygame.K_d:
+                        c = (c + 1) % 4
+                    elif event.key == pygame.K_w:
+                        r = 0
+                    elif event.key == pygame.K_s:
+                        r = 1
+                    self.p1_slot_idx = r * 4 + c
 
                     if self.p1_slot_idx != prev_slot:
                         self._on_p1_slot_changed()
@@ -552,10 +566,18 @@ class CharacterSelect:
             # Controles de Jugador 2 (Sólo en modo PVP)
             if self.game_mode == MODE_PVP and not self.p2_confirmed:
                 prev_p2 = self.p2_slot_idx
-                if event.key in (pygame.K_LEFT, pygame.K_UP):
-                    self.p2_slot_idx = (self.p2_slot_idx - 1) % len(GRID_SLOTS)
-                elif event.key in (pygame.K_RIGHT, pygame.K_DOWN):
-                    self.p2_slot_idx = (self.p2_slot_idx + 1) % len(GRID_SLOTS)
+                r2 = self.p2_slot_idx // 4
+                c2 = self.p2_slot_idx % 4
+
+                if event.key == pygame.K_LEFT:
+                    c2 = (c2 - 1) % 4
+                elif event.key == pygame.K_RIGHT:
+                    c2 = (c2 + 1) % 4
+                elif event.key == pygame.K_UP:
+                    r2 = 0
+                elif event.key == pygame.K_DOWN:
+                    r2 = 1
+                self.p2_slot_idx = r2 * 4 + c2
 
                 if self.p2_slot_idx != prev_p2:
                     self._on_p2_slot_changed()
@@ -586,8 +608,96 @@ class CharacterSelect:
         return None
 
     def update(self, dt=1.0 / FPS):
-        """Actualiza animaciones de parpadeo y temporizadores de transición."""
+        """Actualiza animaciones de parpadeo, temporizadores de transición y controles de mando/gamepad."""
         self.blink_timer += dt
+        self.input_delay_timer += dt
+
+        # Procesar controles de gamepad para selección de personajes
+        pad1 = input_manager.get_player_state(1)
+        pad1_jp = pad1.get("just_pressed", {})
+
+        # Ignorar confirmaciones accidentales en los primeros 0.4s tras entrar a la pantalla
+        can_confirm = (self.input_delay_timer >= 0.4)
+
+        # P1 Selección con Mando 1
+        if not self.p1_confirmed:
+            p1_moved = False
+            prev_p1 = self.p1_slot_idx
+            # 2x4 grid: 4 cols por fila.
+            # Up / Down navegan entre filas (+/- 4), Left / Right entre columnas (+/- 1)
+            row = self.p1_slot_idx // 4
+            col = self.p1_slot_idx % 4
+
+            if pad1_jp.get("left"):
+                col = (col - 1) % 4
+                self.p1_slot_idx = row * 4 + col
+                p1_moved = True
+            elif pad1_jp.get("right"):
+                col = (col + 1) % 4
+                self.p1_slot_idx = row * 4 + col
+                p1_moved = True
+            elif pad1_jp.get("jump"):  # Dpad Up / Stick Up
+                row = 0
+                self.p1_slot_idx = row * 4 + col
+                p1_moved = True
+            elif pad1_jp.get("crouch"): # Dpad Down / Stick Down
+                row = 1
+                self.p1_slot_idx = row * 4 + col
+                p1_moved = True
+
+            if p1_moved and self.p1_slot_idx != prev_p1:
+                self._on_p1_slot_changed()
+
+            # Confirmar P1 con botón A (Cruz), X (Cuadrado) o Start sólo si superó el retardo de entrada inicial
+            if can_confirm and (pad1_jp.get("punch_light") or pad1_jp.get("kick_light") or pad1_jp.get("start")):
+                if self.credits_p1 == 0 and self.credits_p2 == 0:
+                    self.credits_p1 += 1
+                    audio_manager.play_sfx("coin")
+                self.p1_confirmed = True
+                audio_manager.play_sfx("select")
+                if self.game_mode == MODE_PVAI or self.credits_p2 == 0:
+                    if self.p2_slot_idx == self.p1_slot_idx:
+                        self.p2_slot_idx = (self.p1_slot_idx + 1) % len(GRID_SLOTS)
+                    self.p2_confirmed = True
+                    # No salir inmediatamente: permitir que corra el transition_timer de 0.5s
+                    # para ver la foto de confirmación antes del VS
+
+        # P2 Selección con Mando 2 (o Mando 1 si se inserta crédito 2P)
+        if self.game_mode == MODE_PVP and not self.p2_confirmed:
+            pad2 = input_manager.get_player_state(2)
+            pad2_jp = pad2.get("just_pressed", {})
+            # Si solo hay un mando pero estamos en PVP y P1 ya confirmó, permitir controlar P2
+            if not input_manager.player_controllers.get(2) and self.p1_confirmed:
+                pad2_jp = pad1_jp
+
+            p2_moved = False
+            prev_p2 = self.p2_slot_idx
+            row2 = self.p2_slot_idx // 4
+            col2 = self.p2_slot_idx % 4
+
+            if pad2_jp.get("left"):
+                col2 = (col2 - 1) % 4
+                self.p2_slot_idx = row2 * 4 + col2
+                p2_moved = True
+            elif pad2_jp.get("right"):
+                col2 = (col2 + 1) % 4
+                self.p2_slot_idx = row2 * 4 + col2
+                p2_moved = True
+            elif pad2_jp.get("jump"):
+                row2 = 0
+                self.p2_slot_idx = row2 * 4 + col2
+                p2_moved = True
+            elif pad2_jp.get("crouch"):
+                row2 = 1
+                self.p2_slot_idx = row2 * 4 + col2
+                p2_moved = True
+
+            if p2_moved and self.p2_slot_idx != prev_p2:
+                self._on_p2_slot_changed()
+
+            if can_confirm and (pad2_jp.get("punch_light") or pad2_jp.get("kick_light") or pad2_jp.get("start")):
+                self.p2_confirmed = True
+                audio_manager.play_sfx("select")
 
         if self.p1_confirmed and self.p2_confirmed:
             self.transition_timer += dt
@@ -644,10 +754,16 @@ class CharacterSelect:
             offset_tag = 16 if p2_flag == p1_flag else 0
             self._draw_arcade_bracket(target, p2_flag_rect.inflate(18, 16), p2_bracket_color, tag=p2_tag, y_offset=offset_tag)
 
-        # 4. Cuadrícula de 8 casillas (Bottom Grid vacía sin personajes) y marcos selectores
+        # 4. Cuadrícula de 8 casillas con fotos/iconos y marcos selectores
         for i, slot in enumerate(GRID_SLOTS):
             x, y, w, h = slot["grid_rect"]
             rect = pygame.Rect(x, y, w, h)
+            cid = slot["char_id"]
+
+            # Dibujar foto/icono del personaje en la casilla
+            icon = self.grid_icons.get(cid)
+            if icon:
+                target.blit(icon, (x, y))
 
             # Selector de Jugador 1 (AZUL / VERDE al confirmar)
             if i == self.p1_slot_idx:
@@ -679,7 +795,10 @@ class CharacterSelect:
                 s_coin2 = self.font_header.render("INSERT COIN", True, (255, 80, 80))
                 target.blit(s_coin2, (p2_center_x - s_coin2.get_width() // 2, 25))
 
-        # 6 y 7. Los laterales y las casillas quedan completamente vacíos sin personajes ni fotos.
+        # 6 y 7. Retratos arcade laterales de los luchadores seleccionados
+        self._draw_player_portrait(target, self.p1_char, is_player_1=True)
+        if self.game_mode == MODE_PVP or self.credits_p2 > 0:
+            self._draw_player_portrait(target, self.p2_char, is_player_1=False)
 
         # 8. Información de créditos arcade e indicador de modo en el pie de pantalla
         total_credits = max(1, self.credits_p1 + self.credits_p2)
@@ -701,8 +820,45 @@ class CharacterSelect:
             pygame.draw.rect(target, (0, 0, 0), (PILLARBOX_OFFSET_X + ARCADE_WIDTH, 0, PILLARBOX_OFFSET_X, SCREEN_HEIGHT))
 
     def _draw_player_portrait(self, screen, char_id, is_player_1=True):
-        """Espacio lateral dejado vacío sin fotos ni nombres de personajes."""
-        pass
+        """Dibuja el retrato de gran tamaño del personaje seleccionado y su nombre en el lateral arcade."""
+        portrait_surf = self.portraits.get(char_id) or self.portraits.get("default")
+        if not portrait_surf:
+            return
+
+        pw, ph = portrait_surf.get_size()
+        y_pos = 140
+
+        if is_player_1:
+            x_pos = PILLARBOX_OFFSET_X + 20
+            # Marco arcade para el retrato P1
+            border_rect = pygame.Rect(x_pos - 4, y_pos - 4, pw + 8, ph + 8)
+            pygame.draw.rect(screen, (60, 140, 255), border_rect, 2)
+            screen.blit(portrait_surf, (x_pos, y_pos))
+
+            # Nombre del personaje debajo del retrato
+            c_data = CHARACTERS.get(char_id, {})
+            name_str = c_data.get("name", char_id.upper())
+            if self.arcade_font and self.arcade_font.loaded:
+                self.arcade_font.render_to(screen, (x_pos + pw // 2, y_pos + ph + 16), name_str[:12], scale=0.7, align="center")
+            else:
+                lbl = self.font_name.render(name_str[:12], True, COLOR_WHITE)
+                screen.blit(lbl, (x_pos + pw // 2 - lbl.get_width() // 2, y_pos + ph + 10))
+        else:
+            x_pos = PILLARBOX_OFFSET_X + ARCADE_WIDTH - pw - 20
+            # Efecto espejo horizontal para P2
+            flipped_surf = pygame.transform.flip(portrait_surf, True, False)
+            border_rect = pygame.Rect(x_pos - 4, y_pos - 4, pw + 8, ph + 8)
+            pygame.draw.rect(screen, (255, 70, 70), border_rect, 2)
+            screen.blit(flipped_surf, (x_pos, y_pos))
+
+            # Nombre del personaje debajo del retrato
+            c_data = CHARACTERS.get(char_id, {})
+            name_str = c_data.get("name", char_id.upper())
+            if self.arcade_font and self.arcade_font.loaded:
+                self.arcade_font.render_to(screen, (x_pos + pw // 2, y_pos + ph + 16), name_str[:12], scale=0.7, align="center")
+            else:
+                lbl = self.font_name.render(name_str[:12], True, COLOR_WHITE)
+                screen.blit(lbl, (x_pos + pw // 2 - lbl.get_width() // 2, y_pos + ph + 10))
 
     def _draw_arcade_bracket(self, target, rect, color, tag="1P", y_offset=0):
         """Dibuja esquinas de selección arcade (brackets en 4 esquinas) y etiqueta de jugador."""

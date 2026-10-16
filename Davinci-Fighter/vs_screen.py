@@ -29,6 +29,7 @@ from character_data import get_character_data
 from character_select import CHARACTER_LOCATIONS
 from audio_manager import audio_manager
 from arcade_font import get_arcade_font
+from input_manager import input_manager
 
 
 class VSScreen:
@@ -135,7 +136,13 @@ class VSScreen:
         if self.finished:
             return "fight"
 
+        nav = input_manager.get_menu_navigation()
+        if nav.get("confirm") or nav.get("cancel") or nav.get("start"):
+            self.finish()
+            return "fight"
+
         self.state_time += dt
+
 
         if self.state in ("takeoff", "flying"):
             self.flight_progress = min(1.0, self.flight_progress + dt / self.flight_duration)

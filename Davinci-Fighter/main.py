@@ -18,6 +18,7 @@ from menu import MainMenu
 from character_select import CharacterSelect
 from vs_screen import VSScreen
 from game import Game
+from input_manager import input_manager
 
 
 class AppState:
@@ -53,8 +54,10 @@ def main():
         dt = 1.0 / FPS
 
         for event in pygame.event.get():
+            input_manager.handle_device_event(event)
             if event.type == pygame.QUIT:
                 running = False
+
 
             if app_state == AppState.INTRO_CUTSCENE:
                 res = intro_cutscene.handle_input(event)

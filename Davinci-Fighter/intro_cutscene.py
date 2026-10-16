@@ -28,6 +28,7 @@ import threading
 import pygame
 from settings import SCREEN_WIDTH, SCREEN_HEIGHT, COLOR_WHITE, COLOR_YELLOW, COLOR_RED, FPS
 from sprite_font import get_boot_font, get_warning_font
+from input_manager import input_manager
 
 DEFAULT_FIGHT_FRAME_CANDIDATES = [
     "30 fotogramas",
@@ -280,7 +281,7 @@ class IntroCutscene:
                 self._cv2_cap = None
 
         self.mode = "mock"
-        self.total_frames = 180
+        self.total_frames = int(15.0 * self.fps)
         self._load_current_brawl_frame()
 
     def _start_preload(self):
@@ -444,7 +445,7 @@ class IntroCutscene:
         return None
 
     def handle_input(self, event) -> str | None:
-        """Salto inmediato al presionar cualquier tecla o clic."""
+        """Salto inmediato al presionar cualquier tecla, clic o botón de gamepad."""
         if self.finished:
             return "finish"
 
@@ -461,7 +462,13 @@ class IntroCutscene:
         if self.finished:
             return "finish"
 
+        # Comprobar si se presiona algún botón del mando para saltar
+        nav = input_manager.get_menu_navigation()
+        if nav.get("confirm") or nav.get("cancel") or nav.get("start"):
+            return self._trigger_finish(skipped=True)
+
         self.elapsed_time += dt
+
         self.dt_accumulator += dt
         frame_duration = 1.0 / self.fps
 
