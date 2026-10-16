@@ -33,7 +33,7 @@ SYSTEM_TITLE = "C.C.I. SYSTEM - VIRTUAL CONSOLE"
 
 
 def init_subsystems():
-    """Inicializa los subsistemas necesarios de Pygame (display, font, mixer)."""
+    """Inicializa los subsistemas necesarios de Pygame (display, font, mixer, joystick)."""
     pygame.init()
     if not pygame.font.get_init():
         pygame.font.init()
@@ -42,6 +42,12 @@ def init_subsystems():
             pygame.mixer.init(frequency=44100, size=-16, channels=2, buffer=512)
         except Exception as e:
             print(f"[C.C.I. System] Aviso: No se pudo inicializar mixer de audio: {e}")
+    if not pygame.joystick.get_init():
+        try:
+            pygame.joystick.init()
+        except Exception as e:
+            print(f"[C.C.I. System] Aviso: No se pudo inicializar joystick: {e}")
+
 
 
 def main():

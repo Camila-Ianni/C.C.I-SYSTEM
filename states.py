@@ -44,8 +44,243 @@ SCREEN_WIDTH = 1280
 SCREEN_HEIGHT = 720
 
 
+class JoystickManager:
+    """
+    Gestor universal de Mandos / Joysticks (pygame.joystick) para C.C.I. System.
+    - Soporta DualShock, DualSense (PS4/PS5), Xbox 360/One/Series, Switch Pro y genéricos USB.
+    - Maneja hotplugging (conexión / desconexión en caliente).
+    - Traduce automáticamente analógicos, D-pad y botones a teclas virtuales de Pygame
+      (KEYDOWN/KEYUP) y mantiene sincronizado pygame.key.get_pressed().
+    - Inyecta soporte de joystick universal y transparente a los 6 juegos sin romper su lógica.
+    """
+    _instance = None
+
+    def __new__(cls, *args, **kwargs):
+        if not cls._instance:
+            cls._instance = super().__new__(cls)
+            cls._instance._initialized = False
+        return cls._instance
+
+    def __init__(self):
+        if self._initialized:
+            return
+        self._initialized = True
+        self.joysticks = {}
+        self.deadzone = 0.35
+        self.active_simulated_keys = set()
+        self._axis_states = {}  # {(joy_id, axis): val}
+        self._button_map = {
+            # Botones estándar estilo Xbox / PlayStation / Nintendo / Arcade
+            0: pygame.K_SPACE,      # A / Cruz -> Confirmar / Salto / Disparo
+            1: pygame.K_b,          # B / Círculo -> Cancelar / Secundario / Granada
+            2: pygame.K_j,          # X / Cuadrado -> Golpe débil / Disparo primario
+            3: pygame.K_k,          # Y / Triángulo -> Golpe fuerte / Especial
+            4: pygame.K_u,          # LB / L1 -> Patada débil
+            5: pygame.K_i,          # RB / R1 -> Patada fuerte / Turbo
+            6: pygame.K_ESCAPE,     # Back / Share / Select -> Volver / Menú / Salir
+            7: pygame.K_RETURN,     # Start / Options -> Pausa / Confirmar / Start
+            8: pygame.K_p,          # Guía / Home / L3
+            9: pygame.K_o,          # R3
+        }
+        self.init_subsystem()
+        self._install_hooks()
+
+    def init_subsystem(self):
+        """Inicializa el subsistema de joystick de Pygame y abre dispositivos detectados."""
+        if not pygame.joystick.get_init():
+            try:
+                pygame.joystick.init()
+            except Exception as e:
+                print(f"[JoystickManager] Error iniciando pygame.joystick: {e}")
+                return
+
+        self.refresh_devices()
+
+    def refresh_devices(self):
+        """Detecta y activa todos los mandos conectados."""
+        if not pygame.joystick.get_init():
+            return
+        count = pygame.joystick.get_count()
+        for i in range(count):
+            if i not in self.joysticks:
+                try:
+                    joy = pygame.joystick.Joystick(i)
+                    joy.init()
+                    self.joysticks[i] = joy
+                    print(f"[JoystickManager] Mando #{i} conectado: {joy.get_name()}")
+                except Exception as e:
+                    print(f"[JoystickManager] No se pudo inicializar mando #{i}: {e}")
+
+    def _install_hooks(self):
+        """Instala interceptores transparentes en pygame.key.get_pressed y pygame.event.get."""
+        orig_get_pressed = pygame.key.get_pressed
+        orig_event_get = pygame.event.get
+        active_keys = self.active_simulated_keys
+        process_event = self.process_event
+
+        class ScancodeWrapper:
+            def __init__(self, base_keys):
+                self.base_keys = base_keys
+
+            def __getitem__(self, key):
+                if key in active_keys:
+                    return 1
+                try:
+                    return 1 if self.base_keys[key] else 0
+                except (IndexError, KeyError):
+                    return 0
+
+            def __len__(self):
+                return len(self.base_keys)
+
+        def hooked_get_pressed():
+            base = orig_get_pressed()
+            if not active_keys:
+                return base
+            return ScancodeWrapper(base)
+
+        def hooked_event_get(*args, **kwargs):
+            events = orig_event_get(*args, **kwargs)
+            res = []
+            for ev in events:
+                synthesized = process_event(ev)
+                res.append(ev)
+                if synthesized:
+                    res.extend(synthesized)
+            return res
+
+        pygame.key.get_pressed = hooked_get_pressed
+        pygame.event.get = hooked_event_get
+
+
+    def process_event(self, event):
+        """
+        Interpreta eventos de joystick y genera eventos de teclado equivalentes.
+        Retorna una lista de eventos sintetizados (si los hay).
+        """
+        synthesized = []
+
+        # 1. Hotplugging
+        if event.type == pygame.JOYDEVICEADDED:
+            self.refresh_devices()
+        elif event.type == pygame.JOYDEVICEREMOVED:
+            instance_id = getattr(event, "instance_id", None)
+            if instance_id is not None and instance_id in self.joysticks:
+                del self.joysticks[instance_id]
+                print(f"[JoystickManager] Mando #{instance_id} desconectado")
+
+        # 2. D-pad (Hat)
+        elif event.type == pygame.JOYHATMOTION:
+            hat_x, hat_y = event.value
+            # Eje X D-pad
+            if hat_x < 0:
+                synthesized.extend(self._press_key(pygame.K_LEFT))
+                synthesized.extend(self._press_key(pygame.K_a))
+                synthesized.extend(self._release_key(pygame.K_RIGHT))
+                synthesized.extend(self._release_key(pygame.K_d))
+            elif hat_x > 0:
+                synthesized.extend(self._press_key(pygame.K_RIGHT))
+                synthesized.extend(self._press_key(pygame.K_d))
+                synthesized.extend(self._release_key(pygame.K_LEFT))
+                synthesized.extend(self._release_key(pygame.K_a))
+            else:
+                synthesized.extend(self._release_key(pygame.K_LEFT))
+                synthesized.extend(self._release_key(pygame.K_a))
+                synthesized.extend(self._release_key(pygame.K_RIGHT))
+                synthesized.extend(self._release_key(pygame.K_d))
+
+            # Eje Y D-pad
+            if hat_y < 0:
+                synthesized.extend(self._press_key(pygame.K_DOWN))
+                synthesized.extend(self._press_key(pygame.K_s))
+                synthesized.extend(self._release_key(pygame.K_UP))
+                synthesized.extend(self._release_key(pygame.K_w))
+            elif hat_y > 0:
+                synthesized.extend(self._press_key(pygame.K_UP))
+                synthesized.extend(self._press_key(pygame.K_w))
+                synthesized.extend(self._release_key(pygame.K_DOWN))
+                synthesized.extend(self._release_key(pygame.K_s))
+            else:
+                synthesized.extend(self._release_key(pygame.K_UP))
+                synthesized.extend(self._release_key(pygame.K_w))
+                synthesized.extend(self._release_key(pygame.K_DOWN))
+                synthesized.extend(self._release_key(pygame.K_s))
+
+        # 3. Stick Analógico (Axis 0: Horizontal, Axis 1: Vertical)
+        elif event.type == pygame.JOYAXISMOTION:
+            axis = event.axis
+            val = event.value
+            if axis == 0:  # Stick izquierdo horizontal
+                if val < -self.deadzone:
+                    synthesized.extend(self._press_key(pygame.K_LEFT))
+                    synthesized.extend(self._press_key(pygame.K_a))
+                    synthesized.extend(self._release_key(pygame.K_RIGHT))
+                    synthesized.extend(self._release_key(pygame.K_d))
+                elif val > self.deadzone:
+                    synthesized.extend(self._press_key(pygame.K_RIGHT))
+                    synthesized.extend(self._press_key(pygame.K_d))
+                    synthesized.extend(self._release_key(pygame.K_LEFT))
+                    synthesized.extend(self._release_key(pygame.K_a))
+                else:
+                    synthesized.extend(self._release_key(pygame.K_LEFT))
+                    synthesized.extend(self._release_key(pygame.K_a))
+                    synthesized.extend(self._release_key(pygame.K_RIGHT))
+                    synthesized.extend(self._release_key(pygame.K_d))
+            elif axis == 1:  # Stick izquierdo vertical
+                if val < -self.deadzone:
+                    synthesized.extend(self._press_key(pygame.K_UP))
+                    synthesized.extend(self._press_key(pygame.K_w))
+                    synthesized.extend(self._release_key(pygame.K_DOWN))
+                    synthesized.extend(self._release_key(pygame.K_s))
+                elif val > self.deadzone:
+                    synthesized.extend(self._press_key(pygame.K_DOWN))
+                    synthesized.extend(self._press_key(pygame.K_s))
+                    synthesized.extend(self._release_key(pygame.K_UP))
+                    synthesized.extend(self._release_key(pygame.K_w))
+                else:
+                    synthesized.extend(self._release_key(pygame.K_UP))
+                    synthesized.extend(self._release_key(pygame.K_w))
+                    synthesized.extend(self._release_key(pygame.K_DOWN))
+                    synthesized.extend(self._release_key(pygame.K_s))
+
+        # 4. Botones
+        elif event.type == pygame.JOYBUTTONDOWN:
+            mapped_key = self._button_map.get(event.button)
+            if mapped_key:
+                synthesized.extend(self._press_key(mapped_key))
+        elif event.type == pygame.JOYBUTTONUP:
+            mapped_key = self._button_map.get(event.button)
+            if mapped_key:
+                synthesized.extend(self._release_key(mapped_key))
+
+        return synthesized
+
+    def _press_key(self, key):
+        if key not in self.active_simulated_keys:
+            self.active_simulated_keys.add(key)
+            e = pygame.event.Event(pygame.KEYDOWN, key=key, mod=0, scancode=0)
+            return [e]
+        return []
+
+    def _release_key(self, key):
+        if key in self.active_simulated_keys:
+            self.active_simulated_keys.discard(key)
+            e = pygame.event.Event(pygame.KEYUP, key=key, mod=0, scancode=0)
+            return [e]
+        return []
+
+    def reset(self):
+        """Limpia el estado de teclas simuladas."""
+        self.active_simulated_keys.clear()
+
+
+# Instancia global del JoystickManager
+joystick_manager = JoystickManager()
+
+
 class BaseState:
     """Clase base abstracta para todos los estados de la máquina de estados."""
+
     def __init__(self, state_machine):
         self.state_machine = state_machine
 
