@@ -47,13 +47,68 @@ class BaseState:
         pass
 
 
+import subprocess
+import shutil
+
+class VideoAudioPlayer:
+    """
+    Controlador de audio complementario para VideoState.
+    OpenCV sólo decodifica video; VideoAudioPlayer reproduce la pista de audio
+    de forma nativa y sincronizada en segundo plano (usando afplay en macOS o pygame.mixer.music).
+    """
+    def __init__(self, video_path):
+        self.video_path = video_path
+        self.process = None
+
+    def play(self):
+        self.stop()
+        if not os.path.exists(self.video_path):
+            return
+
+        # En macOS, afplay reproduce directamente el contenedor mp4 sin requerir herramientas externas
+        if sys.platform == "darwin" and shutil.which("afplay"):
+            try:
+                self.process = subprocess.Popen(
+                    ["afplay", self.video_path],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL
+                )
+                return
+            except Exception as e:
+                print(f"[VideoAudioPlayer] Error al invocar afplay: {e}")
+
+        # Fallback usando pygame.mixer.music si el formato es soportado
+        try:
+            if not pygame.mixer.get_init():
+                pygame.mixer.init()
+            pygame.mixer.music.load(self.video_path)
+            pygame.mixer.music.play()
+        except Exception as e:
+            print(f"[VideoAudioPlayer] pygame.mixer no pudo reproducir {self.video_path}: {e}")
+
+    def stop(self):
+        if self.process is not None:
+            try:
+                self.process.terminate()
+                self.process.kill()
+            except Exception:
+                pass
+            self.process = None
+
+        try:
+            if pygame.mixer.get_init():
+                pygame.mixer.music.stop()
+        except Exception:
+            pass
+
+
 class VideoState(BaseState):
     """
-    Estado genérico de reproducción de video sincronizado usando OpenCV.
-    - Sincroniza FPS mediante cv2.CAP_PROP_FPS y cálculo de tiempo transcurrido (clock / time.perf_counter).
+    Estado genérico de reproducción de video sincronizado usando OpenCV con Audio Activado.
+    - Sincroniza FPS mediante cv2.CAP_PROP_FPS y cálculo de tiempo transcurrido (time.perf_counter).
+    - Reproduce el audio integrado del video mediante VideoAudioPlayer.
     - Convierte fotogramas BGR de OpenCV a superficies RGB de Pygame.
-    - Soporta escalado fluido manteniendo el aspecto y centrado en pantalla.
-    - Permite omitir (skip) con ENTER o ESPACIO hacia el estado deseado.
+    - Permite omitir (skip) con ENTER o ESPACIO hacia el estado deseado deteniendo el audio de inmediato.
     """
     def __init__(self, state_machine, video_path, next_state_name, allow_skip=True):
         super().__init__(state_machine)
@@ -62,6 +117,7 @@ class VideoState(BaseState):
         self.allow_skip = allow_skip
         
         self.cap = None
+        self.audio_player = VideoAudioPlayer(video_path)
         self.fps = 30.0
         self.frame_delay = 1.0 / 30.0
         self.current_surface = None
@@ -93,9 +149,13 @@ class VideoState(BaseState):
             self.fps = 30.0
         self.frame_delay = 1.0 / self.fps
 
+        # Iniciar reproducción de audio sincronizado
+        self.audio_player.play()
         self.start_time = time.perf_counter()
 
     def exit(self):
+        # Detener audio de inmediato al salir del estado
+        self.audio_player.stop()
         if self.cap is not None:
             self.cap.release()
             self.cap = None
@@ -104,9 +164,10 @@ class VideoState(BaseState):
     def handle_events(self, events):
         for event in events:
             if event.type == pygame.KEYDOWN:
-                # Requerimiento: Si el usuario presiona Enter o Espacio durante cualquier video,
+                # Si el usuario presiona Enter o Espacio durante cualquier video,
                 # debe saltarse (skip) y pasar directamente al Menú.
                 if self.allow_skip and event.key in (pygame.K_RETURN, pygame.K_SPACE, pygame.K_KP_ENTER):
+                    self.audio_player.stop()
                     self.state_machine.change_state("MENU")
                     return
 
@@ -123,6 +184,7 @@ class VideoState(BaseState):
             ret, frame = self.cap.read()
             if not ret or frame is None:
                 self.is_finished = True
+                self.audio_player.stop()
                 self.state_machine.change_state(self.next_state_name)
                 return
 
@@ -140,7 +202,6 @@ class VideoState(BaseState):
                     frame_rgb = cv2.resize(frame_rgb, (target_w, target_h), interpolation=cv2.INTER_LINEAR)
                 
                 # Creación de superficie Pygame mediante pygame.image.frombuffer
-                # (Transposición de dimensiones para formato HxWxC a Pygame WxH)
                 self.current_surface = pygame.image.frombuffer(
                     frame_rgb.tobytes(), (target_w, target_h), "RGB"
                 )
@@ -153,70 +214,66 @@ class VideoState(BaseState):
 
 
 class BootState(VideoState):
-    """ESTADO 'BOOT': Reproduce CCI_INTRO.mp4 y pasa a INTRO_AVATAR al terminar."""
+    """ESTADO 'BOOT': Reproduce CCI_INTRO.mp4 con audio y pasa a INTRO_AVATAR al terminar."""
     def __init__(self, state_machine):
         super().__init__(state_machine, video_path="CCI_INTRO.mp4", next_state_name="INTRO_AVATAR", allow_skip=True)
 
 
 class IntroAvatarState(VideoState):
-    """ESTADO 'INTRO_AVATAR': Reproduce intro_cami.mp4 y pasa al MENU al terminar."""
+    """ESTADO 'INTRO_AVATAR': Reproduce intro_cami.mp4 con audio y pasa al MENU al terminar."""
     def __init__(self, state_machine):
         super().__init__(state_machine, video_path="intro_cami.mp4", next_state_name="MENU", allow_skip=True)
 
 
 class MenuState(BaseState):
     """
-    ESTADO 'MENU': Pantalla de selección interactiva estilo arcade retro.
-    - Soporte visual cyberpunk/arcade con gradientes, líneas scanline y efectos glow.
-    - Opciones seleccionables: 'Da Vinci Fighters' y 'Metal Slug'.
-    - Navegación con flechas (Arriba/Abajo) y selección con Enter.
+    ESTADO 'MENU': Pantalla de selección interactiva basada en 'select_game.jpg'.
+    - Renderiza la imagen oficial de selección de juegos a 1280x720.
+    - Soporta navegación horizontal (Izquierda / Derecha) y vertical (A / D / W / S / Flechas).
+    - Resalta dinámicamente con marco brillante la opción seleccionada:
+      0 -> DA VINCI FIGHTERS (Panel izquierdo)
+      1 -> METAL SLUG (Panel derecho)
+    - Selección con Enter o Espacio.
     """
     def __init__(self, state_machine):
         super().__init__(state_machine)
         self.options = [
-            {
-                "title": "DA VINCI FIGHTERS",
-                "subtitle": "Capcom CPS-1 / Street Fighter II Tribute",
-                "key": "davinci",
-                "color": (255, 60, 60),
-                "badge": "FIGHTING 1P/2P"
-            },
-            {
-                "title": "METAL SLUG",
-                "subtitle": "SNK Neo-Geo Arcade Replica: Super Vehicle-001",
-                "key": "metalslug",
-                "color": (255, 200, 20),
-                "badge": "ACTION RUN & GUN"
-            }
+            {"key": "davinci", "title": "Da Vinci Fighters"},
+            {"key": "metalslug", "title": "Metal Slug"}
         ]
         self.selected_index = 0
         self.anim_timer = 0.0
 
-        # Cargar avatar si existe en el directorio raíz
-        self.avatar_img = None
-        avatar_path = "cami_player.png"
-        if os.path.exists(avatar_path):
-            try:
-                loaded = pygame.image.load(avatar_path).convert_alpha()
-                # Escalar proporcionalmente para encajar en el lateral del menú
-                w, h = loaded.get_size()
-                target_h = 360
-                target_w = int(w * (target_h / h))
-                self.avatar_img = pygame.transform.smoothscale(loaded, (target_w, target_h))
-            except Exception as e:
-                print(f"[MenuState] No se pudo cargar {avatar_path}: {e}")
+        # Cargar y escalar select_game.jpg al tamaño de la pantalla
+        self.bg_image = None
+        img_candidates = ["select_game.jpg", "select_game.png", "select_game.jpeg"]
+        for cand in img_candidates:
+            if os.path.exists(cand):
+                try:
+                    loaded = pygame.image.load(cand)
+                    self.bg_image = pygame.transform.smoothscale(loaded, (SCREEN_WIDTH, SCREEN_HEIGHT))
+                    break
+                except Exception as e:
+                    print(f"[MenuState] Error al cargar {cand}: {e}")
+
+        # Coordenadas exactas de los dos paneles en la resolución de 1280x720
+        # (Medidas calibradas en base a la relación de aspecto de select_game.jpg)
+        self.card_rects = [
+            pygame.Rect(48, 182, 574, 452),   # Panel Da Vinci Fighters
+            pygame.Rect(658, 182, 574, 452)   # Panel Metal Slug
+        ]
 
     def enter(self):
         self.anim_timer = 0.0
-        pygame.display.set_caption("C.C.I. SYSTEM - VIRTUAL ARCADE CONSOLE")
+        pygame.display.set_caption("C.C.I. SYSTEM - SELECT GAME")
 
     def handle_events(self, events):
         for event in events:
             if event.type == pygame.KEYDOWN:
-                if event.key in (pygame.K_UP, pygame.K_w):
+                if event.key in (pygame.K_LEFT, pygame.K_a, pygame.K_UP, pygame.K_w):
                     self.selected_index = (self.selected_index - 1) % len(self.options)
                     self._play_beep(pitch=600)
-                elif event.key in (pygame.K_DOWN, pygame.K_s):
+                elif event.key in (pygame.K_RIGHT, pygame.K_d, pygame.K_DOWN, pygame.K_s):
                     self.selected_index = (self.selected_index + 1) % len(self.options)
                     self._play_beep(pitch=500)
                 elif event.key in (pygame.K_RETURN, pygame.K_SPACE, pygame.K_KP_ENTER):
@@ -235,7 +292,6 @@ class MenuState(BaseState):
             buf = bytearray()
             for i in range(n_samples):
                 t = float(i) / sample_rate
-                # Onda cuadrada arcade
                 val = 127 if math.sin(2.0 * math.pi * pitch * t) > 0 else -128
                 buf.append(val & 0xFF)
             sound = pygame.mixer.Sound(buffer=bytes(buf))
@@ -248,103 +304,40 @@ class MenuState(BaseState):
         self.anim_timer += dt
 
     def draw(self, screen):
-        # Fondo oscuro retro con gradiente
-        screen.fill((12, 14, 24))
+        if self.bg_image:
+            screen.blit(self.bg_image, (0, 0))
+        else:
+            screen.fill((15, 18, 25))
 
-        # Cuadrícula retro en el fondo
-        grid_color = (25, 30, 50)
-        grid_size = 40
-        offset_y = int((self.anim_timer * 20) % grid_size)
-        for y in range(-grid_size, SCREEN_HEIGHT + grid_size, grid_size):
-            pygame.draw.line(screen, grid_color, (0, y + offset_y), (SCREEN_WIDTH, y + offset_y), 1)
-        for x in range(0, SCREEN_WIDTH, grid_size):
-            pygame.draw.line(screen, grid_color, (x, 0), (x, SCREEN_HEIGHT), 1)
+        # Efecto de iluminación/resaltado sobre la tarjeta seleccionada
+        selected_rect = self.card_rects[self.selected_index]
+        pulse = (math.sin(self.anim_timer * 5.0) + 1.0) / 2.0  # Rango 0.0 a 1.0
 
-        # Encabezado C.C.I. System
-        font_header_big = pygame.font.Font(None, 64)
-        font_header_sub = pygame.font.Font(None, 24)
-        font_option = pygame.font.Font(None, 44)
-        font_sub = pygame.font.Font(None, 24)
-        font_badge = pygame.font.Font(None, 20)
+        # Resplandor cian/blanco arcade semitransparente
+        glow_alpha = int(35 + pulse * 45)
+        glow_surf = pygame.Surface((selected_rect.width + 16, selected_rect.height + 16), pygame.SRCALPHA)
+        pygame.draw.rect(
+            glow_surf,
+            (0, 220, 255, glow_alpha),
+            glow_surf.get_rect(),
+            border_radius=18
+        )
+        screen.blit(glow_surf, (selected_rect.x - 8, selected_rect.y - 8))
 
-        # Barra superior metálica/arcade
-        pygame.draw.rect(screen, (20, 24, 42), (0, 0, SCREEN_WIDTH, 90))
-        pygame.draw.line(screen, (0, 220, 255), (0, 90), (SCREEN_WIDTH, 90), 2)
+        # Borde brillante animado sobre el marco de la tarjeta metálica
+        border_color = (
+            int(180 + pulse * 75),
+            int(220 + pulse * 35),
+            255
+        )
+        pygame.draw.rect(screen, border_color, selected_rect, width=3, border_radius=14)
 
-        title_surf = font_header_big.render("C.C.I. SYSTEM", True, (0, 240, 255))
-        screen.blit(title_surf, (50, 16))
-
-        sub_surf = font_header_sub.render("VIRTUAL ARCADE MULTI-GAME PLATFORM // SELECT CARTRIDGE", True, (180, 200, 220))
-        screen.blit(sub_surf, (52, 64))
-
-        # Avatar en la esquina derecha si está disponible
-        if self.avatar_img:
-            # Sombra y marco para el avatar
-            av_x = SCREEN_WIDTH - self.avatar_img.get_width() - 50
-            av_y = 120 + int(math.sin(self.anim_timer * 2.5) * 6)  # Levitación suave
-            
-            # Resplandor detrás del avatar
-            glow_surf = pygame.Surface((self.avatar_img.get_width() + 40, self.avatar_img.get_height() + 40), pygame.SRCALPHA)
-            pygame.draw.ellipse(glow_surf, (0, 200, 255, 35), glow_surf.get_rect())
-            screen.blit(glow_surf, (av_x - 20, av_y - 20))
-            screen.blit(self.avatar_img, (av_x, av_y))
-
-        # Contenedor de opciones (lado izquierdo / central)
-        menu_x = 70
-        start_y = 170
-        card_w = 640
-        card_h = 130
-        spacing = 40
-
-        pulse = (math.sin(self.anim_timer * 6.0) + 1.0) / 2.0  # 0.0 a 1.0
-
-        for i, opt in enumerate(self.options):
-            cy = start_y + i * (card_h + spacing)
-            is_selected = (i == self.selected_index)
-
-            # Fondo de la tarjeta
-            card_rect = pygame.Rect(menu_x, cy, card_w, card_h)
-            if is_selected:
-                # Color de tarjeta iluminada
-                base_color = (32, 40, 68)
-                border_color = (
-                    int(opt["color"][0] * 0.7 + 255 * 0.3 * pulse),
-                    int(opt["color"][1] * 0.7 + 255 * 0.3 * pulse),
-                    int(opt["color"][2] * 0.7 + 255 * 0.3 * pulse)
-                )
-                border_w = 3
-                # Flecha indicadora animada
-                arrow_offset = int(pulse * 8)
-                arrow_surf = font_option.render("►", True, border_color)
-                screen.blit(arrow_surf, (menu_x - 42 + arrow_offset, cy + 30))
-            else:
-                base_color = (20, 24, 38)
-                border_color = (60, 70, 95)
-                border_w = 1
-
-            pygame.draw.rect(screen, base_color, card_rect, border_radius=8)
-            pygame.draw.rect(screen, border_color, card_rect, width=border_w, border_radius=8)
-
-            # Badge de categoría
-            badge_surf = font_badge.render(f"[{opt['badge']}]", True, border_color if is_selected else (130, 140, 160))
-            screen.blit(badge_surf, (menu_x + 20, cy + 18))
-
-            # Título principal del juego
-            text_color = (255, 255, 255) if is_selected else (170, 180, 200)
-            txt_title = font_option.render(opt["title"], True, text_color)
-            screen.blit(txt_title, (menu_x + 20, cy + 42))
-
-            # Subtítulo descriptivo
-            txt_sub = font_sub.render(opt["subtitle"], True, (130, 150, 180) if is_selected else (100, 110, 130))
-            screen.blit(txt_sub, (menu_x + 20, cy + 88))
-
-        # Barra inferior de controles
-        footer_y = SCREEN_HEIGHT - 60
-        pygame.draw.rect(screen, (15, 18, 30), (0, footer_y, SCREEN_WIDTH, 60))
-        pygame.draw.line(screen, (40, 50, 80), (0, footer_y), (SCREEN_WIDTH, footer_y), 1)
-
-        help_txt = font_header_sub.render("▲/▼ / W/S: NAVEGAR   |   ENTER / ESPACIO: INICIAR JUEGO   |   ESC: SALIR", True, (160, 180, 210))
-        screen.blit(help_txt, ((SCREEN_WIDTH - help_txt.get_width()) // 2, footer_y + 20))
+        # Indicador 'P1' / Flecha de selección arcade sobre la tarjeta
+        font_p1 = pygame.font.Font(None, 28)
+        tag_text = font_p1.render("◄ SELECT ►", True, border_color)
+        tag_x = selected_rect.centerx - (tag_text.get_width() // 2)
+        tag_y = selected_rect.top - 24 + int(pulse * 3)
+        screen.blit(tag_text, (tag_x, tag_y))
 
 
 class PlayingState(BaseState):
