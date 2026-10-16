@@ -464,35 +464,8 @@ class MenuState(BaseState):
             elif i < len(self.bn_cards):
                 screen.blit(self.bn_cards[i], (card_rect.x, card_rect.y))
 
-        selected_rect = self.card_rects[self.selected_index]
-        pulse = (math.sin(self.anim_timer * 5.0) + 1.0) / 2.0  # Rango 0.0 a 1.0
+        # Solo las imágenes: las inactivas en B&N y la seleccionada a Color (Hover)
 
-
-        # 3. Resplandor cian/azul arcade exterior suave
-        glow_alpha = int(45 + pulse * 55)
-        glow_surf = pygame.Surface((selected_rect.width + 12, selected_rect.height + 12), pygame.SRCALPHA)
-        pygame.draw.rect(
-            glow_surf,
-            (0, 215, 255, glow_alpha),
-            glow_surf.get_rect(),
-            border_radius=12
-        )
-        screen.blit(glow_surf, (selected_rect.x - 6, selected_rect.y - 6))
-
-        # 4. Marco metálico iluminado exacto sobre el borde del card seleccionado
-        border_color = (
-            int(160 + pulse * 95),
-            int(220 + pulse * 35),
-            255
-        )
-        pygame.draw.rect(screen, border_color, selected_rect, width=3, border_radius=10)
-
-        # 5. Indicador de selección activo "► ACTIVE ◄"
-        font_p1 = pygame.font.Font(None, 22)
-        tag_text = font_p1.render("► ACTIVE ◄", True, border_color)
-        tag_x = selected_rect.centerx - (tag_text.get_width() // 2)
-        tag_y = selected_rect.top - 18 + int(pulse * 2)
-        screen.blit(tag_text, (tag_x, tag_y))
 
 
 
