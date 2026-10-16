@@ -27,16 +27,16 @@ try:
 except Exception:
     _old_stderr_fd = None
 
-try:
-    import pygame
-    import cv2
-finally:
-    if _old_stderr_fd is not None:
-        try:
-            os.dup2(_old_stderr_fd, 2)
-            os.close(_old_stderr_fd)
-        except Exception:
-            pass
+import pygame
+import cv2
+
+if _old_stderr_fd is not None:
+    try:
+        os.dup2(_old_stderr_fd, 2)
+        os.close(_old_stderr_fd)
+    except Exception:
+        pass
+
 
 
 # Dimensiones base del sistema virtual
@@ -329,46 +329,71 @@ class MenuState(BaseState):
             sh = int(round(gh * scale))
             self.card_rects.append(pygame.Rect(sx, sy, sw, sh))
 
-        # Cargar y recortar las tarjetas en color desde 'cards-color.jpeg' para el efecto hover
-        self._load_color_cards(scale, games_boxes)
+        # Cargar y recortar las tarjetas en B&N y Color desde 'cards-bn.jpeg' y 'cards-color.jpeg'
+        self.bn_cards = []
+        self.color_cards = []
+        self._load_cards(scale, games_boxes)
 
-    def _load_color_cards(self, scale, games_boxes):
-        """Corta y prepara los sprites a color de cada tarjeta con bordes transparentes."""
+    def _load_cards(self, scale, games_boxes):
+        """
+        Corta y prepara los sprites de cada tarjeta:
+        - Versión en Blanco y Negro (cards-bn.jpeg) para el estado inactivo.
+        - Versión a todo Color (cards-color.jpeg) para el efecto Hover al seleccionarla.
+        """
+        bn_path = "cards-bn.jpeg"
         color_path = "cards-color.jpeg"
-        if not os.path.exists(color_path):
-            return
 
-        try:
-            col_img = pygame.image.load(color_path)
-            # Bounding boxes de las cards en la imagen fuente de alta resolución (2400x1792)
-            src_boxes = [
-                (628, 433, 548, 403),  # Da Vinci Fighters
-                (1223, 433, 538, 404), # Metal Slug
-                (1795, 433, 533, 405), # Asteroids
-                (628, 876, 548, 420),  # Super Mario Bros
-                (1223, 876, 538, 421), # Pac-Man
-                (1796, 876, 532, 421), # Space Invaders
-            ]
+        # Bounding boxes de las cards en la imagen fuente de alta resolución (2400x1792)
+        src_boxes = [
+            (628, 433, 548, 403),  # Da Vinci Fighters
+            (1223, 433, 538, 404), # Metal Slug
+            (1795, 433, 533, 405), # Asteroids
+            (628, 876, 548, 420),  # Super Mario Bros
+            (1223, 876, 538, 421), # Pac-Man
+            (1796, 876, 532, 421), # Space Invaders
+        ]
 
-            for i, (bx, by, bw, bh) in enumerate(src_boxes):
-                sub = col_img.subsurface(pygame.Rect(bx, by, bw, bh)).copy().convert_alpha()
-                # Volver transparentes los píxeles blancos del fondo alrededor de las esquinas redondeadas
-                try:
-                    import pygame.surfarray
-                    arr = pygame.surfarray.pixels3d(sub)
-                    alpha_arr = pygame.surfarray.pixels_alpha(sub)
-                    is_bg = (arr[:, :, 0] > 235) & (arr[:, :, 1] > 235) & (arr[:, :, 2] > 235)
-                    alpha_arr[is_bg] = 0
-                    del arr
-                    del alpha_arr
-                except Exception:
-                    pass
+        # 1. Cargar cards en B&N
+        if os.path.exists(bn_path):
+            try:
+                bn_img = pygame.image.load(bn_path)
+                for i, (bx, by, bw, bh) in enumerate(src_boxes):
+                    sub = bn_img.subsurface(pygame.Rect(bx, by, bw, bh)).copy().convert_alpha()
+                    try:
+                        arr = pygame.surfarray.pixels3d(sub)
+                        alpha_arr = pygame.surfarray.pixels_alpha(sub)
+                        is_bg = (arr[:, :, 0] > 230) & (arr[:, :, 1] > 230) & (arr[:, :, 2] > 230)
+                        alpha_arr[is_bg] = 0
+                        del arr
+                        del alpha_arr
+                    except Exception:
+                        pass
+                    target_rect = self.card_rects[i]
+                    scaled_card = pygame.transform.smoothscale(sub, (target_rect.width, target_rect.height))
+                    self.bn_cards.append(scaled_card)
+            except Exception as e:
+                print(f"[MenuState] Aviso cargando cards B&N: {e}")
 
-                target_rect = self.card_rects[i]
-                scaled_card = pygame.transform.smoothscale(sub, (target_rect.width, target_rect.height))
-                self.color_cards.append(scaled_card)
-        except Exception as e:
-            print(f"[MenuState] Aviso cargando cards en color: {e}")
+        # 2. Cargar cards a Color
+        if os.path.exists(color_path):
+            try:
+                col_img = pygame.image.load(color_path)
+                for i, (bx, by, bw, bh) in enumerate(src_boxes):
+                    sub = col_img.subsurface(pygame.Rect(bx, by, bw, bh)).copy().convert_alpha()
+                    try:
+                        arr = pygame.surfarray.pixels3d(sub)
+                        alpha_arr = pygame.surfarray.pixels_alpha(sub)
+                        is_bg = (arr[:, :, 0] > 230) & (arr[:, :, 1] > 230) & (arr[:, :, 2] > 230)
+                        alpha_arr[is_bg] = 0
+                        del arr
+                        del alpha_arr
+                    except Exception:
+                        pass
+                    target_rect = self.card_rects[i]
+                    scaled_card = pygame.transform.smoothscale(sub, (target_rect.width, target_rect.height))
+                    self.color_cards.append(scaled_card)
+            except Exception as e:
+                print(f"[MenuState] Aviso cargando cards en color: {e}")
 
     def enter(self):
         self.anim_timer = 0.0
@@ -426,17 +451,22 @@ class MenuState(BaseState):
     def draw(self, screen):
         screen.fill((0, 0, 0))
 
-        # 1. Dibujar el fondo base con todas las cards en escala de grises (games.png)
+        # 1. Dibujar el marco y fondo base del arcade (games.png)
         if self.bg_image and self.img_rect:
             screen.blit(self.bg_image, self.img_rect)
+
+        # 2. Dibujar todas las tarjetas:
+        # Si no está seleccionada -> versión Blanco y Negro (cards-bn)
+        # Si está seleccionada (HOVER) -> versión a todo Color (cards-color)
+        for i, card_rect in enumerate(self.card_rects):
+            if i == self.selected_index and i < len(self.color_cards):
+                screen.blit(self.color_cards[i], (card_rect.x, card_rect.y))
+            elif i < len(self.bn_cards):
+                screen.blit(self.bn_cards[i], (card_rect.x, card_rect.y))
 
         selected_rect = self.card_rects[self.selected_index]
         pulse = (math.sin(self.anim_timer * 5.0) + 1.0) / 2.0  # Rango 0.0 a 1.0
 
-        # 2. Efecto HOVER: Superponer la tarjeta activa en versión COLOR
-        if self.selected_index < len(self.color_cards):
-            color_surf = self.color_cards[self.selected_index]
-            screen.blit(color_surf, (selected_rect.x, selected_rect.y))
 
         # 3. Resplandor cian/azul arcade exterior suave
         glow_alpha = int(45 + pulse * 55)
