@@ -228,12 +228,11 @@ class IntroAvatarState(VideoState):
 class MenuState(BaseState):
     """
     ESTADO 'MENU': Pantalla de selección interactiva basada en 'select_game.jpg'.
-    - Renderiza la imagen oficial de selección de juegos a 1280x720.
-    - Soporta navegación horizontal (Izquierda / Derecha) y vertical (A / D / W / S / Flechas).
-    - Resalta dinámicamente con marco brillante la opción seleccionada:
-      0 -> DA VINCI FIGHTERS (Panel izquierdo)
-      1 -> METAL SLUG (Panel derecho)
-    - Selección con Enter o Espacio.
+    - Renderiza la imagen original sin deformarla (aspect-ratio fit 16:9 con márgenes limpios).
+    - Mapea con precisión micrométrica el contorno metálico biselado de cada card:
+      0 -> DA VINCI FIGHTERS (Card izquierda)
+      1 -> METAL SLUG (Card derecha)
+    - Navegación con flechas / WASD y confirmación con ENTER o ESPACIO.
     """
     def __init__(self, state_machine):
         super().__init__(state_machine)
@@ -244,23 +243,42 @@ class MenuState(BaseState):
         self.selected_index = 0
         self.anim_timer = 0.0
 
-        # Cargar y escalar select_game.jpg al tamaño de la pantalla
+        # Cargar y escalar la imagen preservando fielmente su proporción 1024x764
         self.bg_image = None
+        self.img_rect = None
+        self.card_rects = []
+
+        orig_w, orig_h = 1024, 764
+        scale = SCREEN_HEIGHT / orig_h  # 720 / 764 ≈ 0.9424
+        scaled_w = int(orig_w * scale)   # 965 px
+        scaled_h = SCREEN_HEIGHT         # 720 px
+        self.offset_x = (SCREEN_WIDTH - scaled_w) // 2  # Centrado horizontal
+
         img_candidates = ["select_game.jpg", "select_game.png", "select_game.jpeg"]
         for cand in img_candidates:
             if os.path.exists(cand):
                 try:
-                    loaded = pygame.image.load(cand)
-                    self.bg_image = pygame.transform.smoothscale(loaded, (SCREEN_WIDTH, SCREEN_HEIGHT))
+                    loaded = pygame.image.load(cand).convert()
+                    self.bg_image = pygame.transform.smoothscale(loaded, (scaled_w, scaled_h))
+                    self.img_rect = pygame.Rect(self.offset_x, 0, scaled_w, scaled_h)
                     break
                 except Exception as e:
                     print(f"[MenuState] Error al cargar {cand}: {e}")
 
-        # Coordenadas exactas de los dos paneles en la resolución de 1280x720
-        # (Medidas calibradas en base a la relación de aspecto de select_game.jpg)
+        # Coordenadas exactas de los contornos metálicos en la imagen original (1024x764):
+        # Card 1 (Da Vinci): x=50, y=202, w=454, h=361
+        # Card 2 (Metal Slug): x=525, y=202, w=448, h=361
+        def calc_card(rx, ry, rw, rh):
+            return pygame.Rect(
+                int(self.offset_x + rx * scale),
+                int(ry * scale),
+                int(rw * scale),
+                int(rh * scale)
+            )
+
         self.card_rects = [
-            pygame.Rect(48, 182, 574, 452),   # Panel Da Vinci Fighters
-            pygame.Rect(658, 182, 574, 452)   # Panel Metal Slug
+            calc_card(50, 202, 454, 361),   # Borde exacto Da Vinci Fighters
+            calc_card(525, 202, 448, 361)   # Borde exacto Metal Slug
         ]
 
     def enter(self):
@@ -304,39 +322,41 @@ class MenuState(BaseState):
         self.anim_timer += dt
 
     def draw(self, screen):
-        if self.bg_image:
-            screen.blit(self.bg_image, (0, 0))
-        else:
-            screen.fill((15, 18, 25))
+        # Fondo oscuro uniforme
+        screen.fill((0, 0, 0))
 
-        # Efecto de iluminación/resaltado sobre la tarjeta seleccionada
+        # Dibujar la imagen centrada sin distorsión de aspecto
+        if self.bg_image and self.img_rect:
+            screen.blit(self.bg_image, self.img_rect)
+
+        # Destacar la tarjeta seleccionada con borde y glow preciso
         selected_rect = self.card_rects[self.selected_index]
         pulse = (math.sin(self.anim_timer * 5.0) + 1.0) / 2.0  # Rango 0.0 a 1.0
 
-        # Resplandor cian/blanco arcade semitransparente
-        glow_alpha = int(35 + pulse * 45)
-        glow_surf = pygame.Surface((selected_rect.width + 16, selected_rect.height + 16), pygame.SRCALPHA)
+        # Resplandor cian/azul arcade exterior suave
+        glow_alpha = int(30 + pulse * 40)
+        glow_surf = pygame.Surface((selected_rect.width + 12, selected_rect.height + 12), pygame.SRCALPHA)
         pygame.draw.rect(
             glow_surf,
-            (0, 220, 255, glow_alpha),
+            (0, 215, 255, glow_alpha),
             glow_surf.get_rect(),
-            border_radius=18
+            border_radius=14
         )
-        screen.blit(glow_surf, (selected_rect.x - 8, selected_rect.y - 8))
+        screen.blit(glow_surf, (selected_rect.x - 6, selected_rect.y - 6))
 
-        # Borde brillante animado sobre el marco de la tarjeta metálica
+        # Marco metálico iluminado exacto sobre el borde del card
         border_color = (
-            int(180 + pulse * 75),
-            int(220 + pulse * 35),
+            int(150 + pulse * 105),
+            int(210 + pulse * 45),
             255
         )
-        pygame.draw.rect(screen, border_color, selected_rect, width=3, border_radius=14)
+        pygame.draw.rect(screen, border_color, selected_rect, width=2, border_radius=10)
 
-        # Indicador 'P1' / Flecha de selección arcade sobre la tarjeta
-        font_p1 = pygame.font.Font(None, 28)
-        tag_text = font_p1.render("◄ SELECT ►", True, border_color)
+        # Indicador sutil de selección superior centrado sobre el card
+        font_p1 = pygame.font.Font(None, 24)
+        tag_text = font_p1.render("P1 ACTIVE", True, border_color)
         tag_x = selected_rect.centerx - (tag_text.get_width() // 2)
-        tag_y = selected_rect.top - 24 + int(pulse * 3)
+        tag_y = selected_rect.top - 18 + int(pulse * 2)
         screen.blit(tag_text, (tag_x, tag_y))
 
 
