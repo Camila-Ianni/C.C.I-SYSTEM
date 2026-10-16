@@ -55,7 +55,8 @@ class EnemyAI:
                     else:
                         self.fighter.move_left()
                 elif rand_val < 0.8:
-                    self.fighter.execute_attack("special")
+                    if getattr(self.fighter, "special_cooldown_timer", 0) <= 0:
+                        self.fighter.execute_attack("special")
                 else:
                     self.fighter.jump()
 
@@ -63,7 +64,7 @@ class EnemyAI:
             else:
                 # Lista de ataques disponibles
                 available_attacks = ["punch_light", "punch_heavy", "kick_light", "kick_heavy"]
-                if self.fighter.char_id not in ("cami", "enith", "martin") or self.fighter.is_combo_unlocked():
+                if getattr(self.fighter, "special_cooldown_timer", 0) <= 0:
                     available_attacks.append("special")
 
                 atk_choice = random.choice(available_attacks)

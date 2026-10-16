@@ -43,9 +43,9 @@ CONTROLS_P1 = {
     "punch_light": pygame.K_j,
     "punch_heavy": pygame.K_k,
     "kick_light": pygame.K_u,
-    "kick_heavy": pygame.K_i,
+    "special": pygame.K_i,
     "block": pygame.K_l,
-    "special": pygame.K_o,
+    "kick_heavy": pygame.K_o,
     "ultimate": pygame.K_p,
 }
 
@@ -57,8 +57,8 @@ CONTROLS_P2 = {
     "punch_light": pygame.K_KP1,
     "punch_heavy": pygame.K_KP2,
     "kick_light": pygame.K_KP4,
-    "kick_heavy": pygame.K_KP5,
+    "special": pygame.K_KP5,
     "block": pygame.K_KP6,
-    "special": pygame.K_KP7,
+    "kick_heavy": pygame.K_KP7,
     "ultimate": pygame.K_KP8,
 }

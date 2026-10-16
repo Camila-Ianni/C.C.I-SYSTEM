@@ -48,6 +48,10 @@ class Fighter:
         self.special_meter = 0
         self.max_special_meter = 100
 
+        # Barra de recarga para Ataque Especial (10 segundos de cooldown a 60 FPS = 600 frames)
+        self.special_cooldown_max = 600  # 10 segundos
+        self.special_cooldown_timer = 0  # 0 = disponible inmediatamente al inicio
+
         # Sistema de combos y racha de golpes (Combo Counter)
         self.combo_hits = 0
         self.combo_timer = 0
@@ -112,10 +116,15 @@ class Fighter:
             return
 
         # Restricción especial para Camila, Enith y Martín:
-        # Los ataques especiales y ultimates requieren encadenar más de 4 golpes seguidos (> 4)
-        if self.char_id in ("cami", "enith", "martin") and attack_name in ("special", "ultimate"):
+        # El ataque ULTIMATE requiere encadenar más de 4 golpes seguidos (> 4)
+        if self.char_id in ("cami", "enith", "martin") and attack_name == "ultimate":
             if not self.is_combo_unlocked():
                 return
+
+        # Ataque especial: Barra de carga con 10 segundos de cooldown
+        if attack_name == "special":
+            if self.special_cooldown_timer > 0:
+                return  # En recarga, no se puede usar todavía
 
         if attack_name == "ultimate":
             if self.special_meter < self.max_special_meter:
@@ -134,6 +143,9 @@ class Fighter:
                 can_combo = True
 
         if (self.state in allowed_states or can_combo) and attack_name in self.attacks:
+            if attack_name == "special":
+                self.special_cooldown_timer = self.special_cooldown_max  # Iniciar cooldown de 10s
+
             self.current_attack = self.attacks[attack_name]
             self.attack_timer = 0
             self.has_hit_target = False
@@ -179,7 +191,9 @@ class Fighter:
     def move_left(self):
         if self.status_effect in ["rooted", "error"]:
             return
-        if self.state in [FighterState.IDLE, FighterState.WALK, FighterState.JUMP]:
+        if self.current_attack is None and self.state not in [FighterState.HURT, FighterState.KO]:
+            self.is_blocking = False
+            self.is_crouching = False
             self.velocity_x = -self.speed
             if self.is_grounded:
                 self.set_state(FighterState.WALK)
@@ -187,7 +201,9 @@ class Fighter:
     def move_right(self):
         if self.status_effect in ["rooted", "error"]:
             return
-        if self.state in [FighterState.IDLE, FighterState.WALK, FighterState.JUMP]:
+        if self.current_attack is None and self.state not in [FighterState.HURT, FighterState.KO]:
+            self.is_blocking = False
+            self.is_crouching = False
             self.velocity_x = self.speed
             if self.is_grounded:
                 self.set_state(FighterState.WALK)
@@ -200,7 +216,9 @@ class Fighter:
     def jump(self):
         if self.status_effect in ["rooted", "error"]:
             return
-        if self.is_grounded and self.state not in [FighterState.CROUCH, FighterState.HURT, FighterState.KO]:
+        if self.is_grounded and self.current_attack is None and self.state not in [FighterState.HURT, FighterState.KO]:
+            self.is_crouching = False
+            self.is_blocking = False
             self.velocity_y = JUMP_FORCE
             self.is_grounded = False
             self.is_jumping = True
@@ -209,25 +227,26 @@ class Fighter:
     def set_crouch(self, crouching):
         if self.status_effect in ["rooted", "error"]:
             return
-        if self.is_grounded and self.state in [FighterState.IDLE, FighterState.WALK, FighterState.CROUCH]:
+        if self.is_grounded and self.current_attack is None and self.state not in [FighterState.HURT, FighterState.KO]:
             if crouching:
                 self.is_crouching = True
                 self.velocity_x = 0
                 self.set_state(FighterState.CROUCH)
             else:
+                self.is_crouching = False
                 if self.state == FighterState.CROUCH:
-                    self.is_crouching = False
                     self.set_state(FighterState.IDLE)
 
     def set_block(self, blocking):
         if self.status_effect in ["error"]:
             return
-        if self.is_grounded and self.state in [FighterState.IDLE, FighterState.WALK, FighterState.BLOCK]:
-            self.is_blocking = blocking
+        if self.is_grounded and self.current_attack is None and self.state not in [FighterState.HURT, FighterState.KO]:
             if blocking:
+                self.is_blocking = True
                 self.velocity_x = 0
                 self.set_state(FighterState.BLOCK)
             else:
+                self.is_blocking = False
                 if self.state == FighterState.BLOCK:
                     self.set_state(FighterState.IDLE)
 
@@ -239,6 +258,10 @@ class Fighter:
                 self.facing_right = False
 
     def update(self):
+        # Temporizador de recarga de ataque especial (10 segundos)
+        if self.special_cooldown_timer > 0:
+            self.special_cooldown_timer -= 1
+
         # Temporizador de ventana de combo
         if self.combo_timer > 0:
             self.combo_timer -= 1

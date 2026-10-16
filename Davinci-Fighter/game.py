@@ -99,17 +99,20 @@ class Game:
         Calcula el desplazamiento horizontal de la cámara (camera_x) siguiendo el punto medio entre los dos jugadores
         y restringe que no se alejen más del ancho de la pantalla arcade visible (viewport_w = 960).
         """
-        # Restricción de distancia máxima entre luchadores
+        # Restricción de distancia máxima entre luchadores (para no perderse fuera de pantalla)
         max_dist = self.viewport_w - 140
         dist = self.player2.x - self.player1.x
         if dist > max_dist:
-            mid = (self.player1.x + self.player2.x) / 2
-            self.player1.x = mid - max_dist / 2
-            self.player2.x = mid + max_dist / 2
+            # Si el P1 está a la izquierda y se alejó demasiado hacia atrás
+            if self.player1.x < self.player2.x - max_dist:
+                self.player1.x = self.player2.x - max_dist
+            if self.player2.x > self.player1.x + max_dist:
+                self.player2.x = self.player1.x + max_dist
         elif dist < -max_dist:
-            mid = (self.player1.x + self.player2.x) / 2
-            self.player2.x = mid - max_dist / 2
-            self.player1.x = mid + max_dist / 2
+            if self.player2.x < self.player1.x - max_dist:
+                self.player2.x = self.player1.x - max_dist
+            if self.player1.x > self.player2.x + max_dist:
+                self.player1.x = self.player2.x + max_dist
 
         # Calcular posición objetivo de la cámara centrada entre ambos jugadores
         mid_x = (self.player1.rect.centerx + self.player2.rect.centerx) // 2

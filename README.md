@@ -93,14 +93,15 @@ La consola corre en una única ventana de `1280x720` con gestión de audio e int
 ### 🥊 Controles de Combate (Da Vinci Fighters)
 | Movimiento / Acción | Teclado P1 | Joystick (P1 / P2) |
 | :--- | :--- | :--- |
-| **Moverse / Saltar / Agacharse** | `W / A / S / D` | `D-Pad` o `Stick Izquierdo` |
-| **Puño Ligero** | `U` | `Botón X / Cuadrado (West)` |
-| **Puño Fuerte** | `I` | `Botón Y / Triángulo (North)` |
-| **Patada Ligera** | `J` | `Botón A / Cruz (South)` |
-| **Patada Fuerte** | `K` | `Botón B / Círculo (East)` |
-| **Bloqueo / Guardia** | `L` o `S` (Agachado) | `L1 / LB` o `Abajo en D-Pad` |
-| **Ataque Especial** | `O` (o racha > 4 golpes) | `R1 / RB` |
-| **Ataque Ultimate** | `P` (barra de super llena) | `L2 / LT`, `R2 / RT` o ambos gatillos |
+| **Moverse / Desplazamiento** | `A / D` | `Left Joystick` (o D-Pad) |
+| **Saltar** | `W` | `Botón ✕ (Cruz / A)` |
+| **Agacharse** | `S` | `Left Joystick Abajo` (o D-Pad Abajo) |
+| **Guardia Alta / Bloqueo** | `L` | `Botón ◻ (Cuadrado / X)` |
+| **Patadas** | `U` / `O` | `Botón ◯ (Círculo / B)` |
+| **Ataque Especial** | `I` | `Botón △ (Triángulo / Y)` |
+| **Ataque Ultimate** | `P` (barra de super llena) | `L2 / LT` o `R2 / RT` |
+
+> ⏱️ **Recarga de Ataque Especial:** Al usar el ataque especial con `I` (o `△`), la barra se vacía por completo y entra en recarga durante **10 segundos**, mostrando el tiempo restante en pantalla hasta volver a estar lista.
 
 ---
 

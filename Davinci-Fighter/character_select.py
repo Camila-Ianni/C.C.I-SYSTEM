@@ -648,8 +648,8 @@ class CharacterSelect:
             if p1_moved and self.p1_slot_idx != prev_p1:
                 self._on_p1_slot_changed()
 
-            # Confirmar P1 con botón A (Cruz), X (Cuadrado) o Start sólo si superó el retardo de entrada inicial
-            if can_confirm and (pad1_jp.get("punch_light") or pad1_jp.get("kick_light") or pad1_jp.get("start")):
+            # Confirmar P1 con botón Cruz (jump), Cuadrado, Círculo o Start sólo si superó el retardo de entrada inicial
+            if can_confirm and (pad1_jp.get("jump") or pad1_jp.get("kick_light") or pad1_jp.get("kick_heavy") or pad1_jp.get("block") or pad1_jp.get("start")):
                 if self.credits_p1 == 0 and self.credits_p2 == 0:
                     self.credits_p1 += 1
                     audio_manager.play_sfx("coin")
@@ -695,7 +695,7 @@ class CharacterSelect:
             if p2_moved and self.p2_slot_idx != prev_p2:
                 self._on_p2_slot_changed()
 
-            if can_confirm and (pad2_jp.get("punch_light") or pad2_jp.get("kick_light") or pad2_jp.get("start")):
+            if can_confirm and (pad2_jp.get("jump") or pad2_jp.get("kick_light") or pad2_jp.get("kick_heavy") or pad2_jp.get("block") or pad2_jp.get("start")):
                 self.p2_confirmed = True
                 audio_manager.play_sfx("select")
 

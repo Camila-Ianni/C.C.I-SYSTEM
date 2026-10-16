@@ -3,13 +3,48 @@ __author__ = 'justinarmstrong'
 import os
 import pygame as pg
 
-keybinding = {
-    'action':pg.K_s,
-    'jump':pg.K_a,
-    'left':pg.K_LEFT,
-    'right':pg.K_RIGHT,
-    'down':pg.K_DOWN
-}
+class _KeyBinding(dict):
+    """
+    Dict compatible wrapper que permite indexar keys[tools.keybinding['action']].
+    Si el valor en el dict es una lista de teclas o un int, __getitem__ devuelve un objeto
+    que al evaluarse con keys[...] verifica cualquiera de las teclas asociadas.
+    """
+    class _KeyProxy(int):
+        def __new__(cls, val, aliases):
+            obj = super().__new__(cls, val)
+            obj.aliases = aliases
+            return obj
+
+    def __getitem__(self, item):
+        val = super().__getitem__(item)
+        if isinstance(val, (list, tuple)):
+            # Retorna el primer elemento pero almacena los aliases
+            return self._KeyProxy(val[0], list(val))
+        return val
+
+keybinding = _KeyBinding({
+    'action': [pg.K_x, pg.K_LSHIFT, pg.K_RSHIFT, pg.K_j, pg.K_b],
+    'jump': [pg.K_SPACE, pg.K_z, pg.K_UP, pg.K_w, pg.K_k],
+    'left': [pg.K_LEFT, pg.K_a],
+    'right': [pg.K_RIGHT, pg.K_d],
+    'down': [pg.K_DOWN, pg.K_s]
+})
+
+def is_key_pressed(keys, action_name):
+    """Verifica si alguna tecla asociada a la acción está presionada."""
+    keys_to_check = keybinding.get(action_name, [])
+    if isinstance(keys_to_check, int):
+        keys_to_check = [keys_to_check]
+    elif hasattr(keys_to_check, 'aliases'):
+        keys_to_check = keys_to_check.aliases
+    for k in keys_to_check:
+        try:
+            if keys[k]:
+                return True
+        except (IndexError, KeyError):
+            pass
+    return False
+
 
 class Control(object):
     """Control class for entire project. Contains the game loop, and contains

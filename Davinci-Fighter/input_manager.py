@@ -233,18 +233,24 @@ class InputManager:
                 lt = dev.get_axis(4) > 0.4
                 rt = dev.get_axis(5) > 0.4
 
+        # Configuración exacta solicitada para joystick/gamepad:
+        # - Left Joystick / D-Pad: Moverse horizontalmente y agacharse
+        # - Cruz / A (South): Salto (Jump)
+        # - Triángulo / Y (North): Ataque Especial (Special)
+        # - Cuadrado / X (West): Guardia Alta / Bloqueo (Block)
+        # - Círculo / B (East): Patadas (Kick Light / Kick Heavy)
         state["left"] = bool(d_left)
         state["right"] = bool(d_right)
-        state["jump"] = bool(d_up)
-        state["crouch"] = bool(d_down)
+        state["jump"] = bool(b_a or d_up)      # Cruz (A) salta (y también stick arriba)
+        state["crouch"] = bool(d_down)         # Stick abajo se agacha
 
-        state["punch_light"] = bool(b_x)
-        state["punch_heavy"] = bool(b_y)
-        state["kick_light"] = bool(b_a)
-        state["kick_heavy"] = bool(b_b)
-        state["block"] = bool(lb)
-        state["special"] = bool(rb)
-        state["ultimate"] = bool(lt or rt or (b_x and b_y) or (b_a and b_b))
+        state["block"] = bool(b_x or lb)       # Cuadrado (X) guardia/bloqueo (y L1 opcional)
+        state["special"] = bool(b_y or rb)     # Triángulo (Y) ataque especial (y R1 opcional)
+        state["kick_light"] = bool(b_b)        # Círculo (B) patada
+        state["kick_heavy"] = bool(b_b)        # Círculo (B) patada fuerte
+        state["punch_light"] = bool(rb)        # Puño accesible por gatillo/bumper
+        state["punch_heavy"] = bool(rb)
+        state["ultimate"] = bool(lt or rt)
         state["start"] = bool(start_btn)
         state["select"] = bool(back_btn)
 

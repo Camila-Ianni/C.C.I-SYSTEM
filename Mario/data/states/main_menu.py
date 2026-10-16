@@ -105,11 +105,11 @@ class Menu(tools._State):
 
     def update_cursor(self, keys):
         """Update the position of the cursor"""
-        input_list = [pg.K_RETURN, pg.K_a, pg.K_s]
+        input_list = [pg.K_RETURN, pg.K_SPACE, pg.K_a, pg.K_s, pg.K_j, pg.K_k]
 
         if self.cursor.state == c.PLAYER1:
             self.cursor.rect.y = 358
-            if keys[pg.K_DOWN]:
+            if keys[pg.K_DOWN] or keys[pg.K_s]:
                 self.cursor.state = c.PLAYER2
             for input in input_list:
                 if keys[input]:
@@ -117,8 +117,12 @@ class Menu(tools._State):
                     self.done = True
         elif self.cursor.state == c.PLAYER2:
             self.cursor.rect.y = 403
-            if keys[pg.K_UP]:
+            if keys[pg.K_UP] or keys[pg.K_w]:
                 self.cursor.state = c.PLAYER1
+            for input in input_list:
+                if keys[input]:
+                    self.reset_game_info()
+                    self.done = True
 
 
     def reset_game_info(self):
