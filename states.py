@@ -537,28 +537,61 @@ class PlayingState(BaseState):
                 if ms_dir not in sys.path:
                     sys.path.insert(0, ms_dir)
 
-                from src.game import Game as MetalSlugGame
-                from src.config import FPS as MS_FPS, TITLE as MS_TITLE
+                # Asegurar que el subsistema de audio esté 100% activo
+                if not pygame.mixer.get_init():
+                    try:
+                        pygame.mixer.init(frequency=44100, size=-16, channels=2, buffer=512)
+                    except Exception:
+                        pass
 
-                # Instanciar el juego reutilizando la pantalla existente
-                # Sobrescribimos el set_mode interno para que no cree otra ventana
+                from src.game import Game as MetalSlugGame
+                from src.config import FPS as MS_FPS, TITLE as MS_TITLE, VIRTUAL_WIDTH, VIRTUAL_HEIGHT
+                from src.core.sound_manager import SoundManager
+
+                # Reiniciar el singleton SoundManager para garantizar carga de rutas desde el nuevo cwd
+                SoundManager._instance = None
+                sound_mgr = SoundManager()
+
+                # Instanciar Metal Slug reutilizando la superficie screen sin abrir ventanas nuevas
                 orig_set_mode = pygame.display.set_mode
                 pygame.display.set_mode = lambda *args, **kwargs: screen
 
                 try:
                     ms_instance = MetalSlugGame()
-                    # Asegurar referencia de screen
                     ms_instance.screen = screen
                 finally:
                     pygame.display.set_mode = orig_set_mode
 
                 pygame.display.set_caption(MS_TITLE)
 
-                # Ejecutar ciclo de Metal Slug sin llamar a pygame.quit() al terminar
+                # Escalar la pantalla virtual nativa Neo-Geo (320x224) a la resolución completa de la ventana (1280x720)
+                # Manteniendo relación de aspecto 4:3 arcade con márgenes limpios o rellenado centrado
+                scale_y = SCREEN_HEIGHT / VIRTUAL_HEIGHT          # 720 / 224 ≈ 3.214
+                scaled_w = int(VIRTUAL_WIDTH * scale_y)           # ~1028 px
+                scaled_h = SCREEN_HEIGHT                          # 720 px
+                offset_x = (SCREEN_WIDTH - scaled_w) // 2         # Centrado horizontal (~126 px)
+
+                # Loop de ejecución dedicado de Metal Slug
                 while ms_instance.is_running:
                     ms_instance.handle_events()
                     ms_instance.update()
+
+                    # Limpiar la ventana a negro para eliminar cualquier resto de la pantalla anterior
+                    screen.fill((0, 0, 0))
+
+                    # Dibujar en la superficie virtual del juego
                     ms_instance.draw()
+
+                    # Escalar y proyectar centrado en la ventana completa (1280x720)
+                    scaled_frame = pygame.transform.scale(ms_instance.virtual_screen, (scaled_w, scaled_h))
+                    screen.blit(scaled_frame, (offset_x, 0))
+
+                    # Dibujar barras laterales si aplica (pillarbox arcade)
+                    if offset_x > 0:
+                        pygame.draw.rect(screen, (0, 0, 0), (0, 0, offset_x, SCREEN_HEIGHT))
+                        pygame.draw.rect(screen, (0, 0, 0), (offset_x + scaled_w, 0, offset_x + 10, SCREEN_HEIGHT))
+
+                    pygame.display.flip()
                     ms_instance.clock.tick(MS_FPS)
 
             except Exception as e:
@@ -574,7 +607,10 @@ class PlayingState(BaseState):
                     pass
                 os.chdir(original_cwd)
 
-        # Re-establecer pantalla y regresar al Menú C.C.I.
+        # Limpiar eventos residuales y pantalla antes de regresar al Menú C.C.I.
+        pygame.event.clear()
+        screen.fill((0, 0, 0))
+        pygame.display.flip()
         self.state_machine.change_state("MENU")
 
 
