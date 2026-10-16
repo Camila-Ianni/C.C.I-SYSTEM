@@ -5,8 +5,8 @@ Punto de entrada principal del sistema que unifica múltiples juegos bajo una so
 Patrón de Diseño: State Machine (Máquina de Estados)
 Flujo de Estados:
 1. BOOT: Video de arranque CCI_INTRO.mp4 sincronizado con OpenCV.
-2. INTRO_AVATAR: Video cinemático intro_cami.mp4. (Saltable con Enter / Espacio).
-3. MENU: Menú interactivo arcade retro con selección de Da Vinci Fighters o Metal Slug.
+2. INTRO_AVATAR: Video cinemático Pixel_girl_reading_dialogue_boxes_20261016123851.mp4 con audio. (Saltable con Enter / Espacio).
+3. MENU: Menú interactivo arcade retro con 6 juegos y hover en color.
 4. PLAYING: Ejecución modular del juego seleccionado en el mismo contexto gráfico.
 """
 

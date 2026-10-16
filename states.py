@@ -243,9 +243,15 @@ class BootState(VideoState):
 
 
 class IntroAvatarState(VideoState):
-    """ESTADO 'INTRO_AVATAR': Reproduce intro_cami.mp4 con audio y pasa al MENU al terminar."""
+    """ESTADO 'INTRO_AVATAR': Reproduce Pixel_girl_reading_dialogue_boxes_20261016123851.mp4 con audio y pasa al MENU al terminar."""
     def __init__(self, state_machine):
-        super().__init__(state_machine, video_path="intro_cami.mp4", next_state_name="MENU", allow_skip=True)
+        super().__init__(
+            state_machine,
+            video_path="Pixel_girl_reading_dialogue_boxes_20261016123851.mp4",
+            next_state_name="MENU",
+            allow_skip=True
+        )
+
 
 
 class MenuState(BaseState):
