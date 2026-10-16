@@ -1,0 +1,32 @@
+# Python virtual environment
+.venv/
+venv/
+env/
+ENV/
+
+# Python bytecode & cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Operating System files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Large raw video dumps (> 100MB rejected by GitHub)
+METAL SLUG/No Commentary].mp4
+*.raw
+.cached_*.raw
+
+# Temporary debug test outputs
+METAL SLUG/test_output/
+METAL SLUG/scratch/
+METAL SLUG/tests copy/
+.agents/
+.claude/

@@ -1,0 +1,13 @@
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+.DS_Store
+.pytest_cache/
+.agents/
+scratch/
+scratch*/
+30 fotogramas/
+30 Fotogramas/
+assets/backgrounds/Frames/
+*.mov

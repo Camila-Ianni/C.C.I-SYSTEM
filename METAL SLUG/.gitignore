@@ -1,0 +1,37 @@
+# Environments
+.venv/
+env/
+venv/
+ENV/
+
+# Python bytecode & cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Operating System files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Large media & binary cache files (> 100MB rejected by GitHub)
+*.mp4
+*.raw
+.cached_*.raw
+
+# Temporary and test outputs
+scratch/
+test_output/
+.agents/
+
+# Root debug image dumps
+htp_screen_*.png
+soldier_band_*.png
+test_*.png
+intro_crop_*.png
+thumb_*.png
