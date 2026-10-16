@@ -565,33 +565,62 @@ class PlayingState(BaseState):
                 pygame.display.set_caption(MS_TITLE)
 
                 # Escalar la pantalla virtual nativa Neo-Geo (320x224) a la resolución completa de la ventana (1280x720)
-                # Manteniendo relación de aspecto 4:3 arcade con márgenes limpios o rellenado centrado
+                # Manteniendo relación de aspecto 4:3 arcade con márgenes limpios centrados
                 scale_y = SCREEN_HEIGHT / VIRTUAL_HEIGHT          # 720 / 224 ≈ 3.214
                 scaled_w = int(VIRTUAL_WIDTH * scale_y)           # ~1028 px
                 scaled_h = SCREEN_HEIGHT                          # 720 px
                 offset_x = (SCREEN_WIDTH - scaled_w) // 2         # Centrado horizontal (~126 px)
 
-                # Loop de ejecución dedicado de Metal Slug
-                while ms_instance.is_running:
-                    ms_instance.handle_events()
-                    ms_instance.update()
+                # Sobrescribimos el método original de draw para que no haga blit desalineado
+                # ni haga un doble flip que cause parpadeo (flickering/tearing)
+                orig_draw = ms_instance.draw
+                def single_draw():
+                    # Ejecutar el renderizado interno de entidades a virtual_screen
+                    # sin ejecutar el bloque final de scale a 960x672 ni el flip original
+                    # Usamos una superficie auxiliar temporal o interceptamos el blit final
+                    pass
 
-                    # Limpiar la ventana a negro para eliminar cualquier resto de la pantalla anterior
+                # Reemplazamos la función de presentación final de ms_instance:
+                # El ciclo original de Metal Slug en ms_instance.draw() hace:
+                # scaled = pygame.transform.scale(self.virtual_screen, (WINDOW_WIDTH, WINDOW_HEIGHT))
+                # self.screen.blit(scaled, (0, 0))
+                # pygame.display.flip()
+                # Para evitar el parpadeo de dos flips por frame, delegamos el renderizado
+                # asignando una función adaptada a 1280x720:
+                def presentation_draw():
+                    # 1. Ejecutar el pipeline de renderizado original hasta el virtual_screen
+                    # Guardamos la pantalla real y ponemos una superficie dummy temporal
+                    real_screen = ms_instance.screen
+                    dummy_surf = pygame.Surface((1, 1))
+                    ms_instance.screen = dummy_surf
+                    
+                    # Evitamos que pygame.display.flip() sea llamado dentro de draw()
+                    real_flip = pygame.display.flip
+                    pygame.display.flip = lambda: None
+                    try:
+                        orig_draw()
+                    finally:
+                        ms_instance.screen = real_screen
+                        pygame.display.flip = real_flip
+
+                    # 2. Dibujar a la ventana real (1280x720) centrado con pillarbox y UN SOLO flip
                     screen.fill((0, 0, 0))
-
-                    # Dibujar en la superficie virtual del juego
-                    ms_instance.draw()
-
-                    # Escalar y proyectar centrado en la ventana completa (1280x720)
                     scaled_frame = pygame.transform.scale(ms_instance.virtual_screen, (scaled_w, scaled_h))
                     screen.blit(scaled_frame, (offset_x, 0))
 
-                    # Dibujar barras laterales si aplica (pillarbox arcade)
                     if offset_x > 0:
                         pygame.draw.rect(screen, (0, 0, 0), (0, 0, offset_x, SCREEN_HEIGHT))
                         pygame.draw.rect(screen, (0, 0, 0), (offset_x + scaled_w, 0, offset_x + 10, SCREEN_HEIGHT))
 
                     pygame.display.flip()
+
+                ms_instance.draw = presentation_draw
+
+                # Loop fluido de Metal Slug (1 actualización y 1 solo renderizado por tick)
+                while ms_instance.is_running:
+                    ms_instance.handle_events()
+                    ms_instance.update()
+                    ms_instance.draw()
                     ms_instance.clock.tick(MS_FPS)
 
             except Exception as e:
