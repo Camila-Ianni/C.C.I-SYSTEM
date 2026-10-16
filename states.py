@@ -227,48 +227,66 @@ class IntroAvatarState(VideoState):
 
 class MenuState(BaseState):
     """
-    ESTADO 'MENU': Pantalla de selección interactiva basada en 'select_game.jpg'.
-    - Renderiza la imagen original sin deformarla (aspect-ratio fit 16:9 con márgenes limpios).
-    - Mapea con precisión micrométrica el contorno metálico biselado de cada card:
-      0 -> DA VINCI FIGHTERS (Card izquierda)
-      1 -> METAL SLUG (Card derecha)
-    - Navegación con flechas / WASD y confirmación con ENTER o ESPACIO.
+    ESTADO 'MENU': Pantalla de selección interactiva basada en 'games.png' (6 juegos).
+    - Renderiza 'games.png' (1452x1083) escalado de forma proporcional y centrado en 1280x720.
+    - Soporta rejilla 2x3 con navegación completa (Izquierda/Derecha/Arriba/Abajo / WASD).
+    - Resalta con precisión el contorno metálico del card seleccionado:
+      Fila 0:
+        (0,0) Da Vinci Fighters
+        (0,1) Metal Slug
+        (0,2) Super Mario Bros
+      Fila 1:
+        (1,0) Pac-Man
+        (1,1) Space Invaders
+        (1,2) Asteroids
+    - Selección con ENTER o ESPACIO.
     """
     def __init__(self, state_machine):
         super().__init__(state_machine)
         self.options = [
-            {"key": "davinci", "title": "Da Vinci Fighters"},
-            {"key": "metalslug", "title": "Metal Slug"}
+            {"key": "davinci", "title": "Da Vinci Fighters", "row": 0, "col": 0},
+            {"key": "metalslug", "title": "Metal Slug", "row": 0, "col": 1},
+            {"key": "mario", "title": "Super Mario Bros", "row": 0, "col": 2},
+            {"key": "pacman", "title": "Pac-Man", "row": 1, "col": 0},
+            {"key": "space_invaders", "title": "Space Invaders", "row": 1, "col": 1},
+            {"key": "asteroids", "title": "Asteroids", "row": 1, "col": 2},
         ]
         self.selected_index = 0
         self.anim_timer = 0.0
 
-        # Cargar y escalar la imagen preservando fielmente su proporción 1024x764
+        # Cargar games.png preservando su relación de aspecto (1452x1083)
         self.bg_image = None
         self.img_rect = None
         self.card_rects = []
 
-        orig_w, orig_h = 1024, 764
-        scale = SCREEN_HEIGHT / orig_h  # 720 / 764 ≈ 0.9424
-        scaled_w = int(orig_w * scale)   # 965 px
+        orig_w, orig_h = 1452, 1083
+        scale = SCREEN_HEIGHT / orig_h  # 720 / 1083 ≈ 0.6648
+        scaled_w = int(orig_w * scale)   # ~965 px
         scaled_h = SCREEN_HEIGHT         # 720 px
-        self.offset_x = (SCREEN_WIDTH - scaled_w) // 2  # Centrado horizontal
+        self.offset_x = (SCREEN_WIDTH - scaled_w) // 2  # Centrado horizontal (~157 px)
 
-        img_candidates = ["select_game.jpg", "select_game.png", "select_game.jpeg"]
-        for cand in img_candidates:
-            if os.path.exists(cand):
-                try:
-                    loaded = pygame.image.load(cand).convert()
-                    self.bg_image = pygame.transform.smoothscale(loaded, (scaled_w, scaled_h))
-                    self.img_rect = pygame.Rect(self.offset_x, 0, scaled_w, scaled_h)
-                    break
-                except Exception as e:
-                    print(f"[MenuState] Error al cargar {cand}: {e}")
+        img_path = "games.png"
+        if not os.path.exists(img_path):
+            img_path = "select_game.jpg"
 
-        # Coordenadas exactas de los contornos metálicos en la imagen original (1024x764):
-        # Card 1 (Da Vinci): x=50, y=202, w=454, h=361
-        # Card 2 (Metal Slug): x=525, y=202, w=448, h=361
-        def calc_card(rx, ry, rw, rh):
+        if os.path.exists(img_path):
+            try:
+                loaded = pygame.image.load(img_path).convert()
+                self.bg_image = pygame.transform.smoothscale(loaded, (scaled_w, scaled_h))
+                self.img_rect = pygame.Rect(self.offset_x, 0, scaled_w, scaled_h)
+            except Exception as e:
+                print(f"[MenuState] Error cargando imagen de menú {img_path}: {e}")
+
+        # Coordenadas exactas de los 6 cards en games.png (1452x1083):
+        # Fila 0:
+        #   (0,0) Da Vinci Fighters: [31, 209, 449, 351]
+        #   (0,1) Metal Slug:        [480, 204, 480, 356]
+        #   (0,2) Super Mario:       [960, 204, 448, 356]
+        # Fila 1:
+        #   (1,0) Pac-Man:           [30, 570, 450, 370]
+        #   (1,1) Space Invaders:    [480, 570, 480, 370]
+        #   (1,2) Asteroids:         [960, 570, 469, 370]
+        def to_screen(rx, ry, rw, rh):
             return pygame.Rect(
                 int(self.offset_x + rx * scale),
                 int(ry * scale),
@@ -277,22 +295,39 @@ class MenuState(BaseState):
             )
 
         self.card_rects = [
-            calc_card(50, 202, 454, 361),   # Borde exacto Da Vinci Fighters
-            calc_card(525, 202, 448, 361)   # Borde exacto Metal Slug
+            to_screen(31, 209, 449, 351),   # Da Vinci Fighters
+            to_screen(480, 204, 480, 356),  # Metal Slug
+            to_screen(960, 204, 448, 356),  # Super Mario
+            to_screen(30, 570, 450, 370),   # Pac-Man
+            to_screen(480, 570, 480, 370),  # Space Invaders
+            to_screen(960, 570, 469, 370),  # Asteroids
         ]
 
     def enter(self):
         self.anim_timer = 0.0
-        pygame.display.set_caption("C.C.I. SYSTEM - SELECT GAME")
+        pygame.display.set_caption("C.C.I. SYSTEM - SELECT GAME (6 CARTRIDGES)")
 
     def handle_events(self, events):
         for event in events:
             if event.type == pygame.KEYDOWN:
-                if event.key in (pygame.K_LEFT, pygame.K_a, pygame.K_UP, pygame.K_w):
-                    self.selected_index = (self.selected_index - 1) % len(self.options)
+                cur_row = self.selected_index // 3
+                cur_col = self.selected_index % 3
+
+                if event.key in (pygame.K_LEFT, pygame.K_a):
+                    cur_col = (cur_col - 1) % 3
+                    self.selected_index = cur_row * 3 + cur_col
                     self._play_beep(pitch=600)
-                elif event.key in (pygame.K_RIGHT, pygame.K_d, pygame.K_DOWN, pygame.K_s):
-                    self.selected_index = (self.selected_index + 1) % len(self.options)
+                elif event.key in (pygame.K_RIGHT, pygame.K_d):
+                    cur_col = (cur_col + 1) % 3
+                    self.selected_index = cur_row * 3 + cur_col
+                    self._play_beep(pitch=600)
+                elif event.key in (pygame.K_UP, pygame.K_w):
+                    cur_row = (cur_row - 1) % 2
+                    self.selected_index = cur_row * 3 + cur_col
+                    self._play_beep(pitch=500)
+                elif event.key in (pygame.K_DOWN, pygame.K_s):
+                    cur_row = (cur_row + 1) % 2
+                    self.selected_index = cur_row * 3 + cur_col
                     self._play_beep(pitch=500)
                 elif event.key in (pygame.K_RETURN, pygame.K_SPACE, pygame.K_KP_ENTER):
                     selected_game = self.options[self.selected_index]["key"]
@@ -322,10 +357,8 @@ class MenuState(BaseState):
         self.anim_timer += dt
 
     def draw(self, screen):
-        # Fondo oscuro uniforme
         screen.fill((0, 0, 0))
 
-        # Dibujar la imagen centrada sin distorsión de aspecto
         if self.bg_image and self.img_rect:
             screen.blit(self.bg_image, self.img_rect)
 
@@ -334,7 +367,7 @@ class MenuState(BaseState):
         pulse = (math.sin(self.anim_timer * 5.0) + 1.0) / 2.0  # Rango 0.0 a 1.0
 
         # Resplandor cian/azul arcade exterior suave
-        glow_alpha = int(30 + pulse * 40)
+        glow_alpha = int(35 + pulse * 45)
         glow_surf = pygame.Surface((selected_rect.width + 12, selected_rect.height + 12), pygame.SRCALPHA)
         pygame.draw.rect(
             glow_surf,
@@ -352,11 +385,11 @@ class MenuState(BaseState):
         )
         pygame.draw.rect(screen, border_color, selected_rect, width=2, border_radius=10)
 
-        # Indicador sutil de selección superior centrado sobre el card
-        font_p1 = pygame.font.Font(None, 24)
-        tag_text = font_p1.render("P1 ACTIVE", True, border_color)
+        # Indicador de selección activo
+        font_p1 = pygame.font.Font(None, 22)
+        tag_text = font_p1.render("► ACTIVE ◄", True, border_color)
         tag_x = selected_rect.centerx - (tag_text.get_width() // 2)
-        tag_y = selected_rect.top - 18 + int(pulse * 2)
+        tag_y = selected_rect.top - 16 + int(pulse * 2)
         screen.blit(tag_text, (tag_x, tag_y))
 
 
@@ -625,6 +658,247 @@ class PlayingState(BaseState):
 
             except Exception as e:
                 print(f"[PlayingState] Error ejecutando Metal Slug: {e}")
+                import traceback
+                traceback.print_exc()
+            finally:
+                try:
+                    if pygame.mixer.get_init():
+                        pygame.mixer.music.stop()
+                        pygame.mixer.stop()
+                except Exception:
+                    pass
+                os.chdir(original_cwd)
+
+        elif self.game_key == "mario":
+            mario_dir = os.path.join(root_dir, "Mario")
+            print(f"[PlayingState] Cargando Super Mario Bros desde {mario_dir}...")
+            original_cwd = os.getcwd()
+            try:
+                os.chdir(mario_dir)
+                if mario_dir not in sys.path:
+                    sys.path.insert(0, mario_dir)
+
+                orig_set_mode = pygame.display.set_mode
+                pygame.display.set_mode = lambda *args, **kwargs: screen
+
+                from data import setup, tools
+                from data.states import main_menu, load_screen, level1
+                from data import constants as c
+
+                pygame.display.set_mode = orig_set_mode
+                pygame.display.set_caption(setup.ORIGINAL_CAPTION)
+
+                run_it = tools.Control(setup.ORIGINAL_CAPTION)
+                run_it.screen = screen
+                state_dict = {
+                    c.MAIN_MENU: main_menu.Menu(),
+                    c.LOAD_SCREEN: load_screen.LoadScreen(),
+                    c.TIME_OUT: load_screen.TimeOut(),
+                    c.GAME_OVER: load_screen.GameOver(),
+                    c.LEVEL1: level1.Level1()
+                }
+                run_it.setup_states(state_dict, c.MAIN_MENU)
+
+                # Ejecutar loop de Mario interceptando escape para volver
+                while not run_it.done:
+                    for event in pygame.event.get():
+                        if event.type == pygame.QUIT:
+                            run_it.done = True
+                        elif event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+                            run_it.done = True
+                        elif event.type == pygame.KEYDOWN:
+                            run_it.keys = pygame.key.get_pressed()
+                        elif event.type == pygame.KEYUP:
+                            run_it.keys = pygame.key.get_pressed()
+                        run_it.state.get_event(event)
+
+                    run_it.update()
+                    pygame.display.flip()
+                    run_it.clock.tick(run_it.fps)
+
+            except Exception as e:
+                print(f"[PlayingState] Error ejecutando Super Mario Bros: {e}")
+                import traceback
+                traceback.print_exc()
+            finally:
+                try:
+                    if pygame.mixer.get_init():
+                        pygame.mixer.music.stop()
+                        pygame.mixer.stop()
+                except Exception:
+                    pass
+                os.chdir(original_cwd)
+
+        elif self.game_key == "pacman":
+            pacman_dir = os.path.join(root_dir, "PacMan")
+            print(f"[PlayingState] Cargando Pac-Man desde {pacman_dir}...")
+            original_cwd = os.getcwd()
+            try:
+                os.chdir(pacman_dir)
+                if pacman_dir not in sys.path:
+                    sys.path.insert(0, pacman_dir)
+
+                orig_set_mode = pygame.display.set_mode
+                pygame.display.set_mode = lambda *args, **kwargs: screen
+
+                from pacman import Game as PacmanGame
+                from settings import FPS as PAC_FPS
+
+                try:
+                    pac_instance = PacmanGame()
+                    pac_instance.screen = screen
+                finally:
+                    pygame.display.set_mode = orig_set_mode
+
+                pygame.display.set_caption("PAC-MAN")
+
+                running_pacman = True
+                pac_instance.game_start_sfx.play()
+
+                while running_pacman:
+                    for event in pygame.event.get():
+                        if event.type == pygame.QUIT:
+                            running_pacman = False
+                        elif event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+                            running_pacman = False
+                        else:
+                            if event.type == pygame.KEYDOWN:
+                                from model.direction import Direction
+                                if event.key == pygame.K_LEFT or event.key == pygame.K_a:
+                                    pac_instance.game_engine.direction_command = Direction.LEFT
+                                elif event.key == pygame.K_RIGHT or event.key == pygame.K_d:
+                                    pac_instance.game_engine.direction_command = Direction.RIGHT
+                                elif event.key == pygame.K_DOWN or event.key == pygame.K_s:
+                                    pac_instance.game_engine.direction_command = Direction.DOWN
+                                elif event.key == pygame.K_UP or event.key == pygame.K_w:
+                                    pac_instance.game_engine.direction_command = Direction.UP
+                                elif event.key == pygame.K_SPACE and pac_instance.game_engine.game_over:
+                                    pac_instance.game_start_sfx.play()
+                                    pac_instance.game_engine = pac_instance.init()
+
+                    pac_instance.update()
+                    pac_instance.draw()
+
+            except Exception as e:
+                print(f"[PlayingState] Error ejecutando Pac-Man: {e}")
+                import traceback
+                traceback.print_exc()
+            finally:
+                try:
+                    if pygame.mixer.get_init():
+                        pygame.mixer.music.stop()
+                        pygame.mixer.stop()
+                except Exception:
+                    pass
+                os.chdir(original_cwd)
+
+        elif self.game_key == "space_invaders":
+            si_dir = os.path.join(root_dir, "Space-invaders", "code")
+            print(f"[PlayingState] Cargando Space Invaders desde {si_dir}...")
+            original_cwd = os.getcwd()
+            try:
+                os.chdir(si_dir)
+                if si_dir not in sys.path:
+                    sys.path.insert(0, si_dir)
+
+                orig_set_mode = pygame.display.set_mode
+                pygame.display.set_mode = lambda *args, **kwargs: screen
+
+                from main import Game as SpaceInvadersGame
+                import main as si_main
+
+                si_main.screen = screen
+                si_main.screen_width = SCREEN_WIDTH
+                si_main.screen_height = SCREEN_HEIGHT
+
+                si_instance = SpaceInvadersGame()
+                pygame.display.set_mode = orig_set_mode
+                pygame.display.set_caption("SPACE INVADERS")
+
+                ALIENLASER = pygame.USEREVENT + 1
+                pygame.time.set_timer(ALIENLASER, 800)
+                clock = pygame.time.Clock()
+
+                running_si = True
+                while running_si:
+                    for event in pygame.event.get():
+                        if event.type == pygame.QUIT:
+                            running_si = False
+                        elif event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+                            running_si = False
+                        elif event.type == ALIENLASER:
+                            si_instance.alien_shoot()
+
+                    screen.fill((30, 30, 30))
+                    si_instance.run()
+                    pygame.display.flip()
+                    clock.tick(60)
+
+            except Exception as e:
+                print(f"[PlayingState] Error ejecutando Space Invaders: {e}")
+                import traceback
+                traceback.print_exc()
+            finally:
+                try:
+                    if pygame.mixer.get_init():
+                        pygame.mixer.music.stop()
+                        pygame.mixer.stop()
+                except Exception:
+                    pass
+                os.chdir(original_cwd)
+
+        elif self.game_key == "asteroids":
+            ast_dir = os.path.join(root_dir, "asteroids", "src")
+            print(f"[PlayingState] Cargando Asteroids desde {ast_dir}...")
+            original_cwd = os.getcwd()
+            try:
+                os.chdir(ast_dir)
+                if ast_dir not in sys.path:
+                    sys.path.insert(0, ast_dir)
+
+                orig_set_mode = pygame.display.set_mode
+                pygame.display.set_mode = lambda *args, **kwargs: screen
+
+                from asteroids import Asteroids as AsteroidsGame
+                ast_instance = AsteroidsGame()
+                ast_instance.stage.screen = screen
+                pygame.display.set_mode = orig_set_mode
+                pygame.display.set_caption("ATARI ASTEROIDS")
+
+                clock = pygame.time.Clock()
+                running_ast = True
+                while running_ast:
+                    for event in pygame.event.get():
+                        if event.type == pygame.QUIT:
+                            running_ast = False
+                        elif event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+                            running_ast = False
+                        else:
+                            ast_instance.input([event])
+
+                    if ast_instance.paused and not ast_instance.frameAdvance:
+                        ast_instance.displayPaused()
+                        continue
+
+                    screen.fill((10, 10, 10))
+                    ast_instance.stage.moveSprites()
+                    ast_instance.stage.drawSprites()
+                    ast_instance.doSaucerLogic()
+                    ast_instance.displayScore()
+                    ast_instance.checkScore()
+
+                    if ast_instance.gameState == 'playing':
+                        ast_instance.playing()
+                    elif ast_instance.gameState == 'exploding':
+                        ast_instance.exploding()
+                    else:
+                        ast_instance.displayText()
+
+                    pygame.display.flip()
+                    clock.tick(60)
+
+            except Exception as e:
+                print(f"[PlayingState] Error ejecutando Asteroids: {e}")
                 import traceback
                 traceback.print_exc()
             finally:
