@@ -12,7 +12,6 @@ Flujo de Estados:
 
 import sys
 import os
-import pygame
 
 # Importación de la arquitectura de estados y componentes
 from states import (
@@ -24,6 +23,9 @@ from states import (
     SCREEN_WIDTH,
     SCREEN_HEIGHT
 )
+
+import pygame
+
 
 # Configuración del Sistema
 FPS = 60

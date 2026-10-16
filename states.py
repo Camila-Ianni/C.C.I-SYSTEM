@@ -13,8 +13,31 @@ import os
 import sys
 import math
 import time
-import cv2
-import pygame
+
+# En macOS, opencv-python y pygame-ce contienen bibliotecas SDL2 duplicadas en sus .dylibs.
+# Redirigir stderr a nivel de descriptor de archivo de bajo nivel durante la importación
+# silencia limpiamente los warnings de duplicación de Objective-C sin alterar la funcionalidad.
+_old_stderr_fd = None
+try:
+    sys.stderr.flush()
+    _old_stderr_fd = os.dup(2)
+    _devnull_fd = os.open(os.devnull, os.O_WRONLY)
+    os.dup2(_devnull_fd, 2)
+    os.close(_devnull_fd)
+except Exception:
+    _old_stderr_fd = None
+
+try:
+    import pygame
+    import cv2
+finally:
+    if _old_stderr_fd is not None:
+        try:
+            os.dup2(_old_stderr_fd, 2)
+            os.close(_old_stderr_fd)
+        except Exception:
+            pass
+
 
 # Dimensiones base del sistema virtual
 SCREEN_WIDTH = 1280
@@ -229,27 +252,30 @@ class MenuState(BaseState):
     """
     ESTADO 'MENU': Pantalla de selección interactiva basada en 'games.png' (6 juegos).
     - Renderiza 'games.png' (1452x1083) escalado de forma proporcional y centrado en 1280x720.
-    - Soporta rejilla 2x3 con navegación completa (Izquierda/Derecha/Arriba/Abajo / WASD).
-    - Resalta con precisión el contorno metálico del card seleccionado:
+    - Soporta rejilla 2x3 con navegación completa (Izquierda/Derecha/Arriba/Abajo / WASD):
       Fila 0:
         (0,0) Da Vinci Fighters
         (0,1) Metal Slug
-        (0,2) Super Mario Bros
+        (0,2) Asteroids
       Fila 1:
-        (1,0) Pac-Man
-        (1,1) Space Invaders
-        (1,2) Asteroids
+        (1,0) Super Mario Bros
+        (1,1) Pac-Man
+        (1,2) Space Invaders
+    - Efecto Hover dinámico: Al posicionarse sobre cualquier juego con el teclado,
+      la tarjeta cambia instantáneamente a su versión a todo color extraída de 'cards-color.jpeg'
+      y se ilumina con el halo arcade cibernético.
     - Selección con ENTER o ESPACIO.
     """
     def __init__(self, state_machine):
         super().__init__(state_machine)
+        # Disposición real de los 6 cartuchos en la interfaz gráfica
         self.options = [
             {"key": "davinci", "title": "Da Vinci Fighters", "row": 0, "col": 0},
             {"key": "metalslug", "title": "Metal Slug", "row": 0, "col": 1},
-            {"key": "mario", "title": "Super Mario Bros", "row": 0, "col": 2},
-            {"key": "pacman", "title": "Pac-Man", "row": 1, "col": 0},
-            {"key": "space_invaders", "title": "Space Invaders", "row": 1, "col": 1},
-            {"key": "asteroids", "title": "Asteroids", "row": 1, "col": 2},
+            {"key": "asteroids", "title": "Asteroids", "row": 0, "col": 2},
+            {"key": "mario", "title": "Super Mario Bros", "row": 1, "col": 0},
+            {"key": "pacman", "title": "Pac-Man", "row": 1, "col": 1},
+            {"key": "space_invaders", "title": "Space Invaders", "row": 1, "col": 2},
         ]
         self.selected_index = 0
         self.anim_timer = 0.0
@@ -258,9 +284,10 @@ class MenuState(BaseState):
         self.bg_image = None
         self.img_rect = None
         self.card_rects = []
+        self.color_cards = []
 
         orig_w, orig_h = 1452, 1083
-        scale = SCREEN_HEIGHT / orig_h  # 720 / 1083 ≈ 0.6648
+        scale = SCREEN_HEIGHT / orig_h  # 720 / 1083 ≈ 0.66482
         scaled_w = int(orig_w * scale)   # ~965 px
         scaled_h = SCREEN_HEIGHT         # 720 px
         self.offset_x = (SCREEN_WIDTH - scaled_w) // 2  # Centrado horizontal (~157 px)
@@ -277,31 +304,71 @@ class MenuState(BaseState):
             except Exception as e:
                 print(f"[MenuState] Error cargando imagen de menú {img_path}: {e}")
 
-        # Coordenadas exactas de los 6 cards en games.png (1452x1083):
+        # Coordenadas exactas y calibradas de los 6 cards en games.png (1452x1083):
         # Fila 0:
-        #   (0,0) Da Vinci Fighters: [31, 209, 449, 351]
-        #   (0,1) Metal Slug:        [480, 204, 480, 356]
-        #   (0,2) Super Mario:       [960, 204, 448, 356]
+        #   (0,0) Da Vinci Fighters: [381, 262, 330, 243]
+        #   (0,1) Metal Slug:        [740, 262, 325, 243]
+        #   (0,2) Asteroids:         [1086, 262, 321, 243]
         # Fila 1:
-        #   (1,0) Pac-Man:           [30, 570, 450, 370]
-        #   (1,1) Space Invaders:    [480, 570, 480, 370]
-        #   (1,2) Asteroids:         [960, 570, 469, 370]
-        def to_screen(rx, ry, rw, rh):
-            return pygame.Rect(
-                int(self.offset_x + rx * scale),
-                int(ry * scale),
-                int(rw * scale),
-                int(rh * scale)
-            )
-
-        self.card_rects = [
-            to_screen(31, 209, 449, 351),   # Da Vinci Fighters
-            to_screen(480, 204, 480, 356),  # Metal Slug
-            to_screen(960, 204, 448, 356),  # Super Mario
-            to_screen(30, 570, 450, 370),   # Pac-Man
-            to_screen(480, 570, 480, 370),  # Space Invaders
-            to_screen(960, 570, 469, 370),  # Asteroids
+        #   (1,0) Super Mario Bros:  [381, 530, 330, 253]
+        #   (1,1) Pac-Man:           [740, 530, 325, 253]
+        #   (1,2) Space Invaders:    [1086, 530, 321, 253]
+        games_boxes = [
+            (381, 262, 330, 243),  # Da Vinci
+            (740, 262, 325, 243),  # Metal Slug
+            (1086, 262, 321, 243), # Asteroids
+            (381, 530, 330, 253),  # Super Mario
+            (740, 530, 325, 253),  # Pac-Man
+            (1086, 530, 321, 253), # Space Invaders
         ]
+
+        for gx, gy, gw, gh in games_boxes:
+            sx = int(round(self.offset_x + gx * scale))
+            sy = int(round(gy * scale))
+            sw = int(round(gw * scale))
+            sh = int(round(gh * scale))
+            self.card_rects.append(pygame.Rect(sx, sy, sw, sh))
+
+        # Cargar y recortar las tarjetas en color desde 'cards-color.jpeg' para el efecto hover
+        self._load_color_cards(scale, games_boxes)
+
+    def _load_color_cards(self, scale, games_boxes):
+        """Corta y prepara los sprites a color de cada tarjeta con bordes transparentes."""
+        color_path = "cards-color.jpeg"
+        if not os.path.exists(color_path):
+            return
+
+        try:
+            col_img = pygame.image.load(color_path)
+            # Bounding boxes de las cards en la imagen fuente de alta resolución (2400x1792)
+            src_boxes = [
+                (628, 433, 548, 403),  # Da Vinci Fighters
+                (1223, 433, 538, 404), # Metal Slug
+                (1795, 433, 533, 405), # Asteroids
+                (628, 876, 548, 420),  # Super Mario Bros
+                (1223, 876, 538, 421), # Pac-Man
+                (1796, 876, 532, 421), # Space Invaders
+            ]
+
+            for i, (bx, by, bw, bh) in enumerate(src_boxes):
+                sub = col_img.subsurface(pygame.Rect(bx, by, bw, bh)).copy().convert_alpha()
+                # Volver transparentes los píxeles blancos del fondo alrededor de las esquinas redondeadas
+                try:
+                    import pygame.surfarray
+                    arr = pygame.surfarray.pixels3d(sub)
+                    alpha_arr = pygame.surfarray.pixels_alpha(sub)
+                    is_bg = (arr[:, :, 0] > 235) & (arr[:, :, 1] > 235) & (arr[:, :, 2] > 235)
+                    alpha_arr[is_bg] = 0
+                    del arr
+                    del alpha_arr
+                except Exception:
+                    pass
+
+                target_rect = self.card_rects[i]
+                scaled_card = pygame.transform.smoothscale(sub, (target_rect.width, target_rect.height))
+                self.color_cards.append(scaled_card)
+        except Exception as e:
+            print(f"[MenuState] Aviso cargando cards en color: {e}")
 
     def enter(self):
         self.anim_timer = 0.0
@@ -359,38 +426,44 @@ class MenuState(BaseState):
     def draw(self, screen):
         screen.fill((0, 0, 0))
 
+        # 1. Dibujar el fondo base con todas las cards en escala de grises (games.png)
         if self.bg_image and self.img_rect:
             screen.blit(self.bg_image, self.img_rect)
 
-        # Destacar la tarjeta seleccionada con borde y glow preciso
         selected_rect = self.card_rects[self.selected_index]
         pulse = (math.sin(self.anim_timer * 5.0) + 1.0) / 2.0  # Rango 0.0 a 1.0
 
-        # Resplandor cian/azul arcade exterior suave
-        glow_alpha = int(35 + pulse * 45)
+        # 2. Efecto HOVER: Superponer la tarjeta activa en versión COLOR
+        if self.selected_index < len(self.color_cards):
+            color_surf = self.color_cards[self.selected_index]
+            screen.blit(color_surf, (selected_rect.x, selected_rect.y))
+
+        # 3. Resplandor cian/azul arcade exterior suave
+        glow_alpha = int(45 + pulse * 55)
         glow_surf = pygame.Surface((selected_rect.width + 12, selected_rect.height + 12), pygame.SRCALPHA)
         pygame.draw.rect(
             glow_surf,
             (0, 215, 255, glow_alpha),
             glow_surf.get_rect(),
-            border_radius=14
+            border_radius=12
         )
         screen.blit(glow_surf, (selected_rect.x - 6, selected_rect.y - 6))
 
-        # Marco metálico iluminado exacto sobre el borde del card
+        # 4. Marco metálico iluminado exacto sobre el borde del card seleccionado
         border_color = (
-            int(150 + pulse * 105),
-            int(210 + pulse * 45),
+            int(160 + pulse * 95),
+            int(220 + pulse * 35),
             255
         )
-        pygame.draw.rect(screen, border_color, selected_rect, width=2, border_radius=10)
+        pygame.draw.rect(screen, border_color, selected_rect, width=3, border_radius=10)
 
-        # Indicador de selección activo
+        # 5. Indicador de selección activo "► ACTIVE ◄"
         font_p1 = pygame.font.Font(None, 22)
         tag_text = font_p1.render("► ACTIVE ◄", True, border_color)
         tag_x = selected_rect.centerx - (tag_text.get_width() // 2)
-        tag_y = selected_rect.top - 16 + int(pulse * 2)
+        tag_y = selected_rect.top - 18 + int(pulse * 2)
         screen.blit(tag_text, (tag_x, tag_y))
+
 
 
 class PlayingState(BaseState):
