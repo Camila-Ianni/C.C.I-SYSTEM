@@ -591,26 +591,7 @@ class MenuState(BaseState):
             self.font = pygame.font.SysFont("Courier", 13, bold=True)
             self.font_large = pygame.font.SysFont("Courier", 15, bold=True)
 
-        # Cargar secuencia de frames animados (1, 2 y 3.png) para el panel izquierdo
-        self.side_anim_frames = []
-        anim_dir = "anim_girl_frames"
-        if os.path.exists(anim_dir):
-            scale_factor = 0.95
-            file_list = sorted([f for f in os.listdir(anim_dir) if f.startswith("frame_") and f.endswith(".png")])
-            for fname in file_list:
-                fpath = os.path.join(anim_dir, fname)
-                try:
-                    fr_surf = pygame.image.load(fpath).convert_alpha()
-                    sw = max(10, int(fr_surf.get_width() * scale_factor))
-                    sh = max(10, int(fr_surf.get_height() * scale_factor))
-                    scaled_fr = pygame.transform.smoothscale(fr_surf, (sw, sh))
-                    self.side_anim_frames.append(scaled_fr)
-                except Exception as e:
-                    print(f"[MenuState] Error cargando frame {fpath}: {e}")
 
-        # Velocidad de reproducción calibrada (3.0 FPS) para que cada pose se distinga perfectamente
-        self.side_anim_fps = 3.0
-        self.side_anim_time = 0.0
 
     def enter(self):
         self.anim_timer = 0.0
@@ -659,7 +640,6 @@ class MenuState(BaseState):
 
     def update(self, dt):
         self.anim_timer += dt
-        self.side_anim_time += dt
         
         # Interpolación suave (lerp) del carrusel con envoltura circular más corta
         num_options = len(self.options)
@@ -679,15 +659,6 @@ class MenuState(BaseState):
         # 1. Dibujar fondo Sci-Fi C.C.I. SYSTEM (select_game.jpeg) centrado
         if self.bg_image:
             screen.blit(self.bg_image, (self.offset_x, 0))
-
-        # 1.1 Renderizar animación de personaje en el espacio vacío de la izquierda (1, 2, 3 y 4.png)
-        if self.side_anim_frames:
-            total_fr = len(self.side_anim_frames)
-            current_fr_idx = int(self.side_anim_time * self.side_anim_fps) % total_fr
-            fr_img = self.side_anim_frames[current_fr_idx]
-            # Centrado en X en el panel izquierdo (x=380) y apoyado sobre el cuadro de diálogo (y=555)
-            fr_rect = fr_img.get_rect(midbottom=(380, 555))
-            screen.blit(fr_img, fr_rect)
 
         # 2. Renderizar carrusel en rueda vertical cilíndrica (5 slots visibles en pantalla)
         num_options = len(self.options)

@@ -34,7 +34,6 @@ El menú principal de la consola ha sido rediseñado con un estilo arcade avanza
 - **Fondo Futurista (`select_game.jpeg`):** Pantalla de control con estética cyber-arcade.
 - **Rueda Cilíndrica (Carrusel Vertical):** Rueda de tarjetas a la derecha con curvatura, escala dinámica, profundidad e interpolación suave (*lerp*).
 - **Marco de Selección:** Recuadro blanco brillante y flechas indicadoras (`< >`) sobre el título seleccionado.
-- **Panel Lateral con Animación Fluida:** Animación de personaje extraída de spritesheets en el lateral izquierdo, libre de fondos blancos y calibrada en velocidad y tamaño.
 - **Cuadro de Diálogo Dinámico:** Caja inferior con retrato del avatar y descripción interactiva de cada título.
 
 ---
@@ -166,7 +165,6 @@ C.C.I-SYSTEM/
 ├── Pixel_girl_...mp4           # Video cinemático del avatar con audio sincronizado
 ├── select_game.jpeg            # Fondo base de alta definición del menú arcade
 ├── assets_cards/               # Tarjetas y texturas transparentes de los 9 juegos
-├── anim_girl_frames/           # Secuencia de animación del avatar en el menú
 ├── Davinci-Fighter/            # Juego de lucha arcade (Personajes, AI, Spritesheets, InputManager)
 ├── METAL SLUG/                 # Juego de acción 2D (Físicas Pymunk)
 ├── Mario/                      # Recreación de Super Mario Bros
