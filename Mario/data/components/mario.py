@@ -1108,14 +1108,11 @@ class Mario(pg.sprite.Sprite):
 
 
     def hurt_invincible_check(self):
-        """Makes Mario invincible on a fixed interval"""
-        if self.hurt_invisible_timer == 0:
-            self.hurt_invisible_timer = self.current_time
-        elif (self.current_time - self.hurt_invisible_timer) < 35:
-            self.image.set_alpha(0)
-        elif (self.current_time - self.hurt_invisible_timer) < 70:
+        """Makes Mario blink semitransparently while hurt-invincible so he is always visible"""
+        if (self.current_time // 60) % 2 == 0:
+            self.image.set_alpha(100)
+        else:
             self.image.set_alpha(255)
-            self.hurt_invisible_timer = self.current_time
 
 
     def check_if_crouching(self):
