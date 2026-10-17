@@ -1308,25 +1308,20 @@ class PlayingState(BaseState):
                 change_piece = False
                 run_tetris = True
                 current_piece = tetris_mod.get_shape()
-                next_piece = tetris_mod.get_shape()
+                next_pieces_queue = [tetris_mod.get_shape() for _ in range(3)]
                 fall_time = 0
                 fall_speed = 0.35
-                level_time = 0
                 score = 0
+                lines_cleared_total = 0
+                level = 1
                 last_score = tetris_mod.get_max_score()
 
-                pygame.display.set_caption("TETRIS CLASSIC")
+                pygame.display.set_caption("TETRIS CLASSIC ARCADE")
 
                 while run_tetris:
                     grid = tetris_mod.create_grid(locked_positions)
                     fall_time += clock.get_rawtime()
-                    level_time += clock.get_rawtime()
                     clock.tick(60)
-
-                    if level_time / 1000 > 5:
-                        level_time = 0
-                        if fall_speed > 0.15:
-                            fall_speed -= 0.005
 
                     if fall_time / 1000 > fall_speed:
                         fall_time = 0
@@ -1364,18 +1359,23 @@ class PlayingState(BaseState):
                                 if not tetris_mod.valid_space(current_piece, grid):
                                     current_piece.rotation = (current_piece.rotation - 1) % len(current_piece.shape)
 
+                    piece_pos = tetris_mod.convert_shape_format(current_piece)
+
                     if change_piece:
                         for pos in piece_pos:
-                            p = (pos[0], pos[1])
-                            locked_positions[p] = current_piece.color
-                        current_piece = next_piece
-                        next_piece = tetris_mod.get_shape()
+                            locked_positions[pos] = current_piece.color
+                        current_piece = next_pieces_queue.pop(0)
+                        next_pieces_queue.append(tetris_mod.get_shape())
                         change_piece = False
-                        cleared = tetris_mod.clear_rows(grid, locked_positions)
-                        score += cleared * 10
-                        tetris_mod.update_score(score)
-                        if last_score < score:
-                            last_score = score
+                        cleared = tetris_mod.clear_rows(tetris_mod.create_grid(locked_positions), locked_positions)
+                        if cleared > 0:
+                            lines_cleared_total += cleared
+                            score += cleared * 10
+                            level = 1 + (lines_cleared_total // 10)
+                            fall_speed = max(0.08, 0.35 - (level - 1) * 0.03)
+                            tetris_mod.update_score(score)
+                            if last_score < score:
+                                last_score = score
 
                     # Reconstruir cuadrícula limpia con posiciones bloqueadas
                     grid = tetris_mod.create_grid(locked_positions)
@@ -1387,19 +1387,19 @@ class PlayingState(BaseState):
                         if y >= 0:
                             grid[y][x] = current_piece.color
 
-                    tetris_mod.draw_window(t_surf, grid, score, last_score)
-                    tetris_mod.draw_next_shape(next_piece, t_surf)
+                    tetris_mod.draw_window(t_surf, grid, score, level, last_score)
+                    tetris_mod.draw_next_shape_queue(next_pieces_queue, t_surf)
 
-                    # Escalar y centrar t_surf (800x750) en screen (1280x720)
-                    scaled_t = pygame.transform.smoothscale(t_surf, (768, 720))
-                    screen.fill((10, 10, 15))
-                    screen.blit(scaled_t, ((1280 - 768) // 2, 0))
+                    # Escalar y centrar t_surf (800x720) en screen (1280x720)
+                    scaled_t = pygame.transform.smoothscale(t_surf, (800, 720))
+                    screen.fill((8, 7, 12))
+                    screen.blit(scaled_t, ((1280 - 800) // 2, 0))
                     pygame.display.flip()
 
                     if tetris_mod.check_lost(locked_positions):
                         tetris_mod.draw_text_middle('You Lost', 40, (255, 255, 255), t_surf)
-                        scaled_t = pygame.transform.smoothscale(t_surf, (768, 720))
-                        screen.blit(scaled_t, ((1280 - 768) // 2, 0))
+                        scaled_t = pygame.transform.smoothscale(t_surf, (800, 720))
+                        screen.blit(scaled_t, ((1280 - 800) // 2, 0))
                         pygame.display.flip()
                         pygame.time.delay(1500)
                         run_tetris = False
