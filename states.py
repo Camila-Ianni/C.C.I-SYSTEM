@@ -491,177 +491,148 @@ class IntroAvatarState(VideoState):
 
 class MenuState(BaseState):
     """
-    ESTADO 'MENU': Pantalla de selección interactiva basada en 'games.png' (6 juegos).
-    - Renderiza 'games.png' (1452x1083) escalado de forma proporcional y centrado en 1280x720.
-    - Soporta rejilla 2x3 con navegación completa (Izquierda/Derecha/Arriba/Abajo / WASD):
-      Fila 0:
-        (0,0) Da Vinci Fighters
-        (0,1) Metal Slug
-        (0,2) Asteroids
-      Fila 1:
-        (1,0) Super Mario Bros
-        (1,1) Pac-Man
-        (1,2) Space Invaders
-    - Efecto Hover dinámico: Al posicionarse sobre cualquier juego con el teclado,
-      la tarjeta cambia instantáneamente a su versión a todo color extraída de 'cards-color.jpeg'
-      y se ilumina con el halo arcade cibernético.
-    - Selección con ENTER o ESPACIO.
+    ESTADO 'MENU': Carrusel interactivo estilo rueda cilíndrica 3D sobre 'select_game.jpeg'.
+    - 9 Juegos integrados:
+        1. Da Vinci Fighters
+        2. Metal Slug
+        3. Asteroids
+        4. Super Mario Bros
+        5. Pac-Man
+        6. Space Invaders
+        7. Tetris
+        8. The Legend of Zelda
+        9. DOOM
+    - Carrusel vertical cilíndrico idéntico al diseño de referencia:
+      * Tarjeta central destacada con marco blanco brillante sci-fi y flechas indicadoras (< >).
+      * Tarjetas superiores e inferiores curvadas hacia la derecha con escala, opacidad y perspectiva.
+      * Desplazamiento ultra suave con inercia e interpolación lerp.
+      * Navegación con Arriba/Abajo (W/S o Flechas o D-pad / Stick del Gamepad).
+      * Confirmación con ENTER o ESPACIO o Botón X / A del Gamepad.
     """
     def __init__(self, state_machine):
         super().__init__(state_machine)
-        # Disposición real de los 6 cartuchos en la interfaz gráfica
         self.options = [
-            {"key": "davinci", "title": "Da Vinci Fighters", "row": 0, "col": 0},
-            {"key": "metalslug", "title": "Metal Slug", "row": 0, "col": 1},
-            {"key": "asteroids", "title": "Asteroids", "row": 0, "col": 2},
-            {"key": "mario", "title": "Super Mario Bros", "row": 1, "col": 0},
-            {"key": "pacman", "title": "Pac-Man", "row": 1, "col": 1},
-            {"key": "space_invaders", "title": "Space Invaders", "row": 1, "col": 2},
+            {"key": "davinci",        "title": "Da Vinci Fighters",  "dialog": "Da Vinci Fighters: Combate arcade 1v1."},
+            {"key": "metalslug",      "title": "Metal Slug",         "dialog": "Metal Slug: Acción bélica y tanques arcade."},
+            {"key": "asteroids",      "title": "Asteroids",          "dialog": "Asteroids: Clásico vector espacial de Atari."},
+            {"key": "mario",          "title": "Super Mario Bros",   "dialog": "Super Mario Bros: Aventura en el Reino Champiñón."},
+            {"key": "pacman",         "title": "Pac-Man",            "dialog": "Pac-Man: Come fantasmas en el laberinto."},
+            {"key": "space_invaders", "title": "Space Invaders",     "dialog": "Space Invaders: Defiende la Tierra de la invasión alienígena."},
+            {"key": "tetris",         "title": "Tetris",             "dialog": "Tetris: Encaja los tetriminos y limpia líneas."},
+            {"key": "zelda",          "title": "Zelda",              "dialog": "The Legend of Zelda: Explora y lucha en Hyrule."},
+            {"key": "doom",           "title": "DOOM",               "dialog": "DOOM: Acción shooter en primera persona en Marte."}
         ]
         self.selected_index = 0
+        self.scroll_pos = 0.0  # Posición suave interpolada
         self.anim_timer = 0.0
 
-        # Cargar games.png preservando su relación de aspecto (1452x1083)
+        # Cargar fondo base select_game.jpeg centrado en 1280x720
         self.bg_image = None
-        self.img_rect = None
-        self.card_rects = []
-        self.color_cards = []
-
-        orig_w, orig_h = 1452, 1083
-        scale = SCREEN_HEIGHT / orig_h  # 720 / 1083 ≈ 0.66482
-        scaled_w = int(orig_w * scale)   # ~965 px
+        self.offset_x = 0
+        orig_w, orig_h = 2400, 1792
+        scale = SCREEN_HEIGHT / orig_h  # 720 / 1792 ≈ 0.40178
+        scaled_w = int(orig_w * scale)   # ~964 px
         scaled_h = SCREEN_HEIGHT         # 720 px
-        self.offset_x = (SCREEN_WIDTH - scaled_w) // 2  # Centrado horizontal (~157 px)
+        self.offset_x = (SCREEN_WIDTH - scaled_w) // 2  # Centrado horizontal (158 px)
 
-        img_path = "games.png"
-        if not os.path.exists(img_path):
-            img_path = "select_game.jpg"
+        bg_path = "select_game.jpeg"
+        if not os.path.exists(bg_path):
+            bg_path = "select_game.jpg"
 
-        if os.path.exists(img_path):
+        if os.path.exists(bg_path):
             try:
-                loaded = pygame.image.load(img_path).convert()
+                loaded = pygame.image.load(bg_path).convert()
                 self.bg_image = pygame.transform.smoothscale(loaded, (scaled_w, scaled_h))
-                self.img_rect = pygame.Rect(self.offset_x, 0, scaled_w, scaled_h)
             except Exception as e:
-                print(f"[MenuState] Error cargando imagen de menú {img_path}: {e}")
+                print(f"[MenuState] Error cargando fondo {bg_path}: {e}")
 
-        # Coordenadas exactas y calibradas de los 6 cards en games.png (1452x1083):
-        # Fila 0:
-        #   (0,0) Da Vinci Fighters: [381, 262, 330, 243]
-        #   (0,1) Metal Slug:        [740, 262, 325, 243]
-        #   (0,2) Asteroids:         [1086, 262, 321, 243]
-        # Fila 1:
-        #   (1,0) Super Mario Bros:  [381, 530, 330, 253]
-        #   (1,1) Pac-Man:           [740, 530, 325, 253]
-        #   (1,2) Space Invaders:    [1086, 530, 321, 253]
-        games_boxes = [
-            (381, 262, 330, 243),  # Da Vinci
-            (740, 262, 325, 243),  # Metal Slug
-            (1086, 262, 321, 243), # Asteroids
-            (381, 530, 330, 253),  # Super Mario
-            (740, 530, 325, 253),  # Pac-Man
-            (1086, 530, 321, 253), # Space Invaders
-        ]
+        # Cargar recursos del carrusel: tarjetas limpias, marco resaltado y flechas
+        self.card_surfs = {}
+        for opt in self.options:
+            key = opt["key"]
+            clean_path = f"assets_cards/{key}_clean.png"
+            if not os.path.exists(clean_path):
+                clean_path = f"assets_cards/{key}.png"
+            if os.path.exists(clean_path):
+                try:
+                    self.card_surfs[key] = pygame.image.load(clean_path).convert_alpha()
+                except Exception as e:
+                    print(f"[MenuState] Error cargando tarjeta {clean_path}: {e}")
 
-        for gx, gy, gw, gh in games_boxes:
-            sx = int(round(self.offset_x + gx * scale))
-            sy = int(round(gy * scale))
-            sw = int(round(gw * scale))
-            sh = int(round(gh * scale))
-            self.card_rects.append(pygame.Rect(sx, sy, sw, sh))
+        # Flechas de navegación del centro
+        self.arrow_left = None
+        self.arrow_right = None
+        if os.path.exists("assets_cards/arrow_left_clean.png"):
+            self.arrow_left = pygame.image.load("assets_cards/arrow_left_clean.png").convert_alpha()
+        if os.path.exists("assets_cards/arrow_right_clean.png"):
+            self.arrow_right = pygame.image.load("assets_cards/arrow_right_clean.png").convert_alpha()
 
-        # Cargar y recortar las tarjetas en B&N y Color desde 'cards-bn.jpeg' y 'cards-color.jpeg'
-        self.bn_cards = []
-        self.color_cards = []
-        self._load_cards(scale, games_boxes)
+        # Marco de selección brillante
+        self.selected_border = None
+        if os.path.exists("assets_cards/selected_border_clean.png"):
+            self.selected_border = pygame.image.load("assets_cards/selected_border_clean.png").convert_alpha()
 
-    def _load_cards(self, scale, games_boxes):
-        """
-        Corta y prepara los sprites de cada tarjeta:
-        - Versión en Blanco y Negro (cards-bn.jpeg) para el estado inactivo.
-        - Versión a todo Color (cards-color.jpeg) para el efecto Hover al seleccionarla.
-        """
-        bn_path = "cards-bn.jpeg"
-        color_path = "cards-color.jpeg"
+        # Fuente retro para textos informativos
+        self.font = None
+        for font_candidate in [
+            "./Zelda/extracted/15 - fixes audio/graphics/font/joystix.ttf",
+            "./tetris/mario.ttf",
+            "./Space-invaders/font/Pixeled.ttf",
+            "./Mario/resources/fonts/Fixedsys500c.ttf"
+        ]:
+            if os.path.exists(font_candidate):
+                try:
+                    self.font = pygame.font.Font(font_candidate, 13)
+                    self.font_large = pygame.font.Font(font_candidate, 15)
+                    break
+                except Exception:
+                    pass
+        if self.font is None:
+            self.font = pygame.font.SysFont("Courier", 13, bold=True)
+            self.font_large = pygame.font.SysFont("Courier", 15, bold=True)
 
-        # Bounding boxes de las cards en la imagen fuente de alta resolución (2400x1792)
-        src_boxes = [
-            (628, 433, 548, 403),  # Da Vinci Fighters
-            (1223, 433, 538, 404), # Metal Slug
-            (1795, 433, 533, 405), # Asteroids
-            (628, 876, 548, 420),  # Super Mario Bros
-            (1223, 876, 538, 421), # Pac-Man
-            (1796, 876, 532, 421), # Space Invaders
-        ]
+        # Cargar secuencia de frames animados (1, 2 y 3.png) para el panel izquierdo
+        self.side_anim_frames = []
+        anim_dir = "anim_girl_frames"
+        if os.path.exists(anim_dir):
+            scale_factor = 0.95
+            file_list = sorted([f for f in os.listdir(anim_dir) if f.startswith("frame_") and f.endswith(".png")])
+            for fname in file_list:
+                fpath = os.path.join(anim_dir, fname)
+                try:
+                    fr_surf = pygame.image.load(fpath).convert_alpha()
+                    sw = max(10, int(fr_surf.get_width() * scale_factor))
+                    sh = max(10, int(fr_surf.get_height() * scale_factor))
+                    scaled_fr = pygame.transform.smoothscale(fr_surf, (sw, sh))
+                    self.side_anim_frames.append(scaled_fr)
+                except Exception as e:
+                    print(f"[MenuState] Error cargando frame {fpath}: {e}")
 
-        # 1. Cargar cards en B&N
-        if os.path.exists(bn_path):
-            try:
-                bn_img = pygame.image.load(bn_path)
-                for i, (bx, by, bw, bh) in enumerate(src_boxes):
-                    sub = bn_img.subsurface(pygame.Rect(bx, by, bw, bh)).copy().convert_alpha()
-                    try:
-                        arr = pygame.surfarray.pixels3d(sub)
-                        alpha_arr = pygame.surfarray.pixels_alpha(sub)
-                        is_bg = (arr[:, :, 0] > 230) & (arr[:, :, 1] > 230) & (arr[:, :, 2] > 230)
-                        alpha_arr[is_bg] = 0
-                        del arr
-                        del alpha_arr
-                    except Exception:
-                        pass
-                    target_rect = self.card_rects[i]
-                    scaled_card = pygame.transform.smoothscale(sub, (target_rect.width, target_rect.height))
-                    self.bn_cards.append(scaled_card)
-            except Exception as e:
-                print(f"[MenuState] Aviso cargando cards B&N: {e}")
-
-        # 2. Cargar cards a Color
-        if os.path.exists(color_path):
-            try:
-                col_img = pygame.image.load(color_path)
-                for i, (bx, by, bw, bh) in enumerate(src_boxes):
-                    sub = col_img.subsurface(pygame.Rect(bx, by, bw, bh)).copy().convert_alpha()
-                    try:
-                        arr = pygame.surfarray.pixels3d(sub)
-                        alpha_arr = pygame.surfarray.pixels_alpha(sub)
-                        is_bg = (arr[:, :, 0] > 230) & (arr[:, :, 1] > 230) & (arr[:, :, 2] > 230)
-                        alpha_arr[is_bg] = 0
-                        del arr
-                        del alpha_arr
-                    except Exception:
-                        pass
-                    target_rect = self.card_rects[i]
-                    scaled_card = pygame.transform.smoothscale(sub, (target_rect.width, target_rect.height))
-                    self.color_cards.append(scaled_card)
-            except Exception as e:
-                print(f"[MenuState] Aviso cargando cards en color: {e}")
+        # Velocidad de reproducción calibrada (3.0 FPS) para que cada pose se distinga perfectamente
+        self.side_anim_fps = 3.0
+        self.side_anim_time = 0.0
 
     def enter(self):
         self.anim_timer = 0.0
-        pygame.display.set_caption("C.C.I. SYSTEM - SELECT GAME (6 CARTRIDGES)")
+        self.scroll_pos = float(self.selected_index)
+        pygame.display.set_caption("C.C.I. SYSTEM - SELECT GAME (9 GAMES)")
 
     def handle_events(self, events):
+        num_options = len(self.options)
         for event in events:
             if event.type == pygame.KEYDOWN:
-                cur_row = self.selected_index // 3
-                cur_col = self.selected_index % 3
-
-                if event.key in (pygame.K_LEFT, pygame.K_a):
-                    cur_col = (cur_col - 1) % 3
-                    self.selected_index = cur_row * 3 + cur_col
-                    self._play_beep(pitch=600)
-                elif event.key in (pygame.K_RIGHT, pygame.K_d):
-                    cur_col = (cur_col + 1) % 3
-                    self.selected_index = cur_row * 3 + cur_col
-                    self._play_beep(pitch=600)
-                elif event.key in (pygame.K_UP, pygame.K_w):
-                    cur_row = (cur_row - 1) % 2
-                    self.selected_index = cur_row * 3 + cur_col
-                    self._play_beep(pitch=500)
+                if event.key in (pygame.K_UP, pygame.K_w):
+                    self.selected_index = (self.selected_index - 1) % num_options
+                    self._play_beep(pitch=650)
                 elif event.key in (pygame.K_DOWN, pygame.K_s):
-                    cur_row = (cur_row + 1) % 2
-                    self.selected_index = cur_row * 3 + cur_col
-                    self._play_beep(pitch=500)
+                    self.selected_index = (self.selected_index + 1) % num_options
+                    self._play_beep(pitch=550)
+                elif event.key in (pygame.K_LEFT, pygame.K_a):
+                    self.selected_index = (self.selected_index - 1) % num_options
+                    self._play_beep(pitch=650)
+                elif event.key in (pygame.K_RIGHT, pygame.K_d):
+                    self.selected_index = (self.selected_index + 1) % num_options
+                    self._play_beep(pitch=550)
                 elif event.key in (pygame.K_RETURN, pygame.K_SPACE, pygame.K_KP_ENTER):
                     selected_game = self.options[self.selected_index]["key"]
                     self._play_beep(pitch=900)
@@ -688,24 +659,113 @@ class MenuState(BaseState):
 
     def update(self, dt):
         self.anim_timer += dt
+        self.side_anim_time += dt
+        
+        # Interpolación suave (lerp) del carrusel con envoltura circular más corta
+        num_options = len(self.options)
+        target = self.selected_index
+        diff = (target - self.scroll_pos)
+        while diff > num_options / 2:
+            diff -= num_options
+        while diff < -num_options / 2:
+            diff += num_options
+            
+        self.scroll_pos += diff * min(1.0, dt * 14.0)
+        self.scroll_pos %= num_options
 
     def draw(self, screen):
         screen.fill((0, 0, 0))
 
-        # 1. Dibujar el marco y fondo base del arcade (games.png)
-        if self.bg_image and self.img_rect:
-            screen.blit(self.bg_image, self.img_rect)
+        # 1. Dibujar fondo Sci-Fi C.C.I. SYSTEM (select_game.jpeg) centrado
+        if self.bg_image:
+            screen.blit(self.bg_image, (self.offset_x, 0))
 
-        # 2. Dibujar todas las tarjetas:
-        # Si no está seleccionada -> versión Blanco y Negro (cards-bn)
-        # Si está seleccionada (HOVER) -> versión a todo Color (cards-color)
-        for i, card_rect in enumerate(self.card_rects):
-            if i == self.selected_index and i < len(self.color_cards):
-                screen.blit(self.color_cards[i], (card_rect.x, card_rect.y))
-            elif i < len(self.bn_cards):
-                screen.blit(self.bn_cards[i], (card_rect.x, card_rect.y))
+        # 1.1 Renderizar animación de personaje en el espacio vacío de la izquierda (1, 2, 3 y 4.png)
+        if self.side_anim_frames:
+            total_fr = len(self.side_anim_frames)
+            current_fr_idx = int(self.side_anim_time * self.side_anim_fps) % total_fr
+            fr_img = self.side_anim_frames[current_fr_idx]
+            # Centrado en X en el panel izquierdo (x=380) y apoyado sobre el cuadro de diálogo (y=555)
+            fr_rect = fr_img.get_rect(midbottom=(380, 555))
+            screen.blit(fr_img, fr_rect)
 
-        # Solo las imágenes: las inactivas en B&N y la seleccionada a Color (Hover)
+        # 2. Renderizar carrusel en rueda vertical cilíndrica (5 slots visibles en pantalla)
+        num_options = len(self.options)
+        center_y = 327
+        center_x = 882
+
+        # Para cada distancia relativa de -2 a +2 alrededor de la posición de scroll
+        # Renderizamos de afuera hacia adentro para un correcto z-index
+        indices_to_draw = [-2, 2, -1, 1, 0]
+        
+        for offset in indices_to_draw:
+            # Calcular índice continuo relativo a la posición interpolada
+            rel_idx = offset - (self.scroll_pos - round(self.scroll_pos))
+            actual_idx = (round(self.scroll_pos) + offset) % num_options
+            game_opt = self.options[actual_idx]
+            game_key = game_opt["key"]
+
+            if game_key not in self.card_surfs:
+                continue
+
+            # Parámetros cilíndricos calibrados con la imagen de referencia:
+            # d: distancia respecto al centro seleccionado (-2.0 .. +2.0)
+            d = rel_idx
+            
+            # Altura en Y con espaciado cilíndrico (~115px por slot)
+            slot_y = center_y + d * 115.0
+            
+            # Curvatura cilíndrica en X: se desplaza a la derecha cuanto más lejos del centro
+            slot_x = center_x + (d * d) * 10.5
+            
+            # Escala de la tarjeta: 100% en el centro, disminuye en los extremos (~85%)
+            scale_factor = 1.0 - abs(d) * 0.08
+            card_w = max(10, int(380 * scale_factor))
+            card_h = max(10, int(109 * scale_factor))
+
+            # Alpha / brillo: tarjetas no seleccionadas son ligeramente más tenues
+            alpha = max(100, int(255 - abs(d) * 45))
+
+            card_base = self.card_surfs[game_key]
+            scaled_card = pygame.transform.smoothscale(card_base, (card_w, card_h))
+
+            if alpha < 255:
+                scaled_card.set_alpha(alpha)
+
+            card_rect = scaled_card.get_rect(center=(int(slot_x), int(slot_y)))
+            screen.blit(scaled_card, card_rect)
+
+            # Si es el elemento central (offset == 0) y el scroll está casi asentado:
+            if offset == 0 and abs(self.scroll_pos - self.selected_index) < 0.25:
+                # Dibujar marco blanco brillante con pulsación sutil
+                if self.selected_border:
+                    pulse = int(2 + math.sin(self.anim_timer * 6.0) * 1.5)
+                    bw = card_w + pulse * 2
+                    bh = card_h + pulse * 2
+                    border_surf = pygame.transform.smoothscale(self.selected_border, (bw, bh))
+                    b_rect = border_surf.get_rect(center=(int(slot_x), int(slot_y)))
+                    screen.blit(border_surf, b_rect)
+
+                # Flechas de navegación (< >)
+                arrow_offset = int(math.sin(self.anim_timer * 8.0) * 3.0)
+                if self.arrow_left:
+                    la_rect = self.arrow_left.get_rect(center=(int(slot_x - card_w // 2 - 24 + arrow_offset), int(slot_y)))
+                    screen.blit(self.arrow_left, la_rect)
+                if self.arrow_right:
+                    ra_rect = self.arrow_right.get_rect(center=(int(slot_x + card_w // 2 + 24 - arrow_offset), int(slot_y)))
+                    screen.blit(self.arrow_right, ra_rect)
+
+        # 3. Cuadro de diálogo inferior dinámico con el juego seleccionado
+        current_opt = self.options[self.selected_index]
+        dialog_text_1 = "Selecciona un juego"
+        dialog_text_2 = f"> {current_opt['title']}"
+        
+        # Coordenadas exactas del cuadro de texto interior en 1280x720: x=348, y=612
+        if self.font:
+            t1 = self.font.render(dialog_text_1, True, (210, 215, 225))
+            t2 = self.font.render(dialog_text_2, True, (255, 255, 255))
+            screen.blit(t1, (350, 612))
+            screen.blit(t2, (350, 632))
 
 
 
@@ -1250,6 +1310,264 @@ class PlayingState(BaseState):
                         pygame.mixer.stop()
                 except Exception:
                     pass
+                os.chdir(original_cwd)
+
+        elif self.game_key == "tetris":
+            tetris_dir = os.path.join(root_dir, "tetris")
+            print(f"[PlayingState] Cargando Tetris desde {tetris_dir}...")
+            original_cwd = os.getcwd()
+            try:
+                os.chdir(tetris_dir)
+                if tetris_dir not in sys.path:
+                    sys.path.insert(0, tetris_dir)
+
+                import Tetris as tetris_mod
+
+                # Tetris está diseñado para 800x750 en superficie interna o screen
+                # Creamos una superficie virtual de 800x750 y la escalamos a 1280x720 centrado
+                t_surf = pygame.Surface((tetris_mod.s_width, tetris_mod.s_height))
+                clock = pygame.time.Clock()
+                locked_positions = {}
+                grid = tetris_mod.create_grid(locked_positions)
+                change_piece = False
+                run_tetris = True
+                current_piece = tetris_mod.get_shape()
+                next_piece = tetris_mod.get_shape()
+                fall_time = 0
+                fall_speed = 0.35
+                level_time = 0
+                score = 0
+                last_score = tetris_mod.get_max_score()
+
+                pygame.display.set_caption("TETRIS CLASSIC")
+
+                while run_tetris:
+                    grid = tetris_mod.create_grid(locked_positions)
+                    fall_time += clock.get_rawtime()
+                    level_time += clock.get_rawtime()
+                    clock.tick(60)
+
+                    if level_time / 1000 > 5:
+                        level_time = 0
+                        if fall_speed > 0.15:
+                            fall_speed -= 0.005
+
+                    if fall_time / 1000 > fall_speed:
+                        fall_time = 0
+                        current_piece.y += 1
+                        if not tetris_mod.valid_space(current_piece, grid) and current_piece.y > 0:
+                            current_piece.y -= 1
+                            change_piece = True
+
+                    events = pygame.event.get()
+                    # Mapear eventos de Joystick
+                    for ev in events:
+                        synth = joystick_manager.process_event(ev)
+                        events.extend(synth)
+
+                    for event in events:
+                        if event.type == pygame.QUIT:
+                            run_tetris = False
+                        elif event.type == pygame.KEYDOWN:
+                            if event.key == pygame.K_ESCAPE:
+                                run_tetris = False
+                            elif event.key == pygame.K_LEFT or event.key == pygame.K_a:
+                                current_piece.x -= 1
+                                if not tetris_mod.valid_space(current_piece, grid):
+                                    current_piece.x += 1
+                            elif event.key == pygame.K_RIGHT or event.key == pygame.K_d:
+                                current_piece.x += 1
+                                if not tetris_mod.valid_space(current_piece, grid):
+                                    current_piece.x -= 1
+                            elif event.key == pygame.K_DOWN or event.key == pygame.K_s:
+                                current_piece.y += 1
+                                if not tetris_mod.valid_space(current_piece, grid):
+                                    current_piece.y -= 1
+                            elif event.key == pygame.K_UP or event.key == pygame.K_w or event.key == pygame.K_j or event.key == pygame.K_SPACE:
+                                current_piece.rotation = (current_piece.rotation + 1) % len(current_piece.shape)
+                                if not tetris_mod.valid_space(current_piece, grid):
+                                    current_piece.rotation = (current_piece.rotation - 1) % len(current_piece.shape)
+
+                    piece_pos = tetris_mod.convert_shape_format(current_piece)
+                    for i in range(len(piece_pos)):
+                        x, y = piece_pos[i]
+                        if y >= 0:
+                            grid[y][x] = current_piece.color
+
+                    if change_piece:
+                        for pos in piece_pos:
+                            p = (pos[0], pos[1])
+                            locked_positions[p] = current_piece.color
+                        current_piece = next_piece
+                        next_piece = tetris_mod.get_shape()
+                        change_piece = False
+                        cleared = tetris_mod.clear_rows(grid, locked_positions)
+                        score += cleared * 10
+                        tetris_mod.update_score(score)
+                        if last_score < score:
+                            last_score = score
+
+                    tetris_mod.draw_window(t_surf, grid, score, last_score)
+                    tetris_mod.draw_next_shape(next_piece, t_surf)
+
+                    # Escalar y centrar t_surf (800x750) en screen (1280x720)
+                    scaled_t = pygame.transform.smoothscale(t_surf, (768, 720))
+                    screen.fill((10, 10, 15))
+                    screen.blit(scaled_t, ((1280 - 768) // 2, 0))
+                    pygame.display.flip()
+
+                    if tetris_mod.check_lost(locked_positions):
+                        tetris_mod.draw_text_middle('You Lost', 40, (255, 255, 255), t_surf)
+                        scaled_t = pygame.transform.smoothscale(t_surf, (768, 720))
+                        screen.blit(scaled_t, ((1280 - 768) // 2, 0))
+                        pygame.display.flip()
+                        pygame.time.delay(1500)
+                        run_tetris = False
+
+            except Exception as e:
+                print(f"[PlayingState] Error ejecutando Tetris: {e}")
+                import traceback
+                traceback.print_exc()
+            finally:
+                try:
+                    if pygame.mixer.get_init():
+                        pygame.mixer.music.stop()
+                        pygame.mixer.stop()
+                except Exception:
+                    pass
+                if tetris_dir in sys.path:
+                    sys.path.remove(tetris_dir)
+                for mod in CONFLICTING_MODULES:
+                    sys.modules.pop(mod, None)
+                os.chdir(original_cwd)
+
+        elif self.game_key == "doom":
+            doom_dir = os.path.join(root_dir, "DOOM")
+            print(f"[PlayingState] Cargando DOOM desde {doom_dir}...")
+            original_cwd = os.getcwd()
+            try:
+                os.chdir(doom_dir)
+                if doom_dir not in sys.path:
+                    sys.path.insert(0, doom_dir)
+
+                orig_set_mode = pygame.display.set_mode
+                # DOOM renderiza a RES = (1600, 900)
+                doom_surf = pygame.Surface((1600, 900))
+                pygame.display.set_mode = lambda *args, **kwargs: doom_surf
+
+                from main import Game as DoomGame
+                doom_game = DoomGame()
+                doom_game.screen = doom_surf
+                pygame.display.set_mode = orig_set_mode
+                pygame.display.set_caption("DOOM 3D - C.C.I. SYSTEM")
+
+                clock = pygame.time.Clock()
+                running_doom = True
+
+                while running_doom:
+                    doom_game.global_trigger = False
+                    events = pygame.event.get()
+                    for ev in events:
+                        synth = joystick_manager.process_event(ev)
+                        events.extend(synth)
+
+                    for event in events:
+                        if event.type == pygame.QUIT:
+                            running_doom = False
+                        elif event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+                            running_doom = False
+                        elif event.type == doom_game.global_event:
+                            doom_game.global_trigger = True
+                        doom_game.player.single_fire_event(event)
+
+                    doom_game.player.update()
+                    doom_game.raycasting.update()
+                    doom_game.object_handler.update()
+                    doom_game.weapon.update()
+                    doom_game.delta_time = clock.tick(60)
+
+                    doom_game.draw()
+
+                    # Escalar de 1600x900 (16:9) directo a 1280x720 (16:9)
+                    scaled_doom = pygame.transform.scale(doom_surf, (SCREEN_WIDTH, SCREEN_HEIGHT))
+                    screen.blit(scaled_doom, (0, 0))
+                    pygame.display.flip()
+
+            except Exception as e:
+                print(f"[PlayingState] Error ejecutando DOOM: {e}")
+                import traceback
+                traceback.print_exc()
+            finally:
+                try:
+                    pygame.mouse.set_visible(True)
+                    pygame.event.set_grab(False)
+                    if pygame.mixer.get_init():
+                        pygame.mixer.music.stop()
+                        pygame.mixer.stop()
+                except Exception:
+                    pass
+                if doom_dir in sys.path:
+                    sys.path.remove(doom_dir)
+                for mod in CONFLICTING_MODULES:
+                    sys.modules.pop(mod, None)
+                os.chdir(original_cwd)
+
+        elif self.game_key == "zelda":
+            zelda_dir = os.path.join(root_dir, "Zelda", "extracted", "15 - fixes audio", "code")
+            print(f"[PlayingState] Cargando Zelda desde {zelda_dir}...")
+            original_cwd = os.getcwd()
+            try:
+                os.chdir(zelda_dir)
+                if zelda_dir not in sys.path:
+                    sys.path.insert(0, zelda_dir)
+
+                orig_set_mode = pygame.display.set_mode
+                pygame.display.set_mode = lambda *args, **kwargs: screen
+
+                from main import Game as ZeldaGame
+                zelda_game = ZeldaGame()
+                zelda_game.screen = screen
+                pygame.display.set_mode = orig_set_mode
+                pygame.display.set_caption("THE LEGEND OF ZELDA")
+
+                clock = pygame.time.Clock()
+                running_zelda = True
+
+                while running_zelda:
+                    events = pygame.event.get()
+                    for ev in events:
+                        synth = joystick_manager.process_event(ev)
+                        events.extend(synth)
+
+                    for event in events:
+                        if event.type == pygame.QUIT:
+                            running_zelda = False
+                        elif event.type == pygame.KEYDOWN:
+                            if event.key == pygame.K_ESCAPE:
+                                running_zelda = False
+                            elif event.key == pygame.K_m:
+                                zelda_game.level.toggle_menu()
+
+                    screen.fill('#71ddee')
+                    zelda_game.level.run()
+                    pygame.display.update()
+                    clock.tick(60)
+
+            except Exception as e:
+                print(f"[PlayingState] Error ejecutando Zelda: {e}")
+                import traceback
+                traceback.print_exc()
+            finally:
+                try:
+                    if pygame.mixer.get_init():
+                        pygame.mixer.music.stop()
+                        pygame.mixer.stop()
+                except Exception:
+                    pass
+                if zelda_dir in sys.path:
+                    sys.path.remove(zelda_dir)
+                for mod in CONFLICTING_MODULES:
+                    sys.modules.pop(mod, None)
                 os.chdir(original_cwd)
 
         # Limpiar eventos residuales y pantalla antes de regresar al Menú C.C.I.

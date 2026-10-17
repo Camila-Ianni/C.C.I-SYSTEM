@@ -6,22 +6,36 @@
 ![Architecture](https://img.shields.io/badge/architecture-State%20Machine-purple)
 ![Gamepads](https://img.shields.io/badge/gamepad-DualSense%20%7C%20Xbox%20%7C%20Generic-orange)
 
-**C.C.I. SYSTEM** es una plataforma arcade integral desarrollada en **Python** y **Pygame-CE (Community Edition)**. Unifica seis títulos arcade clásicos y de autor bajo un entorno gráfico retrofuturista de ventana única (`1280x720`), orquestado mediante un patrón arquitectónico de **Máquina de Estados Finita (State Machine)** con aislamiento estricto de entornos y namespaces.
+**C.C.I. SYSTEM** es una plataforma arcade integral desarrollada en **Python** y **Pygame-CE (Community Edition)**. Unifica nueve títulos arcade clásicos y de autor bajo un entorno gráfico retrofuturista de ventana única (`1280x720`), orquestado mediante un patrón arquitectónico de **Máquina de Estados Finita (State Machine)** con aislamiento estricto de entornos y namespaces.
 
 ---
 
-## 🎮 Videojuegos Integrados (6 Títulos)
+## 🎮 Videojuegos Integrados (9 Títulos)
 
-La consola incluye un catálogo de 6 juegos organizados en una cuadrícula interactiva con preview dinámica:
+La consola incluye un catálogo de 9 juegos organizados en un menú con **carrusel vertical cilíndrico** de estética Sci-Fi, efectos de perspectiva y animación fluida:
 
 | Juego | Género | Motor / Características |
 | :--- | :--- | :--- |
 | **Da Vinci Fighters** | Lucha 2D Arcade (CPS-1 Style) | Motor propio de combate, soporte 1P vs CPU y 2P Local, selector de personajes, supers, combos y cinemáticas. |
 | **Metal Slug: Super Vehicle-001** | Run & Gun | Motor de físicas Pymunk, renderizado multicapa y vehículos operables. |
 | **Asteroids** | Arcade Espacial Vectorial | Vector arcade retro clásico con sistema de físicas de inercia y disparos. |
-| **Super Mario Bros** | Plataformas 2D | Recreación con motor modular por estados, físicas y niveles clásicos. |
+| **Super Mario Bros** | Plataformas 2D | Recreación con motor modular por estados, físicas y niveles clásicos. Corrección en transición de daño para evitar desapariciones de sprite. |
 | **Pac-Man** | Laberinto Arcade | IA de fantasmas basada en cuadrícula, pellets y efectos de sonido arcade. |
 | **Space Invaders** | Shoot 'em up Fijo | Sistema de oleadas alienígenas, bunkers destructibles y disparos reactivos. |
+| **Tetris** | Puzzle Clásico | Caída libre de tetriminos, rotación, cálculo de puntuación y eliminación de líneas con aceleración progresiva. |
+| **The Legend of Zelda** | Action RPG 2D | Exploración en Hyrule con vista top-down, sistema de armas, magias, enemigos y audio interactivo. |
+| **DOOM** | First Person Shooter (FPS 3D) | Motor 3D por Raycasting, armas, enemigos animados, mapa laberíntico y captura de ratón. |
+
+---
+
+## 🎡 Nuevo Menú de Selección Estilo Carrusel Sci-Fi
+
+El menú principal de la consola ha sido rediseñado con un estilo arcade avanzado:
+- **Fondo Futurista (`select_game.jpeg`):** Pantalla de control con estética cyber-arcade.
+- **Rueda Cilíndrica (Carrusel Vertical):** Rueda de tarjetas a la derecha con curvatura, escala dinámica, profundidad e interpolación suave (*lerp*).
+- **Marco de Selección:** Recuadro blanco brillante y flechas indicadoras (`< >`) sobre el título seleccionado.
+- **Panel Lateral con Animación Fluida:** Animación de personaje extraída de spritesheets en el lateral izquierdo, libre de fondos blancos y calibrada en velocidad y tamaño.
+- **Cuadro de Diálogo Dinámico:** Caja inferior con retrato del avatar y descripción interactiva de cada título.
 
 ---
 
@@ -46,7 +60,7 @@ Además del elenco original de profesores de Da Vinci (*Carloni, Cavasso, Romero
 ### 🎮 Soporte Integral para Joysticks / Gamepads
 - **Detección automática y Hot-plugging:** DualSense (PS5), DualShock (PS4), mandos de Xbox Series/One, Switch Pro y mandos genéricos USB (`pygame._sdl2.controller` con fallback a `pygame.joystick`).
 - **Navegación completa con Gamepad:**
-  - Navegación y confirmación en el Menú Principal de la consola.
+  - Navegación y confirmación en el Menú Principal y Carrusel.
   - Selección de luchador en la pantalla de selección de personaje (**Character Select**).
   - Control completo de combate para Player 1 y Player 2.
 
@@ -64,19 +78,19 @@ La consola corre en una única ventana de `1280x720` con gestión de audio e int
    │  ↳ Salto con ENTER / ESPACIO / Botón Mando ──┤
    ▼ (Al finalizar)                              │
    └────────────────────────────────────────────►▼
-                                              [MENU] (Rejilla interactiva 2x3 con selector dinámico)
+                                              [MENU] (Carrusel interactivo 3D con 9 títulos)
                                                  │
-                   ┌──────────────┬──────────────┼──────────────┬──────────────┬──────────────┐
-                   ▼              ▼              ▼              ▼              ▼              ▼
-                Da Vinci      Metal Slug     Asteroids        Mario         Pac-Man     Space Invaders
-                   │              │              │              │              │              │
-                   └──────────────┴──────────────┴──────┬───────┴──────────────┴──────────────┘
+          ┌──────────────┬──────────────┬────────┼──────────────┬──────────────┬──────────────┐
+          ▼              ▼              ▼        ▼              ▼              ▼              ▼
+       Da Vinci      Metal Slug     Asteroids  Mario         Pac-Man     Space Invaders   Tetris / Zelda / DOOM
+          │              │              │        │              │              │              │
+          └──────────────┴──────────────┴────────┴──────┬───────┴──────────────┴──────────────┘
                                                         │
                                                         ▼ (Escape o fin de partida)
                                                       [MENU]
 ```
 
-- **Aislamiento de Módulos (Sandbox de ejecución):** Al cargar y salir de cualquier juego, el sistema purga colisiones de módulos cacheados (`sys.modules` como `settings`, `game`, `audio_manager`) y restaura `sys.path` y `cwd` para permitir alternar entre todos los títulos sin reiniciar la aplicación.
+- **Aislamiento de Módulos (Sandbox de ejecución):** Al cargar y salir de cualquier juego, el sistema purga colisiones de módulos cacheados (`sys.modules` como `settings`, `game`, `audio_manager`) y restaura `sys.path` y `cwd` para permitir alternar entre los 9 títulos sin reiniciar la aplicación ni degradar el rendimiento.
 
 ---
 
@@ -85,8 +99,8 @@ La consola corre en una única ventana de `1280x720` con gestión de audio e int
 ### 🕹️ Controles Generales (Launcher y Menús)
 | Acción | Teclado | Mando / Joystick |
 | :--- | :--- | :--- |
-| **Navegar en Rejilla** | `Flechas` o `W / A / S / D` | `D-Pad` o `Stick Izquierdo` |
-| **Seleccionar / Confirmar** | `Enter` o `Espacio` | `Botón A / Cruz / X / Start` |
+| **Navegar en Carrusel** | `W / S` o `Flechas Arriba / Abajo` | `D-Pad` o `Stick Izquierdo` |
+| **Seleccionar / Jugar** | `Enter` o `Espacio` | `Botón A / Cruz / X / Start` |
 | **Saltar Cinemáticas** | `Enter` o `Espacio` | `Cualquier Botón Principal` |
 | **Volver al Menú Principal** | `Escape` | `Botón Select / Share` |
 
@@ -145,28 +159,23 @@ python main.py
 ```text
 C.C.I-SYSTEM/
 ├── main.py                     # Entry point y bucle principal del sistema
-├── states.py                   # Máquina de estados (Boot, IntroAvatar, Menu, Playing)
+├── states.py                   # Máquina de estados (Boot, IntroAvatar, Menu con carrusel, Playing)
 ├── requirements.txt            # Dependencias del proyecto
 ├── README.md                   # Documentación oficial
 ├── CCI_INTRO.mp4               # Video de arranque de la consola
 ├── Pixel_girl_...mp4           # Video cinemático del avatar con audio sincronizado
-├── games.png                   # Arte base del selector de juegos (2x3)
-├── cards-color.jpeg            # Texturas HD para el efecto hover de selección
-├── documentacion/              # Documentación técnica y especificaciones de software
-│   ├── 1_RELEVAMIENTO_Y_ALCANCE.md
-│   ├── 2_PROPUESTA_DE_VALOR.md
-│   ├── 3_SRS_ESPECIFICACION_REQUERIMIENTOS.md
-│   ├── 4_CASOS_DE_USO.md
-│   ├── 5_MANUAL_DE_INSTALACION.md
-│   ├── 6_MANUAL_DE_USUARIO.md
-│   ├── 7_DIAGRAMA_DE_GANTT.md
-│   └── 8_CODIGO_FUENTE_Y_ARQUITECTURA.md
+├── select_game.jpeg            # Fondo base de alta definición del menú arcade
+├── assets_cards/               # Tarjetas y texturas transparentes de los 9 juegos
+├── anim_girl_frames/           # Secuencia de animación del avatar en el menú
 ├── Davinci-Fighter/            # Juego de lucha arcade (Personajes, AI, Spritesheets, InputManager)
 ├── METAL SLUG/                 # Juego de acción 2D (Físicas Pymunk)
 ├── Mario/                      # Recreación de Super Mario Bros
 ├── PacMan/                     # Clásico Pac-Man arcade
 ├── Space-invaders/             # Space Invaders clásico
-└── asteroids/                  # Asteroids retro vectorial
+├── asteroids/                  # Asteroids retro vectorial
+├── tetris/                     # Tetris clásico interactivo
+├── Zelda/                      # The Legend of Zelda (Action RPG)
+└── DOOM/                       # DOOM 3D Raycasting Engine
 ```
 
 ---

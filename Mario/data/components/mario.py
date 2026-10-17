@@ -716,6 +716,7 @@ class Mario(pg.sprite.Sprite):
         transitioning to big"""
         self.in_transition_state = True
 
+        diff = self.current_time - self.transition_timer
         if self.transition_timer == 0:
             self.transition_timer = self.current_time
         elif self.timer_between_these_two_times(135, 200):
@@ -738,7 +739,7 @@ class Mario(pg.sprite.Sprite):
             self.set_mario_to_big_image()
         elif self.timer_between_these_two_times(820, 885):
             self.set_mario_to_small_image()
-        elif self.timer_between_these_two_times(885, 950):
+        elif diff >= 885:
             self.set_mario_to_big_image()
             self.state = c.WALK
             self.in_transition_state = False
@@ -822,37 +823,38 @@ class Mario(pg.sprite.Sprite):
                       self.left_big_red_frames[3],
                       self.left_big_black_frames[3]]
 
+        diff = self.current_time - self.fire_transition_timer
         if self.fire_transition_timer == 0:
             self.fire_transition_timer = self.current_time
-        elif (self.current_time - self.fire_transition_timer) > 65 and (self.current_time - self.fire_transition_timer) < 130:
+        elif diff < 130:
             self.image = frames[0]
-        elif (self.current_time - self.fire_transition_timer) < 195:
+        elif diff < 195:
             self.image = frames[1]
-        elif (self.current_time - self.fire_transition_timer) < 260:
+        elif diff < 260:
             self.image = frames[2]
-        elif (self.current_time - self.fire_transition_timer) < 325:
+        elif diff < 325:
             self.image = frames[3]
-        elif (self.current_time - self.fire_transition_timer) < 390:
+        elif diff < 390:
             self.image = frames[0]
-        elif (self.current_time - self.fire_transition_timer) < 455:
+        elif diff < 455:
             self.image = frames[1]
-        elif (self.current_time - self.fire_transition_timer) < 520:
+        elif diff < 520:
             self.image = frames[2]
-        elif (self.current_time - self.fire_transition_timer) < 585:
+        elif diff < 585:
             self.image = frames[3]
-        elif (self.current_time - self.fire_transition_timer) < 650:
+        elif diff < 650:
             self.image = frames[0]
-        elif (self.current_time - self.fire_transition_timer) < 715:
+        elif diff < 715:
             self.image = frames[1]
-        elif (self.current_time - self.fire_transition_timer) < 780:
+        elif diff < 780:
             self.image = frames[2]
-        elif (self.current_time - self.fire_transition_timer) < 845:
+        elif diff < 845:
             self.image = frames[3]
-        elif (self.current_time - self.fire_transition_timer) < 910:
+        elif diff < 910:
             self.image = frames[0]
-        elif (self.current_time - self.fire_transition_timer) < 975:
+        elif diff < 975:
             self.image = frames[1]
-        elif (self.current_time - self.fire_transition_timer) < 1040:
+        else:
             self.image = frames[2]
             self.fire = True
             self.in_transition_state = False
@@ -878,49 +880,50 @@ class Mario(pg.sprite.Sprite):
                       self.left_small_normal_frames[8]
                      ]
 
+        diff = self.current_time - self.transition_timer
         if self.transition_timer == 0:
             self.transition_timer = self.current_time
-        elif (self.current_time - self.transition_timer) < 265:
+        elif diff < 265:
             self.image = frames[0]
             self.hurt_invincible_check()
             self.adjust_rect()
-        elif (self.current_time - self.transition_timer) < 330:
+        elif diff < 330:
             self.image = frames[1]
             self.hurt_invincible_check()
             self.adjust_rect()
-        elif (self.current_time - self.transition_timer) < 395:
+        elif diff < 395:
             self.image = frames[2]
             self.hurt_invincible_check()
             self.adjust_rect()
-        elif (self.current_time - self.transition_timer) < 460:
+        elif diff < 460:
             self.image = frames[1]
             self.hurt_invincible_check()
             self.adjust_rect()
-        elif (self.current_time - self.transition_timer) < 525:
+        elif diff < 525:
             self.image = frames[2]
             self.hurt_invincible_check()
             self.adjust_rect()
-        elif (self.current_time - self.transition_timer) < 590:
+        elif diff < 590:
             self.image = frames[1]
             self.hurt_invincible_check()
             self.adjust_rect()
-        elif (self.current_time - self.transition_timer) < 655:
+        elif diff < 655:
             self.image = frames[2]
             self.hurt_invincible_check()
             self.adjust_rect()
-        elif (self.current_time - self.transition_timer) < 720:
+        elif diff < 720:
             self.image = frames[1]
             self.hurt_invincible_check()
             self.adjust_rect()
-        elif (self.current_time - self.transition_timer) < 785:
+        elif diff < 785:
             self.image = frames[2]
             self.hurt_invincible_check()
             self.adjust_rect()
-        elif (self.current_time - self.transition_timer) < 850:
+        elif diff < 850:
             self.image = frames[1]
             self.hurt_invincible_check()
             self.adjust_rect()
-        elif (self.current_time - self.transition_timer) < 915:
+        else:
             self.image = frames[2]
             self.adjust_rect()
             self.in_transition_state = False
@@ -1097,6 +1100,8 @@ class Mario(pg.sprite.Sprite):
                 self.hurt_invincible = False
                 self.hurt_invisible_timer = 0
                 self.hurt_invisible_timer2 = 0
+                if self.image:
+                    self.image.set_alpha(255)
                 for frames in self.all_images:
                     for image in frames:
                         image.set_alpha(255)
