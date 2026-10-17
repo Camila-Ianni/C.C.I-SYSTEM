@@ -768,11 +768,16 @@ class PlayingState(BaseState):
         except Exception:
             pass
 
-        # Limpiar módulos en colisión entre juegos (settings, audio_manager, game, menu, etc.)
+        # Capturar instantánea de módulos base del launcher para purgar completamente
+        # cualquier colisión (por ejemplo: weapon.py de Zelda vs weapon.py de DOOM)
+        base_modules = set(sys.modules.keys())
         CONFLICTING_MODULES = [
             "settings", "audio_manager", "game", "menu", "input_manager",
             "character_select", "player", "intro_cutscene", "title_screen",
-            "vs_screen", "pacman", "main", "constants", "config", "setup", "tools"
+            "vs_screen", "pacman", "main", "constants", "config", "setup", "tools",
+            "weapon", "level", "tile", "support", "entity", "enemy", "magic", "ui",
+            "upgrade", "particles", "debug", "sound", "npc", "object_renderer",
+            "raycasting", "object_handler", "map", "sprite_object", "pathfinding"
         ]
         for mod in CONFLICTING_MODULES:
             sys.modules.pop(mod, None)
@@ -1540,6 +1545,11 @@ class PlayingState(BaseState):
                 for mod in CONFLICTING_MODULES:
                     sys.modules.pop(mod, None)
                 os.chdir(original_cwd)
+
+        # Limpiar exhaustivamente cualquier módulo importado por el juego ejecutado
+        for mod in list(sys.modules.keys()):
+            if mod not in base_modules:
+                sys.modules.pop(mod, None)
 
         # Limpiar eventos residuales y pantalla antes de regresar al Menú C.C.I.
         pygame.event.clear()
