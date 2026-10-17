@@ -442,12 +442,6 @@ def main(window):
 
         piece_pos = convert_shape_format(current_piece)
 
-        # draw the piece on the grid by giving color in the piece locations
-        for i in range(len(piece_pos)):
-            x, y = piece_pos[i]
-            if y >= 0:
-                grid[y][x] = current_piece.color
-
         if change_piece:  # if the piece is locked
             for pos in piece_pos:
                 p = (pos[0], pos[1])
@@ -460,6 +454,14 @@ def main(window):
 
             if last_score < score:
                 last_score = score
+
+        grid = create_grid(locked_positions)
+        piece_pos = convert_shape_format(current_piece)
+        # draw the piece on the grid by giving color in the piece locations
+        for i in range(len(piece_pos)):
+            x, y = piece_pos[i]
+            if y >= 0:
+                grid[y][x] = current_piece.color
 
         draw_window(window, grid, score, last_score)
         draw_next_shape(next_piece, window)

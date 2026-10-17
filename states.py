@@ -1364,12 +1364,6 @@ class PlayingState(BaseState):
                                 if not tetris_mod.valid_space(current_piece, grid):
                                     current_piece.rotation = (current_piece.rotation - 1) % len(current_piece.shape)
 
-                    piece_pos = tetris_mod.convert_shape_format(current_piece)
-                    for i in range(len(piece_pos)):
-                        x, y = piece_pos[i]
-                        if y >= 0:
-                            grid[y][x] = current_piece.color
-
                     if change_piece:
                         for pos in piece_pos:
                             p = (pos[0], pos[1])
@@ -1382,6 +1376,16 @@ class PlayingState(BaseState):
                         tetris_mod.update_score(score)
                         if last_score < score:
                             last_score = score
+
+                    # Reconstruir cuadrícula limpia con posiciones bloqueadas
+                    grid = tetris_mod.create_grid(locked_positions)
+
+                    # Colocar la pieza actual en movimiento sobre la cuadrícula
+                    piece_pos = tetris_mod.convert_shape_format(current_piece)
+                    for i in range(len(piece_pos)):
+                        x, y = piece_pos[i]
+                        if y >= 0:
+                            grid[y][x] = current_piece.color
 
                     tetris_mod.draw_window(t_surf, grid, score, last_score)
                     tetris_mod.draw_next_shape(next_piece, t_surf)
