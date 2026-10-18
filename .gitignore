@@ -24,9 +24,12 @@ METAL SLUG/No Commentary].mp4
 *.raw
 .cached_*.raw
 
-# Temporary debug test outputs
+# Temporary debug outputs
 METAL SLUG/test_output/
 METAL SLUG/scratch/
 METAL SLUG/tests copy/
 .agents/
 .claude/
+.cci-user-data/
+.work/
+outputs/

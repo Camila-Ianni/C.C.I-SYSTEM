@@ -1,0 +1,8 @@
+{
+	"Bedroom" : { "file" : "maps/bedroom.tmx" },
+	"Downstairs" : { "file" : "maps/downstairs.tmx" },
+	"Bedroom" : { "file" : "maps/bedroom.tmx" },
+	"Pallet Town" : { "file" : "maps/pallet_town.tmx" },
+	"Prof.Oak's Lab" : { "file" : "maps/oak_lab.tmx"},
+	"Rival's House" : { "file" : "maps/rival_house.tmx"}
+}

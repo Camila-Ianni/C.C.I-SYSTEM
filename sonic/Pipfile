@@ -1,0 +1,18 @@
+[[source]]
+name = "pypi"
+url = "https://pypi.org/simple"
+verify_ssl = true
+
+[dev-packages]
+pylint = "*"
+autopep8 = "*"
+jedi = "*"
+
+[packages]
+pygame = "*"
+
+[requires]
+python_version = "3.8"
+
+[scripts]
+sonic = "python3 -m sonic"
