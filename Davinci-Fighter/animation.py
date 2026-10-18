@@ -152,28 +152,49 @@ class AnimationManager:
         for state, cfg in states_config.items():
             file_path = os.path.join(char_dir, f"{state}.png")
             # Velocidades calibradas para que el movimiento sea pausado, natural y legible
-            is_8frame = (char_folder_name in ("cami", "enith", "martin"))
-            count_override = 8 if is_8frame else cfg["count"]
-            if is_8frame:
+            is_50frame = (char_folder_name == "cami")
+            is_8frame = (char_folder_name in ("enith", "martin"))
+            if is_50frame:
+                count_override = 50
+                # Con 50 frames la velocidad por tick es mayor para mantener duraciones naturales
                 if state == "idle":
-                    anim_speed = 0.08   # Respiración calmada y natural (~1.6s el ciclo completo)
+                    anim_speed = 0.45   # ciclo de ~110 ticks, respiracion fluida
                 elif state == "walk":
-                    anim_speed = 0.12   # Pasos firmes sin aceleración irreal
-                elif state == "crouch":
-                    anim_speed = 0.12
+                    anim_speed = 0.55
+                elif state in ("crouch", "jump"):
+                    anim_speed = 0.5
                 elif state in ("block", "hurt", "ko"):
-                    anim_speed = 0.14
+                    anim_speed = 0.4
                 else:
-                    anim_speed = 0.12
+                    anim_speed = 0.6    # ataques: ademas se sincronizan por progreso en fighter.py
             else:
-                anim_speed = cfg["speed"]
-            
+                count_override = 8 if is_8frame else cfg["count"]
+                if is_8frame:
+                    if state == "idle":
+                        anim_speed = 0.08   # Respiración calmada y natural (~1.6s el ciclo completo)
+                    elif state == "walk":
+                        anim_speed = 0.12   # Pasos firmes sin aceleración irreal
+                    elif state == "crouch":
+                        anim_speed = 0.12
+                    elif state in ("block", "hurt", "ko"):
+                        anim_speed = 0.14
+                    else:
+                        anim_speed = 0.12
+                else:
+                    anim_speed = cfg["speed"]
+
+            if is_50frame:
+                # Celdas de 320x260 a tamaño nativo: sin reescalado para no deformar ni pixelar
+                fw, fh, fscale = 320, 260, 1.0
+            else:
+                fw, fh, fscale = int(width / scale), int(height / scale), scale
+
             frames = cls.load_spritesheet(
                 file_path,
-                frame_width=int(width / scale),
-                frame_height=int(height / scale),
+                frame_width=fw,
+                frame_height=fh,
                 frame_count=count_override,
-                scale=scale
+                scale=fscale
             )
 
             if not frames:
