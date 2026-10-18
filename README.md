@@ -6,13 +6,13 @@
 ![Architecture](https://img.shields.io/badge/architecture-State%20Machine-purple)
 ![Gamepads](https://img.shields.io/badge/gamepad-DualSense%20%7C%20Xbox%20%7C%20Generic-orange)
 
-**C.C.I. SYSTEM** es una plataforma arcade integral desarrollada en **Python** y **Pygame-CE (Community Edition)**. Unifica nueve títulos arcade clásicos y de autor bajo un entorno gráfico retrofuturista de ventana única (`1280x720`), orquestado mediante un patrón arquitectónico de **Máquina de Estados Finita (State Machine)** con aislamiento estricto de entornos y namespaces.
+**C.C.I. SYSTEM** es una plataforma arcade integral desarrollada en **Python** y **Pygame-CE (Community Edition)**. Unifica catorce títulos arcade clásicos y de autor bajo un entorno gráfico retrofuturista de ventana única (`1280x720`), orquestado mediante un patrón arquitectónico de **Máquina de Estados Finita (State Machine)** con aislamiento estricto de entornos y namespaces.
 
 ---
 
-## 🎮 Videojuegos Integrados (9 Títulos)
+## 🎮 Videojuegos Integrados (14 Títulos)
 
-La consola incluye un catálogo de 9 juegos organizados en un menú con **carrusel vertical cilíndrico** de estética Sci-Fi, efectos de perspectiva y animación fluida:
+La consola incluye un catálogo de 14 juegos organizados en un menú con **carrusel vertical cilíndrico** de estética Sci-Fi, efectos de perspectiva y animación fluida:
 
 | Juego | Género | Motor / Características |
 | :--- | :--- | :--- |
@@ -25,6 +25,11 @@ La consola incluye un catálogo de 9 juegos organizados en un menú con **carrus
 | **Tetris** | Puzzle Clásico | Caída libre de tetriminos, rotación, cálculo de puntuación y eliminación de líneas con aceleración progresiva. |
 | **The Legend of Zelda** | Action RPG 2D | Exploración en Hyrule con vista top-down, sistema de armas, magias, enemigos y audio interactivo. |
 | **DOOM** | First Person Shooter (FPS 3D) | Motor 3D por Raycasting, armas, enemigos animados, mapa laberíntico y captura de ratón. |
+| **Minecraft** | Sandbox 3D | Construcción de bloques en primera persona con Ursina (requiere `pip install ursina`); corre en su propia ventana. |
+| **Flappy Bird** | Arcade | Vuela entre tuberías; corre en su propio proceso. |
+| **Dino** | Endless Runner | Corre, salta y agáchate para esquivar cactus y pterodáctilos. |
+| **GhostBusters** | Plataformas de acción | Plataformas con scroll y parallax, fantasmas y granadas. |
+| **Cyberpunk Metroidvania** | Plataformas de acción | Metroidvania distópico con niveles Tiled (`Cyberpunk-Metroidvania/Platformer 01-04-2022`). |
 
 ---
 
@@ -77,7 +82,7 @@ La consola corre en una única ventana de `1280x720` con gestión de audio e int
    │  ↳ Salto con ENTER / ESPACIO / Botón Mando ──┤
    ▼ (Al finalizar)                              │
    └────────────────────────────────────────────►▼
-                                              [MENU] (Carrusel interactivo 3D con 9 títulos)
+                                              [MENU] (Carrusel interactivo 3D con 14 títulos)
                                                  │
           ┌──────────────┬──────────────┬────────┼──────────────┬──────────────┬──────────────┐
           ▼              ▼              ▼        ▼              ▼              ▼              ▼
@@ -151,6 +156,14 @@ pip install -r requirements.txt
 python main.py
 ```
 
+### Interfaz interactiva C.C.I.
+
+El launcher usa las pantallas de `pantallas/finales_entrega/` como base visual y las convierte en vistas interactivas de Pygame. **Inicio** usa `pantallas/Menú futurista C.C.I System.png` con el carrusel lateral vertical interactivo; **Juegos** abre la biblioteca con filtros, búsqueda, favoritos y fichas de juego. Perfil, logros y configuración comparten una barra lateral consistente. Los banners conservan su proporción para evitar deformaciones. Los datos locales se guardan en `.cci-user-data/system.json` (se crea al utilizar la consola y no se versiona).
+
+**Controles de la consola:** flechas o WASD para navegar; en Logros, `↑/↓` seleccionan y `←/→` cambian el filtro por juego; `Q/E` cambia el filtro en Juegos; `Enter` abre/juega; `F` marca favorito; `F3` busca; `F2` edita el nombre del perfil y `Esc` vuelve (o sale desde Inicio). `F4` abre Juegos; `F5` Inicio; `F6` Perfil; `F7` Logros y `F8` Configuración. En mandos estándar, `B` vuelve a Inicio y `X/Y/Guide` abren Perfil/Logros/Configuración. También se puede navegar con mouse y con los mandos compatibles con Pygame.
+
+Los nueve juegos ya integrados por `PlayingState` se ejecutan en la ventana de la consola. Dino, Flappy Bird y GhostBusters se inician como procesos Pygame independientes, usando sus carpetas existentes. Un título sin ejecutable o dependencias disponibles se muestra como no disponible en lugar de simular un lanzamiento.
+
 ---
 
 ## 📁 Estructura del Repositorio
@@ -164,7 +177,7 @@ C.C.I-SYSTEM/
 ├── CCI_INTRO.mp4               # Video de arranque de la consola
 ├── Pixel_girl_...mp4           # Video cinemático del avatar con audio sincronizado
 ├── select_game.jpeg            # Fondo base de alta definición del menú arcade
-├── assets_cards/               # Tarjetas y texturas transparentes de los 9 juegos
+├── assets_cards/               # Tarjetas y texturas transparentes de los 14 juegos (nuevas generadas con tools/build_new_cards.py)
 ├── Davinci-Fighter/            # Juego de lucha arcade (Personajes, AI, Spritesheets, InputManager)
 ├── METAL SLUG/                 # Juego de acción 2D (Físicas Pymunk)
 ├── Mario/                      # Recreación de Super Mario Bros
@@ -173,7 +186,9 @@ C.C.I-SYSTEM/
 ├── asteroids/                  # Asteroids retro vectorial
 ├── tetris/                     # Tetris clásico interactivo
 ├── Zelda/                      # The Legend of Zelda (Action RPG)
-└── DOOM/                       # DOOM 3D Raycasting Engine
+├── DOOM/                       # DOOM 3D Raycasting Engine
+├── Minecraft/ Flappy-Bird/ Dino/ GhostBusters/ Cyberpunk-Metroidvania/   # Juegos lanzados como procesos externos
+└── tools/                      # Utilidades (recorte de tarjetas del carrusel)
 ```
 
 ---

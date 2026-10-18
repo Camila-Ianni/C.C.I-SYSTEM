@@ -13,6 +13,8 @@ import os
 import sys
 import math
 import time
+import importlib.util
+import subprocess
 
 # En macOS, opencv-python y pygame-ce contienen bibliotecas SDL2 duplicadas en sus .dylibs.
 # Redirigir stderr a nivel de descriptor de archivo de bajo nivel durante la importación
@@ -29,6 +31,7 @@ except Exception:
 
 import pygame
 import cv2
+from sidebar_ui import draw_sidebar, load_sidebar, make_sidebar_font, sidebar_destination
 
 if _old_stderr_fd is not None:
     try:
@@ -492,7 +495,7 @@ class IntroAvatarState(VideoState):
 class MenuState(BaseState):
     """
     ESTADO 'MENU': Carrusel interactivo estilo rueda cilíndrica 3D sobre 'select_game.jpeg'.
-    - 9 Juegos integrados:
+    - 14 Juegos integrados:
         1. Da Vinci Fighters
         2. Metal Slug
         3. Asteroids
@@ -502,6 +505,7 @@ class MenuState(BaseState):
         7. Tetris
         8. The Legend of Zelda
         9. DOOM
+        10-14. Minecraft, Flappy Bird, Dino, GhostBusters, Cyberpunk Metroidvania
     - Carrusel vertical cilíndrico idéntico al diseño de referencia:
       * Tarjeta central destacada con marco blanco brillante sci-fi y flechas indicadoras (< >).
       * Tarjetas superiores e inferiores curvadas hacia la derecha con escala, opacidad y perspectiva.
@@ -509,44 +513,58 @@ class MenuState(BaseState):
       * Navegación con Arriba/Abajo (W/S o Flechas o D-pad / Stick del Gamepad).
       * Confirmación con ENTER o ESPACIO o Botón X / A del Gamepad.
     """
-    def __init__(self, state_machine):
+    def __init__(self, state_machine, on_game_launch=None):
         super().__init__(state_machine)
+        self.on_game_launch = on_game_launch
         self.options = [
-            {"key": "davinci",        "title": "Da Vinci Fighters",  "dialog": "Da Vinci Fighters: Combate arcade 1v1."},
             {"key": "metalslug",      "title": "Metal Slug",         "dialog": "Metal Slug: Acción bélica y tanques arcade."},
             {"key": "asteroids",      "title": "Asteroids",          "dialog": "Asteroids: Clásico vector espacial de Atari."},
+            {"key": "davinci",        "title": "Da Vinci Fighters",  "dialog": "Da Vinci Fighters: Combate arcade 1v1."},
             {"key": "mario",          "title": "Super Mario Bros",   "dialog": "Super Mario Bros: Aventura en el Reino Champiñón."},
-            {"key": "pacman",         "title": "Pac-Man",            "dialog": "Pac-Man: Come fantasmas en el laberinto."},
+            {"key": "pacman",         "title": "Pac-Man",            "dialog": "Pac-Man: Come puntos y esquiva fantasmas."},
             {"key": "space_invaders", "title": "Space Invaders",     "dialog": "Space Invaders: Defiende la Tierra de la invasión alienígena."},
             {"key": "tetris",         "title": "Tetris",             "dialog": "Tetris: Encaja los tetriminos y limpia líneas."},
             {"key": "zelda",          "title": "Zelda",              "dialog": "The Legend of Zelda: Explora y lucha en Hyrule."},
-            {"key": "doom",           "title": "DOOM",               "dialog": "DOOM: Acción shooter en primera persona en Marte."}
+            {"key": "doom",           "title": "DOOM",               "dialog": "DOOM: Acción shooter en primera persona en Marte."},
+            {"key": "minecraft",      "title": "Minecraft",          "dialog": "Minecraft: Construye y destruye bloques en un mundo 3D."},
+            {"key": "flappy",         "title": "Flappy Bird",        "dialog": "Flappy Bird: Vuela entre las tuberías sin chocar."},
+            {"key": "dino",           "title": "Dino",               "dialog": "Dino: Corre y salta obstáculos sin parar."},
+            {"key": "ghostbusters",   "title": "GhostBusters",       "dialog": "GhostBusters: Plataformas de acción contra fantasmas."},
+            {"key": "cyberpunk",      "title": "Cyberpunk Metroidvania", "dialog": "Cyberpunk Metroidvania: Plataformas de acción distópico."}
         ]
-        self.selected_index = 0
+        self.selected_index = 2
+        self.last_mouse_game = None
+        self.last_mouse_time = 0.0
         self.scroll_pos = 0.0  # Posición suave interpolada
         self.anim_timer = 0.0
 
-        # Cargar fondo base select_game.jpeg centrado en 1280x720
+        # Cargar el lienzo original vacío del carrusel de selección.
         self.bg_image = None
         self.offset_x = 0
-        orig_w, orig_h = 2400, 1792
-        scale = SCREEN_HEIGHT / orig_h  # 720 / 1792 ≈ 0.40178
-        scaled_w = int(orig_w * scale)   # ~964 px
-        scaled_h = SCREEN_HEIGHT         # 720 px
-        self.offset_x = (SCREEN_WIDTH - scaled_w) // 2  # Centrado horizontal (158 px)
-
-        bg_path = "select_game.jpeg"
-        if not os.path.exists(bg_path):
-            bg_path = "select_game.jpg"
+        bg_path = os.path.join("pantallas", "Menú futurista C.C.I System.png")
 
         if os.path.exists(bg_path):
             try:
                 loaded = pygame.image.load(bg_path).convert()
-                self.bg_image = pygame.transform.smoothscale(loaded, (scaled_w, scaled_h))
+                self.bg_image = pygame.transform.smoothscale(
+                    loaded, (SCREEN_WIDTH, SCREEN_HEIGHT)
+                )
             except Exception as e:
                 print(f"[MenuState] Error cargando fondo {bg_path}: {e}")
 
-        # Cargar recursos del carrusel: tarjetas limpias, marco resaltado y flechas
+        # Inicio usa la misma barra de la plantilla base de logros que las otras vistas.
+        self.sidebar_surface = load_sidebar()
+        self.sidebar_font = make_sidebar_font()
+        self.sidebar_extensions = []
+        if self.bg_image:
+            for destination, source, solid_columns in (
+                (pygame.Rect(260, 35, 90, 75), pygame.Rect(350, 35, 90, 75), 90),
+                (pygame.Rect(260, 100, 150, 480), pygame.Rect(410, 100, 150, 480), 80),
+            ):
+                patch = self._feather_background_patch(destination, source, solid_columns)
+                self.sidebar_extensions.append((destination.topleft, patch))
+
+        # Cargar recursos del carrusel: tarjetas limpias y marco resaltado
         self.card_surfs = {}
         for opt in self.options:
             key = opt["key"]
@@ -558,14 +576,6 @@ class MenuState(BaseState):
                     self.card_surfs[key] = pygame.image.load(clean_path).convert_alpha()
                 except Exception as e:
                     print(f"[MenuState] Error cargando tarjeta {clean_path}: {e}")
-
-        # Flechas de navegación del centro
-        self.arrow_left = None
-        self.arrow_right = None
-        if os.path.exists("assets_cards/arrow_left_clean.png"):
-            self.arrow_left = pygame.image.load("assets_cards/arrow_left_clean.png").convert_alpha()
-        if os.path.exists("assets_cards/arrow_right_clean.png"):
-            self.arrow_right = pygame.image.load("assets_cards/arrow_right_clean.png").convert_alpha()
 
         # Marco de selección brillante
         self.selected_border = None
@@ -596,12 +606,36 @@ class MenuState(BaseState):
     def enter(self):
         self.anim_timer = 0.0
         self.scroll_pos = float(self.selected_index)
-        pygame.display.set_caption("C.C.I. SYSTEM - SELECT GAME (9 GAMES)")
+        pygame.display.set_caption("C.C.I. SYSTEM - SELECT GAME (14 GAMES)")
 
     def handle_events(self, events):
         num_options = len(self.options)
         for event in events:
+            if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                destination = self._sidebar_destination(event.pos)
+                if destination:
+                    if destination == "QUIT":
+                        pygame.event.post(pygame.event.Event(pygame.QUIT))
+                    else:
+                        self.state_machine.change_state(destination)
+                    return
+                if self._handle_background_arrow(event.pos):
+                    return
+                if self._handle_card_click(event.pos):
+                    return
             if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_F4:
+                    self.state_machine.change_state("LIBRARY")
+                    return
+                if event.key == pygame.K_F6:
+                    self.state_machine.change_state("PROFILE")
+                    return
+                if event.key == pygame.K_F7:
+                    self.state_machine.change_state("ACHIEVEMENTS")
+                    return
+                if event.key == pygame.K_F8:
+                    self.state_machine.change_state("SETTINGS")
+                    return
                 if event.key in (pygame.K_UP, pygame.K_w):
                     self.selected_index = (self.selected_index - 1) % num_options
                     self._play_beep(pitch=650)
@@ -617,7 +651,60 @@ class MenuState(BaseState):
                 elif event.key in (pygame.K_RETURN, pygame.K_SPACE, pygame.K_KP_ENTER):
                     selected_game = self.options[self.selected_index]["key"]
                     self._play_beep(pitch=900)
-                    self.state_machine.change_state("PLAYING", game_key=selected_game)
+                    self._launch_game(selected_game)
+                elif event.key == pygame.K_ESCAPE:
+                    pygame.event.post(pygame.event.Event(pygame.QUIT))
+
+    def _launch_game(self, game_key):
+        started = time.monotonic()
+        self.state_machine.change_state("PLAYING", game_key=game_key)
+        if self.on_game_launch:
+            try:
+                self.on_game_launch(game_key, time.monotonic() - started)
+            except Exception as exc:
+                print(f"[MenuState] No se pudo registrar la partida: {exc}")
+
+    def _handle_background_arrow(self, pos):
+        """La flecha derecha visible del fondo cambia la selección del juego."""
+        x, y = pos
+        if not (245 <= y <= 400):
+            return False
+        if 1218 <= x <= 1265:
+            self.selected_index = (self.selected_index + 1) % len(self.options)
+            self._play_beep(pitch=550)
+            return True
+        return False
+
+    def _handle_card_click(self, pos):
+        """Permite elegir una tarjeta visible con mouse y doble clic para abrirla."""
+        num_options = len(self.options)
+        round_pos = round(self.scroll_pos)
+        for offset in (-2, -1, 0, 1, 2):
+            d = offset - (self.scroll_pos - round_pos)
+            index = (round_pos + offset) % num_options
+            scale = 1.0 - abs(d) * 0.08
+            width, height = int(500 * scale), int(109 * scale)
+            rect = pygame.Rect(0, 0, width, height)
+            x = 960 + d * d * 14.5
+            y = 327 + d * 115.0
+            rect.center = (int(x), int(y))
+            if rect.collidepoint(pos):
+                now = time.monotonic()
+                if self.last_mouse_game == index and now - self.last_mouse_time < 0.45:
+                    self._play_beep(pitch=900)
+                    self._launch_game(self.options[index]["key"])
+                else:
+                    self.selected_index = index
+                    self._play_beep(pitch=650)
+                self.last_mouse_game = index
+                self.last_mouse_time = now
+                return True
+        return False
+
+    @staticmethod
+    def _sidebar_destination(pos):
+        """Usa las mismas filas de navegación que las demás vistas."""
+        return sidebar_destination(pos)
 
     def _play_beep(self, pitch=500):
         """Genera un tono sintético ligero si el mixer está disponible."""
@@ -653,17 +740,39 @@ class MenuState(BaseState):
         self.scroll_pos += diff * min(1.0, dt * 14.0)
         self.scroll_pos %= num_options
 
+    def _feather_background_patch(self, destination, source, solid_columns=0):
+        """Limpia los restos de la antigua navegación y suaviza su borde exterior."""
+        patch = self.bg_image.subsurface(destination).copy()
+        clean = self.bg_image.subsurface(source).copy()
+        width, height = patch.get_size()
+        fade_width = max(1, width - solid_columns)
+        for column in range(width):
+            alpha = 255 if column < solid_columns else round(
+                255 * (1.0 - (column - solid_columns) / max(1, fade_width - 1))
+            )
+            strip = clean.subsurface(pygame.Rect(column, 0, 1, height)).copy()
+            strip.set_alpha(alpha)
+            patch.blit(strip, (column, 0))
+        return patch
+
+    def _draw_common_sidebar(self, screen):
+        """Usa el mismo diseño y tipografía común que las otras vistas."""
+        for position, patch in self.sidebar_extensions:
+            screen.blit(patch, position)
+        draw_sidebar(screen, self.sidebar_surface, "home", self.sidebar_font)
+
     def draw(self, screen):
         screen.fill((0, 0, 0))
 
-        # 1. Dibujar fondo Sci-Fi C.C.I. SYSTEM (select_game.jpeg) centrado
+        # Fondo intacto; se sustituye únicamente la franja lateral.
         if self.bg_image:
             screen.blit(self.bg_image, (self.offset_x, 0))
+        self._draw_common_sidebar(screen)
 
-        # 2. Renderizar carrusel en rueda vertical cilíndrica (5 slots visibles en pantalla)
+        # 2. Renderizar el carrusel vertical original (5 tarjetas visibles).
         num_options = len(self.options)
         center_y = 327
-        center_x = 882
+        center_x = 960
 
         # Para cada distancia relativa de -2 a +2 alrededor de la posición de scroll
         # Renderizamos de afuera hacia adentro para un correcto z-index
@@ -687,11 +796,11 @@ class MenuState(BaseState):
             slot_y = center_y + d * 115.0
             
             # Curvatura cilíndrica en X: se desplaza a la derecha cuanto más lejos del centro
-            slot_x = center_x + (d * d) * 10.5
+            slot_x = center_x + (d * d) * 14.5
             
             # Escala de la tarjeta: 100% en el centro, disminuye en los extremos (~85%)
             scale_factor = 1.0 - abs(d) * 0.08
-            card_w = max(10, int(380 * scale_factor))
+            card_w = max(10, int(500 * scale_factor))
             card_h = max(10, int(109 * scale_factor))
 
             # Alpha / brillo: tarjetas no seleccionadas son ligeramente más tenues
@@ -717,28 +826,58 @@ class MenuState(BaseState):
                     b_rect = border_surf.get_rect(center=(int(slot_x), int(slot_y)))
                     screen.blit(border_surf, b_rect)
 
-                # Flechas de navegación (< >)
-                arrow_offset = int(math.sin(self.anim_timer * 8.0) * 3.0)
-                if self.arrow_left:
-                    la_rect = self.arrow_left.get_rect(center=(int(slot_x - card_w // 2 - 24 + arrow_offset), int(slot_y)))
-                    screen.blit(self.arrow_left, la_rect)
-                if self.arrow_right:
-                    ra_rect = self.arrow_right.get_rect(center=(int(slot_x + card_w // 2 + 24 - arrow_offset), int(slot_y)))
-                    screen.blit(self.arrow_right, ra_rect)
 
-        # 3. Cuadro de diálogo inferior dinámico con el juego seleccionado
-        current_opt = self.options[self.selected_index]
-        dialog_text_1 = "Selecciona un juego"
-        dialog_text_2 = f"> {current_opt['title']}"
-        
-        # Coordenadas exactas del cuadro de texto interior en 1280x720: x=348, y=612
-        if self.font:
-            t1 = self.font.render(dialog_text_1, True, (210, 215, 225))
-            t2 = self.font.render(dialog_text_2, True, (255, 255, 255))
-            screen.blit(t1, (350, 612))
-            screen.blit(t2, (350, 632))
+        # El mensaje y los controles inferiores pertenecen al fondo original; no se
+        # dibuja texto encima para evitar duplicar las instrucciones de la plantilla.
 
 
+class ScreenPreviewState(BaseState):
+    """Displays one of the completed UI screens with the shared sidebar navigation."""
+
+    def __init__(self, state_machine, image_path):
+        super().__init__(state_machine)
+        self.image_path = image_path
+        self.image = None
+
+    def enter(self):
+        try:
+            loaded = pygame.image.load(self.image_path).convert()
+            self.image = pygame.transform.smoothscale(
+                loaded, (SCREEN_WIDTH, SCREEN_HEIGHT)
+            )
+        except (pygame.error, OSError) as error:
+            self.image = None
+            print(f"[ScreenPreviewState] Error cargando {self.image_path}: {error}")
+
+    def handle_events(self, events):
+        for event in events:
+            if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+                self.state_machine.change_state("MENU")
+                return
+            if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+                destination = MenuState._sidebar_destination(event.pos)
+                if destination == "QUIT":
+                    pygame.event.post(pygame.event.Event(pygame.QUIT))
+                elif destination == "MENU":
+                    self.state_machine.change_state("MENU")
+                elif destination:
+                    self.state_machine.change_state(destination)
+                return
+
+    def draw(self, screen):
+        screen.fill((0, 0, 0))
+        if self.image:
+            screen.blit(self.image, (0, 0))
+
+
+# Juegos que corren en su propio proceso: clave -> (carpeta, script, módulo requerido o None)
+EXTERNAL_GAMES = {
+    "minecraft":    ("Minecraft", "UrsaCraft_video.py", "ursina"),
+    "flappy":       ("Flappy-Bird", "main.py", None),
+    "dino":         ("Dino", "main.py", None),
+    "ghostbusters": ("GhostBusters", "main.py", None),
+    "cyberpunk":    ("Cyberpunk-Metroidvania/Platformer 01-04-2022", "main.py", None),
+}
 
 
 class PlayingState(BaseState):
@@ -755,6 +894,27 @@ class PlayingState(BaseState):
     def enter(self, game_key="davinci"):
         self.game_key = game_key
         self._run_game()
+
+    @staticmethod
+    def _show_notice(screen, message, seconds=3.0):
+        """Muestra un aviso centrado (p. ej. dependencia faltante) antes de volver al menú."""
+        try:
+            font = pygame.font.Font(None, 34)
+            text = font.render(message, True, (255, 255, 255))
+            box = text.get_rect(center=(screen.get_width() // 2, screen.get_height() // 2)).inflate(60, 40)
+            screen.fill((0, 0, 0))
+            pygame.draw.rect(screen, (20, 22, 30), box, border_radius=8)
+            pygame.draw.rect(screen, (255, 255, 255), box, 2, border_radius=8)
+            screen.blit(text, text.get_rect(center=box.center))
+            pygame.display.flip()
+            end = time.monotonic() + seconds
+            while time.monotonic() < end:
+                for ev in pygame.event.get():
+                    if ev.type in (pygame.KEYDOWN, pygame.MOUSEBUTTONDOWN):
+                        return
+                pygame.time.wait(30)
+        except Exception:
+            pass
 
     def _run_game(self):
         screen = self.state_machine.screen
@@ -1549,6 +1709,29 @@ class PlayingState(BaseState):
                 for mod in CONFLICTING_MODULES:
                     sys.modules.pop(mod, None)
                 os.chdir(original_cwd)
+
+        elif self.game_key in EXTERNAL_GAMES:
+            folder, entry, requires = EXTERNAL_GAMES[self.game_key]
+            game_dir = os.path.join(root_dir, folder)
+            entry_path = os.path.join(game_dir, entry)
+            print(f"[PlayingState] Lanzando {self.game_key} desde {entry_path}...")
+            problem = None
+            if not os.path.isfile(entry_path):
+                problem = f"No se encontró {folder}/{entry}"
+            elif requires and importlib.util.find_spec(requires) is None:
+                problem = f"Falta instalar '{requires}':  pip install {requires}"
+            if problem:
+                print(f"[PlayingState] {problem}")
+                self._show_notice(screen, problem)
+            else:
+                try:
+                    env = os.environ.copy()
+                    env.setdefault("SDL_VIDEO_CENTERED", "1")
+                    subprocess.run([sys.executable, entry_path], cwd=os.path.dirname(entry_path), env=env, check=False)
+                except Exception as e:
+                    print(f"[PlayingState] Error ejecutando {self.game_key}: {e}")
+                    self._show_notice(screen, f"Error al iniciar {self.game_key}")
+            pygame.display.set_caption("C.C.I. SYSTEM")
 
         # Limpiar exhaustivamente cualquier módulo importado por el juego ejecutado
         for mod in list(sys.modules.keys()):
