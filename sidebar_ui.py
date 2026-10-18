@@ -59,7 +59,10 @@ def make_sidebar_font() -> pygame.font.Font:
     """Fuente sans serif de alto contraste, más legible que las fuentes pixel pequeñas."""
     if not pygame.font.get_init():
         pygame.font.init()
-    return pygame.font.SysFont("Arial", 17, bold=True)
+    try:
+        return pygame.font.SysFont("Arial", 17, bold=True)
+    except Exception:
+        return pygame.font.Font(None, 17)
 
 
 def draw_sidebar(target: pygame.Surface, base: pygame.Surface, active_page: str, font: pygame.font.Font) -> None:

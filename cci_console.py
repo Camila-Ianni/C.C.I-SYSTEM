@@ -149,6 +149,18 @@ CATALOG = [
         "tags": "ACCIÓN  ·  AVENTURA", "categories": {"ACCIÓN"},
         "external": ("GhostBusters", "main.py"), "slot": 11,
     },
+    {
+        "id": "minecraft", "title": "MINECRAFT", "subtitle": "Construye, explora y sobrevive en un mundo 3D.",
+        "developer": "Mojang / Ursina", "year": "2011", "genre": "Sandbox / Aventura",
+        "players": "1", "tags": "SANDBOX  ·  AVENTURA", "categories": {"ACCIÓN", "ARCADE"},
+        "external": ("Minecraft", "UrsaCraft_video.py"), "slot": 12,
+    },
+    {
+        "id": "cyberpunk", "title": "CYBERPUNK", "subtitle": "Metroidvania retrofuturista con combate y parkour.",
+        "developer": "C.C.I. System", "year": "2026", "genre": "Acción / Plataformas",
+        "players": "1", "tags": "ACCIÓN  ·  PLATAFORMAS", "categories": {"ACCIÓN", "PLATAFORMAS"},
+        "external": ("Cyberpunk-Metroidvania/Platformer 01-04-2022", "main.py"), "slot": 13,
+    },
 ]
 
 CATEGORIES = ["TODOS", "ACCIÓN", "PLATAFORMAS", "PUZZLE", "SHOOTER", "RPG", "ARCADE"]
@@ -162,6 +174,9 @@ GRID_RECTS = [
     pygame.Rect(282 + col * 145, 194 + row * 120, 133, 108)
     for row in range(3) for col in range(4)
 ]
+LIBRARY_PAGE_SIZE = 12
+LIBRARY_PREV_PAGE_RECT = pygame.Rect(486, 560, 32, 24)
+LIBRARY_NEXT_PAGE_RECT = pygame.Rect(620, 560, 32, 24)
 
 # Recortes de tarjetas a color de pantallas/Biblioteca de Juegos Retro Pixel Art.png.
 # El kit no contiene DOOM; ese juego conserva su carátula local existente.
@@ -177,6 +192,8 @@ COLOR_LIBRARY_RECTS = {
     "flappy": pygame.Rect(432, 451, 186, 154),
     "dino": pygame.Rect(626, 451, 191, 154),
     "ghostbusters": pygame.Rect(826, 451, 183, 154),
+    "minecraft": pygame.Rect(238, 451, 186, 154),
+    "cyberpunk": pygame.Rect(238, 609, 186, 154),
 }
 
 DEFAULT_DATA = {
@@ -353,6 +370,7 @@ class CCIConsoleState:
             self.selected_achievement = initial_rows[0][0]
         self.selected_setting = 0
         self.sort_mode = 0
+        self.library_page = 0
         self.anim_time = 0.0
         self.last_drawn_size = None
 
@@ -515,10 +533,12 @@ class CCIConsoleState:
         art = {}
         for game in CATALOG:
             path = ROOT / "assets_cards" / f"{game['id']}_clean.png"
+            slot = game.get("slot", 0)
+            fallback = self.card_surfaces[slot] if 0 <= slot < len(self.card_surfaces) else pygame.Surface((133, 108))
             try:
-                art[game["id"]] = pygame.image.load(str(path)).convert() if path.is_file() else self.card_surfaces[game["slot"]]
+                art[game["id"]] = pygame.image.load(str(path)).convert() if path.is_file() else fallback
             except (pygame.error, OSError):
-                art[game["id"]] = self.card_surfaces[game["slot"]]
+                art[game["id"]] = fallback
         return art
 
     def enter(self, **kwargs):
@@ -734,12 +754,21 @@ class CCIConsoleState:
         games = self._visible_games()
         if games and self.selected_game_id not in {g["id"] for g in games}:
             self.selected_game_id = games[0]["id"]
-        # Limpiar sólo la cuadrícula; se vuelve a dibujar con tarjetas seleccionables.
-        pygame.draw.rect(self.canvas, DARK, (274, 188, 580, 365))
+        # Limpiar la cuadrícula y zona de paginación
+        pygame.draw.rect(self.canvas, DARK, (274, 188, 580, 410))
+        total_pages = max(1, (len(games) + LIBRARY_PAGE_SIZE - 1) // LIBRARY_PAGE_SIZE)
+        if games:
+            ids = [g["id"] for g in games]
+            if self.selected_game_id in ids:
+                self.library_page = ids.index(self.selected_game_id) // LIBRARY_PAGE_SIZE
+        self.library_page = max(0, min(self.library_page, total_pages - 1))
+        start_slot = self.library_page * LIBRARY_PAGE_SIZE
+
         for slot, rect in enumerate(GRID_RECTS):
-            if slot >= len(games):
+            game_idx = start_slot + slot
+            if game_idx >= len(games):
                 continue
-            game = games[slot]
+            game = games[game_idx]
             if game["id"] == "doom":
                 self._draw_doom_card(rect)
             else:
@@ -747,14 +776,35 @@ class CCIConsoleState:
                 if color_card is not None:
                     self._blit_contained(color_card, rect)
                 else:
-                    self.canvas.blit(self.card_surfaces[game["slot"]], rect)
+                    slot_idx = game.get("slot", 0)
+                    if 0 <= slot_idx < len(self.card_surfaces):
+                        self.canvas.blit(self.card_surfaces[slot_idx], rect)
+                    else:
+                        pygame.draw.rect(self.canvas, (18, 20, 24), rect, border_radius=4)
+                        self._text(game["title"], rect.x + 8, rect.centery - 6, 11, WHITE, True, rect.w - 16)
             if game["id"] == self.selected_game_id:
                 pulse = 2 + int((1 + pygame.math.Vector2(1, 0).rotate(self.anim_time * 90).x) * 1.3)
                 pygame.draw.rect(self.canvas, WHITE, rect.inflate(pulse * 2, pulse * 2), max(2, pulse), border_radius=5)
+
+        if total_pages > 1:
+            mouse_pos = self._logical_mouse(pygame.mouse.get_pos())
+            prev_hover = LIBRARY_PREV_PAGE_RECT.collidepoint(mouse_pos)
+            next_hover = LIBRARY_NEXT_PAGE_RECT.collidepoint(mouse_pos)
+            pygame.draw.rect(self.canvas, (28, 30, 36) if prev_hover else (16, 17, 20), LIBRARY_PREV_PAGE_RECT, border_radius=4)
+            pygame.draw.rect(self.canvas, (75, 79, 85), LIBRARY_PREV_PAGE_RECT, 1, border_radius=4)
+            self._text("<", LIBRARY_PREV_PAGE_RECT.x + 11, LIBRARY_PREV_PAGE_RECT.y + 4, 13, WHITE if self.library_page > 0 else MUTED, True)
+
+            pygame.draw.rect(self.canvas, (28, 30, 36) if next_hover else (16, 17, 20), LIBRARY_NEXT_PAGE_RECT, border_radius=4)
+            pygame.draw.rect(self.canvas, (75, 79, 85), LIBRARY_NEXT_PAGE_RECT, 1, border_radius=4)
+            self._text(">", LIBRARY_NEXT_PAGE_RECT.x + 11, LIBRARY_NEXT_PAGE_RECT.y + 4, 13, WHITE if self.library_page < total_pages - 1 else MUTED, True)
+
+            page_label = f"PÁG {self.library_page + 1} / {total_pages}"
+            self._text(page_label, 526, 565, 11, LIGHT, True, 88)
+
         self._draw_category_highlight()
         self._draw_game_detail(self._selected_game())
         pygame.draw.rect(self.canvas, DARK, (160, 649, 550, 43))
-        hint = "←→ ELEGIR   Q/E FILTRO   ENTER JUGAR   F FAVORITO   F3 BUSCAR"
+        hint = "←→ ELEGIR   Q/E FILTRO   PgUp/Dn PÁGINA   ENTER JUGAR   F FAVORITO   F3 BUSCAR"
         self._text(hint, 188, 668, 11, MUTED, max_width=510)
         if self.search_query:
             self._text(f"BÚSQUEDA: {self.search_query}", 283, 584, 13, WHITE, max_width=520)
@@ -1225,13 +1275,16 @@ class CCIConsoleState:
                 elif event.key in (pygame.K_RETURN, pygame.K_KP_ENTER):
                     self.search_active = False
                     pygame.key.stop_text_input()
+                    self.library_page = 0
                     games = self._visible_games()
                     if games:
                         self.selected_game_id = games[0]["id"]
                 elif event.key == pygame.K_BACKSPACE:
                     self.search_query = self.search_query[:-1]
+                    self.library_page = 0
             elif event.type == pygame.TEXTINPUT:
                 self.search_query = (self.search_query + event.text)[:32]
+                self.library_page = 0
 
     def _handle_key(self, key):
         if key == pygame.K_ESCAPE:
@@ -1270,16 +1323,41 @@ class CCIConsoleState:
         if key in (pygame.K_q, pygame.K_e, pygame.K_TAB):
             direction = -1 if key == pygame.K_q else 1
             self.category = CATEGORIES[(CATEGORIES.index(self.category) + direction) % len(CATEGORIES)]
+            self.library_page = 0
             games = self._visible_games()
             if games:
                 self.selected_game_id = games[0]["id"]
             self._feedback()
             return True
-        if key in (pygame.K_UP, pygame.K_w, pygame.K_LEFT, pygame.K_a):
+        if key in (pygame.K_PAGEUP, pygame.K_LEFTBRACKET):
+            total_pages = max(1, (len(games) + LIBRARY_PAGE_SIZE - 1) // LIBRARY_PAGE_SIZE)
+            if self.library_page > 0:
+                self.library_page -= 1
+                new_idx = self.library_page * LIBRARY_PAGE_SIZE
+                if new_idx < len(games):
+                    self.selected_game_id = games[new_idx]["id"]
+                self._feedback()
+            return True
+        if key in (pygame.K_PAGEDOWN, pygame.K_RIGHTBRACKET):
+            total_pages = max(1, (len(games) + LIBRARY_PAGE_SIZE - 1) // LIBRARY_PAGE_SIZE)
+            if self.library_page < total_pages - 1:
+                self.library_page += 1
+                new_idx = self.library_page * LIBRARY_PAGE_SIZE
+                if new_idx < len(games):
+                    self.selected_game_id = games[new_idx]["id"]
+                self._feedback()
+            return True
+        if key in (pygame.K_LEFT, pygame.K_a):
             self._move_game(-1, games)
             return True
-        if key in (pygame.K_DOWN, pygame.K_s, pygame.K_RIGHT, pygame.K_d):
+        if key in (pygame.K_RIGHT, pygame.K_d):
             self._move_game(1, games)
+            return True
+        if key in (pygame.K_UP, pygame.K_w):
+            self._move_game(-4, games)
+            return True
+        if key in (pygame.K_DOWN, pygame.K_s):
+            self._move_game(4, games)
             return True
         if key in (pygame.K_RETURN, pygame.K_KP_ENTER, pygame.K_SPACE):
             self._launch_selected()
@@ -1484,19 +1562,40 @@ class CCIConsoleState:
             for i, rect in enumerate(CATEGORY_RECTS):
                 if rect.collidepoint(pos):
                     self.category = CATEGORIES[i]
+                    self.library_page = 0
                     games = self._visible_games()
                     if games:
                         self.selected_game_id = games[0]["id"]
                     return
+            games = self._visible_games()
+            total_pages = max(1, (len(games) + LIBRARY_PAGE_SIZE - 1) // LIBRARY_PAGE_SIZE)
+            if total_pages > 1:
+                if LIBRARY_PREV_PAGE_RECT.collidepoint(pos):
+                    if self.library_page > 0:
+                        self.library_page -= 1
+                        new_idx = self.library_page * LIBRARY_PAGE_SIZE
+                        if new_idx < len(games):
+                            self.selected_game_id = games[new_idx]["id"]
+                        self._feedback()
+                    return
+                if LIBRARY_NEXT_PAGE_RECT.collidepoint(pos):
+                    if self.library_page < total_pages - 1:
+                        self.library_page += 1
+                        new_idx = self.library_page * LIBRARY_PAGE_SIZE
+                        if new_idx < len(games):
+                            self.selected_game_id = games[new_idx]["id"]
+                        self._feedback()
+                    return
+            start_slot = self.library_page * LIBRARY_PAGE_SIZE
             for slot, rect in enumerate(GRID_RECTS):
                 if rect.collidepoint(pos):
-                    games = self._visible_games()
-                    if slot < len(games):
-                        self.selected_game_id = games[slot]["id"]
+                    game_idx = start_slot + slot
+                    if game_idx < len(games):
+                        self.selected_game_id = games[game_idx]["id"]
                         self._feedback()
-                        if getattr(self, "last_clicked_slot", None) == slot and time.monotonic() - getattr(self, "last_click_time", 0) < 0.45:
+                        if getattr(self, "last_clicked_slot", None) == game_idx and time.monotonic() - getattr(self, "last_click_time", 0) < 0.45:
                             self._launch_selected()
-                        self.last_clicked_slot = slot
+                        self.last_clicked_slot = game_idx
                         self.last_click_time = time.monotonic()
                     return
             if pygame.Rect(1082, 529, 150, 43).collidepoint(pos):
