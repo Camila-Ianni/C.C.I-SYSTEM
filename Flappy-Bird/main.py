@@ -13,10 +13,8 @@ info = pygame.display.Info()
 width = info.current_w
 height = info.current_h
 
-if width >= height:
-	win = pygame.display.set_mode(SCREEN, pygame.NOFRAME)
-else:
-	win = pygame.display.set_mode(SCREEN, pygame.NOFRAME | pygame.SCALED | pygame.FULLSCREEN)
+win = pygame.display.set_mode(SCREEN, pygame.SCALED | pygame.RESIZABLE)
+pygame.display.set_caption("FLAPPY BIRD — C.C.I. SYSTEM")
 
 # win = pygame.display.set_mode(SCREEN, pygame.SCALED | pygame.FULLSCREEN)
 clock = pygame.time.Clock()

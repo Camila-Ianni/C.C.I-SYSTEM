@@ -11,7 +11,8 @@ from texts import Text, Message, BlinkingText, MessageBox
 pygame.init()
 
 WIDTH, HEIGHT = 640, 384
-win = pygame.display.set_mode((WIDTH, HEIGHT), pygame.NOFRAME)
+win = pygame.display.set_mode((WIDTH, HEIGHT), pygame.SCALED | pygame.RESIZABLE)
+pygame.display.set_caption("GHOSTBUSTERS — C.C.I. SYSTEM")
 TILE_SIZE = 16
 
 clock = pygame.time.Clock()

@@ -11,8 +11,16 @@ arm_texture   = load_texture('assets/arm_texture.png')
 punch_sound   = Audio('assets/punch_sound',loop = False, autoplay = False)
 block_pick = 1
 
+window.title = 'MINECRAFT — C.C.I. SYSTEM'
+window.borderless = False
+window.size = (1280, 720)
+window.center_on_screen()
 window.fps_counter.enabled = False
 window.exit_button.visible = False
+
+def input(key):
+	if key == 'escape':
+		application.quit()
 
 def update():
 	global block_pick
@@ -35,7 +43,7 @@ class Voxel(Button):
 			model = 'assets/block',
 			origin_y = 0.5,
 			texture = texture,
-			color = color.color(0,0,random.uniform(0.9,1)),
+			color = color.hsv(0, 0, random.uniform(0.9, 1)),
 			scale = 0.5)
 
 	def input(self,key):

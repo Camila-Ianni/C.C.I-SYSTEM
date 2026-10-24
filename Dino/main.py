@@ -10,7 +10,8 @@ from objects import Ground, Dino, Cactus, Cloud, Ptera, Star
 
 pygame.init()
 SCREEN = WIDTH, HEIGHT = (600, 200)
-win = pygame.display.set_mode(SCREEN, pygame.NOFRAME)
+win = pygame.display.set_mode(SCREEN, pygame.SCALED | pygame.RESIZABLE)
+pygame.display.set_caption("DINO RUN — C.C.I. SYSTEM")
 
 clock = pygame.time.Clock()
 FPS = 60
