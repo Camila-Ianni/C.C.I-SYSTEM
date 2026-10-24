@@ -196,6 +196,107 @@ COLOR_LIBRARY_RECTS = {
     "cyberpunk": pygame.Rect(238, 609, 186, 154),
 }
 
+GAME_ACHIEVEMENTS = {
+    "davinci": [
+        {"title": "PRIMER ASALTO", "description": "Inicia tu primer combate en Da Vinci Fighters.", "type": "launch", "goal": 1},
+        {"title": "COMBO EN CADENA", "description": "Pelea durante 15 minutos en la arena de combate.", "type": "minutes", "goal": 15},
+        {"title": "FAVORITO DEL DOJO", "description": "Agrega Da Vinci Fighters a tus favoritos.", "type": "favorite", "goal": 1},
+        {"title": "CINTURÓN NEGRO", "description": "Acumula 60 minutos dominando artes marciales.", "type": "minutes", "goal": 60},
+        {"title": "CAMPEÓN DEL TORNEO", "description": "Alcanza un 50% de progreso en el torneo.", "type": "progress", "goal": 50},
+    ],
+    "asteroids": [
+        {"title": "PILOTO EN ÓRBITA", "description": "Inicia un vuelo por el cinturón de asteroides.", "type": "launch", "goal": 1},
+        {"title": "HIPERESPACIO", "description": "Sobrevive 15 minutos esquivando escombros cósmicos.", "type": "minutes", "goal": 15},
+        {"title": "AS DEL RADAR", "description": "Agrega Asteroids a tus favoritos.", "type": "favorite", "goal": 1},
+        {"title": "COMANDANTE ESTELAR", "description": "Juega 60 minutos destruyendo rocas espaciales.", "type": "minutes", "goal": 60},
+        {"title": "SECTOR DESPEJADO", "description": "Alcanza un 50% de progreso en el espacio profundo.", "type": "progress", "goal": 50},
+    ],
+    "mario": [
+        {"title": "MUNDO 1-1", "description": "Inicia una aventura en el Reino Champiñón.", "type": "launch", "goal": 1},
+        {"title": "SALTADOR EXPERTO", "description": "Juega 15 minutos aplastando Goombas.", "type": "minutes", "goal": 15},
+        {"title": "HÉROE DEL REINO", "description": "Agrega Super Mario Bros a tus favoritos.", "type": "favorite", "goal": 1},
+        {"title": "RESCATE DE PEACH", "description": "Acumula 60 minutos explorando mundos.", "type": "minutes", "goal": 60},
+        {"title": "SUPER ESTRELLA", "description": "Alcanza un 50% de progreso con Mario.", "type": "progress", "goal": 50},
+    ],
+    "zelda": [
+        {"title": "ES PELIGROSO IR SOLO", "description": "Inicia tu aventura en The Legend of Zelda.", "type": "launch", "goal": 1},
+        {"title": "ESPADA DE MADERA", "description": "Explora durante 15 minutos las tierras de Hyrule.", "type": "minutes", "goal": 15},
+        {"title": "TRIFUERZA DEL VALOR", "description": "Agrega The Legend of Zelda a tus favoritos.", "type": "favorite", "goal": 1},
+        {"title": "HÉROE DEL TIEMPO", "description": "Acumula 60 minutos buscando mazmorras.", "type": "minutes", "goal": 60},
+        {"title": "MAESTRO DE HYRULE", "description": "Alcanza un 50% de progreso en Hyrule.", "type": "progress", "goal": 50},
+    ],
+    "pacman": [
+        {"title": "WAKA WAKA", "description": "Inicia una partida en el laberinto clásico.", "type": "launch", "goal": 1},
+        {"title": "COME-FANTASMAS", "description": "Sobrevive 15 minutos devorando píldoras de poder.", "type": "minutes", "goal": 15},
+        {"title": "FIEBRE AMARILLA", "description": "Agrega Pac-Man a tus favoritos.", "type": "favorite", "goal": 1},
+        {"title": "LABERINTO SIN FIN", "description": "Acumula 60 minutos huyendo de los fantasmas.", "type": "minutes", "goal": 60},
+        {"title": "PUNTUACIÓN PERFECTA", "description": "Alcanza un 50% de progreso en el laberinto.", "type": "progress", "goal": 50},
+    ],
+    "tetris": [
+        {"title": "PRIMER TETROMINÓ", "description": "Inicia tu primera partida de Tetris.", "type": "launch", "goal": 1},
+        {"title": "LÍNEA PERFECTA", "description": "Juega 15 minutos completando líneas.", "type": "minutes", "goal": 15},
+        {"title": "AMANTE DEL PUZZLE", "description": "Agrega Tetris a tus juegos favoritos.", "type": "favorite", "goal": 1},
+        {"title": "MAESTRO DE LA GRAVEDAD", "description": "Juega 60 minutos en Tetris.", "type": "minutes", "goal": 60},
+        {"title": "GRAN MAESTRO", "description": "Alcanza al menos un 50% de progreso en Tetris.", "type": "progress", "goal": 50},
+    ],
+    "space_invaders": [
+        {"title": "INVASIÓN DETECTADA", "description": "Inicia una defensa contra la invasión alienígena.", "type": "launch", "goal": 1},
+        {"title": "BARRERA DEFENSIVA", "description": "Resiste 15 minutos el bombardeo extraterrestre.", "type": "minutes", "goal": 15},
+        {"title": "FAVORITO CÓSMICO", "description": "Agrega Space Invaders a tus favoritos.", "type": "favorite", "goal": 1},
+        {"title": "DEFENSOR DE LA TIERRA", "description": "Acumula 60 minutos defendiendo el planeta.", "type": "minutes", "goal": 60},
+        {"title": "VICTORIA GALÁCTICA", "description": "Alcanza un 50% de progreso espacial.", "type": "progress", "goal": 50},
+    ],
+    "metalslug": [
+        {"title": "MISSION START!", "description": "Inicia una misión con el escuadrón Peregrine.", "type": "launch", "goal": 1},
+        {"title": "HEAVY MACHINE GUN", "description": "Combate durante 15 minutos en el frente de batalla.", "type": "minutes", "goal": 15},
+        {"title": "FAVORITO DEL GENERAL", "description": "Agrega Metal Slug a tus favoritos.", "type": "favorite", "goal": 1},
+        {"title": "VETERANO DE GUERRA", "description": "Acumula 60 minutos de acción arcade sin tregua.", "type": "minutes", "goal": 60},
+        {"title": "MISIÓN CUMPLIDA", "description": "Alcanza un 50% de progreso militar.", "type": "progress", "goal": 50},
+    ],
+    "doom": [
+        {"title": "ENTRANDO AL INFIERNO", "description": "Inicia tu primera partida de DOOM.", "type": "launch", "goal": 1},
+        {"title": "GATILLO FÁCIL", "description": "Sobrevive 15 minutos en los pasillos de Phobos.", "type": "minutes", "goal": 15},
+        {"title": "ARSENAL DE LA UAC", "description": "Agrega DOOM a tus juegos favoritos.", "type": "favorite", "goal": 1},
+        {"title": "PESADILLA MARCIANA", "description": "Combate durante 60 minutos contra la horda.", "type": "minutes", "goal": 60},
+        {"title": "DOOM SLAYER", "description": "Alcanza un 50% de progreso en DOOM.", "type": "progress", "goal": 50},
+    ],
+    "flappy": [
+        {"title": "PRIMER ALETEO", "description": "Inicia tu primer vuelo en Flappy Bird.", "type": "launch", "goal": 1},
+        {"title": "RITMO CARDÍACO", "description": "Sobrevive 15 minutos esquivando tuberías verdes.", "type": "minutes", "goal": 15},
+        {"title": "FAVORITO DE LAS ALTURAS", "description": "Agrega Flappy Bird a tus favoritos.", "type": "favorite", "goal": 1},
+        {"title": "SEÑOR DEL CIELO", "description": "Acumula 60 minutos volando con paciencia.", "type": "minutes", "goal": 60},
+        {"title": "VUELO LEGENDARIO", "description": "Alcanza un 50% de progreso en el aire.", "type": "progress", "goal": 50},
+    ],
+    "dino": [
+        {"title": "SIN CONEXIÓN", "description": "Inicia tu primera carrera con el T-Rex.", "type": "launch", "goal": 1},
+        {"title": "SALTO DE CACTUS", "description": "Corre durante 15 minutos por el desierto jurásico.", "type": "minutes", "goal": 15},
+        {"title": "FAVORITO FÓSIL", "description": "Agrega Dino Run a tus favoritos.", "type": "favorite", "goal": 1},
+        {"title": "MARATÓN PREHISTÓRICO", "description": "Acumula 60 minutos esquivando pterodáctilos.", "type": "minutes", "goal": 60},
+        {"title": "REY DEL MESOZOICO", "description": "Alcanza un 50% de progreso con el T-Rex.", "type": "progress", "goal": 50},
+    ],
+    "ghostbusters": [
+        {"title": "¿A QUIÉN VAS A LLAMAR?", "description": "Inicia tu primer turno como Cazafantasmas.", "type": "launch", "goal": 1},
+        {"title": "RAYO DE PROTONES", "description": "Patrulla la ciudad durante 15 minutos.", "type": "minutes", "goal": 15},
+        {"title": "EQUIPO PARANORMAL", "description": "Agrega Ghostbusters a tus favoritos.", "type": "favorite", "goal": 1},
+        {"title": "TRAMPA ACTIVA", "description": "Acumula 60 minutos capturando apariciones.", "type": "minutes", "goal": 60},
+        {"title": "SALVADOR DE NUEVA YORK", "description": "Alcanza un 50% de progreso paranormal.", "type": "progress", "goal": 50},
+    ],
+    "minecraft": [
+        {"title": "LA EDAD DE PIEDRA", "description": "Inicia tu primer mundo de supervivencia en Minecraft.", "type": "launch", "goal": 1},
+        {"title": "¡DIAMANTES!", "description": "Explora y construye durante 15 minutos.", "type": "minutes", "goal": 15},
+        {"title": "BLOQUE FAVORITO", "description": "Agrega Minecraft a tus favoritos.", "type": "favorite", "goal": 1},
+        {"title": "SUPERVIVENCIA EXTREMA", "description": "Acumula 60 minutos explorando cavernas.", "type": "minutes", "goal": 60},
+        {"title": "ARQUITECTO DEL MUNDO", "description": "Alcanza un 50% de progreso en tu mundo.", "type": "progress", "goal": 50},
+    ],
+    "cyberpunk": [
+        {"title": "CONEXIÓN NEURAL", "description": "Inicia tu incursión en la ciudad cyberpunk.", "type": "launch", "goal": 1},
+        {"title": "CALLES DE NEÓN", "description": "Explora durante 15 minutos los callejones oscuros.", "type": "minutes", "goal": 15},
+        {"title": "FAVORITO DEL SUBURBIO", "description": "Agrega Cyberpunk a tus favoritos.", "type": "favorite", "goal": 1},
+        {"title": "HACKER FANTASMA", "description": "Acumula 60 minutos desafiando megacorporaciones.", "type": "minutes", "goal": 60},
+        {"title": "OVERDRIVE", "description": "Alcanza un 50% de progreso cibernético.", "type": "progress", "goal": 50},
+    ],
+}
+
 DEFAULT_DATA = {
     "version": 1,
     "player_name": "CAMI",
@@ -288,35 +389,54 @@ class UserData:
     def achievement_rows(self):
         stats = self.data.get("game_stats", {})
         favorites = set(self.data.get("favorites", []))
-        unique = len(stats)
-        launches = int(self.data.get("launch_count", 0))
-        total_minutes = int(self.data.get("total_seconds", 0)) // 60
-        rows = [{"title": "PRIMER CONTACTO", "description": "Inicia tu primera partida.", "progress": min(launches, 1), "goal": 1, "unlocked": launches >= 1}]
-
+        rows = []
         for game in CATALOG:
-            played = game["id"] in stats
-            rows.append({"title": game["title"], "description": f"Inicia una partida de {game['title']}.", "progress": int(played), "goal": 1, "unlocked": played})
+            gid = game["id"]
+            gstats = stats.get(gid, {})
+            launches = int(gstats.get("launches", 0))
+            minutes = int(gstats.get("seconds", 0)) // 60
+            progress = int(gstats.get("progress", 0))
+            fav = gid in favorites
 
-        for goal in (3, 5, 8, 10):
-            rows.append({"title": f"EXPLORADOR {goal}", "description": f"Prueba {goal} juegos diferentes.", "progress": min(unique, goal), "goal": goal, "unlocked": unique >= goal})
+            defs = GAME_ACHIEVEMENTS.get(gid, [
+                {"title": game["title"], "description": f"Inicia una partida de {game['title']}.", "type": "launch", "goal": 1},
+                {"title": f"FAVORITO: {game['title']}", "description": f"Agrega {game['title']} a favoritos.", "type": "favorite", "goal": 1},
+                {"title": f"UNA HORA: {game['title']}", "description": f"Juega 60 minutos a {game['title']}.", "type": "minutes", "goal": 60},
+            ])
 
-        for hours in (1, 4, 10, 25, 50):
-            goal = hours * 60
-            rows.append({"title": f"VETERANO {hours}H", "description": f"Acumula {hours} horas de juego.", "progress": min(total_minutes, goal), "goal": goal, "progress_label": f"{min(total_minutes // 60, hours)}/{hours} h", "unlocked": total_minutes >= goal})
+            for ach in defs:
+                ach_type = ach.get("type", "launch")
+                goal = int(ach.get("goal", 1))
+                if ach_type == "launch":
+                    cur = min(launches, goal)
+                    unlocked = launches >= goal
+                    label = f"{cur}/{goal}"
+                elif ach_type == "minutes":
+                    cur = min(minutes, goal)
+                    unlocked = minutes >= goal
+                    label = f"{cur}/{goal} min"
+                elif ach_type == "favorite":
+                    cur = int(fav)
+                    unlocked = fav
+                    label = f"{cur}/1"
+                elif ach_type == "progress":
+                    cur = min(progress, goal)
+                    unlocked = progress >= goal
+                    label = f"{cur}%/{goal}%"
+                else:
+                    cur = 0
+                    unlocked = False
+                    label = f"0/{goal}"
 
-        for game in CATALOG:
-            is_favorite = game["id"] in favorites
-            rows.append({"title": f"FAVORITO: {game['title']}", "description": f"Agrega {game['title']} a favoritos.", "progress": int(is_favorite), "goal": 1, "unlocked": is_favorite})
-
-        for game in CATALOG:
-            minutes = int(stats.get(game["id"], {}).get("seconds", 0)) // 60
-            rows.append({"title": f"UNA HORA: {game['title']}", "description": f"Juega 60 minutos a {game['title']}.", "progress": min(minutes, 60), "goal": 60, "progress_label": f"{min(minutes, 60)}/60 min", "unlocked": minutes >= 60})
-
-        for goal in (10, 25, 50, 100, 250, 500, 1000, 2500, 5000):
-            rows.append({"title": f"SESIONES {goal}", "description": f"Inicia {goal} partidas en la consola.", "progress": min(launches, goal), "goal": goal, "unlocked": launches >= goal})
-
-        unlocked_before_legend = sum(1 for row in rows if row["unlocked"])
-        rows.append({"title": "LEYENDA C.C.I.", "description": "Desbloquea los otros 55 logros.", "progress": unlocked_before_legend, "goal": 55, "unlocked": unlocked_before_legend == 55})
+                rows.append({
+                    "game_id": gid,
+                    "title": ach["title"],
+                    "description": ach["description"],
+                    "progress": cur,
+                    "goal": goal,
+                    "progress_label": label,
+                    "unlocked": unlocked,
+                })
         return rows
 
     def unlocked_count(self):
@@ -342,7 +462,7 @@ class CCIConsoleState:
         self.avatar_surfaces = self._load_avatars() if page == "profile" else []
         self.profile_icons = self._load_profile_icons() if page == "profile" else {}
         self.achievement_sprites = self._load_achievement_sprites() if page == "achievements" else {}
-        needs_game_art = page in {"library", "profile"}
+        needs_game_art = page in {"library", "profile", "achievements"}
         self.card_surfaces = self._load_library_cards() if needs_game_art else []
         self.color_library_cards = self._load_color_library_cards() if page == "library" else {}
         self.color_library_art = {
@@ -362,9 +482,9 @@ class CCIConsoleState:
         self.toast_until = 0.0
         self.selected_game_id = "davinci"
         self.selected_achievement = 0
-        initial_achievement_game = next((game for game in CATALOG if game["id"] == "flappy"), CATALOG[0])
+        initial_achievement_game = CATALOG[0]
         self.selected_achievement_game = initial_achievement_game["id"]
-        self.achievement_game_offset = CATALOG.index(initial_achievement_game)
+        self.achievement_game_offset = 0
         initial_rows = self._achievement_rows_for_filter()
         if initial_rows:
             self.selected_achievement = initial_rows[0][0]
@@ -664,6 +784,7 @@ class CCIConsoleState:
             lines.append(line)
         for i, item in enumerate(lines[:max_lines]):
             self._text(item, x, y + i * (size + line_gap), size, color)
+        return lines[:max_lines]
 
     def _make_ui_sound(self):
         mixer = pygame.mixer.get_init()
@@ -961,37 +1082,24 @@ class CCIConsoleState:
         self._text("F2 EDITAR NOMBRE   ←→ CAMBIAR AVATAR", 192, 665, 12, MUTED, max_width=580)
 
     def _achievement_game_for_row(self, item):
-        title = str(item.get("title", "")).upper()
-        for game in CATALOG:
-            name = game["title"].upper()
-            if title in {name, f"FAVORITO: {name}", f"UNA HORA: {name}"}:
-                return game["id"]
-        return None
+        return item.get("game_id")
 
     def _achievement_rows_for_filter(self):
         rows = self.user_data.achievement_rows()
         selected_game = self.selected_achievement_game
-        if selected_game is None:
+        if not selected_game:
             return list(enumerate(rows))
-        game_rows, general_rows = [], []
-        for index, item in enumerate(rows):
-            game_id = self._achievement_game_for_row(item)
-            if game_id == selected_game:
-                game_rows.append((index, item))
-            elif game_id is None:
-                general_rows.append((index, item))
-        return game_rows + general_rows
+        return [(index, item) for index, item in enumerate(rows) if item.get("game_id") == selected_game]
 
     def _change_achievement_filter(self, direction):
-        filters = [None] + [game["id"] for game in CATALOG]
+        filters = [game["id"] for game in CATALOG]
         try:
             current = filters.index(self.selected_achievement_game)
         except ValueError:
             current = 0
         current = (current + direction) % len(filters)
         self.selected_achievement_game = filters[current]
-        if current:
-            self.achievement_game_offset = current - 1
+        self.achievement_game_offset = current
         filtered = self._achievement_rows_for_filter()
         if filtered:
             self.selected_achievement = filtered[0][0]
@@ -1017,6 +1125,10 @@ class CCIConsoleState:
 
     def _draw_achievement_game_art(self, game_id, item, rect):
         if game_id and self._draw_achievement_sprite(f"game_{game_id}", rect):
+            return
+        art = self.game_art.get(game_id)
+        if art:
+            self.canvas.blit(pygame.transform.scale(art, rect.size), rect)
             return
         self._draw_achievement_icon(item, rect.center, min(rect.w, rect.h))
 
@@ -1046,8 +1158,8 @@ class CCIConsoleState:
 
         # La plantilla ya contiene el trofeo, la etiqueta y el marco de progreso.
         # Se reemplazan únicamente los marcadores numéricos del contador.
-        pygame.draw.rect(self.canvas, (7, 8, 10), (890, 96, 93, 24))
-        self._text(f"{unlocked} / {len(rows)}", 893, 96, 20, WHITE, True, 88)
+        pygame.draw.rect(self.canvas, (7, 8, 10), (885, 96, 105, 24))
+        self._text(f"{unlocked} / {len(rows)}", 888, 96, 17, WHITE, True, 100)
         pygame.draw.rect(self.canvas, (7, 8, 10), (1199, 95, 42, 22))
         self._text(f"{pct}%", 1201, 96, 14, WHITE, True, 38)
         self._draw_achievement_progress(pygame.Rect(1059, 123, 176, 10), pct / 100)
@@ -1058,6 +1170,7 @@ class CCIConsoleState:
             "zelda": "ZELDA", "pacman": "PAC-MAN", "tetris": "TETRIS",
             "space_invaders": "SPACE INV.", "metalslug": "METAL SLUG", "doom": "DOOM",
             "flappy": "FLAPPY BIRD", "dino": "DINO", "ghostbusters": "GHOSTBUSTERS",
+            "minecraft": "MINECRAFT", "cyberpunk": "CYBERPUNK",
         }
         for tile, game in zip(ACHIEVEMENT_GAME_TILE_RECTS, self._achievement_game_tiles()):
             active = self.selected_achievement_game == game["id"]
@@ -1093,7 +1206,7 @@ class CCIConsoleState:
             pygame.draw.line(self.canvas, (52, 55, 60), (row_rect.x + 474, row_rect.y + 7), (row_rect.x + 474, row_rect.bottom - 7), 1)
 
         # Ficha lateral dentro del panel vertical original.
-        item = rows[self.selected_achievement % len(rows)]
+        item = next((it for idx, it in filtered if idx == self.selected_achievement), filtered[0][1] if filtered else rows[0])
         game_id = self._achievement_game_for_row(item)
         detail = pygame.Rect(1016, 159, 243, 460)
         icon_frame = pygame.Rect(1065, 222, 138, 130)
@@ -1103,8 +1216,9 @@ class CCIConsoleState:
             self._draw_achievement_icon(item, icon_frame.center, 76)
         if not item["unlocked"]:
             self._draw_achievement_sprite("locked", pygame.Rect(icon_frame.right - 28, icon_frame.bottom - 31, 17, 22))
-        self._wrap(self._achievement_display_title(item), detail.x + 24, 382, detail.w - 46, 16, WHITE, max_lines=2)
-        self._wrap(item["description"], detail.x + 24, 411, detail.w - 46, 11, LIGHT, max_lines=3)
+        title_lines = self._wrap(self._achievement_display_title(item), detail.x + 24, 375, detail.w - 46, 14, WHITE, max_lines=2)
+        desc_y = 375 + len(title_lines) * 18 + 6
+        self._wrap(item["description"], detail.x + 24, desc_y, detail.w - 46, 10, LIGHT, max_lines=3)
         pygame.draw.line(self.canvas, (94, 97, 102), (detail.x + 24, 475), (detail.right - 21, 475), 1)
         status = "DESBLOQUEADO" if item["unlocked"] else "PENDIENTE"
         game = next((entry for entry in CATALOG if entry["id"] == game_id), None)
@@ -1614,10 +1728,12 @@ class CCIConsoleState:
                     return
         elif self.page == "achievements":
             if ACHIEVEMENT_LEFT_ARROW_RECT.collidepoint(pos):
-                self.achievement_game_offset = (self.achievement_game_offset - 1) % len(CATALOG)
+                self._change_achievement_filter(-1)
+                self._feedback()
                 return
             if ACHIEVEMENT_RIGHT_ARROW_RECT.collidepoint(pos):
-                self.achievement_game_offset = (self.achievement_game_offset + 1) % len(CATALOG)
+                self._change_achievement_filter(1)
+                self._feedback()
                 return
             for rect, game in zip(ACHIEVEMENT_GAME_TILE_RECTS, self._achievement_game_tiles()):
                 if rect.collidepoint(pos):
@@ -1626,6 +1742,7 @@ class CCIConsoleState:
                     filtered = self._achievement_rows_for_filter()
                     if filtered:
                         self.selected_achievement = filtered[0][0]
+                    self._feedback()
                     return
             filtered = self._achievement_rows_for_filter()
             indices = [index for index, _item in filtered]
