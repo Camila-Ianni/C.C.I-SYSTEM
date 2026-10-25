@@ -11,7 +11,7 @@ from texts import Text, Message, BlinkingText, MessageBox
 pygame.init()
 
 WIDTH, HEIGHT = 640, 384
-win = pygame.display.set_mode((WIDTH, HEIGHT), pygame.SCALED | pygame.RESIZABLE)
+win = pygame.display.set_mode((WIDTH, HEIGHT), pygame.FULLSCREEN | pygame.SCALED)
 pygame.display.set_caption("GHOSTBUSTERS — C.C.I. SYSTEM")
 TILE_SIZE = 16
 

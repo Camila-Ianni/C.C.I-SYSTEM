@@ -1,5 +1,41 @@
+import sys
 from ursina import *
 from ursina.prefabs.first_person_controller import FirstPersonController
+
+# Fix GLSL 130/140 incompatibility on macOS OpenGL
+if sys.platform == 'darwin':
+	import ursina.shaders.unlit_shader as _us
+	_v120 = '''#version 120
+uniform mat4 p3d_ModelViewProjectionMatrix;
+uniform mat4 p3d_ModelViewMatrix;
+uniform mat4 p3d_ModelMatrix;
+attribute vec4 p3d_Vertex;
+attribute vec2 p3d_MultiTexCoord0;
+varying vec2 uvs;
+attribute vec4 p3d_Color;
+varying vec4 vertex_color;
+
+void main() {
+    gl_Position = p3d_ModelViewProjectionMatrix * p3d_Vertex;
+    uvs = p3d_MultiTexCoord0;
+    vertex_color = p3d_Color;
+}
+'''
+	_f120 = '''#version 120
+uniform sampler2D p3d_Texture0;
+uniform vec4 p3d_ColorScale;
+varying vec2 uvs;
+varying vec4 vertex_color;
+varying vec3 vertex_world_position;
+
+void main() {
+    vec4 color = texture2D(p3d_Texture0, uvs) * p3d_ColorScale * vertex_color;
+    gl_FragColor = color;
+}
+'''
+	_mac_shader = Shader(name='unlit_shader', language=Shader.GLSL, vertex=_v120, fragment=_f120)
+	_us.unlit_shader = _mac_shader
+	Entity.default_shader = _mac_shader
 
 app = Ursina()
 grass_texture = load_texture('assets/grass_block.png')
@@ -44,6 +80,7 @@ class Voxel(Button):
 			origin_y = 0.5,
 			texture = texture,
 			color = color.hsv(0, 0, random.uniform(0.9, 1)),
+			shader = Entity.default_shader,
 			scale = 0.5)
 
 	def input(self,key):

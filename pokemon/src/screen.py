@@ -11,7 +11,7 @@ class Screen:
 	def __init__(self, game):
 		self.screen_size = (640, 360)
 		self.font = pygame.font.SysFont("Arial", 20)
-		self.surface = pygame.display.set_mode(self.screen_size, pygame.SCALED | pygame.RESIZABLE)
+		self.surface = pygame.display.set_mode(self.screen_size, pygame.FULLSCREEN | pygame.SCALED)
 		pygame.display.set_caption("POKÉMON — C.C.I. SYSTEM")
 		self.gamepad = Controller(self.screen_size[0], self.screen_size[1], 60, 60)
 		self.dialogbox = None
@@ -36,8 +36,6 @@ class Screen:
 		self.state["fade"] = True
 
 	def draw(self):
-		pygame.display.flip()
-
 		if self.state["mainmenu"]:
 			self.mainmenu.draw()
 
@@ -63,6 +61,5 @@ class Screen:
 				self.fadein = False
 				self.state["fade"] = False
 
-		self.gamepad.draw(self.surface, white, self.font)
 		pygame.display.flip()
 		#test

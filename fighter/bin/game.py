@@ -14,7 +14,7 @@ class Game(object):
         Initialize the game
         """
         pygame.init()
-        self.screen = pygame.display.set_mode(self.size, pygame.SCALED | pygame.RESIZABLE)
+        self.screen = pygame.display.set_mode(self.size, pygame.FULLSCREEN | pygame.SCALED)
         pygame.display.set_caption("STREET FIGHTER II — C.C.I. SYSTEM")
         pygame.event.set_allowed([pygame.QUIT, pygame.KEYDOWN, pygame.KEYUP])
         # build background
@@ -27,6 +27,8 @@ class Game(object):
         left = (self.background.get_width() - self.size[0]) / 2
         self.position = [-left, 0]
         self.walking = False
+        self.clock = pygame.time.Clock()
+        self.font = pygame.font.Font(None, 24)
         self.sprites = Sprite().build_spriteset()
 
     def run(self):
@@ -35,22 +37,37 @@ class Game(object):
         """
         running = True
         self.sprite = itertools.cycle(self.sprites['idle'])
-        self.p1left = 0
+        self.p2_sprite = itertools.cycle([pygame.transform.flip(s, True, False) for s in self.sprites['idle']])
+        self.p1left = 100
+        p2left = 420
         while running:
-            pygame.time.Clock().tick(10)
+            self.clock.tick(20)
             running = self.handleEvents()
             # blit the background
             self.screen.blit(self.background, self.position)
-            # blit the sprite
+
+            # blit fighters
             self.screen.blit(next(self.sprite), (self.p1left, 250))
-            # update screen
-            rect = pygame.Rect(
-                0,
-                0,
-                self.size[0],
-                self.size[1]
-            )
-            pygame.display.update(rect)
+            self.screen.blit(next(self.p2_sprite), (p2left, 250))
+
+            # HUD Life bars (Street Fighter II style)
+            pygame.draw.rect(self.screen, (220, 20, 20), (40, 25, 230, 18))
+            pygame.draw.rect(self.screen, (255, 220, 0), (40, 25, 200, 18))
+            pygame.draw.rect(self.screen, (255, 255, 255), (38, 23, 234, 22), 2)
+            lbl1 = self.font.render("RYU", True, (255, 255, 255))
+            self.screen.blit(lbl1, (40, 48))
+
+            pygame.draw.rect(self.screen, (220, 20, 20), (370, 25, 230, 18))
+            pygame.draw.rect(self.screen, (255, 220, 0), (400, 25, 200, 18))
+            pygame.draw.rect(self.screen, (255, 255, 255), (368, 23, 234, 22), 2)
+            lbl2 = self.font.render("KEN", True, (255, 255, 255))
+            self.screen.blit(lbl2, (560, 48))
+
+            # Controls HUD at bottom
+            hint = self.font.render("A/D o FLECHAS: MOVER   |   ESC: VOLVER A LA CONSOLA", True, (220, 220, 220))
+            self.screen.blit(hint, ((self.size[0] - hint.get_width()) // 2, 450))
+
+            pygame.display.flip()
 
     def handleEvents(self):
         """

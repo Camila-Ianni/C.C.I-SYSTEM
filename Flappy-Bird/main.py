@@ -13,7 +13,7 @@ info = pygame.display.Info()
 width = info.current_w
 height = info.current_h
 
-win = pygame.display.set_mode(SCREEN, pygame.SCALED | pygame.RESIZABLE)
+win = pygame.display.set_mode(SCREEN, pygame.FULLSCREEN | pygame.SCALED)
 pygame.display.set_caption("FLAPPY BIRD — C.C.I. SYSTEM")
 
 # win = pygame.display.set_mode(SCREEN, pygame.SCALED | pygame.FULLSCREEN)

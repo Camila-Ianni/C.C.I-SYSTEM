@@ -16,7 +16,7 @@ if not config_file.exists():
 config.read(str(config_file))
 JANELA = [int(config['JANELA']['LARGURA']), int(config['JANELA']['ALTURA'])]
 
-tela = pygame.display.set_mode(JANELA, pygame.SCALED | pygame.RESIZABLE)
+tela = pygame.display.set_mode(JANELA, pygame.FULLSCREEN | pygame.SCALED)
 pygame.display.set_caption("SONIC THE HEDGEHOG — C.C.I. SYSTEM")
 clock = pygame.time.Clock()
 

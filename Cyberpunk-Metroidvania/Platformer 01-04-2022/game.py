@@ -65,7 +65,7 @@ class Game():
 		'space': False, 'tab': False, 'z': False, 'x': False, 'escape': False, 'l': False, 'd': False, 'i': False, 'y': False, 'n': False}
 
 		self.display = pygame.Surface((WIDTH, HEIGHT))
-		self.screen = pygame.display.set_mode((WIDTH, HEIGHT), pygame.SCALED | pygame.RESIZABLE)
+		self.screen = pygame.display.set_mode((WIDTH, HEIGHT), pygame.FULLSCREEN | pygame.SCALED)
 		pygame.display.set_caption("CYBERPUNK METROIDVANIA — C.C.I. SYSTEM")
 
 		self.font_name = 'font/failed attempt.ttf'
