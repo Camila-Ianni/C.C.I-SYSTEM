@@ -3,7 +3,7 @@ from pytmx.util_pygame import load_pygame
 import pyscroll
 from pyscroll.group import PyscrollGroup
 from .components.dialog import Dialog
-from .foreground import FadeOutAndIn, FadeOut, FadeIn
+from .components.foreground import FadeOutAndIn, FadeOut, FadeIn
 from os import path
 
 class Map:

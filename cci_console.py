@@ -161,6 +161,24 @@ CATALOG = [
         "players": "1", "tags": "ACCIÓN  ·  PLATAFORMAS", "categories": {"ACCIÓN", "PLATAFORMAS"},
         "external": ("Cyberpunk-Metroidvania/Platformer 01-04-2022", "main.py"), "slot": 13,
     },
+    {
+        "id": "pokemon", "title": "POKÉMON", "subtitle": "Aventura RPG clásica por el mundo de Kanto.",
+        "developer": "Game Freak", "year": "1996", "genre": "RPG / Aventura",
+        "players": "1", "tags": "RPG  ·  AVENTURA", "categories": {"RPG"},
+        "external": ("pokemon", "main.py"), "slot": 14,
+    },
+    {
+        "id": "fighter", "title": "STREET FIGHTER II", "subtitle": "Combate arcade legendario 1v1 con Ryu.",
+        "developer": "Capcom", "year": "1991", "genre": "Lucha / Arcade",
+        "players": "1–2", "tags": "LUCHA  ·  ARCADE", "categories": {"ACCIÓN", "ARCADE"},
+        "external": ("fighter", "main.py"), "slot": 15,
+    },
+    {
+        "id": "sonic", "title": "SONIC THE HEDGEHOG", "subtitle": "Corre a toda velocidad por Green Hill Zone.",
+        "developer": "SEGA", "year": "1991", "genre": "Plataformas / Velocidad",
+        "players": "1–2", "tags": "PLATAFORMAS  ·  ARCADE", "categories": {"PLATAFORMAS", "ARCADE"},
+        "external": ("sonic", "main.py"), "slot": 16,
+    },
 ]
 
 CATEGORIES = ["TODOS", "ACCIÓN", "PLATAFORMAS", "PUZZLE", "SHOOTER", "RPG", "ARCADE"]
@@ -294,6 +312,27 @@ GAME_ACHIEVEMENTS = {
         {"title": "FAVORITO DEL SUBURBIO", "description": "Agrega Cyberpunk a tus favoritos.", "type": "favorite", "goal": 1},
         {"title": "HACKER FANTASMA", "description": "Acumula 60 minutos desafiando megacorporaciones.", "type": "minutes", "goal": 60},
         {"title": "OVERDRIVE", "description": "Alcanza un 50% de progreso cibernético.", "type": "progress", "goal": 50},
+    ],
+    "pokemon": [
+        {"title": "¡TE ELIJO A TI!", "description": "Inicia tu aventura Pokémon en Pueblo Paleta.", "type": "launch", "goal": 1},
+        {"title": "ENTRENADOR NOVATO", "description": "Explora durante 15 minutos capturando criaturas.", "type": "minutes", "goal": 15},
+        {"title": "POKÉ-FAVORITO", "description": "Agrega Pokémon a tus favoritos.", "type": "favorite", "goal": 1},
+        {"title": "MAESTRO POKÉMON", "description": "Acumula 60 minutos de viaje Pokémon.", "type": "minutes", "goal": 60},
+        {"title": "LÍDER DE GIMNASIO", "description": "Alcanza un 50% de progreso en tu Pokédex.", "type": "progress", "goal": 50},
+    ],
+    "fighter": [
+        {"title": "HADOKEN!", "description": "Inicia un combate en Street Fighter II.", "type": "launch", "goal": 1},
+        {"title": "GUERRERO MUNDIAL", "description": "Lucha durante 15 minutos en el torneo callejero.", "type": "minutes", "goal": 15},
+        {"title": "LUCHADOR FAVORITO", "description": "Agrega Street Fighter II a tus favoritos.", "type": "favorite", "goal": 1},
+        {"title": "SHORYUKEN MAESTRO", "description": "Acumula 60 minutos dominando las artes marciales.", "type": "minutes", "goal": 60},
+        {"title": "CAMPEÓN CALLEJERO", "description": "Alcanza un 50% de progreso en el torneo.", "type": "progress", "goal": 50},
+    ],
+    "sonic": [
+        {"title": "SUPER SONIC", "description": "Inicia tu carrera por Green Hill Zone.", "type": "launch", "goal": 1},
+        {"title": "COLECTOR DE ANILLOS", "description": "Corre durante 15 minutos esquivando trampas.", "type": "minutes", "goal": 15},
+        {"title": "FAVORITO AZUL", "description": "Agrega Sonic a tus favoritos.", "type": "favorite", "goal": 1},
+        {"title": "SONIC BOOM", "description": "Acumula 60 minutos a máxima velocidad.", "type": "minutes", "goal": 60},
+        {"title": "ESMERALDA DEL CAOS", "description": "Alcanza un 50% de progreso en las zonas.", "type": "progress", "goal": 50},
     ],
 }
 
@@ -1171,6 +1210,7 @@ class CCIConsoleState:
             "space_invaders": "SPACE INV.", "metalslug": "METAL SLUG", "doom": "DOOM",
             "flappy": "FLAPPY BIRD", "dino": "DINO", "ghostbusters": "GHOSTBUSTERS",
             "minecraft": "MINECRAFT", "cyberpunk": "CYBERPUNK",
+            "pokemon": "POKÉMON", "fighter": "STREET FIGHTER", "sonic": "SONIC",
         }
         for tile, game in zip(ACHIEVEMENT_GAME_TILE_RECTS, self._achievement_game_tiles()):
             active = self.selected_achievement_game == game["id"]

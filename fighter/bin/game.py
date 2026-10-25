@@ -14,7 +14,8 @@ class Game(object):
         Initialize the game
         """
         pygame.init()
-        self.screen = pygame.display.set_mode(self.size)
+        self.screen = pygame.display.set_mode(self.size, pygame.SCALED | pygame.RESIZABLE)
+        pygame.display.set_caption("STREET FIGHTER II — C.C.I. SYSTEM")
         pygame.event.set_allowed([pygame.QUIT, pygame.KEYDOWN, pygame.KEYUP])
         # build background
         path = os.path.dirname(os.path.realpath(__file__))
@@ -41,7 +42,7 @@ class Game(object):
             # blit the background
             self.screen.blit(self.background, self.position)
             # blit the sprite
-            self.screen.blit(self.sprite.next(), (self.p1left, 250))
+            self.screen.blit(next(self.sprite), (self.p1left, 250))
             # update screen
             rect = pygame.Rect(
                 0,
@@ -65,21 +66,12 @@ class Game(object):
         pressed = pygame.key.get_pressed()
         # movement control controlling background for now
         move = 'idle'
-        if pressed[pygame.K_LEFT]:
+        if pressed[pygame.K_LEFT] or pressed[pygame.K_a]:
             move = 'left'
             self.p1left -= 9
-            """
-            self.position[0] = max(
-                self.position[0] - 3,
-                -self.background.get_width() + self.size[0]
-            )
-            """
-        if pressed[pygame.K_RIGHT]:
+        if pressed[pygame.K_RIGHT] or pressed[pygame.K_d]:
             move = 'right'
             self.p1left += 9
-            """
-            self.position[0] = min(self.position[0] + 3, 0)
-            """
         if move in ('left', 'right'):
             if not self.walking:
                 self.walking = True

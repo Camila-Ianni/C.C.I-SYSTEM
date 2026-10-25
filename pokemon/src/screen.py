@@ -11,7 +11,8 @@ class Screen:
 	def __init__(self, game):
 		self.screen_size = (640, 360)
 		self.font = pygame.font.SysFont("Arial", 20)
-		self.surface = pygame.display.set_mode(self.screen_size,pygame.SCALED | pygame.FULLSCREEN)
+		self.surface = pygame.display.set_mode(self.screen_size, pygame.SCALED | pygame.RESIZABLE)
+		pygame.display.set_caption("POKÉMON — C.C.I. SYSTEM")
 		self.gamepad = Controller(self.screen_size[0], self.screen_size[1], 60, 60)
 		self.dialogbox = None
 		self.game = game

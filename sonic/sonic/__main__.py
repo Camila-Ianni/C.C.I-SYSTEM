@@ -10,11 +10,14 @@ pygame.mixer.pre_init(44100, 16, 2, 1024)
 pygame.init()
 
 config = configparser.ConfigParser()
-config.read("sonic/config.ini")
+config_file = pathlib.Path(__file__).parent / "config.ini"
+if not config_file.exists():
+    config_file = pathlib.Path("sonic/config.ini")
+config.read(str(config_file))
 JANELA = [int(config['JANELA']['LARGURA']), int(config['JANELA']['ALTURA'])]
 
-tela = pygame.display.set_mode(JANELA)
-pygame.display.set_caption("Sonic Pygame")
+tela = pygame.display.set_mode(JANELA, pygame.SCALED | pygame.RESIZABLE)
+pygame.display.set_caption("SONIC THE HEDGEHOG — C.C.I. SYSTEM")
 clock = pygame.time.Clock()
 
 fase_object = [
@@ -41,6 +44,10 @@ while executando:
         if not fase_object[fase].rodando: 
             fase += 1
             fase_object[fase].rodar_cenario()
+
+        if evento.type == pygame.KEYDOWN:
+            if evento.key in (pygame.K_ESCAPE, pygame.K_q):
+                executando = False
 
         if evento.type == pygame.QUIT:
             executando = False

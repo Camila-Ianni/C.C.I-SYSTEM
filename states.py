@@ -530,7 +530,10 @@ class MenuState(BaseState):
             {"key": "flappy",         "title": "Flappy Bird",        "dialog": "Flappy Bird: Vuela entre las tuberías sin chocar."},
             {"key": "dino",           "title": "Dino",               "dialog": "Dino: Corre y salta obstáculos sin parar."},
             {"key": "ghostbusters",   "title": "GhostBusters",       "dialog": "GhostBusters: Plataformas de acción contra fantasmas."},
-            {"key": "cyberpunk",      "title": "Cyberpunk Metroidvania", "dialog": "Cyberpunk Metroidvania: Plataformas de acción distópico."}
+            {"key": "cyberpunk",      "title": "Cyberpunk Metroidvania", "dialog": "Cyberpunk Metroidvania: Plataformas de acción distópico."},
+            {"key": "pokemon",        "title": "Pokémon",            "dialog": "Pokémon: Aventura RPG clásica por el mundo de Kanto."},
+            {"key": "fighter",        "title": "Street Fighter II",  "dialog": "Street Fighter II: Combate arcade 1v1 con Ryu."},
+            {"key": "sonic",          "title": "Sonic The Hedgehog", "dialog": "Sonic: Corre a toda velocidad por Green Hill Zone."}
         ]
         self.selected_index = 2
         self.last_mouse_game = None
@@ -877,6 +880,10 @@ EXTERNAL_GAMES = {
     "dino":         ("Dino", "main.py", None),
     "ghostbusters": ("GhostBusters", "main.py", None),
     "cyberpunk":    ("Cyberpunk-Metroidvania/Platformer 01-04-2022", "main.py", None),
+    "pokemon":      ("pokemon", "main.py", None),
+    "fighter":      ("fighter", "main.py", None),
+    "streetfighter":("fighter", "main.py", None),
+    "sonic":        ("sonic", "main.py", None),
 }
 
 

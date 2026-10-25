@@ -68,7 +68,14 @@ class Controller:
 	
 	def get_touched(self, surface):
 		for event in pygame.event.get():
-			if event.type == pygame.FINGERDOWN:
+			if event.type == pygame.QUIT:
+				import sys
+				sys.exit(0)
+			elif event.type == pygame.KEYDOWN:
+				if event.key in (pygame.K_ESCAPE, pygame.K_q):
+					import sys
+					sys.exit(0)
+			elif event.type == pygame.FINGERDOWN:
 				self.touchdown = True
 				self.touches.append(event)
 				
@@ -77,7 +84,6 @@ class Controller:
 					if self.touches[i].finger_id == event.finger_id:
 						self.touches.pop(i)
 						break
-				#self.touchdown = True
 				self.touches.append(event)
 
 			elif event.type == pygame.FINGERUP:
@@ -89,9 +95,8 @@ class Controller:
 				if not len(self.touches):
 					self.touchdown = False
 
+		touched = []
 		if self.touchdown:
-			touched = []
-
 			for touch in self.touches:
 				x = touch.x * surface.get_width()
 				y = touch.y * surface.get_height()
@@ -100,7 +105,23 @@ class Controller:
 					for button in self.pyrect[set]:
 						if self.pyrect[set][button].collidepoint((x, y)):
 							touched.append(button)
-			return touched
 
-		else:
-			return None
+		# Support mouse clicks
+		if pygame.mouse.get_pressed()[0]:
+			m_pos = pygame.mouse.get_pos()
+			for s in self.pyrect:
+				for b in self.pyrect[s]:
+					if self.pyrect[s][b].collidepoint(m_pos):
+						touched.append(b)
+
+		# Support physical keyboard
+		keys = pygame.key.get_pressed()
+		if keys[pygame.K_UP] or keys[pygame.K_w]: touched.append("Up")
+		if keys[pygame.K_DOWN] or keys[pygame.K_s]: touched.append("Down")
+		if keys[pygame.K_LEFT] or keys[pygame.K_a]: touched.append("Left")
+		if keys[pygame.K_RIGHT] or keys[pygame.K_d]: touched.append("Right")
+		if keys[pygame.K_SPACE] or keys[pygame.K_RETURN] or keys[pygame.K_z]: touched.append("A")
+		if keys[pygame.K_x] or keys[pygame.K_LSHIFT] or keys[pygame.K_RSHIFT]: touched.append("B")
+		if keys[pygame.K_c] or keys[pygame.K_e]: touched.append("X")
+
+		return touched if touched else None

@@ -31,7 +31,7 @@ class Sprite(object):
             spriteset.get_at(transparent_pixel)
         )
         sprites = dict()
-        for name, coords in self.coords.iteritems():
+        for name, coords in self.coords.items():
             sprites[name] = list()
             for coord in coords:
                 rect = pygame.Rect(coord[0], coord[1], 50, 85)
