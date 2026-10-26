@@ -47,9 +47,11 @@ ACHIEVEMENT_SPRITE_RECTS = {
     "game_tetris": pygame.Rect(150, 322, 106, 76),
     "game_space_invaders": pygame.Rect(271, 322, 106, 76),
     "game_metalslug": pygame.Rect(396, 322, 106, 76),
+    "game_minecraft": pygame.Rect(29, 455, 106, 76),
     "game_flappy": pygame.Rect(150, 455, 106, 76),
     "game_dino": pygame.Rect(271, 455, 106, 76),
     "game_ghostbusters": pygame.Rect(396, 455, 106, 76),
+    "game_cyberpunk": pygame.Rect(29, 578, 106, 76),
     **{f"avatar_{i}": pygame.Rect(545 + i * 77, 188, 73, 90) for i in range(8)},
 }
 
@@ -61,6 +63,7 @@ SETTINGS_SPRITE_RECTS = {
     "button_primary": pygame.Rect(1180, 495, 327, 54),
     "button_secondary": pygame.Rect(1180, 551, 327, 50),
     "network_off": pygame.Rect(1349, 676, 154, 42),
+    "controller_panel": pygame.Rect(600, 465, 542, 275),
 }
 
 ACHIEVEMENT_GAME_TILE_RECTS = (
@@ -365,9 +368,16 @@ def _normal(text: str) -> str:
 
 def _find_file(folder: Path, starts: str, ends: str = ".png") -> Path | None:
     wanted = _normal(starts)
-    for path in folder.iterdir():
-        if path.is_file() and _normal(path.name).startswith(wanted) and path.suffix.lower() == ends.lower():
-            return path
+    search_dirs = [folder]
+    for extra in (ROOT, ROOT / "pantallas"):
+        if extra not in search_dirs and extra.exists():
+            search_dirs.append(extra)
+    for d in search_dirs:
+        if not d.exists():
+            continue
+        for path in d.iterdir():
+            if path.is_file() and _normal(path.name).startswith(wanted) and path.suffix.lower() == ends.lower():
+                return path
     return None
 
 
@@ -509,6 +519,12 @@ class CCIConsoleState:
             for game_id, card in self.color_library_cards.items()
             if card.get_width() > 16 and card.get_height() >= 116
         }
+        mc_hero = ROOT / "assets_cards" / "minecraft_hero.png"
+        if mc_hero.is_file():
+            try:
+                self.color_library_art["minecraft"] = pygame.image.load(str(mc_hero)).convert()
+            except (pygame.error, OSError):
+                pass
         self.game_art = self._load_game_art() if needs_game_art else {}
         self.settings_sprites = self._load_settings_sprites() if page == "settings" else {}
         self.category = "TODOS"
@@ -566,7 +582,7 @@ class CCIConsoleState:
         return load_sidebar()
 
     def _load_avatars(self):
-        path = _find_file(ROOT / "pantallas", "Kit de interfaz retro para perfil")
+        path = _find_file(ROOT / "pantallas", "Kit de interfaz pixel art de ciencia ficción") or _find_file(ROOT / "pantallas", "Kit de interfaz retro para perfil")
         if path is None:
             return []
         try:
@@ -585,23 +601,33 @@ class CCIConsoleState:
 
     def _load_profile_icons(self):
         """Recorta los iconos originales de métricas y edición del kit de perfil."""
-        path = _find_file(ROOT / "pantallas", "Kit de interfaz retro para perfil")
+        path = _find_file(ROOT / "pantallas", "Kit de interfaz pixel art de ciencia ficción") or _find_file(ROOT / "pantallas", "Kit de interfaz retro para perfil")
         if path is None:
             return {}
         try:
             sheet = pygame.image.load(str(path)).convert()
-            rects = {
-                "clock": pygame.Rect(40, 934, 29, 29),
-                "trophy": pygame.Rect(99, 934, 29, 29),
-                "calendar": pygame.Rect(158, 934, 29, 29),
-                "edit": pygame.Rect(207, 924, 48, 48),
-            }
+            is_new = "ciencia" in path.name.lower() or "pixel" in path.name.lower()
+            if is_new:
+                rects = {
+                    "clock": pygame.Rect(28, 915, 48, 48),
+                    "trophy": pygame.Rect(87, 915, 48, 48),
+                    "calendar": pygame.Rect(146, 915, 48, 48),
+                    "edit": pygame.Rect(205, 915, 48, 48),
+                    "trash": pygame.Rect(264, 915, 48, 48),
+                }
+            else:
+                rects = {
+                    "clock": pygame.Rect(40, 934, 29, 29),
+                    "trophy": pygame.Rect(99, 934, 29, 29),
+                    "calendar": pygame.Rect(158, 934, 29, 29),
+                    "edit": pygame.Rect(207, 924, 48, 48),
+                }
             icons = {}
             for name, rect in rects.items():
                 if rect.right > sheet.get_width() or rect.bottom > sheet.get_height():
                     continue
                 icon = sheet.subsurface(rect).copy()
-                if name != "edit":
+                if not is_new and name != "edit":
                     icon = icon.convert_alpha()
                     for ix in range(icon.get_width()):
                         for iy in range(icon.get_height()):
@@ -615,8 +641,8 @@ class CCIConsoleState:
             return {}
 
     def _load_achievement_sprites(self):
-        """Extrae iconografía de logros únicamente de la hoja retro indicada."""
-        path = _find_file(ROOT / "pantallas", "Hoja de interfaz C.C.I. de logros retro")
+        """Extrae iconografía de logros de la hoja de alta definición."""
+        path = _find_file(ROOT / "pantallas", "Panel de logros retro en blanco y negro") or _find_file(ROOT / "pantallas", "Hoja de interfaz C.C.I. de logros retro")
         if path is None:
             return {}
         try:
@@ -640,8 +666,8 @@ class CCIConsoleState:
             return {}
 
     def _load_settings_sprites(self):
-        """Extrae solo componentes de la hoja futurista de configuración."""
-        path = _find_file(ROOT / "pantallas", "Hoja de interfaz futurista C.C.I System")
+        """Extrae componentes de la hoja de configuración de alta definición."""
+        path = _find_file(ROOT / "pantallas", "Panel de configuración C.C.I. System") or _find_file(ROOT / "pantallas", "Hoja de interfaz futurista C.C.I System")
         if path is None:
             return {}
         try:
@@ -672,17 +698,26 @@ class CCIConsoleState:
         return cards
 
     def _load_color_library_cards(self):
-        """Recorta las tarjetas a color de la hoja de sprites para la biblioteca."""
-        path = _find_file(ROOT / "pantallas", "Biblioteca de Juegos Retro Pixel Art")
+        """Recorta las tarjetas a color de la hoja retro en alta definición."""
+        path = _find_file(ROOT / "pantallas", "Biblioteca de Juegos Retro en Alta Definición") or _find_file(ROOT / "pantallas", "Biblioteca de Juegos Retro Pixel Art")
         if path is None:
             return {}
         try:
             sheet = pygame.image.load(str(path)).convert()
-            return {
+            cards = {
                 game_id: sheet.subsurface(rect).copy()
                 for game_id, rect in COLOR_LIBRARY_RECTS.items()
                 if rect.right <= sheet.get_width() and rect.bottom <= sheet.get_height()
             }
+            for extra in ("pokemon", "fighter", "sonic", "streetfighter"):
+                if extra not in cards:
+                    p = ROOT / "assets_cards" / f"{extra}_clean.png"
+                    if p.is_file():
+                        try:
+                            cards[extra] = pygame.image.load(str(p)).convert()
+                        except (pygame.error, OSError):
+                            pass
+            return cards
         except (pygame.error, OSError) as exc:
             print(f"[CCI] No se pudieron recortar las tarjetas a color: {exc}")
             return {}
@@ -1378,9 +1413,13 @@ class CCIConsoleState:
         pygame.draw.rect(self.canvas, (15, 16, 18), (292, 584, 485, 29))
         self._text("Conectar (opcional)", 302, 591, 11, LIGHT)
         self._text("Configurar", 625, 591, 11, WHITE, True)
-        self._text("↑↓ ELEGIR   ←→ AJUSTAR   ENTER CONFIRMAR   F PANTALLA COMPLETA", 192, 665, 11, MUTED, max_width=650)
+        ctrl = self.settings_sprites.get("controller_panel")
+        if ctrl:
+            ctrl_rect = pygame.Rect(812, 350, 436, 216)
+            self.canvas.blit(pygame.transform.smoothscale(ctrl, ctrl_rect.size), ctrl_rect)
         self._draw_settings_button("button_primary", pygame.Rect(815, 574, 170, 40), "RESTABLECER", LIGHT)
         self._draw_settings_button("button_secondary", pygame.Rect(1065, 574, 170, 40), "GUARDAR", WHITE)
+        self._text("↑↓ ELEGIR   ←→ AJUSTAR   ENTER CONFIRMAR   F PANTALLA COMPLETA", 192, 665, 11, MUTED, max_width=650)
 
     def _draw_settings_slider(self, rect, value):
         sprite = self.settings_sprites.get("slider_track")
