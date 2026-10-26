@@ -1,15 +1,11 @@
-# Forzar 100% Python en estadísticas de lenguajes de GitHub (Linguist)
+* linguist-vendored
+**/* linguist-vendored
 * linguist-detectable=false
-*.py linguist-detectable=true
+**/* linguist-detectable=false
 
-# Excluir explícitamente tilesets XML, herramientas y assets
-*.tsx linguist-detectable=false
-*.tsx linguist-vendored=true
-*.tmx linguist-detectable=false
-*.tmx linguist-vendored=true
-*.html linguist-detectable=false
-*.html linguist-vendored=true
-*.m linguist-detectable=false
-*.m linguist-vendored=true
-*.h linguist-detectable=false
-*.h linguist-vendored=true
+*.py linguist-vendored=false
+**/*.py linguist-vendored=false
+*.py linguist-detectable=true
+**/*.py linguist-detectable=true
+*.py linguist-language=Python
+**/*.py linguist-language=Python

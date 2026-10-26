@@ -1,6 +1,9 @@
 """Punto de entrada de la consola virtual C.C.I. System (Pygame-CE)."""
 from __future__ import annotations
 
+# C.C.I. SYSTEM v2.0 — 100% Python Architecture
+VERSION = "2.0.0"
+
 import sys
 
 import pygame
