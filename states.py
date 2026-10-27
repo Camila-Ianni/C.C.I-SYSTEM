@@ -533,7 +533,11 @@ class MenuState(BaseState):
             {"key": "cyberpunk",      "title": "Cyberpunk Metroidvania", "dialog": "Cyberpunk Metroidvania: Plataformas de acción distópico."},
             {"key": "pokemon",        "title": "Pokémon",            "dialog": "Pokémon: Aventura RPG clásica por el mundo de Kanto."},
             {"key": "fighter",        "title": "Street Fighter II",  "dialog": "Street Fighter II: Combate arcade 1v1 con Ryu."},
-            {"key": "sonic",          "title": "Sonic The Hedgehog", "dialog": "Sonic: Corre a toda velocidad por Green Hill Zone."}
+            {"key": "sonic",          "title": "Sonic The Hedgehog", "dialog": "Sonic: Corre a toda velocidad por Green Hill Zone."},
+            {"key": "bomberman",      "title": "Bomberman",          "dialog": "Bomberman: Coloca bombas y elimina a tus rivales."},
+            {"key": "frogger",        "title": "Frogger",            "dialog": "Frogger: Cruza la autopista y el río a salvo."},
+            {"key": "megaman",        "title": "Mega Man",           "dialog": "Mega Man: Plataformas de acción robótica retro."},
+            {"key": "mkultra",        "title": "Mortal Kombat",      "dialog": "Mortal Kombat: Combate visceral uno contra uno."}
         ]
         self.selected_index = 2
         self.last_mouse_game = None
@@ -884,6 +888,10 @@ EXTERNAL_GAMES = {
     "fighter":      ("fighter", "main.py", None),
     "streetfighter":("fighter", "main.py", None),
     "sonic":        ("sonic", "main.py", None),
+    "bomberman":    ("Bomberman", "main.py", None),
+    "frogger":      ("frogger", "frogger.py", None),
+    "megaman":      ("MegamanPygame", "Game.py", None),
+    "mkultra":      ("MK-Ultra", "MKUltra.py", None),
 }
 
 

@@ -182,6 +182,30 @@ CATALOG = [
         "players": "1–2", "tags": "PLATAFORMAS  ·  ARCADE", "categories": {"PLATAFORMAS", "ARCADE"},
         "external": ("sonic", "main.py"), "slot": 16,
     },
+    {
+        "id": "bomberman", "title": "BOMBERMAN", "subtitle": "Coloca bombas y elimina a tus rivales.",
+        "developer": "Hudson Soft", "year": "1983", "genre": "Arcade / Estrategia",
+        "players": "1–2", "tags": "ARCADE  ·  ACCIÓN", "categories": {"ACCIÓN", "ARCADE"},
+        "external": ("Bomberman", "main.py"), "slot": 17,
+    },
+    {
+        "id": "frogger", "title": "FROGGER", "subtitle": "Cruza la autopista y el río a salvo.",
+        "developer": "Konami", "year": "1981", "genre": "Arcade / Habilidad",
+        "players": "1", "tags": "ARCADE  ·  CLÁSICO", "categories": {"ARCADE"},
+        "external": ("frogger", "frogger.py"), "slot": 18,
+    },
+    {
+        "id": "megaman", "title": "MEGA MAN", "subtitle": "Plataformas de acción robótica retro.",
+        "developer": "Capcom", "year": "1987", "genre": "Acción / Plataformas",
+        "players": "1", "tags": "PLATAFORMAS  ·  ACCIÓN", "categories": {"ACCIÓN", "PLATAFORMAS"},
+        "external": ("MegamanPygame", "Game.py"), "slot": 19,
+    },
+    {
+        "id": "mkultra", "title": "MORTAL KOMBAT", "subtitle": "Combate visceral uno contra uno.",
+        "developer": "Midway", "year": "1992", "genre": "Lucha / Acción",
+        "players": "1–2", "tags": "LUCHA  ·  ARCADE", "categories": {"ACCIÓN", "ARCADE"},
+        "external": ("MK-Ultra", "MKUltra.py"), "slot": 20,
+    },
 ]
 
 CATEGORIES = ["TODOS", "ACCIÓN", "PLATAFORMAS", "PUZZLE", "SHOOTER", "RPG", "ARCADE"]
@@ -336,6 +360,34 @@ GAME_ACHIEVEMENTS = {
         {"title": "FAVORITO AZUL", "description": "Agrega Sonic a tus favoritos.", "type": "favorite", "goal": 1},
         {"title": "SONIC BOOM", "description": "Acumula 60 minutos a máxima velocidad.", "type": "minutes", "goal": 60},
         {"title": "ESMERALDA DEL CAOS", "description": "Alcanza un 50% de progreso en las zonas.", "type": "progress", "goal": 50},
+    ],
+    "bomberman": [
+        {"title": "MECHA ENCENDIDA", "description": "Inicia tu primera partida en Bomberman.", "type": "launch", "goal": 1},
+        {"title": "BOMBARDEO TÁCTICO", "description": "Juega durante 15 minutos colocando bombas.", "type": "minutes", "goal": 15},
+        {"title": "PIROTÉCNICO", "description": "Agrega Bomberman a tus favoritos.", "type": "favorite", "goal": 1},
+        {"title": "MAESTRO DE LA DINAMITA", "description": "Acumula 60 minutos detonando laberintos.", "type": "minutes", "goal": 60},
+        {"title": "SUPERVIVIENTE", "description": "Alcanza un 50% de progreso en el juego.", "type": "progress", "goal": 50},
+    ],
+    "frogger": [
+        {"title": "SALTO INICIAL", "description": "Inicia tu primera travesía en Frogger.", "type": "launch", "goal": 1},
+        {"title": "CRUZA-CALLES", "description": "Sobrevive 15 minutos esquivando tráfico y corrientes.", "type": "minutes", "goal": 15},
+        {"title": "RANA FAVORITA", "description": "Agrega Frogger a tus favoritos.", "type": "favorite", "goal": 1},
+        {"title": "REINA DEL ESTANQUE", "description": "Acumula 60 minutos guiando a las ranas al hogar.", "type": "minutes", "goal": 60},
+        {"title": "SALTO PERFECTO", "description": "Alcanza un 50% de progreso cruzando el río.", "type": "progress", "goal": 50},
+    ],
+    "megaman": [
+        {"title": "ROBOT GUERRERO", "description": "Inicia tu primera misión con Mega Man.", "type": "launch", "goal": 1},
+        {"title": "BUSTER CARGADO", "description": "Lucha durante 15 minutos contra los robots maestros.", "type": "minutes", "goal": 15},
+        {"title": "BOMBARDERO AZUL", "description": "Agrega Mega Man a tus favoritos.", "type": "favorite", "goal": 1},
+        {"title": "DERROTA AL DR. WILY", "description": "Acumula 60 minutos de combate robótico retro.", "type": "minutes", "goal": 60},
+        {"title": "CHIP DE PODER", "description": "Alcanza un 50% de progreso en las fases.", "type": "progress", "goal": 50},
+    ],
+    "mkultra": [
+        {"title": "TEST YOUR MIGHT", "description": "Inicia tu primer combate en Mortal Kombat.", "type": "launch", "goal": 1},
+        {"title": "GUERRERO DE LA TIERRA", "description": "Combate durante 15 minutos en el torneo.", "type": "minutes", "goal": 15},
+        {"title": "KOMBATIENTE FAVORITO", "description": "Agrega Mortal Kombat a tus favoritos.", "type": "favorite", "goal": 1},
+        {"title": "FATALITY LEGENDARIA", "description": "Acumula 60 minutos de combate sangriento.", "type": "minutes", "goal": 60},
+        {"title": "CAMPEÓN DE OUTWORLD", "description": "Alcanza un 50% de progreso en el torneo.", "type": "progress", "goal": 50},
     ],
 }
 
@@ -709,7 +761,7 @@ class CCIConsoleState:
                 for game_id, rect in COLOR_LIBRARY_RECTS.items()
                 if rect.right <= sheet.get_width() and rect.bottom <= sheet.get_height()
             }
-            for extra in ("pokemon", "fighter", "sonic", "streetfighter"):
+            for extra in ("pokemon", "fighter", "sonic", "streetfighter", "bomberman", "frogger", "megaman", "mkultra"):
                 if extra not in cards:
                     p = ROOT / "assets_cards" / f"{extra}_clean.png"
                     if p.is_file():
@@ -1246,6 +1298,7 @@ class CCIConsoleState:
             "flappy": "FLAPPY BIRD", "dino": "DINO", "ghostbusters": "GHOSTBUSTERS",
             "minecraft": "MINECRAFT", "cyberpunk": "CYBERPUNK",
             "pokemon": "POKÉMON", "fighter": "STREET FIGHTER", "sonic": "SONIC",
+            "bomberman": "BOMBERMAN", "frogger": "FROGGER", "megaman": "MEGA MAN", "mkultra": "MORTAL KOMBAT",
         }
         for tile, game in zip(ACHIEVEMENT_GAME_TILE_RECTS, self._achievement_game_tiles()):
             active = self.selected_achievement_game == game["id"]
