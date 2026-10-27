@@ -9,6 +9,7 @@ import pygame
 os.environ['SDL_VIDEO_CENTERED'] = '1'  # call before pygame.init()
 pygame.init()
 window_width, window_height = 960, 720
+screen_width, screen_height = window_width, window_height
 
 timer = pygame.time.Clock()
 fps = 60

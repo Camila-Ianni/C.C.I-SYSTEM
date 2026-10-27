@@ -119,7 +119,7 @@ term = 0
 
 totalScore = 0 
 
-myfont=pygame.font.SysFont("Britannic Bold", 40)
+myfont = pygame.font.SysFont("arial", 28, bold=True)
 
 class ball:
 
@@ -476,24 +476,16 @@ while (end_it==False):
 	#start screen shows instructions and waits for player to click on the screen to start the game 
 
 	winScreen.fill(clrBlack)
-
-	nlabel2=myfont.render("Use the 4,6,1,3 on the keypad to move. Light all", 1, clrRed)
-
-	nlabel3=myfont.render("the panels while avoiding enemys to win.", 1, clrRed)
-
-	nlabel=myfont.render("click anywhere to begin", 1, clrWhite)
+	nlabel2 = myfont.render("Move: Arrows, WASD, U/O/J/L or Keypad 4,6,1,3", 1, clrRed)
+	nlabel3 = myfont.render("Light all panels and avoid enemies to win.", 1, clrRed)
+	nlabel = myfont.render("Press SPACE or Click to begin", 1, clrWhite)
 
 	for event in pygame.event.get():
-
 		if event.type == pygame.QUIT or (event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE):
-
-			lives=0
-
+			lives = 0
 			end_it = True
-
-		if event.type==MOUSEBUTTONDOWN:
-
-			end_it=True
+		if event.type == MOUSEBUTTONDOWN or (event.type == pygame.KEYDOWN and event.key in (pygame.K_SPACE, pygame.K_RETURN)):
+			end_it = True
 
 	winScreen.blit(imgStart,(325,150))
 
@@ -641,52 +633,25 @@ while lives!=0:
 
 			elif event.type == pygame.KEYDOWN:
 
-		#player presses keypad 4->change qberts pic,play player jump sound, move qberts x/y so he moves upright 
-
-				if event.key == pygame.K_KP4 or event.key == pygame.K_u:
-
-					PlayerX -=50
-
-					PlayerY -=80
-
+				if event.key in (pygame.K_KP4, pygame.K_4, pygame.K_u, pygame.K_UP, pygame.K_w):
+					PlayerX -= 50
+					PlayerY -= 80
 					imgPlayer = imgPlayerUpRight
-
 					sndQBJump.play()
-
-		#player presses keypad 6->change qberts pic,play player jump sound, move qberts x/y so he moves upleft 
-
-				elif event.key == pygame.K_KP6 or event.key == pygame.K_o:
-
-					PlayerX +=50
-
-					PlayerY -=80
-
+				elif event.key in (pygame.K_KP6, pygame.K_6, pygame.K_o, pygame.K_RIGHT, pygame.K_d):
+					PlayerX += 50
+					PlayerY -= 80
 					imgPlayer = imgPlayerUpLeft
-
 					sndQBJump.play()
-
-		#player presses keypad 1->change qberts pic,play player jump sound, move qberts x/y so he moves downleft 
-
-				elif event.key == pygame.K_KP1 or event.key == pygame.K_j:
-
+				elif event.key in (pygame.K_KP1, pygame.K_1, pygame.K_j, pygame.K_LEFT, pygame.K_a):
 					imgPlayer = imgPlayerDownLeft
-
-					PlayerX -=50
-
-					PlayerY +=80
-
+					PlayerX -= 50
+					PlayerY += 80
 					sndQBJump.play()
-
-		#player presses keypad 3->change qberts pic,play player jump sound, move qberts x/y so he moves downright
-
-				elif event.key == pygame.K_KP3 or event.key == pygame.K_l:
-
+				elif event.key in (pygame.K_KP3, pygame.K_3, pygame.K_l, pygame.K_DOWN, pygame.K_s):
 					imgPlayer = imgPlayerDownRight
-
-					PlayerX +=50
-
-					PlayerY +=80
-
+					PlayerX += 50
+					PlayerY += 80
 					sndQBJump.play()		
 
 		#set Player Position to the new player xy 
@@ -995,9 +960,8 @@ while lives!=0:
 
 						end_it = True
 
-					if event.type==MOUSEBUTTONDOWN:
-
-						end_it=True
+					if event.type == MOUSEBUTTONDOWN or (event.type == pygame.KEYDOWN and event.key in (pygame.K_SPACE, pygame.K_RETURN)):
+						end_it = True
 
 				winScreen.blit(imgWin,(325,150))
 
@@ -1046,9 +1010,8 @@ while lives!=0:
 
 							end_it = True
 
-						if event.type==MOUSEBUTTONDOWN:
-
-							end_it=True
+						if event.type == MOUSEBUTTONDOWN or (event.type == pygame.KEYDOWN and event.key in (pygame.K_SPACE, pygame.K_RETURN)):
+							end_it = True
 
 					winScreen.blit(imgLose,(325,150))
 
