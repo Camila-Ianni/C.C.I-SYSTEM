@@ -206,6 +206,48 @@ CATALOG = [
         "players": "1–2", "tags": "LUCHA  ·  ARCADE", "categories": {"ACCIÓN", "ARCADE"},
         "external": ("MK-Ultra", "MKUltra.py"), "slot": 20,
     },
+    {
+        "id": "castlevania", "title": "CASTLEVANIA", "subtitle": "Aventura gótica y látigo contra Drácula.",
+        "developer": "Konami", "year": "1986", "genre": "Acción / Plataformas",
+        "players": "1", "tags": "ACCIÓN  ·  PLATAFORMAS", "categories": {"ACCIÓN", "PLATAFORMAS"},
+        "external": ("castlevania", "Main.py"), "slot": 21,
+    },
+    {
+        "id": "bubblebobble", "title": "BUBBLE BOBBLE", "subtitle": "Atrapa monstruos en burbujas mágicas.",
+        "developer": "Taito", "year": "1986", "genre": "Arcade / Plataformas",
+        "players": "1–2", "tags": "ARCADE  ·  PLATAFORMAS", "categories": {"ARCADE", "PLATAFORMAS"},
+        "external": ("bubble-bobble", "main.py"), "slot": 22,
+    },
+    {
+        "id": "plantsvszombies", "title": "PLANTS VS. ZOMBIES", "subtitle": "Defiende tu jardín de los no-muertos.",
+        "developer": "PopCap", "year": "2009", "genre": "Estrategia / Tower Defense",
+        "players": "1", "tags": "ESTRATEGIA  ·  ARCADE", "categories": {"ACCIÓN", "ARCADE"},
+        "external": ("PlantsVSZombies", "main.py"), "slot": 23,
+    },
+    {
+        "id": "donkeykong", "title": "DONKEY KONG", "subtitle": "Salta barriles y rescata a Pauline.",
+        "developer": "Nintendo", "year": "1981", "genre": "Arcade / Plataformas",
+        "players": "1–2", "tags": "ARCADE  ·  CLÁSICO", "categories": {"ARCADE", "PLATAFORMAS"},
+        "external": ("PythonDonkeyKong", "main.py"), "slot": 24,
+    },
+    {
+        "id": "qbert", "title": "Q*BERT", "subtitle": "Cambia el color de la pirámide esquivando enemigos.",
+        "developer": "Gottlieb", "year": "1982", "genre": "Arcade / Puzzle",
+        "players": "1", "tags": "ARCADE  ·  PUZZLE", "categories": {"ARCADE", "PUZZLE"},
+        "external": ("qbert", "Qbert.py"), "slot": 25,
+    },
+    {
+        "id": "mariokart", "title": "MARIO KART", "subtitle": "Carreras de karts arcade en circuito cerrado.",
+        "developer": "Nintendo", "year": "1992", "genre": "Carreras / Arcade",
+        "players": "1–2", "tags": "CARRERAS  ·  ARCADE", "categories": {"ARCADE"},
+        "external": ("twisted_pygame", "main.py"), "slot": 26,
+    },
+    {
+        "id": "wonderboy", "title": "WONDER BOY", "subtitle": "Aventura de acción y espada en Monster World.",
+        "developer": "Westone / Sega", "year": "1991", "genre": "Acción / Aventura",
+        "players": "1", "tags": "ACCIÓN  ·  AVENTURA", "categories": {"ACCIÓN", "PLATAFORMAS"},
+        "external": ("Wonder-Boy-in-Monster-World-", "main.py"), "slot": 27,
+    },
 ]
 
 CATEGORIES = ["TODOS", "ACCIÓN", "PLATAFORMAS", "PUZZLE", "SHOOTER", "RPG", "ARCADE"]
@@ -388,6 +430,55 @@ GAME_ACHIEVEMENTS = {
         {"title": "KOMBATIENTE FAVORITO", "description": "Agrega Mortal Kombat a tus favoritos.", "type": "favorite", "goal": 1},
         {"title": "FATALITY LEGENDARIA", "description": "Acumula 60 minutos de combate sangriento.", "type": "minutes", "goal": 60},
         {"title": "CAMPEÓN DE OUTWORLD", "description": "Alcanza un 50% de progreso en el torneo.", "type": "progress", "goal": 50},
+    ],
+    "castlevania": [
+        {"title": "CAZADOR DE VAMPIROS", "description": "Inicia tu primera partida en Castlevania.", "type": "launch", "goal": 1},
+        {"title": "LÁTIGO SAGRADO", "description": "Explora el castillo durante 15 minutos.", "type": "minutes", "goal": 15},
+        {"title": "CORAZÓN GÓTICO", "description": "Agrega Castlevania a tus favoritos.", "type": "favorite", "goal": 1},
+        {"title": "NOCHE ETERNA", "description": "Acumula 60 minutos enfrentando a las sombras.", "type": "minutes", "goal": 60},
+        {"title": "DERROTA A DRÁCULA", "description": "Alcanza un 50% de progreso en el castillo.", "type": "progress", "goal": 50},
+    ],
+    "bubblebobble": [
+        {"title": "BURBUJAS MÁGICAS", "description": "Inicia tu primera partida en Bubble Bobble.", "type": "launch", "goal": 1},
+        {"title": "HERMANOS DRAGÓN", "description": "Salta y dispara burbujas durante 15 minutos.", "type": "minutes", "goal": 15},
+        {"title": "AMIGO DE BUB", "description": "Agrega Bubble Bobble a tus favoritos.", "type": "favorite", "goal": 1},
+        {"title": "LLUVIA DE DULCES", "description": "Acumula 60 minutos superando niveles arcade.", "type": "minutes", "goal": 60},
+        {"title": "MAESTRO DE BURBUJAS", "description": "Alcanza un 50% de progreso en la caverna.", "type": "progress", "goal": 50},
+    ],
+    "plantsvszombies": [
+        {"title": "JARDÍN DEFENSIVO", "description": "Inicia tu defensa botánica contra los zombis.", "type": "launch", "goal": 1},
+        {"title": "SOL RADIANTE", "description": "Siembra y combate durante 15 minutos continuos.", "type": "minutes", "goal": 15},
+        {"title": "BOTÁNICO FAVORITO", "description": "Agrega Plants vs. Zombies a tus favoritos.", "type": "favorite", "goal": 1},
+        {"title": "OLEADA FINAL", "description": "Acumula 60 minutos defendiendo tu patio.", "type": "minutes", "goal": 60},
+        {"title": "TROFEO DORADO", "description": "Alcanza un 50% de progreso en el jardín.", "type": "progress", "goal": 50},
+    ],
+    "donkeykong": [
+        {"title": "SALTA BARRILES", "description": "Inicia tu ascenso en Donkey Kong.", "type": "launch", "goal": 1},
+        {"title": "MARTILLO EN MANO", "description": "Esquiva obstáculos y fuego durante 15 minutos.", "type": "minutes", "goal": 15},
+        {"title": "RESCATE CLÁSICO", "description": "Agrega Donkey Kong a tus favoritos.", "type": "favorite", "goal": 1},
+        {"title": "CIMA DE LAS VIGAS", "description": "Acumula 60 minutos desafiando al gran simio.", "type": "minutes", "goal": 60},
+        {"title": "RESCATA A PAULINE", "description": "Alcanza un 50% de progreso en las vigas.", "type": "progress", "goal": 50},
+    ],
+    "qbert": [
+        {"title": "PIRÁMIDE DE COLORES", "description": "Inicia tu salto por la pirámide de Q*bert.", "type": "launch", "goal": 1},
+        {"title": "¡@!#?@", "description": "Esquiva a Coily y sus secuaces durante 15 minutos.", "type": "minutes", "goal": 15},
+        {"title": "NARIZ DE TROMPETA", "description": "Agrega Q*bert a tus favoritos.", "type": "favorite", "goal": 1},
+        {"title": "DISCO FLOTANTE", "description": "Acumula 60 minutos completando pirámides.", "type": "minutes", "goal": 60},
+        {"title": "COLOR PERFECTO", "description": "Alcanza un 50% de progreso en el tablero.", "type": "progress", "goal": 50},
+    ],
+    "mariokart": [
+        {"title": "EN LA PARRILLA", "description": "Inicia tu primera carrera de Mario Kart.", "type": "launch", "goal": 1},
+        {"title": "PILOTO VELOZ", "description": "Acelera y esquiva cáscaras durante 15 minutos.", "type": "minutes", "goal": 15},
+        {"title": "COPA CHAMPIÑÓN", "description": "Agrega Mario Kart a tus favoritos.", "type": "favorite", "goal": 1},
+        {"title": "DERIVA Y TURBO", "description": "Acumula 60 minutos dominando el asfalto.", "type": "minutes", "goal": 60},
+        {"title": "CAMPEÓN DE LA PISTA", "description": "Alcanza un 50% de progreso en el torneo.", "type": "progress", "goal": 50},
+    ],
+    "wonderboy": [
+        {"title": "ESPADA Y ESCUDO", "description": "Inicia tu aventura en Monster World.", "type": "launch", "goal": 1},
+        {"title": "MONSTER WORLD", "description": "Explora tierras míticas durante 15 minutos.", "type": "minutes", "goal": 15},
+        {"title": "HÉROE DE OCARINA", "description": "Agrega Wonder Boy a tus favoritos.", "type": "favorite", "goal": 1},
+        {"title": "ARMADURA LEGENDARIA", "description": "Acumula 60 minutos derrotando monstruos.", "type": "minutes", "goal": 60},
+        {"title": "LIBERADOR DEL REINO", "description": "Alcanza un 50% de progreso en el mundo mágico.", "type": "progress", "goal": 50},
     ],
 }
 
@@ -761,9 +852,16 @@ class CCIConsoleState:
                 for game_id, rect in COLOR_LIBRARY_RECTS.items()
                 if rect.right <= sheet.get_width() and rect.bottom <= sheet.get_height()
             }
-            for extra in ("pokemon", "fighter", "sonic", "streetfighter", "bomberman", "frogger", "megaman", "mkultra"):
+            extra_ids = (
+                "pokemon", "fighter", "sonic", "streetfighter", "bomberman", "frogger",
+                "megaman", "mkultra", "castlevania", "bubblebobble", "plantsvszombies",
+                "donkeykong", "qbert", "mariokart", "wonderboy"
+            )
+            for extra in extra_ids:
                 if extra not in cards:
                     p = ROOT / "assets_cards" / f"{extra}_clean.png"
+                    if not p.is_file():
+                        p = ROOT / "assets_cards" / f"{extra}.png"
                     if p.is_file():
                         try:
                             cards[extra] = pygame.image.load(str(p)).convert()
@@ -1299,6 +1397,8 @@ class CCIConsoleState:
             "minecraft": "MINECRAFT", "cyberpunk": "CYBERPUNK",
             "pokemon": "POKÉMON", "fighter": "STREET FIGHTER", "sonic": "SONIC",
             "bomberman": "BOMBERMAN", "frogger": "FROGGER", "megaman": "MEGA MAN", "mkultra": "MORTAL KOMBAT",
+            "castlevania": "CASTLEVANIA", "bubblebobble": "BUBBLE BOBBLE", "plantsvszombies": "PLANTS VS ZOMBIES",
+            "donkeykong": "DONKEY KONG", "qbert": "Q*BERT", "mariokart": "MARIO KART", "wonderboy": "WONDER BOY",
         }
         for tile, game in zip(ACHIEVEMENT_GAME_TILE_RECTS, self._achievement_game_tiles()):
             active = self.selected_achievement_game == game["id"]

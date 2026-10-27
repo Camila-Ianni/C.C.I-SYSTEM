@@ -1,0 +1,17 @@
+algo: ppo
+n_envs: 32
+n_steps: 128
+epoch: 4
+mini_batch_size: 1024
+gamma: 0.99
+lmbda: 0.95
+learning_rate: 0.0001
+grad_clip_norm: 0.5
+eps_clip: 0.2
+value_coef: 0.25
+entropy_coef: 0.01
+normalize_adv: True
+use_gae: True
+scale_reward: False
+architecture: nature
+random_shift: True
