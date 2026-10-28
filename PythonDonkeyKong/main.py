@@ -40,9 +40,9 @@ section_width = window_width // 32
 section_height = window_height // 32
 slope = section_height // 8
 
-barrel_spawn_time = 100
-barrel_count = barrel_spawn_time / 2
-barrel_time = 100
+barrel_spawn_time = 150
+barrel_count = barrel_spawn_time // 2
+barrel_time = 150
 barrel_img = pygame.transform.scale(pygame.image.load('assets/images/barrels/barrel.png'),
                                     (section_width * 1.5, section_height * 2))
 flames_img = pygame.transform.scale(pygame.image.load('assets/images/fire.png'),
@@ -147,7 +147,7 @@ class Player(pygame.sprite.Sprite):
     def __init__(self, x_pos, y_pos):
         pygame.sprite.Sprite.__init__(self)
         self.y_change = 0
-        self.x_speed = 1
+        self.x_speed = 2
         self.x_change = 0
         self.landed = False
         self.pos = 0
@@ -733,8 +733,8 @@ def reset():
     player.kill()
     player = Player(250, window_height - 130)
     first_fireball_trigger = False
-    barrel_spawn_time = 100
-    barrel_count = barrel_spawn_time / 2
+    barrel_spawn_time = 150
+    barrel_count = barrel_spawn_time // 2
     victory = False
 
 
@@ -833,12 +833,12 @@ while run:
                     pass
             if event.key in (pygame.K_UP, pygame.K_w):
                 if climb:
-                    player.y_change = -2
+                    player.y_change = -3
                     player.x_change = 0
                     player.climbing = True
             if event.key in (pygame.K_DOWN, pygame.K_s):
                 if down:
-                    player.y_change = 2
+                    player.y_change = 3
                     player.x_change = 0
                     player.climbing = True
         if event.type == pygame.JOYBUTTONDOWN:
@@ -863,11 +863,11 @@ while run:
             else:
                 player.x_change = 0
             if hy > 0 and climb:
-                player.y_change = -2
+                player.y_change = -3
                 player.x_change = 0
                 player.climbing = True
             elif hy < 0 and down:
-                player.y_change = 2
+                player.y_change = 3
                 player.x_change = 0
                 player.climbing = True
             elif hy == 0:
@@ -887,11 +887,11 @@ while run:
                     player.x_change = 0
             elif event.axis == 1:
                 if event.value < -0.4 and climb:
-                    player.y_change = -2
+                    player.y_change = -3
                     player.x_change = 0
                     player.climbing = True
                 elif event.value > 0.4 and down:
-                    player.y_change = 2
+                    player.y_change = 3
                     player.x_change = 0
                     player.climbing = True
                 elif abs(event.value) < 0.2:
