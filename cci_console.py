@@ -608,7 +608,7 @@ class CCIConsoleState:
         if path is None:
             return []
         try:
-            sheet = pygame.image.load(str(path)).convert()
+            sheet = pygame.image.load(str(path)).convert_alpha()
             coords = [(26 + c * 111, 117 + r * 141, 105, 126) for r in range(2) for c in range(4)]
             result = []
             for x, y, w, h in coords:
@@ -627,7 +627,7 @@ class CCIConsoleState:
         if path is None:
             return {}
         try:
-            sheet = pygame.image.load(str(path)).convert()
+            sheet = pygame.image.load(str(path)).convert_alpha()
             is_new = "ciencia" in path.name.lower() or "pixel" in path.name.lower()
             if is_new:
                 rects = {
@@ -668,20 +668,12 @@ class CCIConsoleState:
         if path is None:
             return {}
         try:
-            sheet = pygame.image.load(str(path)).convert()
+            sheet = pygame.image.load(str(path)).convert_alpha()
             sprites = {}
             for name, rect in ACHIEVEMENT_SPRITE_RECTS.items():
                 if rect.right > sheet.get_width() or rect.bottom > sheet.get_height():
                     continue
-                sprite = sheet.subsurface(rect).copy()
-                if name != "progress_track":
-                    sprite = sprite.convert_alpha()
-                    for x in range(sprite.get_width()):
-                        for y in range(sprite.get_height()):
-                            r, g, b, _a = sprite.get_at((x, y))
-                            if max(r, g, b) < 34:
-                                sprite.set_at((x, y), (r, g, b, 0))
-                sprites[name] = sprite
+                sprites[name] = sheet.subsurface(rect).copy()
             return sprites
         except (pygame.error, OSError) as exc:
             print(f"[CCI] No se pudieron cargar los sprites de logros: {exc}")
@@ -693,7 +685,7 @@ class CCIConsoleState:
         if path is None:
             return {}
         try:
-            sheet = pygame.image.load(str(path)).convert()
+            sheet = pygame.image.load(str(path)).convert_alpha()
             return {
                 name: sheet.subsurface(rect).copy()
                 for name, rect in SETTINGS_SPRITE_RECTS.items()
@@ -725,7 +717,7 @@ class CCIConsoleState:
         if path is None:
             return {}
         try:
-            sheet = pygame.image.load(str(path)).convert()
+            sheet = pygame.image.load(str(path)).convert_alpha()
             cards = {
                 game_id: sheet.subsurface(rect).copy()
                 for game_id, rect in COLOR_LIBRARY_RECTS.items()
@@ -742,7 +734,7 @@ class CCIConsoleState:
                         p = ROOT / "assets_cards" / f"{extra}.png"
                     if p.is_file():
                         try:
-                            cards[extra] = pygame.image.load(str(p)).convert()
+                            cards[extra] = pygame.image.load(str(p)).convert_alpha()
                         except (pygame.error, OSError):
                             pass
             return cards
