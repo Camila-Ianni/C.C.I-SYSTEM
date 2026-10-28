@@ -3,7 +3,7 @@ import os
 import pygame
 
 class Sprite(object):
-    coords = {
+    ryu_coords = {
         'idle': [
             (0, 15, 49, 85),
             (49, 15, 49, 85),
@@ -50,24 +50,63 @@ class Sprite(object):
         ]
     }
 
+    chunli_coords = {
+        'idle': [
+            (8, 15, 40, 85),
+            (61, 15, 40, 85),
+            (113, 15, 40, 85),
+            (166, 15, 40, 85)
+        ],
+        'walking': [
+            (231, 15, 42, 85),
+            (289, 15, 42, 85),
+            (345, 15, 42, 85)
+        ],
+        'punch_light': [
+            (4, 150, 55, 85),
+            (72, 150, 52, 85),
+            (4, 150, 55, 85)
+        ],
+        'punch_heavy': [
+            (132, 150, 60, 85),
+            (201, 150, 64, 85),
+            (271, 150, 80, 85)
+        ],
+        'kick': [
+            (2, 270, 50, 85),
+            (55, 270, 55, 85),
+            (115, 270, 75, 85)
+        ],
+        'hadouken': [
+            (4, 150, 55, 85),
+            (201, 150, 64, 85),
+            (271, 150, 80, 85)
+        ],
+        'hit': [
+            (16, 990, 45, 85),
+            (66, 990, 45, 85)
+        ],
+        'ko': [
+            (16, 990, 45, 85),
+            (66, 990, 45, 85)
+        ],
+        'hadouken_ball': [
+            (470, 420, 36, 32)
+        ]
+    }
+
     def build_spriteset(self, character='ryu'):
         path = os.path.dirname(os.path.realpath(__file__))
-        spriteset = pygame.image.load(path + '/../assets/ryu.gif').convert()
-        transparent_pixel = (0, 0)
-        bg = spriteset.get_at(transparent_pixel)
+        is_chun = (character == 'chunli')
+        filename = 'chun-li.gif' if is_chun else 'ryu.gif'
+        spriteset = pygame.image.load(os.path.join(path, '..', 'assets', filename)).convert()
+        bg = spriteset.get_at((0, 0))
         spriteset.set_colorkey(bg)
 
-        # For Ken, convert white gi to crimson red
-        if character == 'ken':
-            w, h = spriteset.get_size()
-            for x in range(w):
-                for y in range(h):
-                    c = spriteset.get_at((x, y))
-                    if c != bg and c.r > 140 and c.g > 140 and c.b > 140 and abs(c.r - c.g) < 30 and abs(c.g - c.b) < 30:
-                        spriteset.set_at((x, y), pygame.Color(min(255, c.r + 20), int(c.g * 0.15), int(c.b * 0.15), c.a))
+        coords_dict = self.chunli_coords if is_chun else self.ryu_coords
 
         sprites = dict()
-        for name, rect_list in self.coords.items():
+        for name, rect_list in coords_dict.items():
             sprites[name] = list()
             for r in rect_list:
                 rect = pygame.Rect(*r)

@@ -36,8 +36,8 @@ class SonicSprite(Sprite):
         ]
         self.img_idle_right = carregar_imagem("sonic-stop.png")
         self.img_idle_left = carregar_imagem("sonic-stop-esquerda.png")
-        self.img_jump_right = carregar_imagem("sonic-pulando-direita.png")
-        self.img_jump_left = carregar_imagem("sonic-pulando-esquerda.png")
+        self.img_jump_right = pygame.transform.scale(carregar_imagem("sonic-pulando-direita.png"), (100, 107))
+        self.img_jump_left = pygame.transform.scale(carregar_imagem("sonic-pulando-esquerda.png"), (100, 107))
 
         self.anim_frame = 0.0
         self.image = self.img_idle_right

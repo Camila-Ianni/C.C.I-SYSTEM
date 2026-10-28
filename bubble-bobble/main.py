@@ -2,12 +2,12 @@
 # -*- coding: utf-8 -*-
 """
 BUBBLE BOBBLE — Classic Arcade Experience for C.C.I. SYSTEM
-Full arcade platformer mechanics:
-- Authentic Bub dragon physics: walking, jumping, falling through platforms
-- Bubble shooting: trap enemies, float bubbles upward, bounce on bubbles
-- Popping trapped enemies: bursts into bonus fruit items (+1000 pts)
-- Zen-chan enemies with platform pathfinding, jumping, and angry mode
-- Full gamepad / joystick controls + force feedback vibration
+Full authentic arcade platformer:
+- Real Taito arcade pixel-art sprites extracted from arcade ROM frames:
+  Bub dragon (walk, jump, shoot), Zen-chan monsters (walk, jump, angry),
+  trapped monsters, floating bubbles, authentic bonus fruits & level brick patterns.
+- Responsive arcade physics, bubble floating & bouncing, enemy trapping.
+- Full gamepad / joystick controls + force feedback vibration.
 """
 
 import os
@@ -78,8 +78,30 @@ def main():
     font_hud = pygame.font.SysFont("Courier", 22, bold=True)
     font_large = pygame.font.SysFont("Courier", 44, bold=True)
 
-    # Platforms geometry (Classic Round 1 Tier Layout)
-    # Platforms are one-way: player can jump up through them, and land on top
+    # Load Authentic Arcade Sprites
+    sprites_dir = os.path.join(ROOT_DIR, "sprites")
+    try:
+        spr_bub_idle = pygame.image.load(os.path.join(sprites_dir, "arcade_bub_idle.png")).convert_alpha()
+        spr_bub_walk = pygame.image.load(os.path.join(sprites_dir, "arcade_bub_walk.png")).convert_alpha()
+        spr_bub_jump = pygame.image.load(os.path.join(sprites_dir, "arcade_bub_jump.png")).convert_alpha()
+        spr_zen_walk1 = pygame.image.load(os.path.join(sprites_dir, "arcade_zen_walk1.png")).convert_alpha()
+        spr_zen_walk2 = pygame.image.load(os.path.join(sprites_dir, "arcade_zen_walk2.png")).convert_alpha()
+        spr_zen_angry = pygame.image.load(os.path.join(sprites_dir, "arcade_zen_angry.png")).convert_alpha()
+        spr_zen_trapped = pygame.image.load(os.path.join(sprites_dir, "arcade_zen_trapped.png")).convert_alpha()
+        spr_bubble = pygame.image.load(os.path.join(sprites_dir, "arcade_bubble_final.png")).convert_alpha()
+        spr_fruit_banana = pygame.image.load(os.path.join(sprites_dir, "arcade_fruit_banana.png")).convert_alpha()
+        spr_fruit_watermelon = pygame.image.load(os.path.join(sprites_dir, "arcade_fruit_watermelon.png")).convert_alpha()
+        spr_fruit_apple = pygame.image.load(os.path.join(sprites_dir, "arcade_fruit_apple.png")).convert_alpha()
+        spr_brick_plat = pygame.image.load(os.path.join(sprites_dir, "arcade_brick_plat.png")).convert()
+        spr_brick_floor = pygame.image.load(os.path.join(sprites_dir, "arcade_brick_floor.png")).convert()
+    except Exception as e:
+        print(f"Sprite load error: {e}")
+        spr_bub_idle = spr_bub_walk = spr_bub_jump = None
+        spr_zen_walk1 = spr_zen_walk2 = spr_zen_angry = spr_zen_trapped = None
+        spr_bubble = spr_fruit_banana = spr_fruit_watermelon = spr_fruit_apple = None
+        spr_brick_plat = spr_brick_floor = None
+
+    # Platforms geometry (Classic Round 1 Layout)
     platforms = [
         # Outer border / floor
         pygame.Rect(40, 680, 880, 24),
@@ -95,18 +117,20 @@ def main():
         pygame.Rect(280, 160, 400, 20),
     ]
 
-    # Pre-render Platform Surface with retro green/cyan arcade brick styling
+    # Pre-render Platform Surface with authentic tiled arcade bricks
     def draw_platforms(surface):
         for p in platforms:
-            # Brick body
-            pygame.draw.rect(surface, (20, 140, 180), p, border_radius=4)
-            # Top highlight
-            pygame.draw.rect(surface, (80, 230, 255), (p.x, p.y, p.w, 4), border_radius=2)
-            # Brick mortar lines
-            brick_w = 40
-            for bx in range(p.x, p.x + p.w, brick_w):
-                pygame.draw.line(surface, (10, 80, 110), (bx, p.y), (bx, p.y + p.h), 2)
-            pygame.draw.rect(surface, (10, 60, 80), p, 2, border_radius=4)
+            if spr_brick_plat and spr_brick_floor:
+                tile = spr_brick_floor if p.y >= 650 else spr_brick_plat
+                tw, th = tile.get_size()
+                for tx in range(p.x, p.x + p.w, tw):
+                    chunk_w = min(tw, (p.x + p.w) - tx)
+                    surface.blit(tile, (tx, p.y), (0, 0, chunk_w, p.h))
+                # Soft arcade outline
+                pygame.draw.rect(surface, (200, 100, 230), p, 1)
+            else:
+                pygame.draw.rect(surface, (20, 140, 180), p, border_radius=4)
+                pygame.draw.rect(surface, (80, 230, 255), (p.x, p.y, p.w, 4), border_radius=2)
 
     # Game State
     score = 0
@@ -143,7 +167,7 @@ def main():
     def spawn_enemies(count):
         enemies.clear()
         spawn_spots = [
-            (300, 120), (600, 120), (480, 380),
+            (320, 120), (580, 120), (480, 380),
             (160, 250), (800, 250), (480, 120)
         ]
         for i in range(count):
@@ -153,11 +177,11 @@ def main():
                 "y": float(sp[1]),
                 "w": 38,
                 "h": 38,
-                "vx": random.choice([-120.0, 120.0]),
+                "vx": random.choice([-90.0, 90.0]),
                 "vy": 0.0,
                 "facing": 1 if random.random() > 0.5 else -1,
                 "state": "walk",
-                "jump_timer": random.uniform(1.0, 3.5),
+                "jump_timer": random.uniform(1.5, 4.0),
                 "anim_timer": 0.0,
                 "angry": False
             })
@@ -175,8 +199,8 @@ def main():
         if player["mouth_timer"] > 0:
             player["mouth_timer"] -= dt
 
-        # Enemies get angry after 25 seconds
-        if round_timer > 25.0:
+        # Enemies get angry after 30 seconds
+        if round_timer > 30.0:
             for e in enemies:
                 e["angry"] = True
 
@@ -236,9 +260,9 @@ def main():
 
         move_x = max(-1.0, min(1.0, move_x))
         if abs(move_x) > 0.1:
-            player["vx"] = move_x * 240.0
+            player["vx"] = move_x * 230.0
             player["facing"] = 1 if move_x > 0 else -1
-            player["anim_timer"] += dt * 10.0
+            player["anim_timer"] += dt * 8.0
         else:
             player["vx"] = 0.0
 
@@ -251,23 +275,22 @@ def main():
 
         # Drop through platform
         if drop_pressed and player["on_ground"]:
-            # Check if not on bottom floor
             if player["y"] < 630.0:
                 player["y"] += 6.0
                 player["on_ground"] = False
 
         # Shoot bubble
         if shoot_pressed:
-            player["mouth_timer"] = 0.2
-            bx = player["x"] + (42 if player["facing"] == 1 else -14)
-            by = player["y"] + 8
+            player["mouth_timer"] = 0.25
+            bx = player["x"] + (42 if player["facing"] == 1 else -20)
+            by = player["y"] + 4
             bubbles.append({
                 "x": bx,
                 "y": by,
-                "vx": player["facing"] * 420.0,
-                "vy": -25.0,
-                "life": 5.0,
-                "radius": 18,
+                "vx": player["facing"] * 360.0,
+                "vy": -20.0,
+                "life": 10.0,
+                "radius": 22,
                 "trapped_enemy": None,
                 "pop": False
             })
@@ -299,9 +322,8 @@ def main():
         if player["vy"] >= 0:
             feet_prev_y = (player["y"] - player["vy"] * dt) + player["h"]
             for p in platforms:
-                # If player feet crossed the top of platform this frame
                 if player_rect.right > p.left and player_rect.left < p.right:
-                    if feet_prev_y <= p.top + 8 and player_rect.bottom >= p.top:
+                    if feet_prev_y <= p.top + 6 and player_rect.bottom >= p.top:
                         player["y"] = p.top - player["h"]
                         player["vy"] = 0.0
                         player["on_ground"] = True
@@ -321,11 +343,11 @@ def main():
             b["y"] += b["vy"] * dt
             # Rapid initial slowdown, then float gently upward
             b["vx"] *= 0.90
-            b["vy"] = max(-65.0, b["vy"] - 60.0 * dt)
+            b["vy"] = max(-55.0, b["vy"] - 45.0 * dt)
             # Gentle horizontal wobble
-            b["x"] += math.sin(b["life"] * 6.0) * 0.8
+            b["x"] += math.sin(b["life"] * 5.0) * 0.6
 
-            # Float bounds
+            # Float bounds: stop at top platform ceiling
             if b["y"] < 90.0:
                 b["y"] = 90.0
                 b["vy"] = 0.0
@@ -340,6 +362,8 @@ def main():
                     if b_rect.colliderect(e_rect):
                         b["trapped_enemy"] = e
                         b["radius"] = 24
+                        b["vx"] = 0.0
+                        b["vy"] = -40.0
                         enemies.remove(e)
                         if snd_shoot:
                             snd_shoot.play()
@@ -348,8 +372,8 @@ def main():
             # Check if player touches / pops bubble
             if player_rect.colliderect(b_rect):
                 # If landing from above, bounce on bubble
-                if player["vy"] > 0 and player_rect.bottom <= b_rect.centery + 10:
-                    player["vy"] = -420.0
+                if player["vy"] > 0 and player_rect.bottom <= b_rect.centery + 12:
+                    player["vy"] = -460.0
                     player["on_ground"] = False
 
                 # Pop trapped bubble
@@ -360,10 +384,10 @@ def main():
                     fruits.append({
                         "x": b["x"],
                         "y": b["y"],
-                        "vy": -150.0,
+                        "vy": -120.0,
                         "type": random.choice(["banana", "apple", "watermelon"]),
                         "value": 1000,
-                        "timer": 8.0
+                        "timer": 9.0
                     })
                     # Spawn sparkle particles
                     for _ in range(12):
@@ -382,25 +406,16 @@ def main():
                     except Exception:
                         pass
                 else:
-                    # Pop normal bubble after brief existence
-                    if b["life"] < 4.5:
-                        b["pop"] = True
-                        for _ in range(6):
-                            particles.append({
-                                "x": b["x"], "y": b["y"],
-                                "vx": random.uniform(-100, 100),
-                                "vy": random.uniform(-100, 100),
-                                "color": (120, 240, 255),
-                                "life": 0.25
-                            })
+                    # Normal bubble only pops if very old (life <= 0)
+                    pass
 
         # Remove dead/popped bubbles
         bubbles = [b for b in bubbles if b["life"] > 0 and not b["pop"]]
 
         # Update Enemies
         for e in enemies:
-            speed = 170.0 if e["angry"] else 110.0
-            e["anim_timer"] += dt * (12.0 if e["angry"] else 6.0)
+            speed = 130.0 if e["angry"] else 85.0
+            e["anim_timer"] += dt * (10.0 if e["angry"] else 5.0)
             e["jump_timer"] -= dt
 
             # Horizontal movement
@@ -412,11 +427,11 @@ def main():
                 e["x"] = WIDTH - 90
                 e["facing"] = -1
 
-            # Enemy Jump AI (randomly jump or chase toward player)
+            # Enemy Jump AI (jump between platforms)
             if e["jump_timer"] <= 0:
-                e["jump_timer"] = random.uniform(2.0, 5.0)
-                if random.random() < 0.6:
-                    e["vy"] = -480.0
+                e["jump_timer"] = random.uniform(2.0, 4.5)
+                if random.random() < 0.65:
+                    e["vy"] = -440.0
 
             # Gravity
             e["vy"] += 1000.0 * dt
@@ -441,7 +456,7 @@ def main():
                 lives -= 1
                 player["invuln"] = 2.5
                 player["x"], player["y"] = 120.0, 630.0
-                player["vy"] = -300.0
+                player["vy"] = -280.0
                 if snd_hurt:
                     snd_hurt.play()
                 try:
@@ -453,25 +468,28 @@ def main():
         # Update Fruits
         for fr in fruits:
             fr["timer"] -= dt
-            fr["vy"] += 600.0 * dt
+            fr["vy"] += 800.0 * dt
             fr["y"] += fr["vy"] * dt
-            fr_rect = pygame.Rect(int(fr["x"] - 14), int(fr["y"] - 14), 28, 28)
-            # Land on platforms
-            if fr["vy"] >= 0:
-                for p in platforms:
-                    if fr_rect.right > p.left and fr_rect.left < p.right:
-                        if fr_rect.bottom >= p.top and fr_rect.bottom <= p.top + 16:
-                            fr["y"] = p.top - 14
+
+            # Bounce / land on floor or platform
+            for p in platforms:
+                if fr["x"] > p.left and fr["x"] < p.right:
+                    if fr["y"] >= p.top - 15 and fr["y"] <= p.top + 10 and fr["vy"] > 0:
+                        fr["y"] = p.top - 15
+                        fr["vy"] = -fr["vy"] * 0.4
+                        if abs(fr["vy"]) < 30:
                             fr["vy"] = 0.0
-                            break
+                        break
+
             if fr["y"] >= 650.0:
                 fr["y"] = 650.0
                 fr["vy"] = 0.0
 
-            # Collect fruit
+            # Player collects Fruit
+            fr_rect = pygame.Rect(int(fr["x"] - 16), int(fr["y"] - 16), 32, 32)
             if player_rect.colliderect(fr_rect):
                 score += fr["value"]
-                fr["timer"] = 0.0
+                fr["timer"] = 0  # Collected
                 if snd_fruit:
                     snd_fruit.play()
                 try:
@@ -487,20 +505,20 @@ def main():
             pt["life"] -= dt
             pt["x"] += pt["vx"] * dt
             pt["y"] += pt["vy"] * dt
+            pt["vy"] += 400.0 * dt
         particles = [pt for pt in particles if pt["life"] > 0]
 
-        # Wave Clear check
-        if len(enemies) == 0 and not any(b["trapped_enemy"] for b in bubbles):
+        # Round completion check
+        if len(enemies) == 0 and len([b for b in bubbles if b["trapped_enemy"] is not None]) == 0:
             cleared_timer += dt
-            if cleared_timer > 2.0:
+            if cleared_timer > 3.0:
                 round_num += 1
                 round_timer = 0.0
                 cleared_timer = 0.0
-                score += 2000
+                score += 5000
                 if snd_clear:
                     snd_clear.play()
-                # Spawn more enemies up to 7
-                spawn_enemies(min(7, 2 + round_num))
+                spawn_enemies(min(6, 2 + round_num))
         else:
             cleared_timer = 0.0
 
@@ -525,90 +543,75 @@ def main():
 
         # Draw Fruits
         for fr in fruits:
-            fx, fy = int(fr["x"]), int(fr["y"])
-            if fr["type"] == "banana":
-                pygame.draw.ellipse(screen, (255, 230, 40), (fx - 14, fy - 10, 28, 20))
-                pygame.draw.circle(screen, (100, 70, 20), (fx - 12, fy - 6), 3)
-            elif fr["type"] == "apple":
-                pygame.draw.circle(screen, (240, 40, 50), (fx, fy), 12)
-                pygame.draw.line(screen, (80, 200, 60), (fx, fy - 12), (fx + 4, fy - 18), 3)
+            fx, fy = int(fr["x"] - 18), int(fr["y"] - 18)
+            f_surf = spr_fruit_apple
+            if fr["type"] == "banana" and spr_fruit_banana:
+                f_surf = spr_fruit_banana
+            elif fr["type"] == "watermelon" and spr_fruit_watermelon:
+                f_surf = spr_fruit_watermelon
+            if f_surf:
+                screen.blit(f_surf, (fx, fy))
             else:
-                pygame.draw.circle(screen, (40, 200, 60), (fx, fy), 14)
-                pygame.draw.line(screen, (230, 40, 60), (fx - 10, fy), (fx + 10, fy), 4)
+                pygame.draw.circle(screen, (255, 230, 40), (fx + 18, fy + 18), 14)
 
         # Draw Bubbles
         for b in bubbles:
             bx, by = int(b["x"]), int(b["y"])
             r = int(b["radius"])
-            bsurf = pygame.Surface((r * 2 + 6, r * 2 + 6), pygame.SRCALPHA)
 
             if b["trapped_enemy"] is not None:
-                # Purple/Red trapped bubble
-                pygame.draw.circle(bsurf, (230, 80, 160, 150), (r + 3, r + 3), r)
-                pygame.draw.circle(bsurf, (255, 180, 220, 220), (r + 3, r + 3), r, 3)
-                # Trapped monster face inside
-                pygame.draw.circle(bsurf, (180, 40, 90), (r + 3, r + 3), int(r * 0.65))
-                pygame.draw.circle(bsurf, (255, 255, 255), (r - 2, r), 4)
-                pygame.draw.circle(bsurf, (255, 255, 255), (r + 8, r), 4)
-                pygame.draw.circle(bsurf, (0, 0, 0), (r - 1, r), 2)
-                pygame.draw.circle(bsurf, (0, 0, 0), (r + 9, r), 2)
+                if spr_zen_trapped:
+                    # Floating trapped monster bubble
+                    tw, th = spr_zen_trapped.get_size()
+                    screen.blit(spr_zen_trapped, (bx - tw // 2, by - th // 2))
+                else:
+                    bsurf = pygame.Surface((r * 2 + 6, r * 2 + 6), pygame.SRCALPHA)
+                    pygame.draw.circle(bsurf, (230, 80, 160, 150), (r + 3, r + 3), r)
+                    screen.blit(bsurf, (bx - r - 3, by - r - 3))
             else:
-                # Translucent Cyan/Green bubble with shiny highlight
-                pygame.draw.circle(bsurf, (60, 210, 240, 130), (r + 3, r + 3), r)
-                pygame.draw.circle(bsurf, (200, 250, 255, 220), (r + 3, r + 3), r, 2)
-                pygame.draw.circle(bsurf, (255, 255, 255, 240), (r - 4, r - 4), 4)
-
-            screen.blit(bsurf, (bx - r - 3, by - r - 3))
+                if spr_bubble:
+                    bw, bh = spr_bubble.get_size()
+                    screen.blit(spr_bubble, (bx - bw // 2, by - bh // 2))
+                else:
+                    bsurf = pygame.Surface((r * 2 + 6, r * 2 + 6), pygame.SRCALPHA)
+                    pygame.draw.circle(bsurf, (60, 210, 240, 130), (r + 3, r + 3), r)
+                    screen.blit(bsurf, (bx - r - 3, by - r - 3))
 
         # Draw Enemies (Zen-chan Wind-up Monsters)
         for e in enemies:
             ex, ey = int(e["x"]), int(e["y"])
-            body_color = (230, 40, 50) if e["angry"] else (160, 60, 210)
-            # Round monster body
-            pygame.draw.circle(screen, body_color, (ex + 19, ey + 20), 18)
-            # Wind-up key on head
-            wobble = int(math.sin(e["anim_timer"]) * 3)
-            pygame.draw.line(screen, (255, 210, 40), (ex + 19, ey + 2), (ex + 19, ey - 7), 3)
-            pygame.draw.ellipse(screen, (255, 210, 40), (ex + 12 + wobble, ey - 14, 14, 8), 2)
-            # Big Cartoon Eyes
-            eye_off = 4 if e["facing"] == 1 else -4
-            pygame.draw.circle(screen, (255, 255, 255), (ex + 14 + eye_off, ey + 17), 6)
-            pygame.draw.circle(screen, (255, 255, 255), (ex + 24 + eye_off, ey + 17), 6)
-            pygame.draw.circle(screen, (20, 20, 20), (ex + 15 + eye_off * 1.3, ey + 17), 3)
-            pygame.draw.circle(screen, (20, 20, 20), (ex + 25 + eye_off * 1.3, ey + 17), 3)
-            # Walking feet
-            foot_w = int(math.sin(e["anim_timer"]) * 4)
-            pygame.draw.circle(screen, (255, 140, 30), (ex + 10 + foot_w, ey + 36), 5)
-            pygame.draw.circle(screen, (255, 140, 30), (ex + 28 - foot_w, ey + 36), 5)
+            if spr_zen_walk1 and spr_zen_walk2 and spr_zen_angry:
+                if e["angry"]:
+                    e_surf = spr_zen_angry if int(e["anim_timer"]) % 2 == 0 else spr_zen_walk2
+                else:
+                    e_surf = spr_zen_walk1 if int(e["anim_timer"]) % 2 == 0 else spr_zen_walk2
+                if e["facing"] == -1:
+                    e_surf = pygame.transform.flip(e_surf, True, False)
+                screen.blit(e_surf, (ex - 2, ey - 4))
+            else:
+                body_color = (230, 40, 50) if e["angry"] else (160, 60, 210)
+                pygame.draw.circle(screen, body_color, (ex + 19, ey + 20), 18)
 
         # Draw Player (Bub Dragon)
         # Flash if invulnerable
         if player["invuln"] <= 0 or int(player["invuln"] * 12) % 2 == 0:
             px, py = int(player["x"]), int(player["y"])
-            bsurf = pygame.Surface((44, 44), pygame.SRCALPHA)
-            # Body
-            pygame.draw.rect(bsurf, (40, 200, 70), (6, 6, 32, 32), border_radius=9)
-            # Yellow belly
-            pygame.draw.rect(bsurf, (255, 240, 130), (12, 16, 18, 18), border_radius=6)
-            # Orange back spikes
-            pygame.draw.polygon(bsurf, (255, 110, 30), [(4, 12), (0, 18), (4, 24)])
-            pygame.draw.polygon(bsurf, (255, 110, 30), [(4, 24), (0, 30), (4, 36)])
-            # Big eyes
-            eye_x = 28 if player["facing"] == 1 else 12
-            pygame.draw.circle(bsurf, (255, 255, 255), (eye_x, 15), 6)
-            pygame.draw.circle(bsurf, (20, 20, 40), (eye_x + (1 if player["facing"] == 1 else -1), 15), 3)
-            # Snout / open mouth when shooting
-            if player["mouth_timer"] > 0:
-                mx = 36 if player["facing"] == 1 else 4
-                pygame.draw.ellipse(bsurf, (255, 70, 70), (mx, 20, 8, 8))
-            # Feet
-            foot_anim = int(math.sin(player["anim_timer"]) * 4) if player["vx"] != 0 else 0
-            pygame.draw.rect(bsurf, (255, 140, 30), (10 + foot_anim, 36, 10, 6), border_radius=3)
-            pygame.draw.rect(bsurf, (255, 140, 30), (24 - foot_anim, 36, 10, 6), border_radius=3)
-
-            if player["facing"] == -1:
-                bsurf = pygame.transform.flip(bsurf, True, False)
-            screen.blit(bsurf, (px, py))
+            if spr_bub_idle and spr_bub_walk and spr_bub_jump:
+                if not player["on_ground"]:
+                    p_surf = spr_bub_jump
+                elif player["vx"] != 0:
+                    p_surf = spr_bub_walk if int(player["anim_timer"]) % 2 == 0 else spr_bub_idle
+                else:
+                    p_surf = spr_bub_idle
+                if player["facing"] == -1:
+                    p_surf = pygame.transform.flip(p_surf, True, False)
+                screen.blit(p_surf, (px - 2, py - 4))
+            else:
+                bsurf = pygame.Surface((44, 44), pygame.SRCALPHA)
+                pygame.draw.rect(bsurf, (40, 200, 70), (6, 6, 32, 32), border_radius=9)
+                if player["facing"] == -1:
+                    bsurf = pygame.transform.flip(bsurf, True, False)
+                screen.blit(bsurf, (px, py))
 
         # HUD Top Bar
         hud_bg = pygame.Surface((WIDTH, 48))

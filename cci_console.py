@@ -183,40 +183,28 @@ CATALOG = [
         "external": ("MegamanPygame", "Game.py"), "slot": 16,
     },
     {
-        "id": "mkultra", "title": "MORTAL KOMBAT", "subtitle": "Combate visceral uno contra uno.",
-        "developer": "Midway", "year": "1992", "genre": "Lucha / Acción",
-        "players": "1–2", "tags": "LUCHA  ·  ARCADE", "categories": {"ACCIÓN", "ARCADE"},
-        "external": ("MK-Ultra", "MKUltra.py"), "slot": 17,
-    },
-    {
         "id": "castlevania", "title": "CASTLEVANIA", "subtitle": "Aventura gótica y látigo contra Drácula.",
         "developer": "Konami", "year": "1986", "genre": "Acción / Plataformas",
         "players": "1", "tags": "ACCIÓN  ·  PLATAFORMAS", "categories": {"ACCIÓN", "PLATAFORMAS"},
-        "external": ("castlevania", "Main.py"), "slot": 18,
+        "external": ("castlevania", "Main.py"), "slot": 17,
     },
     {
         "id": "bubblebobble", "title": "BUBBLE BOBBLE", "subtitle": "Atrapa monstruos en burbujas mágicas.",
         "developer": "Taito", "year": "1986", "genre": "Arcade / Plataformas",
         "players": "1–2", "tags": "ARCADE  ·  PLATAFORMAS", "categories": {"ARCADE", "PLATAFORMAS"},
-        "external": ("bubble-bobble", "main.py"), "slot": 19,
+        "external": ("bubble-bobble", "main.py"), "slot": 18,
     },
     {
         "id": "plantsvszombies", "title": "PLANTS VS. ZOMBIES", "subtitle": "Defiende tu jardín de los no-muertos.",
         "developer": "PopCap", "year": "2009", "genre": "Estrategia / Tower Defense",
         "players": "1", "tags": "ESTRATEGIA  ·  ARCADE", "categories": {"ACCIÓN", "ARCADE"},
-        "external": ("PlantsVSZombies", "main.py"), "slot": 20,
+        "external": ("PlantsVSZombies", "main.py"), "slot": 19,
     },
     {
         "id": "donkeykong", "title": "DONKEY KONG", "subtitle": "Salta barriles y rescata a Pauline.",
         "developer": "Nintendo", "year": "1981", "genre": "Arcade / Plataformas",
         "players": "1–2", "tags": "ARCADE  ·  CLÁSICO", "categories": {"ARCADE", "PLATAFORMAS"},
-        "external": ("PythonDonkeyKong", "main.py"), "slot": 21,
-    },
-    {
-        "id": "qbert", "title": "Q*BERT", "subtitle": "Cambia el color de la pirámide esquivando enemigos.",
-        "developer": "Gottlieb", "year": "1982", "genre": "Arcade / Puzzle",
-        "players": "1", "tags": "ARCADE  ·  PUZZLE", "categories": {"ARCADE", "PUZZLE"},
-        "external": ("qbert", "Qbert.py"), "slot": 22,
+        "external": ("PythonDonkeyKong", "main.py"), "slot": 20,
     },
 ]
 
@@ -372,13 +360,6 @@ GAME_ACHIEVEMENTS = {
         {"title": "DERROTA AL DR. WILY", "description": "Acumula 60 minutos de combate robótico retro.", "type": "minutes", "goal": 60},
         {"title": "CHIP DE PODER", "description": "Alcanza un 50% de progreso en las fases.", "type": "progress", "goal": 50},
     ],
-    "mkultra": [
-        {"title": "TEST YOUR MIGHT", "description": "Inicia tu primer combate en Mortal Kombat.", "type": "launch", "goal": 1},
-        {"title": "GUERRERO DE LA TIERRA", "description": "Combate durante 15 minutos en el torneo.", "type": "minutes", "goal": 15},
-        {"title": "KOMBATIENTE FAVORITO", "description": "Agrega Mortal Kombat a tus favoritos.", "type": "favorite", "goal": 1},
-        {"title": "FATALITY LEGENDARIA", "description": "Acumula 60 minutos de combate sangriento.", "type": "minutes", "goal": 60},
-        {"title": "CAMPEÓN DE OUTWORLD", "description": "Alcanza un 50% de progreso en el torneo.", "type": "progress", "goal": 50},
-    ],
     "castlevania": [
         {"title": "CAZADOR DE VAMPIROS", "description": "Inicia tu primera partida en Castlevania.", "type": "launch", "goal": 1},
         {"title": "LÁTIGO SAGRADO", "description": "Explora el castillo durante 15 minutos.", "type": "minutes", "goal": 15},
@@ -406,13 +387,6 @@ GAME_ACHIEVEMENTS = {
         {"title": "RESCATE CLÁSICO", "description": "Agrega Donkey Kong a tus favoritos.", "type": "favorite", "goal": 1},
         {"title": "CIMA DE LAS VIGAS", "description": "Acumula 60 minutos desafiando al gran simio.", "type": "minutes", "goal": 60},
         {"title": "RESCATA A PAULINE", "description": "Alcanza un 50% de progreso en las vigas.", "type": "progress", "goal": 50},
-    ],
-    "qbert": [
-        {"title": "PIRÁMIDE DE COLORES", "description": "Inicia tu salto por la pirámide de Q*bert.", "type": "launch", "goal": 1},
-        {"title": "¡@!#?@", "description": "Esquiva a Coily y sus secuaces durante 15 minutos.", "type": "minutes", "goal": 15},
-        {"title": "NARIZ DE TROMPETA", "description": "Agrega Q*bert a tus favoritos.", "type": "favorite", "goal": 1},
-        {"title": "DISCO FLOTANTE", "description": "Acumula 60 minutos completando pirámides.", "type": "minutes", "goal": 60},
-        {"title": "COLOR PERFECTO", "description": "Alcanza un 50% de progreso en el tablero.", "type": "progress", "goal": 50},
     ],
 }
 
@@ -785,8 +759,8 @@ class CCIConsoleState:
             }
             extra_ids = (
                 "pokemon", "fighter", "sonic", "streetfighter",
-                "megaman", "mkultra", "castlevania", "bubblebobble", "plantsvszombies",
-                "donkeykong", "qbert"
+                "megaman", "castlevania", "bubblebobble", "plantsvszombies",
+                "donkeykong"
             )
             for extra in extra_ids:
                 if extra not in cards:
@@ -1335,9 +1309,9 @@ class CCIConsoleState:
             "flappy": "FLAPPY BIRD", "dino": "DINO", "ghostbusters": "GHOSTBUSTERS",
             "cyberpunk": "CYBERPUNK",
             "pokemon": "POKÉMON", "fighter": "STREET FIGHTER", "sonic": "SONIC",
-            "megaman": "MEGA MAN", "mkultra": "MORTAL KOMBAT",
+            "megaman": "MEGA MAN",
             "castlevania": "CASTLEVANIA", "bubblebobble": "BUBBLE BOBBLE", "plantsvszombies": "PLANTS VS ZOMBIES",
-            "donkeykong": "DONKEY KONG", "qbert": "Q*BERT",
+            "donkeykong": "DONKEY KONG",
         }
         for tile, game in zip(ACHIEVEMENT_GAME_TILE_RECTS, self._achievement_game_tiles()):
             active = self.selected_achievement_game == game["id"]

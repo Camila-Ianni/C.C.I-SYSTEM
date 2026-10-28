@@ -553,12 +553,10 @@ class MenuState(BaseState):
             {"key": "fighter",        "title": "Street Fighter II",  "dialog": "Street Fighter II: Combate arcade 1v1 con Ryu."},
             {"key": "sonic",          "title": "Sonic The Hedgehog", "dialog": "Sonic: Corre a toda velocidad por Green Hill Zone."},
             {"key": "megaman",        "title": "Mega Man",           "dialog": "Mega Man: Plataformas de acción robótica retro."},
-            {"key": "mkultra",        "title": "Mortal Kombat",      "dialog": "Mortal Kombat: Combate visceral uno contra uno."},
             {"key": "castlevania",     "title": "Castlevania",        "dialog": "Castlevania: Aventura gótica y látigo contra Drácula."},
             {"key": "bubblebobble",    "title": "Bubble Bobble",      "dialog": "Bubble Bobble: Atrapa monstruos en burbujas mágicas."},
             {"key": "plantsvszombies", "title": "Plants vs. Zombies", "dialog": "Plants vs. Zombies: Defiende tu jardín de los no-muertos."},
-            {"key": "donkeykong",      "title": "Donkey Kong",        "dialog": "Donkey Kong: Salta barriles y rescata a Pauline."},
-            {"key": "qbert",           "title": "Q*bert",             "dialog": "Q*bert: Cambia el color de la pirámide esquivando enemigos."}
+            {"key": "donkeykong",      "title": "Donkey Kong",        "dialog": "Donkey Kong: Salta barriles y rescata a Pauline."}
         ]
         self.selected_index = 2
         self.last_mouse_game = None
@@ -912,12 +910,10 @@ EXTERNAL_GAMES = {
     "streetfighter":("fighter", "main.py", None),
     "sonic":        ("sonic", "main.py", None),
     "megaman":      ("MegamanPygame", "Game.py", None),
-    "mkultra":      ("MK-Ultra", "MKUltra.py", None),
     "castlevania":     ("castlevania", "Main.py", None),
     "bubblebobble":    ("bubble-bobble", "main.py", None),
     "plantsvszombies": ("PlantsVSZombies", "main.py", None),
     "donkeykong":      ("PythonDonkeyKong", "main.py", None),
-    "qbert":           ("qbert", "Qbert.py", None),
 }
 
 

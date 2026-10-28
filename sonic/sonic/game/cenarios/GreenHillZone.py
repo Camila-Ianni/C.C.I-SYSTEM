@@ -19,7 +19,6 @@ class GreenHillZone:
         base = pathlib.Path(__file__).parent.parent.parent
         self.fundo_path = str(base / "img" / "cenarios" / "green-hills.png")
         self.musica_path = str(base / "audio" / "green-hill-zone.wav")
-        self.gamma_dir = base / "img" / "gamma"
         self.tela = tela
 
         self.sonic = SonicSprite(x=60, y=350)
@@ -27,42 +26,32 @@ class GreenHillZone:
         self.font = pygame.font.Font(None, 28)
         self.font_large = pygame.font.Font(None, 48)
 
-        # Load Gamma Badnik robot sprites
-        self.gamma_frames_left = [
-            pygame.image.load(str(self.gamma_dir / f"gamma-esquerda-{i}.png")).convert_alpha()
-            for i in (1, 2, 3)
-        ]
-        self.gamma_frames_right = [
-            pygame.image.load(str(self.gamma_dir / f"gamma-direita-{i}.png")).convert_alpha()
-            for i in (1, 2, 3)
-        ]
-
         self.reset_zone()
 
     def reset_zone(self):
         self.time_seconds = 0.0
         self.particles = []
 
-        # Enemies: Badnik Robots
+        # Classic Badnik Motobugs (patrolling on ground)
         self.enemies = [
-            {"x": 340.0, "y": 380.0, "vx": -2.0, "facing": -1, "min_x": 240, "max_x": 420, "frame": 0.0, "alive": True},
-            {"x": 620.0, "y": 380.0, "vx": 2.0, "facing": 1, "min_x": 520, "max_x": 740, "frame": 0.0, "alive": True},
+            {"x": 340.0, "y": 385.0, "vx": -2.0, "facing": -1, "min_x": 220, "max_x": 420, "anim": 0.0, "alive": True},
+            {"x": 600.0, "y": 385.0, "vx": 2.0, "facing": 1, "min_x": 490, "max_x": 720, "anim": 0.0, "alive": True},
         ]
 
-        # Golden Rings: {x, y, collected}
+        # Golden Rings
         self.rings = [
             {"x": 160, "y": 380, "collected": False},
-            {"x": 190, "y": 350, "collected": False},
-            {"x": 220, "y": 350, "collected": False},
+            {"x": 190, "y": 340, "collected": False},
+            {"x": 220, "y": 340, "collected": False},
             {"x": 250, "y": 380, "collected": False},
             {"x": 480, "y": 380, "collected": False},
-            {"x": 510, "y": 350, "collected": False},
+            {"x": 510, "y": 340, "collected": False},
             {"x": 540, "y": 380, "collected": False},
         ]
 
-        # Spikes Obstacle: {x, y, w, h}
+        # Spikes Hazard
         self.spikes = [
-            pygame.Rect(450, 420, 24, 20)
+            pygame.Rect(440, 420, 28, 20)
         ]
 
         self.fundo = pygame.image.load(self.fundo_path).convert()
@@ -91,46 +80,55 @@ class GreenHillZone:
         
     def atualizar_eventos(self, evento):
         if evento.type == pygame.KEYDOWN:
-            if evento.key in (pygame.K_RIGHT, pygame.K_d):
-                self.sonic.velocidade_x = 8
-                self.sonic.facing = 1
-            elif evento.key in (pygame.K_LEFT, pygame.K_a):
-                self.sonic.velocidade_x = -8
-                self.sonic.facing = -1
-            elif evento.key in (pygame.K_SPACE, pygame.K_UP, pygame.K_w, pygame.K_z):
+            if evento.key in (pygame.K_SPACE, pygame.K_UP, pygame.K_w, pygame.K_z):
                 self.sonic.jump()
-        elif evento.type == pygame.KEYUP:
-            if evento.key in (pygame.K_RIGHT, pygame.K_d, pygame.K_LEFT, pygame.K_a):
-                self.sonic.stop()
         elif evento.type == pygame.JOYBUTTONDOWN:
             if evento.button in (0, 2):  # A or X
-                self.sonic.jump()
-        elif evento.type == pygame.JOYHATMOTION:
-            hx, hy = evento.value
-            if hx > 0:
-                self.sonic.velocidade_x = 8
-                self.sonic.facing = 1
-            elif hx < 0:
-                self.sonic.velocidade_x = -8
-                self.sonic.facing = -1
-            else:
-                self.sonic.stop()
-            if hy > 0:
                 self.sonic.jump()
 
     def atualizar_cenario(self):
         dt = 0.016
         self.time_seconds += dt
 
+        # Continuous frame-by-frame input (Never gets stuck)
+        keys = pygame.key.get_pressed()
+        vx = 0.0
+        if keys[pygame.K_RIGHT] or keys[pygame.K_d]:
+            vx += 8.0
+        if keys[pygame.K_LEFT] or keys[pygame.K_a]:
+            vx -= 8.0
+
+        # Gamepad directional polling
+        for j in range(pygame.joystick.get_count()):
+            try:
+                js = pygame.joystick.Joystick(j)
+                ax = js.get_axis(0)
+                if abs(ax) > 0.25:
+                    vx += 8.0 if ax > 0 else -8.0
+                if js.get_numhats() > 0:
+                    hx, hy = js.get_hat(0)
+                    if hx != 0:
+                        vx += 8.0 if hx > 0 else -8.0
+                    if hy > 0:
+                        self.sonic.jump()
+            except Exception:
+                pass
+
+        if vx != 0:
+            self.sonic.velocidade_x = vx
+            self.sonic.facing = 1 if vx > 0 else -1
+        else:
+            self.sonic.velocidade_x = 0.0
+
         # Update Sonic
         self.sonic.update()
 
-        # Update Enemies
+        # Update Motobugs
         for e in self.enemies:
             if not e["alive"]:
                 continue
             e["x"] += e["vx"]
-            e["frame"] = (e["frame"] + 0.15) % 3.0
+            e["anim"] += 0.2
             if e["x"] > e["max_x"]:
                 e["x"] = e["max_x"]
                 e["vx"] = -abs(e["vx"])
@@ -140,21 +138,21 @@ class GreenHillZone:
                 e["vx"] = abs(e["vx"])
                 e["facing"] = 1
 
-            e_rect = pygame.Rect(int(e["x"]), int(e["y"]), 45, 60)
+            e_rect = pygame.Rect(int(e["x"]), int(e["y"]), 50, 40)
             s_rect = self.sonic.rect
 
             # Collision with Sonic
             if s_rect.colliderect(e_rect):
-                # Sonic hits from above while jumping (Badnik defeat!)
-                if self.sonic.is_jumping and self.sonic.velocidade_y > 0 and s_rect.bottom <= e_rect.top + 30:
+                # Jump attack defeats Badnik!
+                if self.sonic.is_jumping and self.sonic.velocidade_y > 0 and s_rect.bottom <= e_rect.top + 32:
                     e["alive"] = False
                     self.sonic.score += 100
                     self.sonic.bounce()
                     # Sparkles
-                    for _ in range(10):
+                    for _ in range(12):
                         self.particles.append({
-                            "x": e["x"] + 22,
-                            "y": e["y"] + 30,
+                            "x": e["x"] + 25,
+                            "y": e["y"] + 20,
                             "vx": random.uniform(-6, 6),
                             "vy": random.uniform(-6, 6),
                             "life": 0.4
@@ -166,7 +164,7 @@ class GreenHillZone:
         s_rect = self.sonic.rect
         for r in self.rings:
             if not r["collected"]:
-                r_rect = pygame.Rect(r["x"] - 12, r["y"] - 12, 24, 24)
+                r_rect = pygame.Rect(r["x"] - 14, r["y"] - 14, 28, 28)
                 if s_rect.colliderect(r_rect):
                     r["collected"] = True
                     self.sonic.rings += 1
@@ -190,14 +188,6 @@ class GreenHillZone:
             pt["life"] -= dt
         self.particles = [p for p in self.particles if p["life"] > 0]
 
-        # Check end of stage
-        if self.sonic.rect[0] > self.tela.get_rect()[2]:
-            try:
-                pygame.mixer.music.fadeout(500)
-            except Exception:
-                pass
-            self.rodando = False
-
         # RENDER
         self.renderizar_fundo()
 
@@ -205,23 +195,38 @@ class GreenHillZone:
         for sp in self.spikes:
             pts = [(sp.x, sp.bottom), (sp.x + sp.w // 2, sp.top), (sp.right, sp.bottom)]
             pygame.draw.polygon(self.tela, (180, 190, 210), pts)
-            pygame.draw.polygon(self.tela, (230, 240, 255), pts, 2)
+            pygame.draw.polygon(self.tela, (240, 245, 255), pts, 2)
 
         # Draw Golden Rings (Rotating Animation)
-        ring_scale = abs(math.cos(self.time_seconds * 5.0)) * 12.0
+        ring_scale = abs(math.cos(self.time_seconds * 5.0)) * 13.0
         for r in self.rings:
             if not r["collected"]:
                 rx, ry = r["x"], r["y"]
                 rw = max(3, int(ring_scale))
-                pygame.draw.ellipse(self.tela, (255, 215, 0), (rx - rw, ry - 12, rw * 2, 24))
-                pygame.draw.ellipse(self.tela, (255, 255, 200), (rx - max(1, rw - 3), ry - 8, max(2, (rw - 3) * 2), 16))
+                pygame.draw.ellipse(self.tela, (255, 215, 0), (rx - rw, ry - 14, rw * 2, 28))
+                pygame.draw.ellipse(self.tela, (255, 255, 220), (rx - max(1, rw - 3), ry - 9, max(2, (rw - 3) * 2), 18))
 
-        # Draw Badnik Robots
+        # Draw Classic Badnik Motobugs
         for e in self.enemies:
             if e["alive"]:
-                frames = self.gamma_frames_left if e["facing"] == -1 else self.gamma_frames_right
-                frame_img = frames[int(e["frame"])]
-                self.tela.blit(frame_img, (int(e["x"]), int(e["y"])))
+                ex, ey = int(e["x"]), int(e["y"])
+                facing = e["facing"]
+                # Motobug Red Body Shell
+                pygame.draw.ellipse(self.tela, (210, 30, 40), (ex, ey, 46, 32))
+                pygame.draw.ellipse(self.tela, (255, 80, 80), (ex + 6, ey + 4, 34, 16))
+                # Head / Face
+                head_x = ex + 32 if facing == 1 else ex - 6
+                pygame.draw.circle(self.tela, (180, 20, 30), (head_x + 8, ey + 14), 10)
+                # Big Yellow Horn / Antenna
+                pygame.draw.polygon(self.tela, (255, 220, 40), [(head_x + 6, ey + 6), (head_x + 12, ey - 4), (head_x + 14, ey + 6)])
+                # Cartoon Eye
+                eye_x = head_x + 10 if facing == 1 else head_x + 6
+                pygame.draw.circle(self.tela, (255, 255, 255), (eye_x, ey + 12), 4)
+                pygame.draw.circle(self.tela, (10, 10, 10), (eye_x + (1 if facing == 1 else -1), ey + 12), 2)
+                # Black Roller Wheel with spokes
+                wheel_anim = int(e["anim"] * 4) % 6
+                pygame.draw.circle(self.tela, (30, 30, 35), (ex + 23, ey + 32), 9)
+                pygame.draw.circle(self.tela, (160, 160, 180), (ex + 23, ey + 32), 4)
 
         # Draw Particles
         for pt in self.particles:
