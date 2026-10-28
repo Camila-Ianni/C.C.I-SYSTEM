@@ -694,6 +694,9 @@ class CCIConsoleState:
             print(f"[CCI] No se pudo cargar {path}: {exc}")
             return pygame.Surface((LOGICAL_W, LOGICAL_H))
 
+    def set_user_data(self, user_data: UserData):
+        self.user_data = user_data
+
     def _load_shared_sidebar(self):
         """Usa en todas las vistas la barra de la plantilla base de logros."""
         return load_sidebar()
@@ -1201,7 +1204,7 @@ class CCIConsoleState:
 
     def _draw_profile(self):
         name = str(self.user_data.data.get("player_name", "CAMI"))[:18]
-        avatar_count = max(1, min(6, len(self.avatar_surfaces)))
+        avatar_count = max(1, len(self.avatar_surfaces))
         avatar_index = int(self.user_data.data.get("avatar", 0)) % avatar_count
         # Retrato original con su marco integrado en el asset del kit.
         pygame.draw.rect(self.canvas, DARK, (360, 185, 422, 130))
@@ -1212,6 +1215,13 @@ class CCIConsoleState:
         edit_icon = self.profile_icons.get("edit")
         if edit_icon is not None:
             self.canvas.blit(pygame.transform.scale(edit_icon, (28, 28)), (746, 203))
+
+        # Botón Cambiar Usuario (conduce a USER_SELECT)
+        btn_switch = pygame.Rect(620, 178, 120, 24)
+        pygame.draw.rect(self.canvas, (18, 24, 36), btn_switch, border_radius=4)
+        pygame.draw.rect(self.canvas, (0, 229, 255), btn_switch, 1, border_radius=4)
+        self._text("CAMBIAR USUARIO", btn_switch.x + 8, btn_switch.y + 6, 9, (0, 229, 255), True)
+
         seconds = int(self.user_data.data.get("total_seconds", 0))
         xp = (seconds // 60) * 10
         level = xp // 1000 + 1
@@ -1243,15 +1253,17 @@ class CCIConsoleState:
             text_x = x + 25
             self._text(label, text_x, 330, 9, MUTED, max_width=132)
             self._text(value, text_x, 352, 12, WHITE, True, 132)
-        # Selector clicable de avatares.
+        # Selector clicable de los 8 avatares en rejilla 2x4.
         if self.avatar_surfaces:
-            start_x, y, w, h, gap = 300, 441, 75, 90, 7
-            for i in range(min(6, len(self.avatar_surfaces))):
-                rect = pygame.Rect(start_x + i * (w + gap), y, w, h)
+            for i in range(len(self.avatar_surfaces)):
+                col = i % 4
+                row = i // 4
+                w, h = 90, 80
+                rect = pygame.Rect(315 + col * 114, 415 + row * 92, w, h)
                 frame = pygame.transform.scale(self.avatar_surfaces[i], rect.size)
                 self.canvas.blit(frame, rect)
                 if i == avatar_index:
-                    pygame.draw.rect(self.canvas, WHITE, rect.inflate(4, 4), 2, border_radius=4)
+                    pygame.draw.rect(self.canvas, (0, 229, 255), rect.inflate(4, 4), 2, border_radius=4)
         # Partidas guardadas: datos reales de sesiones recientes.
         pygame.draw.rect(self.canvas, DARK, (832, 194, 403, 366))
         history = self.user_data.data.get("history", [])[:4]
@@ -1277,7 +1289,7 @@ class CCIConsoleState:
                 self._text(f"{date} {item.get('time', '')}  {h_play:02d}h {m_play:02d}m", rect.x + 137, rect.y + 54, 10, LIGHT, max_width=245)
             else:
                 self._text("SIN PARTIDAS GUARDADAS", rect.x + 14, rect.y + 28, 11, MUTED)
-        self._text("F2 EDITAR NOMBRE   ←→ CAMBIAR AVATAR", 192, 665, 12, MUTED, max_width=580)
+        self._text("F2 EDITAR NOMBRE   F3 CAMBIAR USUARIO   ←→ CAMBIAR AVATAR", 192, 665, 12, MUTED, max_width=580)
 
     def _achievement_game_for_row(self, item):
         return item.get("game_id")
@@ -1767,9 +1779,12 @@ class CCIConsoleState:
             self.name_buffer = str(self.user_data.data.get("player_name", "CAMI"))
             pygame.key.start_text_input()
             return True
+        if key == pygame.K_F3:
+            self.state_machine.change_state("USER_SELECT")
+            return True
         if key in (pygame.K_LEFT, pygame.K_a, pygame.K_RIGHT, pygame.K_d):
             delta = -1 if key in (pygame.K_LEFT, pygame.K_a) else 1
-            count = max(1, min(6, len(self.avatar_surfaces)))
+            count = max(1, len(self.avatar_surfaces))
             self.user_data.data["avatar"] = (int(self.user_data.data.get("avatar", 0)) + delta) % count
             self.user_data.save()
             return True
@@ -1921,13 +1936,18 @@ class CCIConsoleState:
             if pygame.Rect(1082, 529, 150, 43).collidepoint(pos):
                 self._launch_selected()
         elif self.page == "profile":
+            if pygame.Rect(620, 178, 120, 24).collidepoint(pos):
+                self.state_machine.change_state("USER_SELECT")
+                return
             if pygame.Rect(742, 199, 38, 38).collidepoint(pos):
                 self.text_input_active = True
                 self.name_buffer = str(self.user_data.data.get("player_name", "CAMI"))
                 pygame.key.start_text_input()
                 return
-            for i in range(min(6, len(self.avatar_surfaces))):
-                rect = pygame.Rect(300 + i * 82, 441, 75, 90)
+            for i in range(len(self.avatar_surfaces)):
+                col = i % 4
+                row = i // 4
+                rect = pygame.Rect(315 + col * 114, 415 + row * 92, 90, 80)
                 if rect.collidepoint(pos):
                     self.user_data.data["avatar"] = i
                     self.user_data.save()

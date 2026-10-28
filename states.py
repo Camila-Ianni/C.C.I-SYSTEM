@@ -445,10 +445,10 @@ class VideoState(BaseState):
         for event in events:
             if event.type == pygame.KEYDOWN:
                 # Si el usuario presiona Enter o Espacio durante cualquier video,
-                # debe saltarse (skip) y pasar directamente al Menú.
+                # debe saltarse (skip) y pasar directamente al siguiente estado.
                 if self.allow_skip and event.key in (pygame.K_RETURN, pygame.K_SPACE, pygame.K_KP_ENTER):
                     self.audio_player.stop()
-                    self.state_machine.change_state("MENU")
+                    self.state_machine.change_state(self.next_state_name)
                     return
 
     def update(self, dt):
@@ -500,12 +500,12 @@ class BootState(VideoState):
 
 
 class IntroAvatarState(VideoState):
-    """ESTADO 'INTRO_AVATAR': Reproduce Pixel_girl_reading_dialogue_boxes_20261016123851.mp4 con audio y pasa al MENU al terminar."""
+    """ESTADO 'INTRO_AVATAR': Reproduce Pixel_girl_reading_dialogue_boxes_20261016123851.mp4 con audio y pasa a USER_SELECT al terminar."""
     def __init__(self, state_machine):
         super().__init__(
             state_machine,
             video_path="Pixel_girl_reading_dialogue_boxes_20261016123851.mp4",
-            next_state_name="MENU",
+            next_state_name="USER_SELECT",
             allow_skip=True
         )
 
@@ -655,6 +655,9 @@ class MenuState(BaseState):
                 if self._handle_card_click(event.pos):
                     return
             if event.type == pygame.KEYDOWN:
+                if event.key in (pygame.K_F2, pygame.K_F3):
+                    self.state_machine.change_state("USER_SELECT")
+                    return
                 if event.key == pygame.K_F4:
                     self.state_machine.change_state("LIBRARY")
                     return

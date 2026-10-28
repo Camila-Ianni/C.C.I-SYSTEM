@@ -9,6 +9,8 @@ import sys
 import pygame
 
 from cci_console import CATALOG, CCIConsoleState, UserData
+from cci_users import UserManager
+from user_select_state import UserSelectState
 from states import (
     SCREEN_HEIGHT,
     SCREEN_WIDTH,
@@ -69,7 +71,8 @@ def _open_display(settings):
 
 def main():
     init_subsystems()
-    user_data = UserData()
+    user_manager = UserManager()
+    user_data = user_manager.active_user
     screen = _open_display(user_data.settings)
     clock = pygame.time.Clock()
     state_machine = StateMachine(screen)
@@ -79,13 +82,24 @@ def main():
         screen = _open_display(settings)
         state_machine.screen = screen
 
-    # Se mantiene el Inicio original con carrusel vertical; las demás vistas son interactivas.
+    def apply_user(new_user_data):
+        nonlocal user_data
+        user_data = new_user_data
+        for st_name in ("LIBRARY", "PROFILE", "ACHIEVEMENTS", "SETTINGS"):
+            st = state_machine.states.get(st_name)
+            if hasattr(st, "set_user_data"):
+                st.set_user_data(new_user_data)
+        apply_display(new_user_data.settings)
+
+    # Flujo de inicio: BOOT -> INTRO_AVATAR -> USER_SELECT -> MENU
     state_machine.register_state("BOOT", BootState(state_machine))
     state_machine.register_state("INTRO_AVATAR", IntroAvatarState(state_machine))
+    state_machine.register_state("USER_SELECT", UserSelectState(state_machine, on_user_selected=apply_user))
+
     def record_game_launch(game_key, elapsed):
         game = next((item for item in CATALOG if item["id"] == game_key), None)
         if game:
-            user_data.record_launch(game, elapsed)
+            user_manager.active_user.record_launch(game, elapsed)
 
     state_machine.register_state("MENU", MenuState(state_machine, on_game_launch=record_game_launch))
     state_machine.register_state("LIBRARY", CCIConsoleState(state_machine, "library", user_data, apply_display))
