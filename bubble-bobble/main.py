@@ -84,9 +84,11 @@ def main():
         spr_bub_idle = pygame.image.load(os.path.join(sprites_dir, "arcade_bub_idle.png")).convert_alpha()
         spr_bub_walk = pygame.image.load(os.path.join(sprites_dir, "arcade_bub_walk.png")).convert_alpha()
         spr_bub_jump = pygame.image.load(os.path.join(sprites_dir, "arcade_bub_jump.png")).convert_alpha()
+        spr_bub_shoot = pygame.image.load(os.path.join(sprites_dir, "arcade_bub_shoot.png")).convert_alpha()
         spr_zen_walk1 = pygame.image.load(os.path.join(sprites_dir, "arcade_zen_walk1.png")).convert_alpha()
         spr_zen_walk2 = pygame.image.load(os.path.join(sprites_dir, "arcade_zen_walk2.png")).convert_alpha()
         spr_zen_angry = pygame.image.load(os.path.join(sprites_dir, "arcade_zen_angry.png")).convert_alpha()
+        spr_zen_angry2 = pygame.image.load(os.path.join(sprites_dir, "arcade_zen_angry2.png")).convert_alpha()
         spr_zen_trapped = pygame.image.load(os.path.join(sprites_dir, "arcade_zen_trapped.png")).convert_alpha()
         spr_bubble = pygame.image.load(os.path.join(sprites_dir, "arcade_bubble_final.png")).convert_alpha()
         spr_fruit_banana = pygame.image.load(os.path.join(sprites_dir, "arcade_fruit_banana.png")).convert_alpha()
@@ -96,8 +98,8 @@ def main():
         spr_brick_floor = pygame.image.load(os.path.join(sprites_dir, "arcade_brick_floor.png")).convert()
     except Exception as e:
         print(f"Sprite load error: {e}")
-        spr_bub_idle = spr_bub_walk = spr_bub_jump = None
-        spr_zen_walk1 = spr_zen_walk2 = spr_zen_angry = spr_zen_trapped = None
+        spr_bub_idle = spr_bub_walk = spr_bub_jump = spr_bub_shoot = None
+        spr_zen_walk1 = spr_zen_walk2 = spr_zen_angry = spr_zen_angry2 = spr_zen_trapped = None
         spr_bubble = spr_fruit_banana = spr_fruit_watermelon = spr_fruit_apple = None
         spr_brick_plat = spr_brick_floor = None
 
@@ -582,7 +584,8 @@ def main():
             ex, ey = int(e["x"]), int(e["y"])
             if spr_zen_walk1 and spr_zen_walk2 and spr_zen_angry:
                 if e["angry"]:
-                    e_surf = spr_zen_angry if int(e["anim_timer"]) % 2 == 0 else spr_zen_walk2
+                    ang2 = spr_zen_angry2 if spr_zen_angry2 else spr_zen_angry
+                    e_surf = spr_zen_angry if int(e["anim_timer"]) % 2 == 0 else ang2
                 else:
                     e_surf = spr_zen_walk1 if int(e["anim_timer"]) % 2 == 0 else spr_zen_walk2
                 if e["facing"] == -1:
@@ -597,7 +600,9 @@ def main():
         if player["invuln"] <= 0 or int(player["invuln"] * 12) % 2 == 0:
             px, py = int(player["x"]), int(player["y"])
             if spr_bub_idle and spr_bub_walk and spr_bub_jump:
-                if not player["on_ground"]:
+                if player["mouth_timer"] > 0 and spr_bub_shoot:
+                    p_surf = spr_bub_shoot
+                elif not player["on_ground"]:
                     p_surf = spr_bub_jump
                 elif player["vx"] != 0:
                     p_surf = spr_bub_walk if int(player["anim_timer"]) % 2 == 0 else spr_bub_idle
@@ -619,8 +624,15 @@ def main():
         hud_bg.fill((8, 12, 24))
         screen.blit(hud_bg, (0, 0))
 
-        score_txt = font_hud.render(f"1UP: {score:06d}   TOP: {high_score:06d}   ROUND: {round_num:02d}   LIVES: {'❤ ' * max(0, lives)}", True, (255, 255, 255))
+        score_txt = font_hud.render(f"1UP: {score:06d}   TOP: {high_score:06d}   ROUND: {round_num:02d}   LIVES: {lives}", True, (255, 255, 255))
         screen.blit(score_txt, (30, 12))
+        # Draw small mini hearts next to lives text
+        hx = 30 + score_txt.get_width() + 10
+        for _ in range(max(0, lives)):
+            pygame.draw.circle(screen, (255, 60, 80), (hx, 22), 5)
+            pygame.draw.circle(screen, (255, 60, 80), (hx + 6, 22), 5)
+            pygame.draw.polygon(screen, (255, 60, 80), [(hx - 5, 23), (hx + 11, 23), (hx + 3, 31)])
+            hx += 20
 
         # Controls hint at bottom
         ctrl_txt = font_hud.render("FLECHAS / D-PAD: MOVER   ESPACIO / A: SALTAR   Z / B: BURBUJA   ESC: SALIR", True, (160, 180, 210))
