@@ -11,6 +11,8 @@ import pygame
 from cci_console import CATALOG, CCIConsoleState, UserData
 from cci_users import UserManager
 from user_select_state import UserSelectState
+from screenshot_manager import ScreenshotManager
+from audio_bgm import BGMManager
 from states import (
     SCREEN_HEIGHT,
     SCREEN_WIDTH,
@@ -116,11 +118,18 @@ def main():
         for event in events:
             if event.type == pygame.QUIT:
                 running = False
+            elif event.type == pygame.KEYDOWN and event.key in (pygame.K_F12, pygame.K_PRINT, pygame.K_F10):
+                current_surf = pygame.display.get_surface() or screen
+                ScreenshotManager.get_instance().take_screenshot(current_surf)
+            elif event.type == pygame.JOYBUTTONDOWN and event.button in (6, 8):
+                current_surf = pygame.display.get_surface() or screen
+                ScreenshotManager.get_instance().take_screenshot(current_surf)
         state_machine.handle_events(events)
         state_machine.update(dt)
         screen = pygame.display.get_surface() or screen
         state_machine.screen = screen
         state_machine.draw(screen)
+        ScreenshotManager.get_instance().draw_overlay(screen)
         pygame.display.flip()
 
     pygame.quit()

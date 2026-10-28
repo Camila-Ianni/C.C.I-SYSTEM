@@ -18,6 +18,9 @@ from pathlib import Path
 
 import pygame
 from sidebar_ui import SIDEBAR_W, draw_sidebar, load_sidebar, make_sidebar_font, sidebar_destination
+from audio_bgm import BGMManager
+from game_hub import GameHubModal
+from screenshot_manager import ScreenshotManager
 
 LOGICAL_W, LOGICAL_H = 1280, 720
 ROOT = Path(__file__).resolve().parent
@@ -598,6 +601,17 @@ class CCIConsoleState:
         self.last_drawn_size = None
         self.fanfare_sound = self._make_fanfare_sound() if page == "achievements" else None
         self.awarding_trophy = None
+        self.game_hub = GameHubModal()
+
+    def _selected_game_art(self, game_id=None):
+        gid = game_id or self.selected_game_id
+        if gid in self.color_library_art:
+            return self.color_library_art[gid]
+        if gid in self.game_art:
+            return self.game_art[gid]
+        if gid in self.color_library_cards:
+            return self.color_library_cards[gid]
+        return None
 
     def _load_background(self, page: str):
         folder = ROOT / "pantallas" / "finales_entrega"
@@ -1084,6 +1098,9 @@ class CCIConsoleState:
             self._text(f"BÚSQUEDA: {self.search_query}", 283, 584, 13, WHITE, max_width=520)
         if self.search_active:
             self._draw_search_modal()
+        if self.game_hub.is_open():
+            self.game_hub.update(0.016)
+            self.game_hub.draw(self.canvas)
 
     def _draw_doom_card(self, rect):
         pygame.draw.rect(self.canvas, (12, 13, 15), rect, border_radius=5)
@@ -1215,6 +1232,19 @@ class CCIConsoleState:
                 self.canvas.blit(frame, rect)
                 if i == avatar_index:
                     pygame.draw.rect(self.canvas, (0, 229, 255), rect.inflate(4, 4), 2, border_radius=4)
+
+        # Galería de Capturas de Pantalla (PS5 Style)
+        cap_box = pygame.Rect(300, 540, 500, 50)
+        pygame.draw.rect(self.canvas, (14, 18, 26), cap_box, border_radius=6)
+        pygame.draw.rect(self.canvas, (0, 229, 255), cap_box, 1, border_radius=6)
+        cap_count = ScreenshotManager.get_capture_count()
+        self._text(f"📸 CAPTURAS: {cap_count} IMÁGENES GUARDADAS", cap_box.x + 14, cap_box.y + 11, 11, (0, 229, 255), True)
+        self._text("Presiona F12 para capturar pantalla en cualquier momento", cap_box.x + 14, cap_box.y + 28, 9, MUTED)
+        btn_open = pygame.Rect(cap_box.right - 120, cap_box.y + 10, 110, 30)
+        pygame.draw.rect(self.canvas, (24, 32, 48), btn_open, border_radius=4)
+        pygame.draw.rect(self.canvas, (0, 229, 255), btn_open, 1, border_radius=4)
+        self._text("ABRIR CARPETA", btn_open.x + 10, btn_open.y + 8, 9, WHITE, True)
+
         # Partidas guardadas: datos reales de sesiones recientes.
         pygame.draw.rect(self.canvas, DARK, (832, 194, 403, 366))
         history = self.user_data.data.get("history", [])[:4]
@@ -1240,7 +1270,7 @@ class CCIConsoleState:
                 self._text(f"{date} {item.get('time', '')}  {h_play:02d}h {m_play:02d}m", rect.x + 137, rect.y + 54, 10, LIGHT, max_width=245)
             else:
                 self._text("SIN PARTIDAS GUARDADAS", rect.x + 14, rect.y + 28, 11, MUTED)
-        self._text("F2 EDITAR NOMBRE   F3 CAMBIAR USUARIO   ←→ CAMBIAR AVATAR", 192, 665, 12, MUTED, max_width=580)
+        self._text("F2 EDITAR NOMBRE   F3 CAMBIAR USUARIO   G ABRIR CAPTURAS (F12)   ←→ CAMBIAR AVATAR", 192, 665, 11, MUTED, max_width=580)
 
     def _achievement_game_for_row(self, item):
         return item.get("game_id")
@@ -1853,7 +1883,8 @@ class CCIConsoleState:
             self._move_game(4, games)
             return True
         if key in (pygame.K_RETURN, pygame.K_KP_ENTER, pygame.K_SPACE):
-            self._launch_selected()
+            self.game_hub.open(self._selected_game(), self.user_data, self._selected_game_art())
+            self._feedback()
             return True
         if key == pygame.K_f:
             game_id = self.selected_game_id
@@ -1891,6 +1922,8 @@ class CCIConsoleState:
             self.toast = "ESTE JUEGO NO ESTÁ INSTALADO"
             self.toast_until = time.monotonic() + 2.4
             return
+        # PS5 Style: Desvanecer música ambiental al arrancar el juego
+        BGMManager.get_instance().fadeout(500)
         start = time.monotonic()
         try:
             if "external" in game:
@@ -1905,6 +1938,9 @@ class CCIConsoleState:
                 subprocess.run([sys.executable, str(path)], cwd=str(path.parent), env=env, check=False)
                 pygame.event.clear()
                 pygame.display.set_caption("C.C.I. SYSTEM — BIBLIOTECA")
+                # Reanudar música ambiental al volver de juego externo
+                vol = self.user_data.settings.get("volume_menu", 80) / 100.0
+                BGMManager.get_instance().play_ambient(volume=vol, fade_ms=1000)
             else:
                 current = pygame.display.get_surface()
                 if current and current.get_size() != (LOGICAL_W, LOGICAL_H):
@@ -1921,6 +1957,8 @@ class CCIConsoleState:
             print(f"[CCI] Error al lanzar {game['title']}: {exc}")
             self.toast = f"NO SE PUDO INICIAR {game['title']}"
             self.toast_until = time.monotonic() + 3.0
+            vol = self.user_data.settings.get("volume_menu", 80) / 100.0
+            BGMManager.get_instance().play_ambient(volume=vol, fade_ms=1000)
 
     def _handle_profile_key(self, key):
         if self.text_input_active:
@@ -1940,8 +1978,10 @@ class CCIConsoleState:
             self.name_buffer = str(self.user_data.data.get("player_name", "CAMI"))
             pygame.key.start_text_input()
             return True
-        if key == pygame.K_F3:
-            self.state_machine.change_state("USER_SELECT")
+        if key in (pygame.K_g, pygame.K_F10):
+            ScreenshotManager.open_capturas_folder()
+            self.toast = "CARPETA CAPTURAS ABIERTA"
+            self.toast_until = time.monotonic() + 2.0
             return True
         if key in (pygame.K_LEFT, pygame.K_a, pygame.K_RIGHT, pygame.K_d):
             delta = -1 if key in (pygame.K_LEFT, pygame.K_a) else 1
@@ -2029,6 +2069,8 @@ class CCIConsoleState:
         self.user_data.save()
         if key in {"volume_menu", "volume_fx"}:
             self._feedback()
+            if key == "volume_menu":
+                BGMManager.get_instance().set_volume(int(settings["volume_menu"]) / 100.0)
         if key in {"resolution", "fullscreen"}:
             self._apply_settings()
         elif key in {"volume_game", "volume_fx"} and pygame.mixer.get_init():
@@ -2095,13 +2137,16 @@ class CCIConsoleState:
                         self.selected_game_id = games[game_idx]["id"]
                         self._feedback()
                         if getattr(self, "last_clicked_slot", None) == game_idx and time.monotonic() - getattr(self, "last_click_time", 0) < 0.45:
-                            self._launch_selected()
+                            self.game_hub.open(self._selected_game(), self.user_data, self._selected_game_art())
                         self.last_clicked_slot = game_idx
                         self.last_click_time = time.monotonic()
                     return
             if pygame.Rect(1082, 529, 150, 43).collidepoint(pos):
-                self._launch_selected()
+                self.game_hub.open(self._selected_game(), self.user_data, self._selected_game_art())
         elif self.page == "profile":
+            if pygame.Rect(670, 540, 130, 40).collidepoint(pos):
+                ScreenshotManager.open_capturas_folder()
+                return
             if pygame.Rect(620, 178, 120, 24).collidepoint(pos):
                 self.state_machine.change_state("USER_SELECT")
                 return
@@ -2225,6 +2270,27 @@ class CCIConsoleState:
                         pygame.key.stop_text_input()
                     elif event.key == pygame.K_BACKSPACE:
                         self.name_buffer = self.name_buffer[:-1]
+            return
+        if self.game_hub.is_open():
+            for event in events:
+                action = self.game_hub.handle_event(event)
+                if action == "play":
+                    self.game_hub.close()
+                    self._launch_selected()
+                    return
+                elif action == "favorite":
+                    game_id = self.selected_game_id
+                    favorites = self.user_data.data.setdefault("favorites", [])
+                    if game_id in favorites:
+                        favorites.remove(game_id)
+                        self.toast = "QUITADO DE FAVORITOS"
+                    else:
+                        favorites.append(game_id)
+                        self.toast = "AGREGADO A FAVORITOS"
+                    self.toast_until = time.monotonic() + 1.8
+                    self.user_data.save()
+                elif action == "close":
+                    return
             return
         if self.modal:
             for event in events:
