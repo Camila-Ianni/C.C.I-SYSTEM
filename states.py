@@ -545,7 +545,6 @@ class MenuState(BaseState):
             {"key": "tetris",         "title": "Tetris",             "dialog": "Tetris: Encaja los tetriminos y limpia líneas."},
             {"key": "zelda",          "title": "Zelda",              "dialog": "The Legend of Zelda: Explora y lucha en Hyrule."},
             {"key": "doom",           "title": "DOOM",               "dialog": "DOOM: Acción shooter en primera persona en Marte."},
-            {"key": "minecraft",      "title": "Minecraft",          "dialog": "Minecraft: Construye y destruye bloques en un mundo 3D."},
             {"key": "flappy",         "title": "Flappy Bird",        "dialog": "Flappy Bird: Vuela entre las tuberías sin chocar."},
             {"key": "dino",           "title": "Dino",               "dialog": "Dino: Corre y salta obstáculos sin parar."},
             {"key": "ghostbusters",   "title": "GhostBusters",       "dialog": "GhostBusters: Plataformas de acción contra fantasmas."},
@@ -553,8 +552,6 @@ class MenuState(BaseState):
             {"key": "pokemon",        "title": "Pokémon",            "dialog": "Pokémon: Aventura RPG clásica por el mundo de Kanto."},
             {"key": "fighter",        "title": "Street Fighter II",  "dialog": "Street Fighter II: Combate arcade 1v1 con Ryu."},
             {"key": "sonic",          "title": "Sonic The Hedgehog", "dialog": "Sonic: Corre a toda velocidad por Green Hill Zone."},
-            {"key": "bomberman",      "title": "Bomberman",          "dialog": "Bomberman: Coloca bombas y elimina a tus rivales."},
-            {"key": "frogger",        "title": "Frogger",            "dialog": "Frogger: Cruza la autopista y el río a salvo."},
             {"key": "megaman",        "title": "Mega Man",           "dialog": "Mega Man: Plataformas de acción robótica retro."},
             {"key": "mkultra",        "title": "Mortal Kombat",      "dialog": "Mortal Kombat: Combate visceral uno contra uno."},
             {"key": "castlevania",     "title": "Castlevania",        "dialog": "Castlevania: Aventura gótica y látigo contra Drácula."},
@@ -906,7 +903,6 @@ class ScreenPreviewState(BaseState):
 
 # Juegos que corren en su propio proceso: clave -> (carpeta, script, módulo requerido o None)
 EXTERNAL_GAMES = {
-    "minecraft":    ("Minecraft", "UrsaCraft_video.py", "ursina"),
     "flappy":       ("Flappy-Bird", "main.py", None),
     "dino":         ("Dino", "main.py", None),
     "ghostbusters": ("GhostBusters", "main.py", None),
@@ -915,8 +911,6 @@ EXTERNAL_GAMES = {
     "fighter":      ("fighter", "main.py", None),
     "streetfighter":("fighter", "main.py", None),
     "sonic":        ("sonic", "main.py", None),
-    "bomberman":    ("Bomberman", "main.py", None),
-    "frogger":      ("frogger", "frogger.py", None),
     "megaman":      ("MegamanPygame", "Game.py", None),
     "mkultra":      ("MK-Ultra", "MKUltra.py", None),
     "castlevania":     ("castlevania", "Main.py", None),

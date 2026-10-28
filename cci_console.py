@@ -153,88 +153,70 @@ CATALOG = [
         "external": ("GhostBusters", "main.py"), "slot": 11,
     },
     {
-        "id": "minecraft", "title": "MINECRAFT", "subtitle": "Construye, explora y sobrevive en un mundo 3D.",
-        "developer": "Mojang / Ursina", "year": "2011", "genre": "Sandbox / Aventura",
-        "players": "1", "tags": "SANDBOX  ·  AVENTURA", "categories": {"ACCIÓN", "ARCADE"},
-        "external": ("Minecraft", "UrsaCraft_video.py"), "slot": 12,
-    },
-    {
         "id": "cyberpunk", "title": "CYBERPUNK", "subtitle": "Metroidvania retrofuturista con combate y parkour.",
         "developer": "C.C.I. System", "year": "2026", "genre": "Acción / Plataformas",
         "players": "1", "tags": "ACCIÓN  ·  PLATAFORMAS", "categories": {"ACCIÓN", "PLATAFORMAS"},
-        "external": ("Cyberpunk-Metroidvania/Platformer 01-04-2022", "main.py"), "slot": 13,
+        "external": ("Cyberpunk-Metroidvania/Platformer 01-04-2022", "main.py"), "slot": 12,
     },
     {
         "id": "pokemon", "title": "POKÉMON", "subtitle": "Aventura RPG clásica por el mundo de Kanto.",
         "developer": "Game Freak", "year": "1996", "genre": "RPG / Aventura",
         "players": "1", "tags": "RPG  ·  AVENTURA", "categories": {"RPG"},
-        "external": ("pokemon", "main.py"), "slot": 14,
+        "external": ("pokemon", "main.py"), "slot": 13,
     },
     {
         "id": "fighter", "title": "STREET FIGHTER II", "subtitle": "Combate arcade legendario 1v1 con Ryu.",
         "developer": "Capcom", "year": "1991", "genre": "Lucha / Arcade",
         "players": "1–2", "tags": "LUCHA  ·  ARCADE", "categories": {"ACCIÓN", "ARCADE"},
-        "external": ("fighter", "main.py"), "slot": 15,
+        "external": ("fighter", "main.py"), "slot": 14,
     },
     {
         "id": "sonic", "title": "SONIC THE HEDGEHOG", "subtitle": "Corre a toda velocidad por Green Hill Zone.",
         "developer": "SEGA", "year": "1991", "genre": "Plataformas / Velocidad",
         "players": "1–2", "tags": "PLATAFORMAS  ·  ARCADE", "categories": {"PLATAFORMAS", "ARCADE"},
-        "external": ("sonic", "main.py"), "slot": 16,
-    },
-    {
-        "id": "bomberman", "title": "BOMBERMAN", "subtitle": "Coloca bombas y elimina a tus rivales.",
-        "developer": "Hudson Soft", "year": "1983", "genre": "Arcade / Estrategia",
-        "players": "1–2", "tags": "ARCADE  ·  ACCIÓN", "categories": {"ACCIÓN", "ARCADE"},
-        "external": ("Bomberman", "main.py"), "slot": 17,
-    },
-    {
-        "id": "frogger", "title": "FROGGER", "subtitle": "Cruza la autopista y el río a salvo.",
-        "developer": "Konami", "year": "1981", "genre": "Arcade / Habilidad",
-        "players": "1", "tags": "ARCADE  ·  CLÁSICO", "categories": {"ARCADE"},
-        "external": ("frogger", "frogger.py"), "slot": 18,
+        "external": ("sonic", "main.py"), "slot": 15,
     },
     {
         "id": "megaman", "title": "MEGA MAN", "subtitle": "Plataformas de acción robótica retro.",
         "developer": "Capcom", "year": "1987", "genre": "Acción / Plataformas",
         "players": "1", "tags": "PLATAFORMAS  ·  ACCIÓN", "categories": {"ACCIÓN", "PLATAFORMAS"},
-        "external": ("MegamanPygame", "Game.py"), "slot": 19,
+        "external": ("MegamanPygame", "Game.py"), "slot": 16,
     },
     {
         "id": "mkultra", "title": "MORTAL KOMBAT", "subtitle": "Combate visceral uno contra uno.",
         "developer": "Midway", "year": "1992", "genre": "Lucha / Acción",
         "players": "1–2", "tags": "LUCHA  ·  ARCADE", "categories": {"ACCIÓN", "ARCADE"},
-        "external": ("MK-Ultra", "MKUltra.py"), "slot": 20,
+        "external": ("MK-Ultra", "MKUltra.py"), "slot": 17,
     },
     {
         "id": "castlevania", "title": "CASTLEVANIA", "subtitle": "Aventura gótica y látigo contra Drácula.",
         "developer": "Konami", "year": "1986", "genre": "Acción / Plataformas",
         "players": "1", "tags": "ACCIÓN  ·  PLATAFORMAS", "categories": {"ACCIÓN", "PLATAFORMAS"},
-        "external": ("castlevania", "Main.py"), "slot": 21,
+        "external": ("castlevania", "Main.py"), "slot": 18,
     },
     {
         "id": "bubblebobble", "title": "BUBBLE BOBBLE", "subtitle": "Atrapa monstruos en burbujas mágicas.",
         "developer": "Taito", "year": "1986", "genre": "Arcade / Plataformas",
         "players": "1–2", "tags": "ARCADE  ·  PLATAFORMAS", "categories": {"ARCADE", "PLATAFORMAS"},
-        "external": ("bubble-bobble", "main.py"), "slot": 22,
+        "external": ("bubble-bobble", "main.py"), "slot": 19,
     },
     {
         "id": "plantsvszombies", "title": "PLANTS VS. ZOMBIES", "subtitle": "Defiende tu jardín de los no-muertos.",
         "developer": "PopCap", "year": "2009", "genre": "Estrategia / Tower Defense",
         "players": "1", "tags": "ESTRATEGIA  ·  ARCADE", "categories": {"ACCIÓN", "ARCADE"},
-        "external": ("PlantsVSZombies", "main.py"), "slot": 23,
+        "external": ("PlantsVSZombies", "main.py"), "slot": 20,
     },
     {
         "id": "donkeykong", "title": "DONKEY KONG", "subtitle": "Salta barriles y rescata a Pauline.",
         "developer": "Nintendo", "year": "1981", "genre": "Arcade / Plataformas",
         "players": "1–2", "tags": "ARCADE  ·  CLÁSICO", "categories": {"ARCADE", "PLATAFORMAS"},
-        "external": ("PythonDonkeyKong", "main.py"), "slot": 24,
+        "external": ("PythonDonkeyKong", "main.py"), "slot": 21,
     },
     {
         "id": "qbert", "title": "Q*BERT", "subtitle": "Cambia el color de la pirámide esquivando enemigos.",
         "developer": "Gottlieb", "year": "1982", "genre": "Arcade / Puzzle",
         "players": "1", "tags": "ARCADE  ·  PUZZLE", "categories": {"ARCADE", "PUZZLE"},
-        "external": ("qbert", "Qbert.py"), "slot": 25,
+        "external": ("qbert", "Qbert.py"), "slot": 22,
     },
 ]
 
@@ -267,7 +249,6 @@ COLOR_LIBRARY_RECTS = {
     "flappy": pygame.Rect(432, 451, 186, 154),
     "dino": pygame.Rect(626, 451, 191, 154),
     "ghostbusters": pygame.Rect(826, 451, 183, 154),
-    "minecraft": pygame.Rect(238, 451, 186, 154),
     "cyberpunk": pygame.Rect(238, 609, 186, 154),
 }
 
@@ -356,13 +337,6 @@ GAME_ACHIEVEMENTS = {
         {"title": "TRAMPA ACTIVA", "description": "Acumula 60 minutos capturando apariciones.", "type": "minutes", "goal": 60},
         {"title": "SALVADOR DE NUEVA YORK", "description": "Alcanza un 50% de progreso paranormal.", "type": "progress", "goal": 50},
     ],
-    "minecraft": [
-        {"title": "LA EDAD DE PIEDRA", "description": "Inicia tu primer mundo de supervivencia en Minecraft.", "type": "launch", "goal": 1},
-        {"title": "¡DIAMANTES!", "description": "Explora y construye durante 15 minutos.", "type": "minutes", "goal": 15},
-        {"title": "BLOQUE FAVORITO", "description": "Agrega Minecraft a tus favoritos.", "type": "favorite", "goal": 1},
-        {"title": "SUPERVIVENCIA EXTREMA", "description": "Acumula 60 minutos explorando cavernas.", "type": "minutes", "goal": 60},
-        {"title": "ARQUITECTO DEL MUNDO", "description": "Alcanza un 50% de progreso en tu mundo.", "type": "progress", "goal": 50},
-    ],
     "cyberpunk": [
         {"title": "CONEXIÓN NEURAL", "description": "Inicia tu incursión en la ciudad cyberpunk.", "type": "launch", "goal": 1},
         {"title": "CALLES DE NEÓN", "description": "Explora durante 15 minutos los callejones oscuros.", "type": "minutes", "goal": 15},
@@ -390,20 +364,6 @@ GAME_ACHIEVEMENTS = {
         {"title": "FAVORITO AZUL", "description": "Agrega Sonic a tus favoritos.", "type": "favorite", "goal": 1},
         {"title": "SONIC BOOM", "description": "Acumula 60 minutos a máxima velocidad.", "type": "minutes", "goal": 60},
         {"title": "ESMERALDA DEL CAOS", "description": "Alcanza un 50% de progreso en las zonas.", "type": "progress", "goal": 50},
-    ],
-    "bomberman": [
-        {"title": "MECHA ENCENDIDA", "description": "Inicia tu primera partida en Bomberman.", "type": "launch", "goal": 1},
-        {"title": "BOMBARDEO TÁCTICO", "description": "Juega durante 15 minutos colocando bombas.", "type": "minutes", "goal": 15},
-        {"title": "PIROTÉCNICO", "description": "Agrega Bomberman a tus favoritos.", "type": "favorite", "goal": 1},
-        {"title": "MAESTRO DE LA DINAMITA", "description": "Acumula 60 minutos detonando laberintos.", "type": "minutes", "goal": 60},
-        {"title": "SUPERVIVIENTE", "description": "Alcanza un 50% de progreso en el juego.", "type": "progress", "goal": 50},
-    ],
-    "frogger": [
-        {"title": "SALTO INICIAL", "description": "Inicia tu primera travesía en Frogger.", "type": "launch", "goal": 1},
-        {"title": "CRUZA-CALLES", "description": "Sobrevive 15 minutos esquivando tráfico y corrientes.", "type": "minutes", "goal": 15},
-        {"title": "RANA FAVORITA", "description": "Agrega Frogger a tus favoritos.", "type": "favorite", "goal": 1},
-        {"title": "REINA DEL ESTANQUE", "description": "Acumula 60 minutos guiando a las ranas al hogar.", "type": "minutes", "goal": 60},
-        {"title": "SALTO PERFECTO", "description": "Alcanza un 50% de progreso cruzando el río.", "type": "progress", "goal": 50},
     ],
     "megaman": [
         {"title": "ROBOT GUERRERO", "description": "Inicia tu primera misión con Mega Man.", "type": "launch", "goal": 1},
@@ -636,12 +596,6 @@ class CCIConsoleState:
             for game_id, card in self.color_library_cards.items()
             if card.get_width() > 16 and card.get_height() >= 116
         }
-        mc_hero = ROOT / "assets_cards" / "minecraft_hero.png"
-        if mc_hero.is_file():
-            try:
-                self.color_library_art["minecraft"] = pygame.image.load(str(mc_hero)).convert()
-            except (pygame.error, OSError):
-                pass
         self.game_art = self._load_game_art() if needs_game_art else {}
         self.settings_sprites = self._load_settings_sprites() if page == "settings" else {}
         self.category = "TODOS"
@@ -830,7 +784,7 @@ class CCIConsoleState:
                 if rect.right <= sheet.get_width() and rect.bottom <= sheet.get_height()
             }
             extra_ids = (
-                "pokemon", "fighter", "sonic", "streetfighter", "bomberman", "frogger",
+                "pokemon", "fighter", "sonic", "streetfighter",
                 "megaman", "mkultra", "castlevania", "bubblebobble", "plantsvszombies",
                 "donkeykong", "qbert"
             )
@@ -1379,9 +1333,9 @@ class CCIConsoleState:
             "zelda": "ZELDA", "pacman": "PAC-MAN", "tetris": "TETRIS",
             "space_invaders": "SPACE INV.", "metalslug": "METAL SLUG", "doom": "DOOM",
             "flappy": "FLAPPY BIRD", "dino": "DINO", "ghostbusters": "GHOSTBUSTERS",
-            "minecraft": "MINECRAFT", "cyberpunk": "CYBERPUNK",
+            "cyberpunk": "CYBERPUNK",
             "pokemon": "POKÉMON", "fighter": "STREET FIGHTER", "sonic": "SONIC",
-            "bomberman": "BOMBERMAN", "frogger": "FROGGER", "megaman": "MEGA MAN", "mkultra": "MORTAL KOMBAT",
+            "megaman": "MEGA MAN", "mkultra": "MORTAL KOMBAT",
             "castlevania": "CASTLEVANIA", "bubblebobble": "BUBBLE BOBBLE", "plantsvszombies": "PLANTS VS ZOMBIES",
             "donkeykong": "DONKEY KONG", "qbert": "Q*BERT",
         }

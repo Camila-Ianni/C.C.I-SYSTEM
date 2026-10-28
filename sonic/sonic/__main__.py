@@ -1,6 +1,16 @@
 #!/bin/python3
+# -*- coding: utf-8 -*-
 
-import pygame, configparser, pathlib
+import os
+import sys
+import pygame
+import configparser
+import pathlib
+
+# Ensure root directory is on sys.path for cci_rumble
+ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if ROOT_DIR not in sys.path:
+    sys.path.insert(0, ROOT_DIR)
 
 from .game.cenarios.GreenHillZone import GreenHillZone
 from .game.cenarios.MarbleZone import MarbleZone
@@ -8,6 +18,13 @@ from .game.telas.TelaDeInicio import TelaDeInicio
 
 pygame.mixer.pre_init(44100, 16, 2, 1024)
 pygame.init()
+try:
+    pygame.joystick.init()
+    joysticks = [pygame.joystick.Joystick(i) for i in range(pygame.joystick.get_count())]
+    for j in joysticks:
+        j.init()
+except Exception:
+    joysticks = []
 
 config = configparser.ConfigParser()
 config_file = pathlib.Path(__file__).parent / "config.ini"
@@ -31,28 +48,27 @@ fase_object[fase].rodar_cenario()
 executando = True
 while executando:
 
-    fase_object[fase].atualizar_cenario()
-
     for evento in pygame.event.get():
-
-        if fase == 0:
-            fase_object[fase].atualizar_eventos(evento, fase)
-        else: 
-            fase_object[fase].atualizar_eventos(evento)
-            fase_object[fase].sonic.update()
-
-        if not fase_object[fase].rodando: 
-            fase += 1
-            fase_object[fase].rodar_cenario()
-
-        if evento.type == pygame.KEYDOWN:
-            if evento.key in (pygame.K_ESCAPE, pygame.K_q):
-                executando = False
-
         if evento.type == pygame.QUIT:
             executando = False
+        elif evento.type == pygame.KEYDOWN and evento.key in (pygame.K_ESCAPE, pygame.K_q):
+            executando = False
+        elif evento.type == pygame.JOYBUTTONDOWN and evento.button in (6, 7):
+            executando = False
+        else:
+            if fase == 0:
+                fase_object[fase].atualizar_eventos(evento, fase)
+            else:
+                fase_object[fase].atualizar_eventos(evento)
 
-    clock.tick(30)
+    # Update scene once per frame
+    fase_object[fase].atualizar_cenario()
+
+    if not fase_object[fase].rodando:
+        fase = (fase + 1) % len(fase_object)
+        fase_object[fase].rodar_cenario()
+
+    clock.tick(60)
     pygame.display.flip()
 
 pygame.quit()

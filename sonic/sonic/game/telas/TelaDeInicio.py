@@ -41,8 +41,8 @@ class TelaDeInicio:
                 self.renderizar_press_start()
                 self.press_start_aparecendo = True
 
-        if evento.type == pygame.KEYDOWN:
-            if evento.key in (pygame.K_RETURN, pygame.K_SPACE, pygame.K_z, pygame.K_x):
+        if evento.type in (pygame.KEYDOWN, pygame.JOYBUTTONDOWN):
+            if evento.type == pygame.JOYBUTTONDOWN or evento.key in (pygame.K_RETURN, pygame.K_SPACE, pygame.K_z, pygame.K_x):
                 pygame.mixer.music.fadeout(500)
                 pygame.time.set_timer(self.EVENTO_PISCAR, 0)
                 self.rodando = False

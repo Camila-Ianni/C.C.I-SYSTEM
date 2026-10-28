@@ -2,14 +2,25 @@
 # -*- coding: utf-8 -*-
 
 import pygame, sys
+import os
+
+ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
+os.chdir(ROOT_DIR)
+sys.path.insert(0, os.path.dirname(ROOT_DIR))
 
 from pygame.locals import *
-
 from random import randint
-
 import math
-
 import time
+
+try:
+    pygame.joystick.init()
+    joysticks = [pygame.joystick.Joystick(x) for x in range(pygame.joystick.get_count())]
+    for j in joysticks:
+        j.init()
+except Exception:
+    joysticks = []
+
 
 #QBERT
 
@@ -38,7 +49,16 @@ clrBlack = pygame.Color(0, 0, 0)
 
 clrYellow = pygame.Color(255,255,0)
 
+
 #declare images(load some images)
+SURF_CACHE = {}
+for _name in ['playerleftdown.png', 'playerdownright.png', 'playerupleft.png', 'playerupright.png',
+              'playerleftdownjump.png', 'playerdownrightjump.png', 'playerupleftJump.png', 'playeruprightjump.png']:
+    try:
+        SURF_CACHE[_name] = pygame.image.load(_name).convert_alpha()
+    except Exception:
+        pass
+
 
 imgPlayerDownLeft = 'playerleftdown.png'
 
@@ -397,7 +417,7 @@ def spinLeft(PlayerX,PlayerY):
 
 		imgPlayer = imgPlayerSpindownright
 
-		Player = pygame.image.load(imgPlayer).convert_alpha()
+		Player = SURF_CACHE.get(imgPlayer) or pygame.image.load(imgPlayer).convert_alpha()
 
 		#gives player a moving path
 		while PlayerX < 410:
@@ -443,7 +463,7 @@ def spinRight(PlayerX,PlayerY):
 
 		imgPlayer = imgPlayerSpindownleft
 
-		Player = pygame.image.load(imgPlayer).convert_alpha()
+		Player = SURF_CACHE.get(imgPlayer) or pygame.image.load(imgPlayer).convert_alpha()
 
 		#gives player a moving path
 
@@ -480,11 +500,14 @@ while (end_it==False):
 	nlabel3 = myfont.render("Light all panels and avoid enemies to win.", 1, clrRed)
 	nlabel = myfont.render("Press SPACE or Click to begin", 1, clrWhite)
 
+	pygame.time.Clock().tick(60)
 	for event in pygame.event.get():
 		if event.type == pygame.QUIT or (event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE):
 			lives = 0
 			end_it = True
 		if event.type == MOUSEBUTTONDOWN or (event.type == pygame.KEYDOWN and event.key in (pygame.K_SPACE, pygame.K_RETURN)):
+			end_it = True
+		if event.type == pygame.JOYBUTTONDOWN:
 			end_it = True
 
 	winScreen.blit(imgStart,(325,150))
@@ -503,7 +526,7 @@ print("Game start\n")
 
 sndQBStart.play()
 
-time.sleep(3)
+time.sleep(0.5)
 
 #set round to 1 
 
@@ -615,7 +638,7 @@ while lives!=0:
 
 		#frames per second = 30 
 
-		iFPS = 30
+		iFPS = 60
 
 		fpsClock = pygame.time.Clock()
 
@@ -632,27 +655,86 @@ while lives!=0:
 				RunGame = False
 
 			elif event.type == pygame.KEYDOWN:
-
+				moved = False
 				if event.key in (pygame.K_KP4, pygame.K_4, pygame.K_u, pygame.K_UP, pygame.K_w):
 					PlayerX -= 50
 					PlayerY -= 80
 					imgPlayer = imgPlayerUpRight
-					sndQBJump.play()
+					moved = True
 				elif event.key in (pygame.K_KP6, pygame.K_6, pygame.K_o, pygame.K_RIGHT, pygame.K_d):
 					PlayerX += 50
 					PlayerY -= 80
 					imgPlayer = imgPlayerUpLeft
-					sndQBJump.play()
+					moved = True
 				elif event.key in (pygame.K_KP1, pygame.K_1, pygame.K_j, pygame.K_LEFT, pygame.K_a):
 					imgPlayer = imgPlayerDownLeft
 					PlayerX -= 50
 					PlayerY += 80
-					sndQBJump.play()
+					moved = True
 				elif event.key in (pygame.K_KP3, pygame.K_3, pygame.K_l, pygame.K_DOWN, pygame.K_s):
 					imgPlayer = imgPlayerDownRight
 					PlayerX += 50
 					PlayerY += 80
-					sndQBJump.play()		
+					moved = True
+				if moved:
+					sndQBJump.play()
+					try:
+						import cci_rumble
+						cci_rumble.light_rumble()
+					except Exception:
+						pass
+			elif event.type == pygame.JOYHATMOTION:
+				hx, hy = event.value
+				moved = False
+				if hx < 0 or hy > 0:
+					PlayerX -= 50
+					PlayerY -= 80
+					imgPlayer = imgPlayerUpRight
+					moved = True
+				elif hx > 0 or hy < 0:
+					PlayerX += 50
+					PlayerY += 80
+					imgPlayer = imgPlayerDownRight
+					moved = True
+				if moved:
+					sndQBJump.play()
+					try:
+						import cci_rumble
+						cci_rumble.light_rumble()
+					except Exception:
+						pass
+			elif event.type == pygame.JOYBUTTONDOWN:
+				moved = False
+				if event.button == 2:
+					PlayerX += 50
+					PlayerY -= 80
+					imgPlayer = imgPlayerUpLeft
+					moved = True
+				elif event.button == 3:
+					PlayerX -= 50
+					PlayerY -= 80
+					imgPlayer = imgPlayerUpRight
+					moved = True
+				elif event.button == 0:
+					PlayerX -= 50
+					PlayerY += 80
+					imgPlayer = imgPlayerDownLeft
+					moved = True
+				elif event.button == 1:
+					PlayerX += 50
+					PlayerY += 80
+					imgPlayer = imgPlayerDownRight
+					moved = True
+				elif event.button in (6, 7):
+					RunGamereal = True
+					RunGame = False
+				if moved:
+					sndQBJump.play()
+					try:
+						import cci_rumble
+						cci_rumble.light_rumble()
+					except Exception:
+						pass		
 
 		#set Player Position to the new player xy 
 
@@ -660,7 +742,7 @@ while lives!=0:
 
 		#load current image player 
 
-		Player = pygame.image.load(imgPlayer).convert_alpha()
+		Player = SURF_CACHE.get(imgPlayer) or pygame.image.load(imgPlayer).convert_alpha()
 
 		#if left disk hasnt been used 
 
@@ -891,6 +973,11 @@ while lives!=0:
 			#if collide kill qbert 
 
 				sndQBDeath1.play()
+				try:
+					import cci_rumble
+					cci_rumble.hit_rumble()
+				except Exception:
+					pass
 
 				winScreen.blit(PlayerSwear,(PlayerX-72,PlayerY-72))
 
@@ -921,8 +1008,13 @@ while lives!=0:
 	#play game over sound and if lives dont = 0 set lives to 0
 
 		sndQBDeath2.play()
+		try:
+			import cci_rumble
+			cci_rumble.explosion_rumble()
+		except Exception:
+			pass
 
-		time.sleep(2)
+		time.sleep(0.7)
 
 		lives = 0
 
@@ -991,13 +1083,13 @@ while lives!=0:
 
 			sndQBDeath1.play()
 
-			time.sleep(2)
+			time.sleep(0.7)
 
 			if lives == 0:
 
 				sndQBDeath2.play()
 
-				time.sleep(2)
+				time.sleep(0.7)
 
 		#lose screen waits for player to click on the screen to end the game(close game)
 

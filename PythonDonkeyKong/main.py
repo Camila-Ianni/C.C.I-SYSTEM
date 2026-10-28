@@ -3,11 +3,20 @@ import sys
 import random
 
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
+if os.path.dirname(os.path.dirname(os.path.abspath(__file__))) not in sys.path:
+    sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import pygame
 
 os.environ['SDL_VIDEO_CENTERED'] = '1'  # call before pygame.init()
 pygame.init()
+try:
+    pygame.joystick.init()
+    joysticks = [pygame.joystick.Joystick(x) for x in range(pygame.joystick.get_count())]
+    for j in joysticks:
+        j.init()
+except Exception:
+    joysticks = []
 window_width, window_height = 960, 720
 screen_width, screen_height = window_width, window_height
 
@@ -268,7 +277,7 @@ class Barrel(pygame.sprite.Sprite):
 
     def update(self, fire_trig):
         if self.y_change < 8 and not self.falling:
-            barrel.y_change += 2
+            self.y_change += 2
         for i in range(len(plats)):
             if self.bottom.colliderect(plats[i]):
                 self.y_change = 0
@@ -691,36 +700,75 @@ while run:
         if event.type == pygame.KEYDOWN:
             if event.key == pygame.K_ESCAPE:
                 run = False
-            if event.key == pygame.K_RIGHT and not player.climbing:
+            if event.key in (pygame.K_RIGHT, pygame.K_d) and not player.climbing:
                 player.x_change = 1
                 player.dir = 1
-            if event.key == pygame.K_LEFT and not player.climbing:
+            if event.key in (pygame.K_LEFT, pygame.K_a) and not player.climbing:
                 player.x_change = -1
                 player.dir = -1
             if event.key == pygame.K_SPACE and player.landed:
                 player.landed = False
                 player.y_change = -6
-            if event.key == pygame.K_UP:
+                try:
+                    import cci_rumble
+                    cci_rumble.light_rumble()
+                except Exception:
+                    pass
+            if event.key in (pygame.K_UP, pygame.K_w):
                 if climb:
                     player.y_change = -2
                     player.x_change = 0
                     player.climbing = True
-            if event.key == pygame.K_DOWN:
+            if event.key in (pygame.K_DOWN, pygame.K_s):
                 if down:
                     player.y_change = 2
                     player.x_change = 0
                     player.climbing = True
+        if event.type == pygame.JOYBUTTONDOWN:
+            if event.button in (0, 2) and player.landed:  # A or X: jump
+                player.landed = False
+                player.y_change = -6
+                try:
+                    import cci_rumble
+                    cci_rumble.light_rumble()
+                except Exception:
+                    pass
+            elif event.button in (6, 7):  # Back / Start
+                run = False
+        if event.type == pygame.JOYHATMOTION:
+            hx, hy = event.value
+            if hx > 0 and not player.climbing:
+                player.x_change = 1
+                player.dir = 1
+            elif hx < 0 and not player.climbing:
+                player.x_change = -1
+                player.dir = -1
+            else:
+                player.x_change = 0
+            if hy > 0 and climb:
+                player.y_change = -2
+                player.x_change = 0
+                player.climbing = True
+            elif hy < 0 and down:
+                player.y_change = 2
+                player.x_change = 0
+                player.climbing = True
+            elif hy == 0:
+                if climb or down:
+                    player.y_change = 0
+                if player.climbing and player.landed:
+                    player.climbing = False
         if event.type == pygame.KEYUP:
-            if event.key == pygame.K_RIGHT:
+            if event.key in (pygame.K_RIGHT, pygame.K_d):
                 player.x_change = 0
-            if event.key == pygame.K_LEFT:
+            if event.key in (pygame.K_LEFT, pygame.K_a):
                 player.x_change = 0
-            if event.key == pygame.K_UP:
+            if event.key in (pygame.K_UP, pygame.K_w):
                 if climb:
                     player.y_change = 0
                 if player.climbing and player.landed:
                     player.climbing = False
-            if event.key == pygame.K_DOWN:
+            if event.key in (pygame.K_DOWN, pygame.K_s):
                 if climb:
                     player.y_change = 0
                 if player.climbing and player.landed:

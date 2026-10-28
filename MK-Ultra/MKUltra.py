@@ -99,7 +99,7 @@ def _resolve_sound_root() -> str | None:
     if os.path.isdir(candidate):
         return candidate
     # Fallback to Blake's dev path (as provided).
-    fallback = "/Users/blake/Documents/Mac_Code/MKUltra/sounds"
+    fallback = f"{GAME_DIR}/sounds"
     if os.path.isdir(fallback):
         return fallback
     return None
@@ -891,12 +891,12 @@ HUD_ROUND_Y = 80
 # =====================
 # MENUS
 # =====================
-TITLESCREEN_BG_PATH = '/Users/blake/Documents/Mac_Code/MKUltra/menu/TitleScreen.jpeg'
-CHARSELECT_BG_PATH = '/Users/blake/Documents/Mac_Code/MKUltra/menu/CharacterSelect.jpg'
-NATE_SELECT_PATH = '/Users/blake/Documents/Mac_Code/MKUltra/menu/NateSelect.png'
-SCORPION_SELECT_PATH = '/Users/blake/Documents/Mac_Code/MKUltra/menu/scorpionselect.png'
-CONNOR_SELECT_PATH = '/Users/blake/Documents/Mac_Code/MKUltra/menu/ConnorSelect.png'
-BLAKE_SELECT_PATH = '/Users/blake/Documents/Mac_Code/MKUltra/menu/BlakeSelect.png'
+TITLESCREEN_BG_PATH = f'{GAME_DIR}/menu/TitleScreen.jpeg'
+CHARSELECT_BG_PATH = f'{GAME_DIR}/menu/CharacterSelect.jpg'
+NATE_SELECT_PATH = f'{GAME_DIR}/menu/NateSelect.png'
+SCORPION_SELECT_PATH = f'{GAME_DIR}/menu/scorpionselect.png'
+CONNOR_SELECT_PATH = f'{GAME_DIR}/menu/ConnorSelect.png'
+BLAKE_SELECT_PATH = f'{GAME_DIR}/menu/BlakeSelect.png'
 
 # Character indices that are currently implemented (box index -> character id)
 CHAR_INDEX_TO_ID = {
@@ -906,7 +906,7 @@ CHAR_INDEX_TO_ID = {
     3: 'blake',
 }
 
-STAGESELECT_BG_PATH = '/Users/blake/Documents/Mac_Code/MKUltra/menu/StageSelect.jpeg'
+STAGESELECT_BG_PATH = f'{GAME_DIR}/menu/StageSelect.jpeg'
 
 MENU_ITEM_GAP = 18
 
@@ -941,10 +941,9 @@ def get_ground_y() -> int:
 # =====================
 # STAGES / BACKGROUNDS
 # =====================
-# You asked to use this path for stages:
-#   /Users/blake/Documents/Mac_Code/MKUltra/stages
+#   stages directory relative to script
 # For portability, we also fall back to a local 'stages' folder next to this script.
-STAGES_DIR = '/Users/blake/Documents/Mac_Code/MKUltra/stages'
+STAGES_DIR = f'{GAME_DIR}/stages'
 DEFAULT_STAGE_NAME = 'MirabookaBusStation2'
 
 # Stage configuration. Add more stages here later.
@@ -1161,48 +1160,48 @@ NATE_MEDIUM_HIT_DIR = os.path.join("sprites", "nate", "medium", "hit", "hit1")
 # Low stance (crouch) paths
 # Preferred: Blake's local absolute paths (Mac). Fallback: repo-relative paths.
 NATE_LOW_IDLE_DIR = resolve_sprite_dir(
-    '/Users/blake/Documents/Mac_Code/MKUltra/sprites/nate/low/idle/idle1',
+    f'{GAME_DIR}/sprites/nate/low/idle/idle1',
     os.path.join('sprites', 'nate', 'low', 'idle', 'idle1'),
 )
 NATE_LOW_MOVE_DIR = resolve_sprite_dir(
-    '/Users/blake/Documents/Mac_Code/MKUltra/sprites/nate/low/movement/movement1',
+    f'{GAME_DIR}/sprites/nate/low/movement/movement1',
     os.path.join('sprites', 'nate', 'low', 'movement', 'movement1'),
 )
 NATE_LOW_BLOCK_DIR = resolve_sprite_dir(
-    '/Users/blake/Documents/Mac_Code/MKUltra/sprites/nate/low/block/block1',
+    f'{GAME_DIR}/sprites/nate/low/block/block1',
     os.path.join('sprites', 'nate', 'low', 'block', 'block1'),
 )
 # Low attack (only R is implemented in low stance for now)
 NATE_LOW_ATTACK_R_DIR = resolve_sprite_dir(
-    '/Users/blake/Documents/Mac_Code/MKUltra/sprites/nate/low/attack/attack1',
+    f'{GAME_DIR}/sprites/nate/low/attack/attack1',
     os.path.join('sprites', 'nate', 'low', 'attack', 'attack1'),
 )
 NATE_LOW_HIT_DIR = resolve_sprite_dir(
-    '/Users/blake/Documents/Mac_Code/MKUltra/sprites/nate/low/hit/hit1',
+    f'{GAME_DIR}/sprites/nate/low/hit/hit1',
     os.path.join('sprites', 'nate', 'low', 'hit', 'hit1'),
 )
 
 # High stance (jump) paths
 NATE_HIGH_MOVE_DIR = resolve_sprite_dir(
-    '/Users/blake/Documents/Mac_Code/MKUltra/sprites/nate/high/movement/movement1',
+    f'{GAME_DIR}/sprites/nate/high/movement/movement1',
     os.path.join('sprites', 'nate', 'high', 'movement', 'movement1'),
 )
 NATE_HIGH_HIT_DIR = resolve_sprite_dir(
-    '/Users/blake/Documents/Mac_Code/MKUltra/sprites/nate/high/hit/hit1',
+    f'{GAME_DIR}/sprites/nate/high/hit/hit1',
     os.path.join('sprites', 'nate', 'high', 'hit', 'hit1'),
 )
 NATE_HIGH_ATTACK_DIR = resolve_sprite_dir(
-    '/Users/blake/Documents/Mac_Code/MKUltra/sprites/nate/high/attack/attack1',
+    f'{GAME_DIR}/sprites/nate/high/attack/attack1',
     os.path.join('sprites', 'nate', 'high', 'attack', 'attack1'),
 )
 
 # End-of-match (win/lose) animations
 NATE_END_WIN_DIR = resolve_sprite_dir(
-    '/Users/blake/Documents/Mac_Code/MKUltra/sprites/nate/end/win/win1',
+    f'{GAME_DIR}/sprites/nate/end/win/win1',
     os.path.join('sprites', 'nate', 'end', 'win', 'win1'),
 )
 NATE_END_LOSE_DIR = resolve_sprite_dir(
-    '/Users/blake/Documents/Mac_Code/MKUltra/sprites/nate/end/lose/lose1',
+    f'{GAME_DIR}/sprites/nate/end/lose/lose1',
     os.path.join('sprites', 'nate', 'end', 'lose', 'lose1'),
 )
 
@@ -1211,7 +1210,7 @@ NATE_END_LOSE_DIR = resolve_sprite_dir(
 # CONNOR SPRITE PATHS
 # =====================
 CONNOR_START_DIR = resolve_sprite_dir(
-    '/Users/blake/Documents/Mac_Code/MKUltra/sprites/connor/start',
+    f'{GAME_DIR}/sprites/connor/start',
     os.path.join('sprites', 'connor', 'start'),
 )
 
@@ -1223,96 +1222,96 @@ CONNOR_ATTACK_R_BOOST = 1.0
 CONNOR_FAST_SCALE = True
 
 CONNOR_MEDIUM_IDLE_DIR = resolve_sprite_dir(
-    '/Users/blake/Documents/Mac_Code/MKUltra/sprites/connor/medium/idle/idle1',
+    f'{GAME_DIR}/sprites/connor/medium/idle/idle1',
     os.path.join('sprites', 'connor', 'medium', 'idle', 'idle1'),
 )
 CONNOR_MEDIUM_MOVE_FWD_DIR = resolve_sprite_dir(
-    '/Users/blake/Documents/Mac_Code/MKUltra/sprites/connor/medium/movement/movement1',
+    f'{GAME_DIR}/sprites/connor/medium/movement/movement1',
     os.path.join('sprites', 'connor', 'medium', 'movement', 'movement1'),
 )
 CONNOR_MEDIUM_MOVE_BACK_DIR = resolve_sprite_dir(
-    '/Users/blake/Documents/Mac_Code/MKUltra/sprites/connor/medium/movement/movement2',
+    f'{GAME_DIR}/sprites/connor/medium/movement/movement2',
     os.path.join('sprites', 'connor', 'medium', 'movement', 'movement2'),
 )
 
 CONNOR_MEDIUM_BLOCK1_DIR = resolve_sprite_dir(
-    '/Users/blake/Documents/Mac_Code/MKUltra/sprites/connor/medium/block/block1',
+    f'{GAME_DIR}/sprites/connor/medium/block/block1',
     os.path.join('sprites', 'connor', 'medium', 'block', 'block1'),
 )
 CONNOR_MEDIUM_BLOCK2_DIR = resolve_sprite_dir(
-    '/Users/blake/Documents/Mac_Code/MKUltra/sprites/connor/medium/block/block2',
+    f'{GAME_DIR}/sprites/connor/medium/block/block2',
     os.path.join('sprites', 'connor', 'medium', 'block', 'block2'),
 )
 if not os.path.isdir(CONNOR_MEDIUM_BLOCK2_DIR):
     CONNOR_MEDIUM_BLOCK2_DIR = CONNOR_MEDIUM_BLOCK1_DIR
 
 CONNOR_MEDIUM_ATTACK_E_DIR = resolve_sprite_dir(
-    '/Users/blake/Documents/Mac_Code/MKUltra/sprites/connor/medium/attack/attack1',
+    f'{GAME_DIR}/sprites/connor/medium/attack/attack1',
     os.path.join('sprites', 'connor', 'medium', 'attack', 'attack1'),
 )
 CONNOR_MEDIUM_ATTACK_T_DIR = resolve_sprite_dir(
-    '/Users/blake/Documents/Mac_Code/MKUltra/sprites/connor/medium/attack/attack2',
+    f'{GAME_DIR}/sprites/connor/medium/attack/attack2',
     os.path.join('sprites', 'connor', 'medium', 'attack', 'attack2'),
 )
 CONNOR_MEDIUM_ATTACK_Y_DIR = resolve_sprite_dir(
-    '/Users/blake/Documents/Mac_Code/MKUltra/sprites/connor/medium/attack/attack3',
+    f'{GAME_DIR}/sprites/connor/medium/attack/attack3',
     os.path.join('sprites', 'connor', 'medium', 'attack', 'attack3'),
 )
 CONNOR_MEDIUM_ATTACK_R_DIR = resolve_sprite_dir(
-    '/Users/blake/Documents/Mac_Code/MKUltra/sprites/connor/medium/attack/attack4',
+    f'{GAME_DIR}/sprites/connor/medium/attack/attack4',
     os.path.join('sprites', 'connor', 'medium', 'attack', 'attack4'),
 )
 
 CONNOR_MEDIUM_HIT_DIR = resolve_sprite_dir(
-    '/Users/blake/Documents/Mac_Code/MKUltra/sprites/connor/medium/hit/hit1',
+    f'{GAME_DIR}/sprites/connor/medium/hit/hit1',
     os.path.join('sprites', 'connor', 'medium', 'hit', 'hit1'),
 )
 
 # Low stance (crouch) paths
 CONNOR_LOW_IDLE_DIR = resolve_sprite_dir(
-    '/Users/blake/Documents/Mac_Code/MKUltra/sprites/connor/low/idle/idle1',
+    f'{GAME_DIR}/sprites/connor/low/idle/idle1',
     os.path.join('sprites', 'connor', 'low', 'idle', 'idle1'),
 )
 CONNOR_LOW_MOVE_DIR = resolve_sprite_dir(
-    '/Users/blake/Documents/Mac_Code/MKUltra/sprites/connor/low/movement/movement1',
+    f'{GAME_DIR}/sprites/connor/low/movement/movement1',
     os.path.join('sprites', 'connor', 'low', 'movement', 'movement1'),
 )
 if not os.path.isdir(CONNOR_LOW_MOVE_DIR):
     CONNOR_LOW_MOVE_DIR = CONNOR_LOW_IDLE_DIR
 CONNOR_LOW_BLOCK_DIR = resolve_sprite_dir(
-    '/Users/blake/Documents/Mac_Code/MKUltra/sprites/connor/low/block/block1',
+    f'{GAME_DIR}/sprites/connor/low/block/block1',
     os.path.join('sprites', 'connor', 'low', 'block', 'block1'),
 )
 CONNOR_LOW_ATTACK_R_DIR = resolve_sprite_dir(
-    '/Users/blake/Documents/Mac_Code/MKUltra/sprites/connor/low/attack/attack1',
+    f'{GAME_DIR}/sprites/connor/low/attack/attack1',
     os.path.join('sprites', 'connor', 'low', 'attack', 'attack1'),
 )
 CONNOR_LOW_HIT_DIR = resolve_sprite_dir(
-    '/Users/blake/Documents/Mac_Code/MKUltra/sprites/connor/low/hit/hit1',
+    f'{GAME_DIR}/sprites/connor/low/hit/hit1',
     os.path.join('sprites', 'connor', 'low', 'hit', 'hit1'),
 )
 
 # High stance (jump) paths
 CONNOR_HIGH_MOVE_DIR = resolve_sprite_dir(
-    '/Users/blake/Documents/Mac_Code/MKUltra/sprites/connor/high/movement/movement1',
+    f'{GAME_DIR}/sprites/connor/high/movement/movement1',
     os.path.join('sprites', 'connor', 'high', 'movement', 'movement1'),
 )
 CONNOR_HIGH_HIT_DIR = resolve_sprite_dir(
-    '/Users/blake/Documents/Mac_Code/MKUltra/sprites/connor/high/hit/hit1',
+    f'{GAME_DIR}/sprites/connor/high/hit/hit1',
     os.path.join('sprites', 'connor', 'high', 'hit', 'hit1'),
 )
 CONNOR_HIGH_ATTACK_DIR = resolve_sprite_dir(
-    '/Users/blake/Documents/Mac_Code/MKUltra/sprites/connor/high/attack/attack1',
+    f'{GAME_DIR}/sprites/connor/high/attack/attack1',
     os.path.join('sprites', 'connor', 'high', 'attack', 'attack1'),
 )
 
 # End-of-match (win/lose) animations
 CONNOR_END_WIN_DIR = resolve_sprite_dir(
-    '/Users/blake/Documents/Mac_Code/MKUltra/sprites/connor/end/win/win1',
+    f'{GAME_DIR}/sprites/connor/end/win/win1',
     os.path.join('sprites', 'connor', 'end', 'win', 'win1'),
 )
 CONNOR_END_LOSE_DIR = resolve_sprite_dir(
-    '/Users/blake/Documents/Mac_Code/MKUltra/sprites/connor/end/lose/lose1',
+    f'{GAME_DIR}/sprites/connor/end/lose/lose1',
     os.path.join('sprites', 'connor', 'end', 'lose', 'lose1'),
 )
 
@@ -1322,7 +1321,7 @@ CONNOR_END_LOSE_DIR = resolve_sprite_dir(
 # =====================
 # Mirrors Connor/Nate folder structure one-for-one.
 BLAKE_START_DIR = resolve_sprite_dir(
-    '/Users/blake/Documents/Mac_Code/MKUltra/sprites/blake/start',
+    f'{GAME_DIR}/sprites/blake/start',
     os.path.join('sprites', 'blake', 'start'),
 )
 
@@ -1330,96 +1329,96 @@ BLAKE_FIT = 1.0
 BLAKE_FAST_SCALE = True
 
 BLAKE_MEDIUM_IDLE_DIR = resolve_sprite_dir(
-    '/Users/blake/Documents/Mac_Code/MKUltra/sprites/blake/medium/idle/idle1',
+    f'{GAME_DIR}/sprites/blake/medium/idle/idle1',
     os.path.join('sprites', 'blake', 'medium', 'idle', 'idle1'),
 )
 BLAKE_MEDIUM_MOVE_FWD_DIR = resolve_sprite_dir(
-    '/Users/blake/Documents/Mac_Code/MKUltra/sprites/blake/medium/movement/movement1',
+    f'{GAME_DIR}/sprites/blake/medium/movement/movement1',
     os.path.join('sprites', 'blake', 'medium', 'movement', 'movement1'),
 )
 BLAKE_MEDIUM_MOVE_BACK_DIR = resolve_sprite_dir(
-    '/Users/blake/Documents/Mac_Code/MKUltra/sprites/blake/medium/movement/movement2',
+    f'{GAME_DIR}/sprites/blake/medium/movement/movement2',
     os.path.join('sprites', 'blake', 'medium', 'movement', 'movement2'),
 )
 
 BLAKE_MEDIUM_BLOCK1_DIR = resolve_sprite_dir(
-    '/Users/blake/Documents/Mac_Code/MKUltra/sprites/blake/medium/block/block1',
+    f'{GAME_DIR}/sprites/blake/medium/block/block1',
     os.path.join('sprites', 'blake', 'medium', 'block', 'block1'),
 )
 BLAKE_MEDIUM_BLOCK2_DIR = resolve_sprite_dir(
-    '/Users/blake/Documents/Mac_Code/MKUltra/sprites/blake/medium/block/block2',
+    f'{GAME_DIR}/sprites/blake/medium/block/block2',
     os.path.join('sprites', 'blake', 'medium', 'block', 'block2'),
 )
 if not os.path.isdir(BLAKE_MEDIUM_BLOCK2_DIR):
     BLAKE_MEDIUM_BLOCK2_DIR = BLAKE_MEDIUM_BLOCK1_DIR
 
 BLAKE_MEDIUM_ATTACK_E_DIR = resolve_sprite_dir(
-    '/Users/blake/Documents/Mac_Code/MKUltra/sprites/blake/medium/attack/attack1',
+    f'{GAME_DIR}/sprites/blake/medium/attack/attack1',
     os.path.join('sprites', 'blake', 'medium', 'attack', 'attack1'),
 )
 BLAKE_MEDIUM_ATTACK_T_DIR = resolve_sprite_dir(
-    '/Users/blake/Documents/Mac_Code/MKUltra/sprites/blake/medium/attack/attack2',
+    f'{GAME_DIR}/sprites/blake/medium/attack/attack2',
     os.path.join('sprites', 'blake', 'medium', 'attack', 'attack2'),
 )
 BLAKE_MEDIUM_ATTACK_Y_DIR = resolve_sprite_dir(
-    '/Users/blake/Documents/Mac_Code/MKUltra/sprites/blake/medium/attack/attack3',
+    f'{GAME_DIR}/sprites/blake/medium/attack/attack3',
     os.path.join('sprites', 'blake', 'medium', 'attack', 'attack3'),
 )
 BLAKE_MEDIUM_ATTACK_R_DIR = resolve_sprite_dir(
-    '/Users/blake/Documents/Mac_Code/MKUltra/sprites/blake/medium/attack/attack4',
+    f'{GAME_DIR}/sprites/blake/medium/attack/attack4',
     os.path.join('sprites', 'blake', 'medium', 'attack', 'attack4'),
 )
 
 BLAKE_MEDIUM_HIT_DIR = resolve_sprite_dir(
-    '/Users/blake/Documents/Mac_Code/MKUltra/sprites/blake/medium/hit/hit1',
+    f'{GAME_DIR}/sprites/blake/medium/hit/hit1',
     os.path.join('sprites', 'blake', 'medium', 'hit', 'hit1'),
 )
 
 # Low stance (crouch) paths
 BLAKE_LOW_IDLE_DIR = resolve_sprite_dir(
-    '/Users/blake/Documents/Mac_Code/MKUltra/sprites/blake/low/idle/idle1',
+    f'{GAME_DIR}/sprites/blake/low/idle/idle1',
     os.path.join('sprites', 'blake', 'low', 'idle', 'idle1'),
 )
 BLAKE_LOW_MOVE_DIR = resolve_sprite_dir(
-    '/Users/blake/Documents/Mac_Code/MKUltra/sprites/blake/low/movement/movement1',
+    f'{GAME_DIR}/sprites/blake/low/movement/movement1',
     os.path.join('sprites', 'blake', 'low', 'movement', 'movement1'),
 )
 if not os.path.isdir(BLAKE_LOW_MOVE_DIR):
     BLAKE_LOW_MOVE_DIR = BLAKE_LOW_IDLE_DIR
 BLAKE_LOW_BLOCK_DIR = resolve_sprite_dir(
-    '/Users/blake/Documents/Mac_Code/MKUltra/sprites/blake/low/block/block1',
+    f'{GAME_DIR}/sprites/blake/low/block/block1',
     os.path.join('sprites', 'blake', 'low', 'block', 'block1'),
 )
 BLAKE_LOW_ATTACK_R_DIR = resolve_sprite_dir(
-    '/Users/blake/Documents/Mac_Code/MKUltra/sprites/blake/low/attack/attack1',
+    f'{GAME_DIR}/sprites/blake/low/attack/attack1',
     os.path.join('sprites', 'blake', 'low', 'attack', 'attack1'),
 )
 BLAKE_LOW_HIT_DIR = resolve_sprite_dir(
-    '/Users/blake/Documents/Mac_Code/MKUltra/sprites/blake/low/hit/hit1',
+    f'{GAME_DIR}/sprites/blake/low/hit/hit1',
     os.path.join('sprites', 'blake', 'low', 'hit', 'hit1'),
 )
 
 # High stance (jump) paths
 BLAKE_HIGH_MOVE_DIR = resolve_sprite_dir(
-    '/Users/blake/Documents/Mac_Code/MKUltra/sprites/blake/high/movement/movement1',
+    f'{GAME_DIR}/sprites/blake/high/movement/movement1',
     os.path.join('sprites', 'blake', 'high', 'movement', 'movement1'),
 )
 BLAKE_HIGH_HIT_DIR = resolve_sprite_dir(
-    '/Users/blake/Documents/Mac_Code/MKUltra/sprites/blake/high/hit/hit1',
+    f'{GAME_DIR}/sprites/blake/high/hit/hit1',
     os.path.join('sprites', 'blake', 'high', 'hit', 'hit1'),
 )
 BLAKE_HIGH_ATTACK_DIR = resolve_sprite_dir(
-    '/Users/blake/Documents/Mac_Code/MKUltra/sprites/blake/high/attack/attack1',
+    f'{GAME_DIR}/sprites/blake/high/attack/attack1',
     os.path.join('sprites', 'blake', 'high', 'attack', 'attack1'),
 )
 
 # End-of-match (win/lose) animations
 BLAKE_END_WIN_DIR = resolve_sprite_dir(
-    '/Users/blake/Documents/Mac_Code/MKUltra/sprites/blake/end/win/win1',
+    f'{GAME_DIR}/sprites/blake/end/win/win1',
     os.path.join('sprites', 'blake', 'end', 'win', 'win1'),
 )
 BLAKE_END_LOSE_DIR = resolve_sprite_dir(
-    '/Users/blake/Documents/Mac_Code/MKUltra/sprites/blake/end/lose/lose1',
+    f'{GAME_DIR}/sprites/blake/end/lose/lose1',
     os.path.join('sprites', 'blake', 'end', 'lose', 'lose1'),
 )
 
@@ -1429,7 +1428,7 @@ BLAKE_END_LOSE_DIR = resolve_sprite_dir(
 # =====================
 # Mirrors Nate's folder structure one-for-one.
 SCORPION_START_DIR = resolve_sprite_dir(
-    '/Users/blake/Documents/Mac_Code/MKUltra/sprites/scorpion/start',
+    f'{GAME_DIR}/sprites/scorpion/start',
     os.path.join('sprites', 'scorpion', 'start'),
 )
 
@@ -1438,105 +1437,105 @@ LOW_STANCE_BOOST = 1.45  # boost low stance size (~45%)  # boost low stance size
 
 # Medium stance paths (preferred: Blake's absolute path; fallback: repo-relative)
 SCORPION_MEDIUM_IDLE_DIR = resolve_sprite_dir(
-    '/Users/blake/Documents/Mac_Code/MKUltra/sprites/scorpion/medium/idle/idle1',
+    f'{GAME_DIR}/sprites/scorpion/medium/idle/idle1',
     os.path.join('sprites', 'scorpion', 'medium', 'idle', 'idle1'),
 )
 SCORPION_MEDIUM_MOVE_FWD_DIR = resolve_sprite_dir(
-    '/Users/blake/Documents/Mac_Code/MKUltra/sprites/scorpion/medium/movement/movement1',
+    f'{GAME_DIR}/sprites/scorpion/medium/movement/movement1',
     os.path.join('sprites', 'scorpion', 'medium', 'movement', 'movement1'),
 )
 SCORPION_MEDIUM_MOVE_BACK_DIR = resolve_sprite_dir(
-    '/Users/blake/Documents/Mac_Code/MKUltra/sprites/scorpion/medium/movement/movement2',
+    f'{GAME_DIR}/sprites/scorpion/medium/movement/movement2',
     os.path.join('sprites', 'scorpion', 'medium', 'movement', 'movement2'),
 )
 
 SCORPION_MEDIUM_BLOCK1_DIR = resolve_sprite_dir(
-    '/Users/blake/Documents/Mac_Code/MKUltra/sprites/scorpion/medium/block/block1',
+    f'{GAME_DIR}/sprites/scorpion/medium/block/block1',
     os.path.join('sprites', 'scorpion', 'medium', 'block', 'block1'),
 )
 # Optional: block2. If it doesn't exist, fall back to block1 so blocking always works.
 SCORPION_MEDIUM_BLOCK2_DIR = resolve_sprite_dir(
-    '/Users/blake/Documents/Mac_Code/MKUltra/sprites/scorpion/medium/block/block2',
+    f'{GAME_DIR}/sprites/scorpion/medium/block/block2',
     os.path.join('sprites', 'scorpion', 'medium', 'block', 'block2'),
 )
 if not os.path.isdir(SCORPION_MEDIUM_BLOCK2_DIR):
     SCORPION_MEDIUM_BLOCK2_DIR = SCORPION_MEDIUM_BLOCK1_DIR
 
 SCORPION_MEDIUM_ATTACK_E_DIR = resolve_sprite_dir(
-    '/Users/blake/Documents/Mac_Code/MKUltra/sprites/scorpion/medium/attack/attack1',
+    f'{GAME_DIR}/sprites/scorpion/medium/attack/attack1',
     os.path.join('sprites', 'scorpion', 'medium', 'attack', 'attack1'),
 )
 SCORPION_MEDIUM_ATTACK_T_DIR = resolve_sprite_dir(
-    '/Users/blake/Documents/Mac_Code/MKUltra/sprites/scorpion/medium/attack/attack2',
+    f'{GAME_DIR}/sprites/scorpion/medium/attack/attack2',
     os.path.join('sprites', 'scorpion', 'medium', 'attack', 'attack2'),
 )
 SCORPION_MEDIUM_ATTACK_Y_DIR = resolve_sprite_dir(
-    '/Users/blake/Documents/Mac_Code/MKUltra/sprites/scorpion/medium/attack/attack3',
+    f'{GAME_DIR}/sprites/scorpion/medium/attack/attack3',
     os.path.join('sprites', 'scorpion', 'medium', 'attack', 'attack3'),
 )
 SCORPION_MEDIUM_ATTACK_R_DIR = resolve_sprite_dir(
-    '/Users/blake/Documents/Mac_Code/MKUltra/sprites/scorpion/medium/attack/attack4',
+    f'{GAME_DIR}/sprites/scorpion/medium/attack/attack4',
     os.path.join('sprites', 'scorpion', 'medium', 'attack', 'attack4'),
 )
 
 SCORPION_MEDIUM_HIT_DIR = resolve_sprite_dir(
-    '/Users/blake/Documents/Mac_Code/MKUltra/sprites/scorpion/medium/hit/hit1',
+    f'{GAME_DIR}/sprites/scorpion/medium/hit/hit1',
     os.path.join('sprites', 'scorpion', 'medium', 'hit', 'hit1'),
 )
 
 # Low stance (crouch) paths (preferred: Blake's absolute path; fallback: repo-relative)
 SCORPION_LOW_IDLE_DIR = resolve_sprite_dir(
-    '/Users/blake/Documents/Mac_Code/MKUltra/sprites/scorpion/low/idle/idle1',
+    f'{GAME_DIR}/sprites/scorpion/low/idle/idle1',
     os.path.join('sprites', 'scorpion', 'low', 'idle', 'idle1'),
 )
 SCORPION_LOW_MOVE_DIR = resolve_sprite_dir(
-    '/Users/blake/Documents/Mac_Code/MKUltra/sprites/scorpion/low/movement/movement1',
+    f'{GAME_DIR}/sprites/scorpion/low/movement/movement1',
     os.path.join('sprites', 'scorpion', 'low', 'movement', 'movement1'),
 )
 SCORPION_LOW_BLOCK_DIR = resolve_sprite_dir(
-    '/Users/blake/Documents/Mac_Code/MKUltra/sprites/scorpion/low/block/block1',
+    f'{GAME_DIR}/sprites/scorpion/low/block/block1',
     os.path.join('sprites', 'scorpion', 'low', 'block', 'block1'),
 )
 SCORPION_LOW_ATTACK_R_DIR = resolve_sprite_dir(
-    '/Users/blake/Documents/Mac_Code/MKUltra/sprites/scorpion/low/attack/attack1',
+    f'{GAME_DIR}/sprites/scorpion/low/attack/attack1',
     os.path.join('sprites', 'scorpion', 'low', 'attack', 'attack1'),
 )
 SCORPION_LOW_HIT_DIR = resolve_sprite_dir(
-    '/Users/blake/Documents/Mac_Code/MKUltra/sprites/scorpion/low/hit/hit1',
+    f'{GAME_DIR}/sprites/scorpion/low/hit/hit1',
     os.path.join('sprites', 'scorpion', 'low', 'hit', 'hit1'),
 )
 
 # High stance (jump) paths
 SCORPION_HIGH_MOVE_DIR = resolve_sprite_dir(
-    '/Users/blake/Documents/Mac_Code/MKUltra/sprites/scorpion/high/movement/movement1',
+    f'{GAME_DIR}/sprites/scorpion/high/movement/movement1',
     os.path.join('sprites', 'scorpion', 'high', 'movement', 'movement1'),
 )
 SCORPION_HIGH_MOVE_BACK_DIR = resolve_sprite_dir(
-    '/Users/blake/Documents/Mac_Code/MKUltra/sprites/scorpion/high/movement/movement2',
+    f'{GAME_DIR}/sprites/scorpion/high/movement/movement2',
     os.path.join('sprites', 'scorpion', 'high', 'movement', 'movement2'),
 )
 SCORPION_HIGH_HIT_DIR = resolve_sprite_dir(
-    '/Users/blake/Documents/Mac_Code/MKUltra/sprites/scorpion/high/hit/hit1',
+    f'{GAME_DIR}/sprites/scorpion/high/hit/hit1',
     os.path.join('sprites', 'scorpion', 'high', 'hit', 'hit1'),
 )
 SCORPION_HIGH_ATTACK_DIR = resolve_sprite_dir(
-    '/Users/blake/Documents/Mac_Code/MKUltra/sprites/scorpion/high/attack/attack1',
+    f'{GAME_DIR}/sprites/scorpion/high/attack/attack1',
     os.path.join('sprites', 'scorpion', 'high', 'attack', 'attack1'),
 )
 
 # End-of-match (win/lose) animations
 SCORPION_END_WIN_DIR = resolve_sprite_dir(
-    '/Users/blake/Documents/Mac_Code/MKUltra/sprites/scorpion/end/win/win1',
+    f'{GAME_DIR}/sprites/scorpion/end/win/win1',
     os.path.join('sprites', 'scorpion', 'end', 'win', 'win1'),
 )
 SCORPION_END_LOSE_DIR = resolve_sprite_dir(
-    '/Users/blake/Documents/Mac_Code/MKUltra/sprites/scorpion/end/lose/lose1',
+    f'{GAME_DIR}/sprites/scorpion/end/lose/lose1',
     os.path.join('sprites', 'scorpion', 'end', 'lose', 'lose1'),
 )
 
 
 # Font (MK2-style). Prefer your absolute path, then fall back to ./mk2.ttf, then pygame default.
-FONT_PATH = '/Users/blake/Documents/Mac_Code/MKUltra/mk2.ttf'
+FONT_PATH = f'{GAME_DIR}/mk2.ttf'
 
 def load_game_font(size: int) -> pygame.font.Font:
     # Prefer the absolute path you provided (Mac)
@@ -5903,7 +5902,7 @@ def main() -> None:
         # -----------------
         def run_stage_select(font_mid):
             """Return selected stage key or None to go back."""
-            stage_dir = '/Users/blake/Documents/Mac_Code/MKUltra/stages'
+            stage_dir = f'{GAME_DIR}/stages'
             discovered = discover_stage_images(stage_dir)
             stage_keys = []
             stage_paths = {}
@@ -5932,7 +5931,11 @@ def main() -> None:
             bg_img = try_load_image(STAGESELECT_BG_PATH, convert_alpha=False) or try_load_image(
                 os.path.join(os.path.dirname(__file__), 'StageSelect.jpeg'), convert_alpha=False
             )
-            bg_img = pygame.transform.scale(bg_img, (WIDTH, HEIGHT))
+            if bg_img:
+                bg_img = pygame.transform.scale(bg_img, (WIDTH, HEIGHT))
+            else:
+                bg_img = pygame.Surface((WIDTH, HEIGHT))
+                bg_img.fill((20, 20, 25))
 
             # Template is 600x600 with borders near x=116,295,484 and y=115,301,484
             tW, tH = 600, 600
