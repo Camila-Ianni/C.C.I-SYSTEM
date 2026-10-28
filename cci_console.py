@@ -236,18 +236,6 @@ CATALOG = [
         "players": "1", "tags": "ARCADE  ·  PUZZLE", "categories": {"ARCADE", "PUZZLE"},
         "external": ("qbert", "Qbert.py"), "slot": 25,
     },
-    {
-        "id": "mariokart", "title": "MARIO KART", "subtitle": "Carreras de karts arcade en circuito cerrado.",
-        "developer": "Nintendo", "year": "1992", "genre": "Carreras / Arcade",
-        "players": "1–2", "tags": "CARRERAS  ·  ARCADE", "categories": {"ARCADE"},
-        "external": ("twisted_pygame", "main.py"), "slot": 26,
-    },
-    {
-        "id": "wonderboy", "title": "WONDER BOY", "subtitle": "Aventura de acción y espada en Monster World.",
-        "developer": "Westone / Sega", "year": "1991", "genre": "Acción / Aventura",
-        "players": "1", "tags": "ACCIÓN  ·  AVENTURA", "categories": {"ACCIÓN", "PLATAFORMAS"},
-        "external": ("Wonder-Boy-in-Monster-World-", "main.py"), "slot": 27,
-    },
 ]
 
 CATEGORIES = ["TODOS", "ACCIÓN", "PLATAFORMAS", "PUZZLE", "SHOOTER", "RPG", "ARCADE"]
@@ -465,20 +453,6 @@ GAME_ACHIEVEMENTS = {
         {"title": "NARIZ DE TROMPETA", "description": "Agrega Q*bert a tus favoritos.", "type": "favorite", "goal": 1},
         {"title": "DISCO FLOTANTE", "description": "Acumula 60 minutos completando pirámides.", "type": "minutes", "goal": 60},
         {"title": "COLOR PERFECTO", "description": "Alcanza un 50% de progreso en el tablero.", "type": "progress", "goal": 50},
-    ],
-    "mariokart": [
-        {"title": "EN LA PARRILLA", "description": "Inicia tu primera carrera de Mario Kart.", "type": "launch", "goal": 1},
-        {"title": "PILOTO VELOZ", "description": "Acelera y esquiva cáscaras durante 15 minutos.", "type": "minutes", "goal": 15},
-        {"title": "COPA CHAMPIÑÓN", "description": "Agrega Mario Kart a tus favoritos.", "type": "favorite", "goal": 1},
-        {"title": "DERIVA Y TURBO", "description": "Acumula 60 minutos dominando el asfalto.", "type": "minutes", "goal": 60},
-        {"title": "CAMPEÓN DE LA PISTA", "description": "Alcanza un 50% de progreso en el torneo.", "type": "progress", "goal": 50},
-    ],
-    "wonderboy": [
-        {"title": "ESPADA Y ESCUDO", "description": "Inicia tu aventura en Monster World.", "type": "launch", "goal": 1},
-        {"title": "MONSTER WORLD", "description": "Explora tierras míticas durante 15 minutos.", "type": "minutes", "goal": 15},
-        {"title": "HÉROE DE OCARINA", "description": "Agrega Wonder Boy a tus favoritos.", "type": "favorite", "goal": 1},
-        {"title": "ARMADURA LEGENDARIA", "description": "Acumula 60 minutos derrotando monstruos.", "type": "minutes", "goal": 60},
-        {"title": "LIBERADOR DEL REINO", "description": "Alcanza un 50% de progreso en el mundo mágico.", "type": "progress", "goal": 50},
     ],
 }
 
@@ -855,7 +829,7 @@ class CCIConsoleState:
             extra_ids = (
                 "pokemon", "fighter", "sonic", "streetfighter", "bomberman", "frogger",
                 "megaman", "mkultra", "castlevania", "bubblebobble", "plantsvszombies",
-                "donkeykong", "qbert", "mariokart", "wonderboy"
+                "donkeykong", "qbert"
             )
             for extra in extra_ids:
                 if extra not in cards:
@@ -1398,7 +1372,7 @@ class CCIConsoleState:
             "pokemon": "POKÉMON", "fighter": "STREET FIGHTER", "sonic": "SONIC",
             "bomberman": "BOMBERMAN", "frogger": "FROGGER", "megaman": "MEGA MAN", "mkultra": "MORTAL KOMBAT",
             "castlevania": "CASTLEVANIA", "bubblebobble": "BUBBLE BOBBLE", "plantsvszombies": "PLANTS VS ZOMBIES",
-            "donkeykong": "DONKEY KONG", "qbert": "Q*BERT", "mariokart": "MARIO KART", "wonderboy": "WONDER BOY",
+            "donkeykong": "DONKEY KONG", "qbert": "Q*BERT",
         }
         for tile, game in zip(ACHIEVEMENT_GAME_TILE_RECTS, self._achievement_game_tiles()):
             active = self.selected_achievement_game == game["id"]

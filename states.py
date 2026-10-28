@@ -542,9 +542,7 @@ class MenuState(BaseState):
             {"key": "bubblebobble",    "title": "Bubble Bobble",      "dialog": "Bubble Bobble: Atrapa monstruos en burbujas mágicas."},
             {"key": "plantsvszombies", "title": "Plants vs. Zombies", "dialog": "Plants vs. Zombies: Defiende tu jardín de los no-muertos."},
             {"key": "donkeykong",      "title": "Donkey Kong",        "dialog": "Donkey Kong: Salta barriles y rescata a Pauline."},
-            {"key": "qbert",           "title": "Q*bert",             "dialog": "Q*bert: Cambia el color de la pirámide esquivando enemigos."},
-            {"key": "mariokart",       "title": "Mario Kart",         "dialog": "Mario Kart: Carreras de karts arcade en circuito cerrado."},
-            {"key": "wonderboy",       "title": "Wonder Boy",         "dialog": "Wonder Boy: Aventura de acción y espada en Monster World."}
+            {"key": "qbert",           "title": "Q*bert",             "dialog": "Q*bert: Cambia el color de la pirámide esquivando enemigos."}
         ]
         self.selected_index = 2
         self.last_mouse_game = None
@@ -904,8 +902,6 @@ EXTERNAL_GAMES = {
     "plantsvszombies": ("PlantsVSZombies", "main.py", None),
     "donkeykong":      ("PythonDonkeyKong", "main.py", None),
     "qbert":           ("qbert", "Qbert.py", None),
-    "mariokart":       ("twisted_pygame", "main.py", None),
-    "wonderboy":       ("Wonder-Boy-in-Monster-World-", "main.py", None),
 }
 
 
