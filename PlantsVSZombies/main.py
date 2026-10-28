@@ -24,9 +24,12 @@ from PIL import Image
 menu=Menu()
 mode=menu.Run()
 
-while 1:
-	game=GameControl(mode)
-	plantlist=game.Select()
-	if (len(plantlist)==0):
-		break
-	game.Run(plantlist)
+if mode and mode > 0:
+	while 1:
+		game=GameControl(mode)
+		plantlist=game.Select()
+		if not plantlist or len(plantlist)==0:
+			break
+		game.Run(plantlist)
+
+pygame.quit()

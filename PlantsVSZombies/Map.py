@@ -12,6 +12,7 @@ import psutil
 import subprocess
 from multiprocessing import Process
 from PIL import Image
+import math
 
 class Menu():
 	def __init__(self):
@@ -49,7 +50,9 @@ class Menu():
 		while 1:
 			for event in pygame.event.get():
 				if (event.type==pygame.QUIT):
-					return
+					return 0
+				if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+					return 0
 				if event.type == pygame.MOUSEBUTTONUP:
 					x=self.Click(pygame.mouse.get_pos())
 					if (x>0):
@@ -67,10 +70,12 @@ class GameControl():
 		icon=pygame.image.load('Picture/Others/Flower.ico')
 		icon.set_colorkey((0,0,0))
 		pygame.display.set_icon(icon)
-		#图标无法设置为透明
 
 		flags = pygame.FULLSCREEN | pygame.SCALED if hasattr(pygame, "SCALED") else 0
-		self.screen=pygame.display.set_mode((Screen_Width, Screen_Height), flags)
+		self.screen = pygame.display.get_surface()
+		if self.screen is None or self.screen.get_size() != (Screen_Width, Screen_Height):
+			self.screen = pygame.display.set_mode((Screen_Width, Screen_Height), flags)
+
 		self.all_sprites=pygame.sprite.Group()
 		self.clock=pygame.time.Clock()
 		self.sun=Sun(self.screen)
@@ -79,9 +84,13 @@ class GameControl():
 		else:
 			self.sun.sum=3000
 		
-		File=open('info.in','r')
-		self.level=int(File.readline())
-		File.close()
+		info_file = 'Info.in' if os.path.exists('Info.in') else 'info.in'
+		try:
+			with open(info_file, 'r') as File:
+				val = int(File.readline().strip())
+				self.level = max(0, min(val - 1, len(Zom_create) - 1))
+		except Exception:
+			self.level = 0
 
 		self.zomid=0
 
@@ -93,6 +102,13 @@ class GameControl():
 		self.bullet_list=[]
 		self.car=Car(self.screen)
 		self.time=pygame.time.get_ticks()
+
+		self.horde_banner = pygame.image.load('Picture/Others/HordeBanner.png').convert_alpha()
+		self.horde_alert_active = False
+		self.horde_alert_start = 0
+		self.horde_spawned = False
+		self.survive_tick = pygame.time.get_ticks()
+		self.survive_wave_timer = pygame.time.get_ticks()
 
 	# Page initialization
 
@@ -225,31 +241,74 @@ class GameControl():
 		#子弹判定
 
 	def CreateZom(self):
-		if (self.mode==1):
-			if (self.zomid>=len(Zom_create[self.level])):
+		now_ticks = pygame.time.get_ticks()
+		elapsed = (now_ticks - self.time) / 1000
+
+		if (self.mode == 1):
+			if self.zomid >= len(Zom_create[self.level]):
 				return
-			if ((pygame.time.get_ticks() - self.time)/1000>= Zom_create[self.level][self.zomid][0]):
-				if (Zom_create[self.level][self.zomid][1]==0):
-					self.zombies.append(NolMal_Zombie(self.screen,0,random.randint(0,4)))	
-				elif (Zom_create[self.level][self.zomid][1]==1):
-					self.zombies.append(ConeheadZombie(self.screen,1,random.randint(0,4)))	
+
+			final_time = Zom_create[self.level][-1][0]
+			# Activar alerta de cartel 4 segundos antes de la horda final
+			if elapsed >= (final_time - 4) and not self.horde_alert_active and not self.horde_spawned:
+				self.horde_alert_active = True
+				self.horde_alert_start = now_ticks
+				try:
+					import cci_rumble
+					cci_rumble.explosion_rumble()
+				except Exception:
+					pass
+
+			# Al alcanzar la hora de la gran horda, añadir Flag Zombie liderando
+			if elapsed >= final_time and not self.horde_spawned:
+				self.horde_spawned = True
+				self.zombies.append(FlagZombie(self.screen, 3, random.randint(0, 4)))
+
+			# Spawnear todos los zombies agendados hasta este segundo
+			while self.zomid < len(Zom_create[self.level]) and elapsed >= Zom_create[self.level][self.zomid][0]:
+				z_type = Zom_create[self.level][self.zomid][1]
+				lane = random.randint(0, 4)
+				if z_type == 0:
+					self.zombies.append(NolMal_Zombie(self.screen, 0, lane))
+				elif z_type == 1:
+					self.zombies.append(ConeheadZombie(self.screen, 1, lane))
 				else:
-					self.zombies.append(BucketheadZombie(self.screen,2,random.randint(0,4)))	
-				self.zomid+=1
+					self.zombies.append(BucketheadZombie(self.screen, 2, lane))
+				self.zomid += 1
 		else:
-			if (pygame.time.get_ticks() - self.time>=5000):
-				self.time=pygame.time.get_ticks()
-				x=random.randint(0,4)
-				if (x==0):
-					self.zombies.append(NolMal_Zombie(self.screen,0,random.randint(0,4)))	
-				elif (x==1):
-					self.zombies.append(ConeheadZombie(self.screen,1,random.randint(0,4)))	
-				elif (x==2):
-					self.zombies.append(BucketheadZombie(self.screen,2,random.randint(0,4)))
-				elif (x==3):
-					self.zombies.append(FlagZombie(self.screen,3,random.randint(0,4)))
+			# Modo Supervivencia: zombies constantes
+			if now_ticks - self.survive_tick >= 4000:
+				self.survive_tick = now_ticks
+				x = random.randint(0, 4)
+				lane = random.randint(0, 4)
+				if x == 0:
+					self.zombies.append(NolMal_Zombie(self.screen, 0, lane))
+				elif x == 1:
+					self.zombies.append(ConeheadZombie(self.screen, 1, lane))
+				elif x == 2:
+					self.zombies.append(BucketheadZombie(self.screen, 2, lane))
+				elif x == 3:
+					self.zombies.append(FlagZombie(self.screen, 3, lane))
 				else:
-					self.zombies.append(PaperZombie(self.screen,4,random.randint(0,4)))
+					self.zombies.append(PaperZombie(self.screen, 4, lane))
+
+			# Horda masiva en Supervivencia cada 60 segundos
+			if now_ticks - self.survive_wave_timer >= 60000:
+				self.survive_wave_timer = now_ticks
+				self.horde_alert_active = True
+				self.horde_alert_start = now_ticks
+				try:
+					import cci_rumble
+					cci_rumble.explosion_rumble()
+				except Exception:
+					pass
+				self.zombies.append(FlagZombie(self.screen, 3, 2))
+				for l in range(5):
+					self.zombies.append(NolMal_Zombie(self.screen, 0, l))
+					if random.random() > 0.4:
+						self.zombies.append(ConeheadZombie(self.screen, 1, l))
+					if random.random() > 0.6:
+						self.zombies.append(BucketheadZombie(self.screen, 2, l))
 	#根据关卡信息生成僵尸
 
 	def ZomDraw(self):
@@ -340,19 +399,21 @@ class GameControl():
 		return lis
 
 	def Select(self):
-		screen=pygame.display.set_mode((Screen_Width, Screen_Height))
-		plants=[]
+		screen = self.screen
+		plants = []
 
 		while 1:
-			self.SelectDraw(screen,plants)
+			self.SelectDraw(screen, plants)
 			for event in pygame.event.get():
-				if (event.type==pygame.QUIT):
-					return plants
+				if event.type == pygame.QUIT:
+					return []
+				if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+					return []
 				if event.type == pygame.MOUSEBUTTONUP:
-					if (self.BeginGame(plants)):
+					if self.BeginGame(plants):
 						return plants
-					a=self.SelectPlant(plants,pygame.mouse.get_pos())
-					plants=[]
+					a = self.SelectPlant(plants, pygame.mouse.get_pos())
+					plants = []
 					for i in a:
 						plants.append(i)
 	#游戏开始时选择植物
@@ -376,8 +437,10 @@ class GameControl():
 
 		while 1:
 			for event in pygame.event.get():
-				if (event.type==pygame.QUIT):
-					exit()
+				if event.type == pygame.QUIT:
+					return
+				if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+					return
 				if event.type == pygame.MOUSEBUTTONUP:
 					if (self.card.select!=-1):
 						self.SetPlant(pygame.mouse.get_pos())
@@ -388,7 +451,6 @@ class GameControl():
 			self.screen.blit(cd,(0,0))
 			self.card.Draw(self.sun.sum)
 
-			
 			font=pygame.font.SysFont(None,22)
 			text=font.render(str(self.sun.sum),True,BLACK)
 			self.screen.blit(text,Sun_Pos)
@@ -412,31 +474,49 @@ class GameControl():
 			self.sun.Appear()
 			self.sun.Draw()
 
+			# Cartel: ¡SE APROXIMA UNA GRAN HORDA DE ZOMBIS!
+			if self.horde_alert_active:
+				alert_ms = pygame.time.get_ticks() - self.horde_alert_start
+				if alert_ms < 3800:
+					if (alert_ms // 220) % 2 == 0 or alert_ms < 1200:
+						scale = 1.0 + 0.05 * math.sin(alert_ms / 120.0)
+						bw = int(self.horde_banner.get_width() * scale)
+						bh = int(self.horde_banner.get_height() * scale)
+						b_surf = pygame.transform.smoothscale(self.horde_banner, (bw, bh))
+						bx = (Screen_Width - bw) // 2
+						by = 240
+						self.screen.blit(b_surf, (bx, by))
+				else:
+					self.horde_alert_active = False
+
 			if (self.WinCheck()==0):
 				try:
 					import cci_rumble
 					cci_rumble.explosion_rumble()
 				except Exception:
 					pass
-				img=pygame.image.load('Picture/Menu/Lost.png')
+				img=pygame.image.load('Picture/Menu/Lost.png').convert_alpha()
 				rec=img.get_rect()
-				new=pygame.display.set_mode((rec[2],rec[3]))
-				new.blit(img,(0,0))
+				self.screen.fill((0, 0, 0))
+				self.screen.blit(img, ((Screen_Width - rec.width) // 2, (Screen_Height - rec.height) // 2))
 				pygame.display.flip()
 				sleep(3)
 				return
 			elif (self.WinCheck()==1):
-				File=open('info.in','w')
-				x=self.level+1
-				if (x>5):
-					x=1
-				File.write(str(x))
-				File.close()
+				info_file = 'Info.in' if os.path.exists('Info.in') else 'info.in'
+				try:
+					with open(info_file, 'w') as File:
+						x = self.level + 2
+						if x > len(Zom_create):
+							x = 1
+						File.write(str(x))
+				except Exception:
+					pass
 
-				img=pygame.image.load('Picture/Menu/Win.png')
+				img=pygame.image.load('Picture/Menu/Win.png').convert_alpha()
 				rec=img.get_rect()
-				new=pygame.display.set_mode((rec[2],rec[3]))
-				new.blit(img,(0,0))
+				self.screen.fill((0, 0, 0))
+				self.screen.blit(img, ((Screen_Width - rec.width) // 2, (Screen_Height - rec.height) // 2))
 				pygame.display.flip()
 				sleep(3)
 				return
@@ -451,4 +531,3 @@ class GameControl():
 		self.sun.time=pygame.time.get_ticks()
 		self.card=Card(self.screen,plants)
 		self.Test()
-		pygame.quit()
