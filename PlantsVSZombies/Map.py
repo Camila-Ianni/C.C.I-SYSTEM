@@ -25,29 +25,42 @@ class Menu():
 		flags = pygame.FULLSCREEN | pygame.SCALED if hasattr(pygame, "SCALED") else 0
 		self.screen=pygame.display.set_mode((Screen_Width, Screen_Height), flags)
 		self.clock=pygame.time.Clock()
-		self.bgp=pygame.image.load('Picture/Menu/MainMenu.png')
-		self.adv=pygame.image.load('Picture/Menu/Adventure.png')
-		self.sur=pygame.image.load('Picture/Menu/Survive.png')
-		'''
-		有Warning
-		'''
+		self.bgp=pygame.image.load('Picture/Menu/MainMenu.png').convert()
 
 	def Click(self,click):
 		pos=( int(round(click[0])),int(round(click[1])) )
-		rect1=self.adv.get_rect()
-		rect2=self.sur.get_rect()
-		if (460<=pos[0]<=460+rect1[2] and 60<=pos[1]<=60+rect1[3]):
+		# START ADVENTURE
+		if (490 <= pos[0] <= 735 and 55 <= pos[1] <= 160):
 			return 1
-		if (480<=pos[0]<=480+rect2[2] and 180<=pos[1]<=180+rect2[3]):
+		# SURVIVAL
+		if (490 <= pos[0] <= 705 and 330 <= pos[1] <= 410):
 			return 2
+		# QUIT
+		if (710 <= pos[0] <= 785 and 470 <= pos[1] <= 570):
+			return -1
 		return 0
 
 	def Run(self):
-		self.screen.blit(self.bgp,(0,0))
-		self.screen.blit(self.adv,(460,60))
-		self.screen.blit(self.sur,(480,180))
-		pygame.display.flip()
 		while 1:
+			mouse_pos = pygame.mouse.get_pos()
+			self.screen.blit(self.bgp, (0, 0))
+
+			# Hover en START ADVENTURE
+			if 490 <= mouse_pos[0] <= 735 and 55 <= mouse_pos[1] <= 160:
+				glow = pygame.Surface((735 - 490, 160 - 55), pygame.SRCALPHA)
+				glow.fill((255, 255, 200, 35))
+				self.screen.blit(glow, (490, 55))
+			# Hover en SURVIVAL
+			elif 490 <= mouse_pos[0] <= 705 and 330 <= mouse_pos[1] <= 410:
+				glow = pygame.Surface((705 - 490, 410 - 330), pygame.SRCALPHA)
+				glow.fill((255, 255, 200, 35))
+				self.screen.blit(glow, (490, 330))
+			# Hover en QUIT florero
+			elif 710 <= mouse_pos[0] <= 785 and 470 <= mouse_pos[1] <= 570:
+				glow = pygame.Surface((785 - 710, 570 - 470), pygame.SRCALPHA)
+				glow.fill((255, 100, 100, 40))
+				self.screen.blit(glow, (710, 470))
+
 			for event in pygame.event.get():
 				if (event.type==pygame.QUIT):
 					return 0
@@ -57,6 +70,10 @@ class Menu():
 					x=self.Click(pygame.mouse.get_pos())
 					if (x>0):
 						return	x
+					elif (x == -1):
+						return 0
+
+			pygame.display.flip()
 			self.clock.tick(Fps)
 '''
 游戏初始页面
