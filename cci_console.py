@@ -165,18 +165,6 @@ CATALOG = [
         "external": ("pokemon", "main.py"), "slot": 13,
     },
     {
-        "id": "fighter", "title": "STREET FIGHTER II", "subtitle": "Combate arcade legendario 1v1 con Ryu.",
-        "developer": "Capcom", "year": "1991", "genre": "Lucha / Arcade",
-        "players": "1–2", "tags": "LUCHA  ·  ARCADE", "categories": {"ACCIÓN", "ARCADE"},
-        "external": ("fighter", "main.py"), "slot": 14,
-    },
-    {
-        "id": "sonic", "title": "SONIC THE HEDGEHOG", "subtitle": "Corre a toda velocidad por Green Hill Zone.",
-        "developer": "SEGA", "year": "1991", "genre": "Plataformas / Velocidad",
-        "players": "1–2", "tags": "PLATAFORMAS  ·  ARCADE", "categories": {"PLATAFORMAS", "ARCADE"},
-        "external": ("sonic", "main.py"), "slot": 15,
-    },
-    {
         "id": "megaman", "title": "MEGA MAN", "subtitle": "Plataformas de acción robótica retro.",
         "developer": "Capcom", "year": "1987", "genre": "Acción / Plataformas",
         "players": "1", "tags": "PLATAFORMAS  ·  ACCIÓN", "categories": {"ACCIÓN", "PLATAFORMAS"},
@@ -338,20 +326,6 @@ GAME_ACHIEVEMENTS = {
         {"title": "POKÉ-FAVORITO", "description": "Agrega Pokémon a tus favoritos.", "type": "favorite", "goal": 1},
         {"title": "MAESTRO POKÉMON", "description": "Acumula 60 minutos de viaje Pokémon.", "type": "minutes", "goal": 60},
         {"title": "LÍDER DE GIMNASIO", "description": "Alcanza un 50% de progreso en tu Pokédex.", "type": "progress", "goal": 50},
-    ],
-    "fighter": [
-        {"title": "HADOKEN!", "description": "Inicia un combate en Street Fighter II.", "type": "launch", "goal": 1},
-        {"title": "GUERRERO MUNDIAL", "description": "Lucha durante 15 minutos en el torneo callejero.", "type": "minutes", "goal": 15},
-        {"title": "LUCHADOR FAVORITO", "description": "Agrega Street Fighter II a tus favoritos.", "type": "favorite", "goal": 1},
-        {"title": "SHORYUKEN MAESTRO", "description": "Acumula 60 minutos dominando las artes marciales.", "type": "minutes", "goal": 60},
-        {"title": "CAMPEÓN CALLEJERO", "description": "Alcanza un 50% de progreso en el torneo.", "type": "progress", "goal": 50},
-    ],
-    "sonic": [
-        {"title": "SUPER SONIC", "description": "Inicia tu carrera por Green Hill Zone.", "type": "launch", "goal": 1},
-        {"title": "COLECTOR DE ANILLOS", "description": "Corre durante 15 minutos esquivando trampas.", "type": "minutes", "goal": 15},
-        {"title": "FAVORITO AZUL", "description": "Agrega Sonic a tus favoritos.", "type": "favorite", "goal": 1},
-        {"title": "SONIC BOOM", "description": "Acumula 60 minutos a máxima velocidad.", "type": "minutes", "goal": 60},
-        {"title": "ESMERALDA DEL CAOS", "description": "Alcanza un 50% de progreso en las zonas.", "type": "progress", "goal": 50},
     ],
     "megaman": [
         {"title": "ROBOT GUERRERO", "description": "Inicia tu primera misión con Mega Man.", "type": "launch", "goal": 1},
@@ -758,8 +732,7 @@ class CCIConsoleState:
                 if rect.right <= sheet.get_width() and rect.bottom <= sheet.get_height()
             }
             extra_ids = (
-                "pokemon", "fighter", "sonic", "streetfighter",
-                "megaman", "castlevania", "bubblebobble", "plantsvszombies",
+                "pokemon", "megaman", "castlevania", "bubblebobble", "plantsvszombies",
                 "donkeykong"
             )
             for extra in extra_ids:
@@ -1308,7 +1281,7 @@ class CCIConsoleState:
             "space_invaders": "SPACE INV.", "metalslug": "METAL SLUG", "doom": "DOOM",
             "flappy": "FLAPPY BIRD", "dino": "DINO", "ghostbusters": "GHOSTBUSTERS",
             "cyberpunk": "CYBERPUNK",
-            "pokemon": "POKÉMON", "fighter": "STREET FIGHTER", "sonic": "SONIC",
+            "pokemon": "POKÉMON",
             "megaman": "MEGA MAN",
             "castlevania": "CASTLEVANIA", "bubblebobble": "BUBBLE BOBBLE", "plantsvszombies": "PLANTS VS ZOMBIES",
             "donkeykong": "DONKEY KONG",

@@ -35,9 +35,9 @@ section_width = window_width // 32
 section_height = window_height // 32
 slope = section_height // 8
 
-barrel_spawn_time = 140
+barrel_spawn_time = 100
 barrel_count = barrel_spawn_time / 2
-barrel_time = 140
+barrel_time = 100
 barrel_img = pygame.transform.scale(pygame.image.load('assets/images/barrels/barrel.png'),
                                     (section_width * 1.5, section_height * 2))
 flames_img = pygame.transform.scale(pygame.image.load('assets/images/fire.png'),
@@ -142,7 +142,7 @@ class Player(pygame.sprite.Sprite):
     def __init__(self, x_pos, y_pos):
         pygame.sprite.Sprite.__init__(self)
         self.y_change = 0
-        self.x_speed = 3
+        self.x_speed = 1
         self.x_change = 0
         self.landed = False
         self.pos = 0
@@ -289,15 +289,15 @@ class Barrel(pygame.sprite.Sprite):
                     fire_trig = True
         if not self.falling:
             if row5_top >= self.rect.bottom or row3_top >= self.rect.bottom >= row4_top or row1_top > self.rect.bottom >= row2_top:
-                self.x_change = 5
+                self.x_change = 6
             else:
-                self.x_change = -5
+                self.x_change = -6
         else:
             self.x_change = 0
         self.rect.move_ip(self.x_change, self.y_change)
         if self.rect.top > screen_height:
             self.kill()
-        if self.count < 15:
+        if self.count < 8:
             self.count += 1
         else:
             self.count = 0
@@ -616,7 +616,7 @@ def reset():
     player.kill()
     player = Player(250, window_height - 130)
     first_fireball_trigger = False
-    barrel_spawn_time = 140
+    barrel_spawn_time = 100
     barrel_count = barrel_spawn_time / 2
     victory = False
 
@@ -701,14 +701,14 @@ while run:
             if event.key == pygame.K_ESCAPE:
                 run = False
             if event.key in (pygame.K_RIGHT, pygame.K_d) and not player.climbing:
-                player.x_change = 3
+                player.x_change = 1
                 player.dir = 1
             if event.key in (pygame.K_LEFT, pygame.K_a) and not player.climbing:
-                player.x_change = -3
+                player.x_change = -1
                 player.dir = -1
             if event.key == pygame.K_SPACE and player.landed:
                 player.landed = False
-                player.y_change = -7
+                player.y_change = -5
                 try:
                     import cci_rumble
                     cci_rumble.light_rumble()
@@ -716,18 +716,18 @@ while run:
                     pass
             if event.key in (pygame.K_UP, pygame.K_w):
                 if climb:
-                    player.y_change = -3.5
+                    player.y_change = -2
                     player.x_change = 0
                     player.climbing = True
             if event.key in (pygame.K_DOWN, pygame.K_s):
                 if down:
-                    player.y_change = 3.5
+                    player.y_change = 2
                     player.x_change = 0
                     player.climbing = True
         if event.type == pygame.JOYBUTTONDOWN:
             if event.button in (0, 2) and player.landed:  # A or X: jump
                 player.landed = False
-                player.y_change = -7
+                player.y_change = -5
                 try:
                     import cci_rumble
                     cci_rumble.light_rumble()
@@ -738,19 +738,19 @@ while run:
         if event.type == pygame.JOYHATMOTION:
             hx, hy = event.value
             if hx > 0 and not player.climbing:
-                player.x_change = 3
+                player.x_change = 1
                 player.dir = 1
             elif hx < 0 and not player.climbing:
-                player.x_change = -3
+                player.x_change = -1
                 player.dir = -1
             else:
                 player.x_change = 0
             if hy > 0 and climb:
-                player.y_change = -3.5
+                player.y_change = -2
                 player.x_change = 0
                 player.climbing = True
             elif hy < 0 and down:
-                player.y_change = 3.5
+                player.y_change = 2
                 player.x_change = 0
                 player.climbing = True
             elif hy == 0:
@@ -758,6 +758,30 @@ while run:
                     player.y_change = 0
                 if player.climbing and player.landed:
                     player.climbing = False
+        if event.type == pygame.JOYAXISMOTION:
+            if event.axis == 0:
+                if event.value > 0.4 and not player.climbing:
+                    player.x_change = 1
+                    player.dir = 1
+                elif event.value < -0.4 and not player.climbing:
+                    player.x_change = -1
+                    player.dir = -1
+                elif abs(event.value) < 0.2:
+                    player.x_change = 0
+            elif event.axis == 1:
+                if event.value < -0.4 and climb:
+                    player.y_change = -2
+                    player.x_change = 0
+                    player.climbing = True
+                elif event.value > 0.4 and down:
+                    player.y_change = 2
+                    player.x_change = 0
+                    player.climbing = True
+                elif abs(event.value) < 0.2:
+                    if climb or down:
+                        player.y_change = 0
+                    if player.climbing and player.landed:
+                        player.climbing = False
         if event.type == pygame.KEYUP:
             if event.key in (pygame.K_RIGHT, pygame.K_d):
                 player.x_change = 0
