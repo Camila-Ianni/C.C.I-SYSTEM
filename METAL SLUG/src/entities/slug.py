@@ -121,6 +121,14 @@ class MetalSlug:
         if self.is_dead:
             return
         self.armor -= amount
+        try:
+            import cci_rumble
+            if self.armor <= 0:
+                cci_rumble.explosion_rumble()
+            else:
+                cci_rumble.hit_rumble()
+        except Exception:
+            pass
         if self.armor <= 0:
             self.armor = 0
             self.is_dead = True

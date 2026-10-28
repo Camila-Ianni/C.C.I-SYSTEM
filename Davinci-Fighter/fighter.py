@@ -188,6 +188,18 @@ class Fighter:
         else:
             self.set_state(FighterState.HURT)
 
+        try:
+            import cci_rumble
+            if self.player_id == 1:
+                if self.health <= 0:
+                    cci_rumble.explosion_rumble()
+                elif self.is_blocking:
+                    cci_rumble.light_rumble()
+                else:
+                    cci_rumble.hit_rumble()
+        except Exception:
+            pass
+
     def move_left(self):
         if self.status_effect in ["rooted", "error"]:
             return

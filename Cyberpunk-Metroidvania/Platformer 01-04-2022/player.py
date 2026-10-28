@@ -304,6 +304,14 @@ class Player(Character):
 						self.game.current_health -= 50
 						self.invincible = True
 						self.invincibility_timer = 0
+						try:
+							import cci_rumble
+							if self.game.current_health <= 0:
+								cci_rumble.explosion_rumble()
+							else:
+								cci_rumble.hit_rumble()
+						except Exception:
+							pass
 					if self.game.current_health <= 0:
 						self.game.current_health = 0
 						Particles(self, [self.game.level.visible_sprites, self.game.level.active_sprites], 'guard')
@@ -322,6 +330,14 @@ class Player(Character):
 					self.game.current_health -= 25
 					self.invincible = True
 					self.invincibility_timer = 0
+					try:
+						import cci_rumble
+						if self.game.current_health <= 0:
+							cci_rumble.explosion_rumble()
+						else:
+							cci_rumble.hit_rumble()
+					except Exception:
+						pass
 				if self.game.current_health <= 0:
 					self.game.current_health = 0
 					Particles(self, [self.game.level.visible_sprites, self.game.level.active_sprites], 'guard')

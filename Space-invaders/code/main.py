@@ -130,6 +130,14 @@ class Game:
 				if pygame.sprite.spritecollide(laser,self.player,False):
 					laser.kill()
 					self.lives -= 1
+					try:
+						import cci_rumble
+						if self.lives <= 0:
+							cci_rumble.explosion_rumble()
+						else:
+							cci_rumble.hit_rumble()
+					except Exception:
+						pass
 					if self.lives <= 0:
 						pygame.quit()
 						sys.exit()
@@ -140,6 +148,11 @@ class Game:
 				pygame.sprite.spritecollide(alien,self.blocks,True)
 
 				if pygame.sprite.spritecollide(alien,self.player,False):
+					try:
+						import cci_rumble
+						cci_rumble.explosion_rumble()
+					except Exception:
+						pass
 					pygame.quit()
 					sys.exit()
 	

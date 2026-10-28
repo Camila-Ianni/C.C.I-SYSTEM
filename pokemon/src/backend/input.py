@@ -40,6 +40,11 @@ class Input_Handler:
 					if not self.keydown:
 						self.screen.menu.select()
 						self.keydown = True
+						try:
+							import cci_rumble
+							cci_rumble.light_rumble()
+						except Exception:
+							pass
 				elif "Up" in touched:
 					if not self.keydown:
 						self.screen.menu.prev()

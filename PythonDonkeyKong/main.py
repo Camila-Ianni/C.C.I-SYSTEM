@@ -595,6 +595,14 @@ def reset():
     for hams in hammers_list:
         hammers.add(Hammer(*hams))
     lives -= 1
+    try:
+        import cci_rumble
+        if lives <= 0:
+            cci_rumble.explosion_rumble()
+        else:
+            cci_rumble.hit_rumble()
+    except Exception:
+        pass
     bonus = 6000
     player.kill()
     player = Player(250, window_height - 130)

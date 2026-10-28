@@ -100,7 +100,17 @@ class GameEngine:
                     self.level.score += 50 * self.player.score_multiplier
                     self.player.score_multiplier += 1
                     ghost.set_to_eaten()
+                    try:
+                        import cci_rumble
+                        cci_rumble.light_rumble()
+                    except Exception:
+                        pass
                 elif ghost.is_chasing() or ghost.is_scatter():
+                    try:
+                        import cci_rumble
+                        cci_rumble.hit_rumble()
+                    except Exception:
+                        pass
                     pygame.time.wait(500)
                     pygame.time.set_timer(PLAYER_EATEN_EVENT, 1, True)
                     self.player.set_to_eaten()

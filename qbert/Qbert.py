@@ -978,6 +978,14 @@ while lives!=0:
 		#play losing music add that rounds score to total score
 
 			lives -= 1
+			try:
+				import cci_rumble
+				if lives <= 0:
+					cci_rumble.explosion_rumble()
+				else:
+					cci_rumble.hit_rumble()
+			except Exception:
+				pass
 
 			totalScore += score 
 

@@ -158,12 +158,25 @@ def run_game():
 
         if pending_char:
             game.move_char(pending_char)
+            if pending_char == "b":
+                try:
+                    import cci_rumble
+                    cci_rumble.light_rumble()
+                except Exception:
+                    pass
 
         # Enemies move every 8 frames
         step_counter += 1
         if step_counter >= 8:
+            old_lives = getattr(Manage, "lives", 3)
             game.moveenemies()
             game.bombcounter()
+            if getattr(Manage, "lives", 3) < old_lives:
+                try:
+                    import cci_rumble
+                    cci_rumble.explosion_rumble()
+                except Exception:
+                    pass
             step_counter = 0
 
         # Draw frame

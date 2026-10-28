@@ -104,6 +104,11 @@ while running:
 			if grumpy.alive:
 				hit_fx.play()
 				die_fx.play()
+				try:
+					import cci_rumble
+					cci_rumble.explosion_rumble()
+				except Exception:
+					pass
 			grumpy.alive = False
 			grumpy.theta = grumpy.vel * -2
 	

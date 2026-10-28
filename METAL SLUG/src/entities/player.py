@@ -830,3 +830,8 @@ class Player:
     def die(self):
         """Trigger player death state."""
         self.is_dead = True
+        try:
+            import cci_rumble
+            cci_rumble.explosion_rumble()
+        except Exception:
+            pass

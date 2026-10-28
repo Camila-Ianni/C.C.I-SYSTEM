@@ -4385,6 +4385,15 @@ class Scorpion:
         else:
             opponent.trigger_hit()
 
+        try:
+            import cci_rumble
+            if opponent.health <= 0:
+                cci_rumble.explosion_rumble()
+            else:
+                cci_rumble.hit_rumble()
+        except Exception:
+            pass
+
         # Knockback
         if self.facing_right:
             opponent.rect.x += md.knockback_px

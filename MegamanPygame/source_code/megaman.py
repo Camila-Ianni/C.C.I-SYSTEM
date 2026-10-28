@@ -220,6 +220,14 @@ class Megaman(Character):
    def damage_megaman(self, hazard):
       if hazard.is_alive() and hazard.is_active and self.invincibility == False:
          self.reduce_hp(hazard.damage_points)
+         try:
+            import cci_rumble
+            if self.is_alive() == False:
+               cci_rumble.explosion_rumble()
+            else:
+               cci_rumble.hit_rumble()
+         except Exception:
+            pass
          if self.is_alive() == False:
             pass
          else:

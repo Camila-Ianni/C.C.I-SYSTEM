@@ -88,6 +88,11 @@ class Belmont(pygame.sprite.Sprite):
             self.setMove(False)
             self.attacking = True
             self.currentFrame = 0
+            try:
+                import cci_rumble
+                cci_rumble.damage_rumble()
+            except Exception:
+                pass
 
     def initCrouch(self):
         if self.crouching == False:

@@ -131,6 +131,14 @@ class Level:
 			self.player.vulnerable = False
 			self.player.hurt_time = pygame.time.get_ticks()
 			self.animation_player.create_particles(attack_type,self.player.rect.center,[self.visible_sprites])
+			try:
+				import cci_rumble
+				if self.player.health <= 0:
+					cci_rumble.explosion_rumble()
+				else:
+					cci_rumble.hit_rumble()
+			except Exception:
+				pass
 
 	def trigger_death_particles(self,pos,particle_type):
 

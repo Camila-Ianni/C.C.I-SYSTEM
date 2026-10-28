@@ -709,6 +709,11 @@ class Mario(pg.sprite.Sprite):
         self.image = self.right_frames[self.frame_index]
         self.state = c.DEATH_JUMP
         self.in_transition_state = True
+        try:
+            import cci_rumble
+            cci_rumble.explosion_rumble()
+        except Exception:
+            pass
 
 
     def changing_to_big(self):
@@ -868,6 +873,11 @@ class Mario(pg.sprite.Sprite):
         self.in_transition_state = True
         self.hurt_invincible = True
         self.state = c.BIG_TO_SMALL
+        try:
+            import cci_rumble
+            cci_rumble.hit_rumble()
+        except Exception:
+            pass
 
         if self.facing_right:
             frames = [self.right_big_normal_frames[4],

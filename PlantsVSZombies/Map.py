@@ -413,6 +413,11 @@ class GameControl():
 			self.sun.Draw()
 
 			if (self.WinCheck()==0):
+				try:
+					import cci_rumble
+					cci_rumble.explosion_rumble()
+				except Exception:
+					pass
 				img=pygame.image.load('Picture/Menu/Lost.png')
 				rec=img.get_rect()
 				new=pygame.display.set_mode((rec[2],rec[3]))

@@ -96,6 +96,14 @@ class App:
 		if self.lanes[lane_index].check(self.frog):
 			self.score.lives -= 1
 			self.score.score = 0
+			try:
+				import cci_rumble
+				if self.score.lives <= 0:
+					cci_rumble.explosion_rumble()
+				else:
+					cci_rumble.hit_rumble()
+			except Exception:
+				pass
 		
 		self.frog.update()
 

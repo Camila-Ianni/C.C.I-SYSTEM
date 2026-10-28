@@ -218,6 +218,11 @@ while running:
 						SPEED = 0
 						dino.alive = False
 						die_fx.play()
+						try:
+							import cci_rumble
+							cci_rumble.explosion_rumble()
+						except Exception:
+							pass
 
 				for cactus in ptera_group:
 					if LYAGAMI:
@@ -234,6 +239,11 @@ while running:
 						SPEED = 0
 						dino.alive = False
 						die_fx.play()
+						try:
+							import cci_rumble
+							cci_rumble.explosion_rumble()
+						except Exception:
+							pass
 
 		ground.update(SPEED)
 		ground.draw(win)

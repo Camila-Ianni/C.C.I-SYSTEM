@@ -69,6 +69,11 @@ def main():
                         "radius": 16,
                         "pop": False
                     })
+                    try:
+                        import cci_rumble
+                        cci_rumble.light_rumble()
+                    except Exception:
+                        pass
                 elif event.key in (pygame.K_UP, pygame.K_w) and on_ground:
                     vy = -450.0
                     on_ground = False

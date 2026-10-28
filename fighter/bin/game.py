@@ -80,6 +80,12 @@ class Game(object):
                 # if the user presses escape or 'q', quit the event loop.
                 if event.key in (pygame.K_ESCAPE, pygame.K_q):
                     return False
+                elif event.key in (pygame.K_SPACE, pygame.K_j, pygame.K_k, pygame.K_u, pygame.K_i):
+                    try:
+                        import cci_rumble
+                        cci_rumble.hit_rumble()
+                    except Exception:
+                        pass
         pressed = pygame.key.get_pressed()
         # movement control controlling background for now
         move = 'idle'

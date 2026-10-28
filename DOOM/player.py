@@ -37,6 +37,14 @@ class Player:
         self.health -= damage
         self.game.object_renderer.player_damage()
         self.game.sound.player_pain.play()
+        try:
+            import cci_rumble
+            if self.health < 1:
+                cci_rumble.explosion_rumble()
+            else:
+                cci_rumble.hit_rumble()
+        except Exception:
+            pass
         self.check_game_over()
 
     def single_fire_event(self, event):
@@ -45,6 +53,11 @@ class Player:
                 self.game.sound.shotgun.play()
                 self.shot = True
                 self.game.weapon.reloading = True
+                try:
+                    import cci_rumble
+                    cci_rumble.light_rumble()
+                except Exception:
+                    pass
 
     def movement(self):
         sin_a = math.sin(self.angle)

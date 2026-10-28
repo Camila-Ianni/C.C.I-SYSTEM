@@ -352,6 +352,14 @@ while running:
 					if not p.hit:
 						p.hit = True
 						p.health -= 20
+						try:
+							import cci_rumble
+							if p.health <= 0:
+								cci_rumble.explosion_rumble()
+							else:
+								cci_rumble.hit_rumble()
+						except Exception:
+							pass
 						print(p.health)
 					bullet.kill()
 

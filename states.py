@@ -276,6 +276,25 @@ class JoystickManager:
         """Limpia el estado de teclas simuladas."""
         self.active_simulated_keys.clear()
 
+    def rumble(self, low=0.6, high=0.6, duration_ms=250):
+        """Emite vibración háptica en los mandos conectados."""
+        for joy in self.joysticks.values():
+            if hasattr(joy, "rumble"):
+                try:
+                    joy.rumble(float(low), float(high), int(duration_ms))
+                except Exception:
+                    pass
+
+    def hit_rumble(self):
+        self.rumble(0.75, 0.9, 230)
+
+    def damage_rumble(self):
+        self.rumble(0.5, 0.65, 180)
+
+    def explosion_rumble(self):
+        self.rumble(1.0, 0.85, 420)
+
+
 
 # Instancia global del JoystickManager
 joystick_manager = JoystickManager()
@@ -1430,6 +1449,7 @@ class PlayingState(BaseState):
 
                 clock = pygame.time.Clock()
                 running_ast = True
+                prev_ast_state = 'playing'
                 while running_ast:
                     for event in pygame.event.get():
                         if event.type == pygame.QUIT:
@@ -1452,7 +1472,11 @@ class PlayingState(BaseState):
 
                     if ast_instance.gameState == 'playing':
                         ast_instance.playing()
+                        prev_ast_state = 'playing'
                     elif ast_instance.gameState == 'exploding':
+                        if prev_ast_state != 'exploding':
+                            joystick_manager.explosion_rumble()
+                            prev_ast_state = 'exploding'
                         ast_instance.exploding()
                     else:
                         ast_instance.displayText()
@@ -1561,6 +1585,9 @@ class PlayingState(BaseState):
                             tetris_mod.update_score(score)
                             if last_score < score:
                                 last_score = score
+                            joystick_manager.rumble(0.65, 0.8, 220)
+                        else:
+                            joystick_manager.rumble(0.2, 0.3, 60)
 
                     # Reconstruir cuadrícula limpia con posiciones bloqueadas
                     grid = tetris_mod.create_grid(locked_positions)
@@ -1752,6 +1779,7 @@ class PlayingState(BaseState):
                 try:
                     env = os.environ.copy()
                     env.setdefault("SDL_VIDEO_CENTERED", "1")
+                    env["PYTHONPATH"] = root_dir + os.pathsep + env.get("PYTHONPATH", "")
                     subprocess.run([sys.executable, entry_path], cwd=os.path.dirname(entry_path), env=env, check=False)
                 except Exception as e:
                     print(f"[PlayingState] Error ejecutando {self.game_key}: {e}")

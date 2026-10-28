@@ -29,12 +29,27 @@ class GreenHillZone:
         
     def atualizar_eventos(self, evento):
         if evento.type == pygame.KEYDOWN:
-            if evento.key == pygame.K_RIGHT:
+            if evento.key in (pygame.K_RIGHT, pygame.K_d):
                 self.sonic.velocidade_x = 10
-            if evento.key == pygame.K_LEFT:
+                try:
+                    import cci_rumble
+                    cci_rumble.light_rumble()
+                except Exception:
+                    pass
+            if evento.key in (pygame.K_LEFT, pygame.K_a):
                 self.sonic.velocidade_x = -10
+                try:
+                    import cci_rumble
+                    cci_rumble.light_rumble()
+                except Exception:
+                    pass
         if evento.type == pygame.KEYUP:
-                self.sonic.stop()
+            self.sonic.stop()
+            try:
+                import cci_rumble
+                cci_rumble.light_rumble()
+            except Exception:
+                pass
                 
     def atualizar_cenario(self):
         if self.sonic.rect[0] > self.tela.get_rect()[2] :
