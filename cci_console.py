@@ -373,6 +373,7 @@ DEFAULT_DATA = {
     "last_session": "",
     "history": [],
     "favorites": [],
+    "claimed_achievements": [],
     "game_stats": {},
     "settings": {
         "resolution": "1280 x 720", "fullscreen": False,
@@ -463,6 +464,7 @@ class UserData:
     def achievement_rows(self):
         stats = self.data.get("game_stats", {})
         favorites = set(self.data.get("favorites", []))
+        claimed_set = set(self.data.get("claimed_achievements", []))
         rows = []
         for game in CATALOG:
             gid = game["id"]
@@ -502,16 +504,43 @@ class UserData:
                     unlocked = False
                     label = f"0/{goal}"
 
+                title_up = str(ach.get("title", "")).upper()
+                if goal >= 60 or "MAESTRO" in title_up or "LEYENDA" in title_up or "GRAN MAESTRO" in title_up or "DOOM SLAYER" in title_up:
+                    tier = "gold"
+                    tier_name = "ORO"
+                elif goal >= 15 or "CAMPEÓN" in title_up or "ESMERALDA" in title_up or "SUPER" in title_up or "CIMA" in title_up or "HÉROE" in title_up:
+                    tier = "silver"
+                    tier_name = "PLATA"
+                else:
+                    tier = "bronze"
+                    tier_name = "BRONCE"
+
+                ach_id = f"{gid}:{ach['title']}"
+                claimed = ach_id in claimed_set
+
                 rows.append({
+                    "id": ach_id,
                     "game_id": gid,
                     "title": ach["title"],
                     "description": ach["description"],
+                    "type": ach_type,
                     "progress": cur,
                     "goal": goal,
                     "progress_label": label,
                     "unlocked": unlocked,
+                    "claimed": claimed,
+                    "tier": tier,
+                    "tier_name": tier_name,
                 })
         return rows
+
+    def claim_achievement(self, ach_id: str):
+        claimed = self.data.setdefault("claimed_achievements", [])
+        if ach_id not in claimed:
+            claimed.append(ach_id)
+            self.save()
+            return True
+        return False
 
     def unlocked_count(self):
         return sum(1 for row in self.achievement_rows() if row["unlocked"])
@@ -567,6 +596,8 @@ class CCIConsoleState:
         self.library_page = 0
         self.anim_time = 0.0
         self.last_drawn_size = None
+        self.fanfare_sound = self._make_fanfare_sound() if page == "achievements" else None
+        self.awarding_trophy = None
 
     def _load_background(self, page: str):
         folder = ROOT / "pantallas" / "finales_entrega"
@@ -790,7 +821,9 @@ class CCIConsoleState:
         if self.user_data.settings.get("crt_filter"):
             self._draw_crt()
         self._draw_toast()
-        if self.modal or self.text_input_active:
+        if self.awarding_trophy is not None:
+            self._draw_trophy_ceremony_modal()
+        elif self.modal or self.text_input_active:
             self._draw_modal()
         out = pygame.transform.smoothscale(self.canvas, screen.get_size()) if screen.get_size() != (LOGICAL_W, LOGICAL_H) else self.canvas
         screen.blit(out, (0, 0))
@@ -894,6 +927,32 @@ class CCIConsoleState:
         try:
             return pygame.mixer.Sound(buffer=samples.tobytes())
         except pygame.error:
+            return None
+
+    def _make_fanfare_sound(self):
+        mixer = pygame.mixer.get_init()
+        if not mixer or mixer[1] != -16:
+            return None
+        frequency, _, channels = mixer
+        try:
+            import numpy as np
+            notes = [(523.25, 0.11), (659.25, 0.11), (784.0, 0.13), (1046.5, 0.40)]
+            total_time = sum(d for _, d in notes)
+            total_samples = int(frequency * total_time)
+            buf = np.zeros(total_samples, dtype=np.float32)
+            idx = 0
+            for freq, dur in notes:
+                n_samples = int(frequency * dur)
+                t = np.linspace(0, dur, n_samples, endpoint=False)
+                decay = np.exp(-t * (4.2 if dur > 0.2 else 2.2))
+                wave = 0.55 * np.sin(2 * np.pi * freq * t) + 0.25 * np.sin(4 * np.pi * freq * t)
+                buf[idx:idx + n_samples] += wave * decay
+                idx += n_samples
+            buf = np.clip(buf, -1.0, 1.0)
+            mono_i16 = (buf * 15500).astype(np.int16)
+            stereo_i16 = np.column_stack([mono_i16] * channels)
+            return pygame.mixer.Sound(buffer=stereo_i16.tobytes())
+        except Exception:
             return None
 
     def _feedback(self):
@@ -1234,6 +1293,34 @@ class CCIConsoleState:
             return
         self._draw_achievement_icon(item, rect.center, min(rect.w, rect.h))
 
+    def _open_trophy_ceremony(self, item):
+        if not item.get("unlocked"):
+            self.toast = "LOGRO BLOQUEADO · CUMPLE EL OBJETIVO"
+            self.toast_until = time.monotonic() + 2.0
+            self._feedback()
+            return
+        is_new = not item.get("claimed", False)
+        if is_new:
+            self.user_data.claim_achievement(item["id"])
+            item["claimed"] = True
+            if self.fanfare_sound:
+                try:
+                    self.fanfare_sound.play()
+                except Exception:
+                    pass
+            try:
+                import cci_rumble
+                cci_rumble.hit_rumble(duration_ms=350, strong=0.7, weak=0.9)
+            except Exception:
+                pass
+        else:
+            self._feedback()
+        self.awarding_trophy = {
+            "item": item,
+            "start_time": time.monotonic(),
+            "is_new": is_new,
+        }
+
     def _draw_achievements(self):
         rows = self.user_data.achievement_rows()
         if not rows:
@@ -1295,20 +1382,57 @@ class CCIConsoleState:
             index, item = filtered[entry_pos]
             row_rect = pygame.Rect(ACHIEVEMENT_ROW_RECT.x, ACHIEVEMENT_ROW_Y[slot], ACHIEVEMENT_ROW_RECT.w, ACHIEVEMENT_ROW_RECT.h)
             selected = index == self.selected_achievement
+            unlocked = item["unlocked"]
+            claimed = item.get("claimed", False)
+
             if selected:
                 pygame.draw.rect(self.canvas, WHITE, row_rect.inflate(-2, -2), 2)
+            elif unlocked and not claimed:
+                pulse = int(160 + 80 * math.sin(self.anim_time * 6))
+                pygame.draw.rect(self.canvas, (pulse, int(pulse * 0.85), 35), row_rect.inflate(-2, -2), 1)
+
             game_id = self._achievement_game_for_row(item)
             self._draw_achievement_game_art(game_id, item, pygame.Rect(row_rect.x + 10, row_rect.y + 8, 46, 42))
-            title_color = WHITE if item["unlocked"] else (183, 186, 191)
+
+            if not unlocked:
+                title_color = (135, 138, 144)
+                desc_color = (110, 114, 120)
+            elif not claimed:
+                title_color = WHITE
+                desc_color = LIGHT
+            else:
+                title_color = (230, 235, 240)
+                desc_color = LIGHT
+
             self._text(self._achievement_display_title(item), row_rect.x + 75, row_rect.y + 10, 13, title_color, True, 350)
-            self._text(item["description"], row_rect.x + 75, row_rect.y + 33, 10, LIGHT, max_width=350)
+            self._text(item["description"], row_rect.x + 75, row_rect.y + 33, 10, desc_color, max_width=350)
             self._draw_achievement_icon(item, (row_rect.x + 505, row_rect.centery), 34)
-            status = "DESBLOQUEADO" if item["unlocked"] else "PENDIENTE"
-            self._text(status, row_rect.x + 538, row_rect.y + 9, 9, LIGHT if item["unlocked"] else MUTED, True, 92)
+
+            # Estado
+            if not unlocked:
+                status = "BLOQUEADO"
+                status_color = (145, 148, 154)
+            elif not claimed:
+                status = "¡RECLAMAR!"
+                status_color = (255, 215, 0)
+            else:
+                status = "RECLAMADO"
+                status_color = (130, 240, 160)
+
+            self._text(status, row_rect.x + 538, row_rect.y + 9, 9, status_color, True, 92)
             progress = item.get("progress_label", f"{item['progress']}/{item['goal']}")
-            self._text(progress, row_rect.x + 538, row_rect.y + 32, 10, LIGHT, max_width=85)
-            if not item["unlocked"]:
+            self._text(progress, row_rect.x + 538, row_rect.y + 32, 10, LIGHT if unlocked else MUTED, max_width=85)
+
+            if not unlocked:
                 self._draw_achievement_sprite("locked", pygame.Rect(row_rect.right - 29, row_rect.y + 18, 17, 23))
+            elif not claimed:
+                pulse_badge = int(200 + 55 * math.sin(self.anim_time * 8))
+                badge_surf = self._font(12, bold=True).render("★", True, (pulse_badge, pulse_badge, 40))
+                self.canvas.blit(badge_surf, (row_rect.right - 27, row_rect.y + 20))
+            else:
+                check_surf = self._font(12, bold=True).render("✓", True, (130, 240, 160))
+                self.canvas.blit(check_surf, (row_rect.right - 27, row_rect.y + 20))
+
             pygame.draw.line(self.canvas, (52, 55, 60), (row_rect.x + 474, row_rect.y + 7), (row_rect.x + 474, row_rect.bottom - 7), 1)
 
         # Ficha lateral dentro del panel vertical original.
@@ -1316,25 +1440,52 @@ class CCIConsoleState:
         game_id = self._achievement_game_for_row(item)
         detail = pygame.Rect(1016, 159, 243, 460)
         icon_frame = pygame.Rect(1065, 222, 138, 130)
-        if game_id:
-            self._draw_achievement_game_art(game_id, item, icon_frame.inflate(-22, -22))
-        else:
-            self._draw_achievement_icon(item, icon_frame.center, 76)
-        if not item["unlocked"]:
-            self._draw_achievement_sprite("locked", pygame.Rect(icon_frame.right - 28, icon_frame.bottom - 31, 17, 22))
-        title_lines = self._wrap(self._achievement_display_title(item), detail.x + 24, 375, detail.w - 46, 14, WHITE, max_lines=2)
-        desc_y = 375 + len(title_lines) * 18 + 6
-        self._wrap(item["description"], detail.x + 24, desc_y, detail.w - 46, 10, LIGHT, max_lines=3)
-        pygame.draw.line(self.canvas, (94, 97, 102), (detail.x + 24, 475), (detail.right - 21, 475), 1)
-        status = "DESBLOQUEADO" if item["unlocked"] else "PENDIENTE"
+
+        self._draw_achievement_icon(item, icon_frame.center, 84)
+
+        tier_title = f"TROFEO DE {item.get('tier_name', 'BRONCE')}"
+        tier_col = {"gold": (255, 215, 0), "silver": (200, 220, 245), "bronze": (215, 140, 75)}.get(item.get("tier", "bronze"), (215, 140, 75))
+        self._text(tier_title, detail.x + 24, 358, 10, tier_col if item["unlocked"] else MUTED, True, detail.w - 46)
+
+        title_lines = self._wrap(self._achievement_display_title(item), detail.x + 24, 376, detail.w - 46, 13, WHITE if item["unlocked"] else MUTED, max_lines=2)
+        desc_y = 376 + len(title_lines) * 17 + 4
+        self._wrap(item["description"], detail.x + 24, desc_y, detail.w - 46, 10, LIGHT if item["unlocked"] else (110, 114, 120), max_lines=3)
+        pygame.draw.line(self.canvas, (94, 97, 102), (detail.x + 24, 470), (detail.right - 21, 470), 1)
+
         game = next((entry for entry in CATALOG if entry["id"] == game_id), None)
         context = f"Juego: {game['title'].title()}" if game else "Juego: C.C.I. System"
-        self._text(context, detail.x + 24, 489, 9, LIGHT, max_width=detail.w - 46)
+        self._text(context, detail.x + 24, 482, 9, LIGHT, max_width=detail.w - 46)
         kind = f"Tipo: {game['genre']}" if game else "Tipo: General"
-        self._text(kind, detail.x + 24, 512, 9, LIGHT, max_width=detail.w - 46)
-        self._text(f"Estado: {status.title()}", detail.x + 24, 535, 9, WHITE if item["unlocked"] else MUTED, max_width=detail.w - 46)
+        self._text(kind, detail.x + 24, 502, 9, LIGHT, max_width=detail.w - 46)
+
+        if not item["unlocked"]:
+            st_text = "Estado: Bloqueado"
+            st_col = MUTED
+        elif not item.get("claimed", False):
+            st_text = "Estado: ¡Listo para reclamar!"
+            st_col = (255, 215, 0)
+        else:
+            st_text = "Estado: Otorgado"
+            st_col = (130, 240, 160)
+        self._text(st_text, detail.x + 24, 522, 9, st_col, max_width=detail.w - 46)
+
         detail_progress = item.get("progress_label", f"{item['progress']}/{item['goal']}")
-        self._text(f"Progreso: {detail_progress}", detail.x + 24, 558, 9, LIGHT, max_width=detail.w - 46)
+        self._text(f"Progreso: {detail_progress}", detail.x + 24, 542, 9, LIGHT, max_width=detail.w - 46)
+
+        btn_rect = pygame.Rect(detail.x + 18, 574, detail.w - 36, 32)
+        if not item["unlocked"]:
+            pygame.draw.rect(self.canvas, (24, 26, 30), btn_rect, border_radius=4)
+            pygame.draw.rect(self.canvas, (50, 54, 60), btn_rect, 1, border_radius=4)
+            self._text("BLOQUEADO", btn_rect.centerx - 36, btn_rect.centery - 6, 10, MUTED, True)
+        elif not item.get("claimed", False):
+            pulse = int(180 + 75 * math.sin(self.anim_time * 6))
+            pygame.draw.rect(self.canvas, (35, 30, 12), btn_rect, border_radius=4)
+            pygame.draw.rect(self.canvas, (pulse, int(pulse * 0.85), 40), btn_rect, 2, border_radius=4)
+            self._text("★ RECLAMAR TROFEO ★", btn_rect.x + 16, btn_rect.centery - 6, 10, (255, 225, 60), True)
+        else:
+            pygame.draw.rect(self.canvas, (20, 28, 22), btn_rect, border_radius=4)
+            pygame.draw.rect(self.canvas, (55, 120, 75), btn_rect, 1, border_radius=4)
+            self._text("VER TROFEO OTORGADO", btn_rect.x + 18, btn_rect.centery - 6, 10, (140, 240, 170), True)
 
         # El footer ya trae marcos y controles: se completa solo el retrato y la ayuda.
         self._draw_achievement_sprite(f"avatar_{avatar_index}", pygame.Rect(49, 649, 94, 55))
@@ -1343,15 +1494,9 @@ class CCIConsoleState:
         self._text("—", 177, 695, 10, LIGHT)
 
     def _achievement_icon_key(self, item):
-        if not item.get("unlocked"):
-            return "locked" if "LEYENDA" in str(item.get("title", "")).upper() else "silver"
-        title = str(item.get("title", "")).upper()
-        goal = int(item.get("goal", 1))
-        if "LEYENDA" in title or "MAESTRO" in title or goal > 10:
-            return "gold"
-        return "silver"
+        return item.get("tier", "bronze")
 
-    def _draw_achievement_icon(self, item, center, size):
+    def _draw_achievement_icon(self, item, center, size, force_color=False):
         sprite = self.achievement_sprites.get(self._achievement_icon_key(item))
         if sprite is None:
             return
@@ -1361,7 +1506,131 @@ class CCIConsoleState:
             max(1, round(sprite.get_height() * scale)),
         )
         scaled = pygame.transform.scale(sprite, scaled_size)
-        self.canvas.blit(scaled, scaled.get_rect(center=center))
+        if not item.get("unlocked") and not force_color:
+            try:
+                gray = pygame.transform.grayscale(scaled)
+                darken = pygame.Surface(gray.get_size(), pygame.SRCALPHA)
+                darken.fill((0, 0, 0, 80))
+                gray.blit(darken, (0, 0), special_flags=pygame.BLEND_RGBA_SUB)
+                target = gray
+            except Exception:
+                target = scaled
+        else:
+            target = scaled
+        rect = target.get_rect(center=center)
+        self.canvas.blit(target, rect)
+        if not item.get("unlocked") and not force_color:
+            lock_sprite = self.achievement_sprites.get("locked")
+            if lock_sprite:
+                lock_scale = min(rect.w * 0.52 / lock_sprite.get_width(), rect.h * 0.52 / lock_sprite.get_height())
+                lock_size = (max(1, round(lock_sprite.get_width() * lock_scale)), max(1, round(lock_sprite.get_height() * lock_scale)))
+                lock_img = pygame.transform.scale(lock_sprite, lock_size)
+                self.canvas.blit(lock_img, lock_img.get_rect(center=center))
+
+    def _draw_trophy_ceremony_modal(self):
+        if not self.awarding_trophy:
+            return
+        item = self.awarding_trophy["item"]
+        is_new = self.awarding_trophy.get("is_new", False)
+        start_time = self.awarding_trophy.get("start_time", 0.0)
+        elapsed = time.monotonic() - start_time
+
+        shade = pygame.Surface((LOGICAL_W, LOGICAL_H), pygame.SRCALPHA)
+        shade.fill((0, 0, 0, 215))
+        self.canvas.blit(shade, (0, 0))
+
+        w, h = 600, 480
+        x = (LOGICAL_W - w) // 2
+        y = (LOGICAL_H - h) // 2
+        rect = pygame.Rect(x, y, w, h)
+
+        tier = item.get("tier", "bronze")
+        tier_colors = {
+            "gold": ((255, 215, 0), (255, 240, 160), "TROFEO DE ORO"),
+            "silver": ((200, 220, 245), (240, 248, 255), "TROFEO DE PLATA"),
+            "bronze": ((215, 140, 75), (250, 195, 145), "TROFEO DE BRONCE"),
+        }
+        main_color, glow_color, tier_title = tier_colors.get(tier, tier_colors["bronze"])
+
+        pygame.draw.rect(self.canvas, (11, 13, 17), rect, border_radius=10)
+        pulse = 0.5 + 0.5 * math.sin(elapsed * 5)
+        border_col = (
+            int(main_color[0] * (0.7 + 0.3 * pulse)),
+            int(main_color[1] * (0.7 + 0.3 * pulse)),
+            int(main_color[2] * (0.7 + 0.3 * pulse)),
+        )
+        pygame.draw.rect(self.canvas, border_col, rect, 3, border_radius=10)
+        pygame.draw.rect(self.canvas, (35, 38, 48), rect.inflate(-6, -6), 1, border_radius=8)
+
+        banner_bg = pygame.Rect(rect.x + 10, rect.y + 12, rect.w - 20, 38)
+        pygame.draw.rect(self.canvas, (18, 22, 30), banner_bg, border_radius=6)
+        pygame.draw.rect(self.canvas, border_col, banner_bg, 1, border_radius=6)
+
+        banner_text = "★ ¡NUEVO TROFEO OTORGADO! ★" if is_new else "★ TROFEO CONSEGUIDO ★"
+        font_b = self._font(16, bold=True)
+        tw = font_b.size(banner_text)[0]
+        self._text(banner_text, rect.centerx - tw // 2, rect.y + 22, 16, glow_color if is_new else WHITE, True)
+
+        tier_badge_text = f"● {tier_title} ●"
+        font_t = self._font(13, bold=True)
+        tbw = font_t.size(tier_badge_text)[0]
+        badge_rect = pygame.Rect(rect.centerx - tbw // 2 - 14, rect.y + 58, tbw + 28, 24)
+        pygame.draw.rect(self.canvas, (24, 28, 38), badge_rect, border_radius=12)
+        pygame.draw.rect(self.canvas, main_color, badge_rect, 1, border_radius=12)
+        self._text(tier_badge_text, rect.centerx - tbw // 2, rect.y + 63, 13, main_color, True)
+
+        trophy_center_y = rect.y + 168
+        halo_radius = int(55 + 8 * math.sin(elapsed * 4))
+        for r_offset in (12, 6, 0):
+            hr = halo_radius + r_offset
+            alpha = max(10, int((45 - r_offset * 3) * (0.6 + 0.4 * pulse)))
+            halo_surf = pygame.Surface((hr * 2, hr * 2), pygame.SRCALPHA)
+            pygame.draw.circle(halo_surf, (*main_color, alpha), (hr, hr), hr)
+            self.canvas.blit(halo_surf, (rect.centerx - hr, trophy_center_y - hr))
+
+        trophy_sprite = self.achievement_sprites.get(tier)
+        if trophy_sprite:
+            bounce = min(1.0, elapsed * 4.5)
+            if elapsed < 0.6:
+                bounce += 0.22 * math.sin(elapsed * math.pi / 0.6)
+            big_w = max(10, int(140 * bounce))
+            big_h = max(10, int(148 * bounce))
+            big_trophy = pygame.transform.smoothscale(trophy_sprite, (big_w, big_h))
+            self.canvas.blit(big_trophy, big_trophy.get_rect(center=(rect.centerx, trophy_center_y)))
+
+        title_str = self._achievement_display_title(item)
+        font_tit = self._font(20, bold=True)
+        tit_w = font_tit.size(title_str)[0]
+        self._text(title_str, rect.centerx - tit_w // 2, rect.y + 252, 20, WHITE, True)
+
+        game = next((g for g in CATALOG if g["id"] == item["game_id"]), None)
+        game_name = game["title"] if game else "C.C.I. SYSTEM"
+        genre_name = game.get("genre", "ARCADE") if game else "SISTEMA"
+        sub_info = f"JUEGO: {game_name.upper()}   |   {genre_name.upper()}"
+        font_sub = self._font(11, bold=True)
+        sw = font_sub.size(sub_info)[0]
+        self._text(sub_info, rect.centerx - sw // 2, rect.y + 280, 11, LIGHT, True)
+
+        box_y = rect.y + 308
+        box_rect = pygame.Rect(rect.x + 30, box_y, rect.w - 60, 108)
+        pygame.draw.rect(self.canvas, (17, 20, 27), box_rect, border_radius=7)
+        pygame.draw.rect(self.canvas, (55, 62, 78), box_rect, 1, border_radius=7)
+
+        why_label = "¿POR QUÉ LO GANASTE? (REQUISITO CUMPLIDO):"
+        self._text(why_label, box_rect.x + 16, box_rect.y + 12, 11, (110, 210, 255), True)
+
+        desc = item.get("description", "")
+        self._wrap(desc, box_rect.x + 16, box_rect.y + 36, box_rect.w - 32, 12, WHITE, max_lines=2)
+
+        progress_text = f"Objetivo completado: {item.get('progress_label', '')}  (100% Conseguido)"
+        self._text(progress_text, box_rect.x + 16, box_rect.y + 80, 11, (130, 245, 160), True)
+
+        footer_pulse = int(170 + 75 * math.sin(elapsed * 6))
+        prompt_col = (footer_pulse, footer_pulse, footer_pulse)
+        prompt = "[ PRESIONA CUALQUIER BOTÓN O HAZ CLIC PARA CONTINUAR ]"
+        font_p = self._font(11, bold=True)
+        pw = font_p.size(prompt)[0]
+        self._text(prompt, rect.centerx - pw // 2, rect.bottom - 32, 11, prompt_col, True)
 
     def _draw_achievement_progress(self, rect, ratio):
         track = self.achievement_sprites.get("progress_track")
@@ -1696,7 +1965,12 @@ class CCIConsoleState:
             self._change_achievement_filter(1)
             return True
         if key in (pygame.K_RETURN, pygame.K_KP_ENTER, pygame.K_SPACE):
-            self._feedback()
+            filtered = self._achievement_rows_for_filter()
+            item = next((it for idx, it in filtered if idx == self.selected_achievement), None)
+            if item:
+                self._open_trophy_ceremony(item)
+            else:
+                self._feedback()
             return True
         filtered = self._achievement_rows_for_filter()
         if not filtered:
@@ -1873,8 +2147,17 @@ class CCIConsoleState:
                 if row_rect.collidepoint(pos):
                     entry_pos = visible_start + slot
                     if entry_pos < len(filtered):
-                        self.selected_achievement = filtered[entry_pos][0]
+                        idx, item = filtered[entry_pos]
+                        self.selected_achievement = idx
+                        self._open_trophy_ceremony(item)
                     return
+            btn_rect = pygame.Rect(1034, 574, 207, 34)
+            icon_rect = pygame.Rect(1065, 222, 138, 130)
+            if btn_rect.collidepoint(pos) or icon_rect.collidepoint(pos):
+                item = next((it for idx, it in filtered if idx == self.selected_achievement), None)
+                if item:
+                    self._open_trophy_ceremony(item)
+                return
         elif self.page == "settings":
             for i, (_, rect, _) in enumerate(self._settings_rows()):
                 if rect.collidepoint(pos):
@@ -1917,6 +2200,12 @@ class CCIConsoleState:
         self._text(self.toast, rect.x + 14, rect.y + 11, 12, WHITE, max_width=530)
 
     def handle_events(self, events):
+        if self.awarding_trophy is not None:
+            for event in events:
+                if event.type in (pygame.KEYDOWN, pygame.MOUSEBUTTONDOWN, pygame.JOYBUTTONDOWN):
+                    self.awarding_trophy = None
+                    return
+            return
         # Text entry is handled before normal keys so F2/search work with SDL_TEXTINPUT.
         if self.search_active:
             self._handle_search(events)
