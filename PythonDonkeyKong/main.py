@@ -1,6 +1,11 @@
 import os
 import sys
 import random
+import math
+import shutil
+import subprocess
+import time
+import cv2
 
 os.chdir(os.path.dirname(os.path.abspath(__file__)))
 if os.path.dirname(os.path.dirname(os.path.abspath(__file__))) not in sys.path:
@@ -94,7 +99,7 @@ active_level = 0
 counter = 0
 score = 0
 high_score = 0
-lives = 5
+lives = 3
 bonus = 6000
 first_fireball_trigger = False
 victory = False
@@ -591,10 +596,118 @@ def barrel_collide(reset):
     return reset
 
 
+def play_game_over_video(target_screen):
+    video_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "assets", "Pixel_arcade_screen_showing_loss_970f3613_1080p.mp4")
+    if not os.path.isfile(video_path):
+        video_path = "assets/Pixel_arcade_screen_showing_loss_970f3613_1080p.mp4"
+    if not os.path.isfile(video_path):
+        print(f"[DonkeyKong] Video no encontrado: {video_path}")
+        return
+
+    if pygame.mixer.get_init():
+        try:
+            pygame.mixer.stop()
+            pygame.mixer.music.stop()
+        except Exception:
+            pass
+
+    audio_proc = None
+    if sys.platform == "darwin" and shutil.which("afplay"):
+        try:
+            audio_proc = subprocess.Popen(["afplay", video_path], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except Exception:
+            pass
+    elif pygame.mixer.get_init():
+        try:
+            pygame.mixer.music.load(video_path)
+            pygame.mixer.music.play()
+        except Exception:
+            pass
+
+    cap = cv2.VideoCapture(video_path)
+    if not cap.isOpened():
+        if audio_proc:
+            try:
+                audio_proc.kill()
+            except Exception:
+                pass
+        return
+
+    fps = cap.get(cv2.CAP_PROP_FPS)
+    if not fps or math.isnan(fps) or fps <= 0:
+        fps = 24.0
+    frame_delay = 1.0 / fps
+
+    target_size = target_screen.get_size()
+    start_time = time.perf_counter()
+    expected_frame = 0
+    running = True
+
+    while running and cap.isOpened():
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                running = False
+                break
+            elif event.type == pygame.KEYDOWN:
+                if event.key in (pygame.K_ESCAPE, pygame.K_RETURN, pygame.K_SPACE):
+                    running = False
+                    break
+            elif event.type == pygame.JOYBUTTONDOWN:
+                running = False
+                break
+            elif event.type == pygame.MOUSEBUTTONDOWN:
+                running = False
+                break
+
+        if not running:
+            break
+
+        elapsed = time.perf_counter() - start_time
+        target_frame_idx = int(elapsed * fps)
+
+        ret = True
+        while expected_frame <= target_frame_idx:
+            ret, frame = cap.read()
+            expected_frame += 1
+            if not ret:
+                running = False
+                break
+
+        if not ret or not running:
+            break
+
+        rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        h, w = rgb_frame.shape[:2]
+        surf = pygame.image.frombuffer(rgb_frame.tobytes(), (w, h), "RGB")
+        if (w, h) != target_size:
+            surf = pygame.transform.scale(surf, target_size)
+
+        target_screen.blit(surf, (0, 0))
+        pygame.display.flip()
+
+        spent = time.perf_counter() - start_time
+        sleep_time = (expected_frame * frame_delay) - spent
+        if sleep_time > 0.002:
+            time.sleep(sleep_time)
+
+    cap.release()
+    if audio_proc:
+        try:
+            audio_proc.terminate()
+            audio_proc.kill()
+        except Exception:
+            pass
+    if pygame.mixer.get_init():
+        try:
+            pygame.mixer.music.stop()
+        except Exception:
+            pass
+
+
 def reset():
-    global player, barrels, flames, hammers, first_fireball_trigger, victory, lives, bonus
+    global player, barrels, flames, hammers, first_fireball_trigger, victory, lives, bonus, run
     global barrel_spawn_time, barrel_count
-    pygame.time.delay(1000)
+    pygame.time.delay(600)
     for bar in barrels:
         bar.kill()
     for flam in flames:
@@ -612,6 +725,10 @@ def reset():
             cci_rumble.hit_rumble()
     except Exception:
         pass
+    if lives <= 0:
+        play_game_over_video(screen)
+        run = False
+        return
     bonus = 6000
     player.kill()
     player = Player(250, window_height - 130)
