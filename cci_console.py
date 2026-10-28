@@ -683,7 +683,7 @@ class CCIConsoleState:
         }
         path = (
             _find_file(fallback, ends[page])
-            if page == "achievements"
+            if page in ("achievements", "profile")
             else _find_file(folder, prefixes[page]) or _find_file(fallback, ends[page])
         )
         if path is None:
@@ -1253,13 +1253,12 @@ class CCIConsoleState:
             text_x = x + 25
             self._text(label, text_x, 330, 9, MUTED, max_width=132)
             self._text(value, text_x, 352, 12, WHITE, True, 132)
-        # Selector clicable de los 8 avatares en rejilla 2x4.
+        # Selector clicable de los 8 avatares en fila limpia.
+        pygame.draw.rect(self.canvas, DARK, (294, 426, 508, 126))
         if self.avatar_surfaces:
+            start_x, y, w, h, gap = 300, 444, 56, 78, 6
             for i in range(len(self.avatar_surfaces)):
-                col = i % 4
-                row = i // 4
-                w, h = 90, 80
-                rect = pygame.Rect(315 + col * 114, 415 + row * 92, w, h)
+                rect = pygame.Rect(start_x + i * (w + gap), y, w, h)
                 frame = pygame.transform.scale(self.avatar_surfaces[i], rect.size)
                 self.canvas.blit(frame, rect)
                 if i == avatar_index:
@@ -1944,10 +1943,9 @@ class CCIConsoleState:
                 self.name_buffer = str(self.user_data.data.get("player_name", "CAMI"))
                 pygame.key.start_text_input()
                 return
+            start_x, y, w, h, gap = 300, 444, 56, 78, 6
             for i in range(len(self.avatar_surfaces)):
-                col = i % 4
-                row = i // 4
-                rect = pygame.Rect(315 + col * 114, 415 + row * 92, 90, 80)
+                rect = pygame.Rect(start_x + i * (w + gap), y, w, h)
                 if rect.collidepoint(pos):
                     self.user_data.data["avatar"] = i
                     self.user_data.save()
