@@ -195,9 +195,15 @@ class UserSelectState(BaseState):
                 self.selected_index = i
                 break
         self.focus_target = "avatars"
-        self.creating_user = False
         self.deleting_user = False
-        pygame.key.stop_text_input()
+        if not users:
+            self.creating_user = True
+            self.new_user_name = ""
+            self.new_user_avatar = 0
+            pygame.key.start_text_input()
+        else:
+            self.creating_user = False
+            pygame.key.stop_text_input()
 
     def exit(self):
         pygame.key.stop_text_input()
@@ -288,11 +294,12 @@ class UserSelectState(BaseState):
                         self._trigger_delete()
 
                 elif event.key == pygame.K_ESCAPE:
-                    # '◯ Atrás' -> si hay usuario activo, entrar al Menú
-                    ud = self.user_manager.active_user
-                    if self.on_user_selected:
-                        self.on_user_selected(ud)
-                    self.state_machine.change_state("MENU")
+                    # '◯ Atrás' -> si hay usuarios, entrar al Menú
+                    if self.user_manager.users:
+                        ud = self.user_manager.active_user
+                        if self.on_user_selected:
+                            self.on_user_selected(ud)
+                        self.state_machine.change_state("MENU")
 
             elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                 self._handle_click(event.pos)

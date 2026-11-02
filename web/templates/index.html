@@ -1,0 +1,407 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>C.C.I. SYSTEM — Consola Virtual & Emulador Retro 100% Python</title>
+  <meta name="description" content="Landing oficial de C.C.I. SYSTEM, la consola virtual y emulador de 19 juegos arcade legendarios desarrollado 100% en Python por Camila Carolina Ianni.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;600;700;900&family=Rajdhani:wght@500;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+  <!-- Ambient background glow elements -->
+  <div class="bg-grid"></div>
+  <div class="glow-orb orb-1"></div>
+  <div class="glow-orb orb-2"></div>
+
+  <!-- Header / Navigation -->
+  <header class="header">
+    <div class="container nav-container">
+      <a href="#hero" class="brand">
+        <span class="brand-glitch" data-text="C.C.I.">C.C.I.</span>
+        <span class="brand-sub">SYSTEM</span>
+        <span class="badge-v">v2.0</span>
+      </a>
+
+      <nav class="nav-menu" id="navMenu">
+        <a href="#hero" class="nav-link active">Inicio</a>
+        <a href="#acerca" class="nav-link">La Consola</a>
+        <a href="#juegos" class="nav-link">Catálogo (19)</a>
+        <a href="#autora" class="nav-link">Autora</a>
+        <a href="#descarga" class="nav-link nav-cta">Descargar Emulador</a>
+      </nav>
+
+      <div class="nav-badge-pill">
+        <span class="status-dot"></span> 100% PYTHON
+      </div>
+    </div>
+  </header>
+
+  <!-- Hero Section -->
+  <section id="hero" class="hero">
+    <div class="container hero-grid">
+      <div class="hero-content">
+        <div class="hero-tag">
+          <span class="tag-icon">⚡</span> CONSOLA VIRTUAL RETRO & ARCADE DEFINITIVA
+        </div>
+        <h1 class="hero-title">
+          REVIVE 19 CLÁSICOS ARCADE EN TU COMPUTADORA
+        </h1>
+        <p class="hero-desc">
+          <strong>C.C.I. SYSTEM</strong> es una consola virtual completa desarrollada íntegramente en <strong>Python</strong>.
+          Con estética retrofuturista inspirada en la nueva generación de consolas, sistema multiusuario con estadísticas independientes,
+          soporte universal de joystick y 19 obras maestras del gaming clásico listas para jugar desde cero.
+        </p>
+
+        <div class="hero-actions">
+          <a href="/download/mac" class="btn btn-primary">
+            <svg class="btn-icon" viewBox="0 0 24 24" fill="currentColor"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M15.97 6.37c.63-.77 1.06-1.85.94-2.93-.91.04-2.02.61-2.67 1.37-.58.67-.99 1.77-.85 2.83 1.02.08 2.05-.51 2.58-1.27z"/></svg>
+            <span>DESCARGAR PARA MACOS</span>
+          </a>
+          <a href="/download/windows" class="btn btn-secondary">
+            <svg class="btn-icon" viewBox="0 0 24 24" fill="currentColor"><path d="M0 3.449L9.75 2.1v9.451H0m10.949-9.602L24 0v11.4H10.949M0 12.6h9.75v9.451L0 20.699M10.949 12.6H24V24l-12.9-1.801"/></svg>
+            <span>DESCARGAR PARA WINDOWS</span>
+          </a>
+        </div>
+
+        <div class="hero-features-strip">
+          <div class="strip-item">
+            <span class="strip-num">19</span>
+            <span class="strip-lbl">Juegos Integrados</span>
+          </div>
+          <div class="strip-divider"></div>
+          <div class="strip-item">
+            <span class="strip-num">0</span>
+            <span class="strip-lbl">Perfiles Previos (Limpio)</span>
+          </div>
+          <div class="strip-divider"></div>
+          <div class="strip-item">
+            <span class="strip-num">60</span>
+            <span class="strip-lbl">FPS Pygame-CE</span>
+          </div>
+          <div class="strip-divider"></div>
+          <div class="strip-item">
+            <span class="strip-num">100%</span>
+            <span class="strip-lbl">Código Python</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="hero-preview-wrapper">
+        <div class="console-frame">
+          <div class="frame-header">
+            <span class="dot red"></span>
+            <span class="dot yellow"></span>
+            <span class="dot green"></span>
+            <span class="frame-title">C.C.I. SYSTEM — CONSOLA VIRTUAL (1280x720)</span>
+          </div>
+          <div class="frame-body">
+            <img src="/assets/welcome.png" alt="Bienvenida C.C.I. System" class="console-screen-img">
+            <div class="screen-overlay-scanline"></div>
+            <div class="screen-badge">MODO EMULADOR ACTIVO</div>
+          </div>
+          <div class="frame-footer">
+            <span>PLUG & PLAY JOYSTICK</span>
+            <span>AUDIO SINTETIZADOR ESTÉREO</span>
+            <span>CAPTURAS F12</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- About / Architecture Section -->
+  <section id="acerca" class="section">
+    <div class="container">
+      <div class="section-header text-center">
+        <span class="section-tag">INGENIERÍA & ARQUITECTURA</span>
+        <h2 class="section-title">¿QUÉ HACE ÚNICO A C.C.I. SYSTEM?</h2>
+        <p class="section-desc">
+          Más que un simple launcher, C.C.I. System es una arquitectura completa de consola virtual con renderizado híbrido,
+          máquina de estados finitos e integración sinérgica de emulación para títulos retro legendarios.
+        </p>
+      </div>
+
+      <div class="features-grid">
+        <div class="feature-card">
+          <div class="feature-icon">🎮</div>
+          <h3 class="feature-title">19 Clásicos de Élite</h3>
+          <p class="feature-text">
+            Desde Da Vinci Fighters y Super Mario Bros hasta Doom, Metal Slug, Pokémon, Zelda, Mega Man,
+            Castlevania, Bubble Bobble y Plants vs. Zombies. Todos integrados y optimizados.
+          </p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">👤</div>
+          <h3 class="feature-title">Empieza 100% Desde Cero</h3>
+          <p class="feature-text">
+            La descarga distribuible viene con <strong>0 perfiles preconfigurados</strong>. Al arrancar por primera vez,
+            un asistente interactivo te permite crear tu propio perfil de jugador con nombre y avatar cyberpunk personalizado.
+          </p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">🏆</div>
+          <h3 class="feature-title">Perfiles y Estadísticas</h3>
+          <p class="feature-text">
+            Monitoreo real de horas acumuladas, partidas jugadas, sistema de logros dinámicos
+            y registro de última sesión guardada en archivos JSON aislados por usuario.
+          </p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">🕹️</div>
+          <h3 class="feature-title">Soporte Universal de Joystick</h3>
+          <p class="feature-text">
+            Mapeo automático para mandos de PlayStation (DualShock 4, DualSense PS5), Xbox One/Series, Switch Pro
+            y joysticks USB genéricos con retroalimentación háptica (rumble sintetizado).
+          </p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">🔊</div>
+          <h3 class="feature-title">Sintetizador de Audio en Vivo</h3>
+          <p class="feature-text">
+            Generación procedural de efectos de sonido sintetizados mediante matemáticas de onda seno y búferes NumPy
+            en tiempo real, acompañado de música ambiental con fade suave en menús.
+          </p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">📸</div>
+          <h3 class="feature-title">Capturador de Pantalla (F12)</h3>
+          <p class="feature-text">
+            Captura instantes épicos con la tecla F12 o botón Share de tu mando. Las imágenes se guardan con fecha
+            y miniatura toast de confirmación en la carpeta local de capturas.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Games Catalog Section -->
+  <section id="juegos" class="section section-dark">
+    <div class="container">
+      <div class="section-header">
+        <span class="section-tag">CATÁLOGO DE TÍTULOS</span>
+        <h2 class="section-title">19 JUEGOS DISPONIBLES</h2>
+        <p class="section-desc">
+          Explora la colección completa. Filtra por categoría y descubre el género, año de lanzamiento,
+          desarrollador original y modalidad de cada aventura.
+        </p>
+
+        <!-- Filters -->
+        <div class="filters-bar" id="filtersBar">
+          {% for cat in categories %}
+          <button class="filter-btn {% if cat == 'TODOS' %}active{% endif %}" data-cat="{{ cat }}">{{ cat }}</button>
+          {% endfor %}
+        </div>
+      </div>
+
+      <!-- Games Grid -->
+      <div class="games-grid" id="gamesGrid">
+        {% for game in games %}
+        <div class="game-card" data-categories="{{ game.categories|join(' ') }}" data-title="{{ game.title }}" data-genre="{{ game.genre }}" data-dev="{{ game.developer }}" data-year="{{ game.year }}" data-players="{{ game.players }}" data-desc="{{ game.subtitle }}">
+          <div class="game-card-art">
+            <img src="{{ game.card_url }}" alt="{{ game.title }}" loading="lazy">
+            <div class="game-card-hover-overlay">
+              <span class="hover-btn">VER FICHA</span>
+            </div>
+          </div>
+          <div class="game-card-info">
+            <div class="game-card-meta">
+              <span class="game-badge-year">{{ game.year }}</span>
+              <span class="game-badge-players">{{ game.players }} JUGADORES</span>
+            </div>
+            <h3 class="game-title">{{ game.title }}</h3>
+            <p class="game-subtitle">{{ game.subtitle }}</p>
+            <div class="game-tags">
+              {% for tag in game.tags %}
+              <span class="game-tag">{{ tag }}</span>
+              {% endfor %}
+            </div>
+          </div>
+        </div>
+        {% endfor %}
+      </div>
+    </div>
+  </section>
+
+  <!-- Author Section (Camila Carolina Ianni) -->
+  <section id="autora" class="section">
+    <div class="container">
+      <div class="author-box">
+        <div class="author-badge-top">AUTORA & CREADORA DEL PROYECTO</div>
+        <div class="author-content-grid">
+          <div class="author-avatar-wrap">
+            <div class="author-avatar-circle">
+              <div class="avatar-silhouette">
+                <span class="author-initials">CCI</span>
+              </div>
+            </div>
+            <div class="author-title-pill">DESARROLLADORA</div>
+          </div>
+
+          <div class="author-details">
+            <h2 class="author-name">CAMILA CAROLINA IANNI</h2>
+            <p class="author-institution">{{ author.institution }} · {{ author.year }}</p>
+            
+            <p class="author-bio">
+              {{ author.bio }}
+            </p>
+
+            <div class="author-highlights">
+              <div class="highlight-item">
+                <span class="hl-icon">⚡</span>
+                <div>
+                  <strong>Desarrollo en Python:</strong>
+                  <span>Pygame-CE, State Machines, Concurrencia de Subprocesos y Audio DSP.</span>
+                </div>
+              </div>
+              <div class="highlight-item">
+                <span class="hl-icon">🎨</span>
+                <div>
+                  <strong>Diseño UI/UX Cyberpunk:</strong>
+                  <span>Carruseles cilíndricos, sombras analíticas, estética arcade y shaders simulados.</span>
+                </div>
+              </div>
+              <div class="highlight-item">
+                <span class="hl-icon">🕹️</span>
+                <div>
+                  <strong>Preservación de Videojuegos:</strong>
+                  <span>Recreación fidedigna de dinámicas retro con controles modernos y balance pulido.</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Download Section -->
+  <section id="descarga" class="section section-dark">
+    <div class="container">
+      <div class="section-header text-center">
+        <span class="section-tag">INSTALACIÓN & DESCARGA</span>
+        <h2 class="section-title">DESCARGA C.C.I. SYSTEM EMULADOR</h2>
+        <p class="section-desc">
+          Elige tu sistema operativo. Ambas versiones vienen completamente preparadas con los 19 juegos,
+          lanzadores rápidos de 1-clic y <strong>0 perfiles precargados</strong> para que comiences tu propia partida personal.
+        </p>
+      </div>
+
+      <div class="download-grid">
+        <!-- macOS Download Card -->
+        <div class="download-card">
+          <div class="os-icon-wrap">
+            <svg class="os-svg" viewBox="0 0 24 24" fill="currentColor"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M15.97 6.37c.63-.77 1.06-1.85.94-2.93-.91.04-2.02.61-2.67 1.37-.58.67-.99 1.77-.85 2.83 1.02.08 2.05-.51 2.58-1.27z"/></svg>
+          </div>
+          <h3 class="download-os-title">C.C.I. SYSTEM para macOS</h3>
+          <p class="download-os-sub">Compatible con Apple Silicon (M1/M2/M3/M4) e Intel (macOS 12+)</p>
+          
+          <ul class="download-specs">
+            <li>✔ Incluye lanzador directo <code>iniciar_cci_mac.command</code></li>
+            <li>✔ 19 juegos arcade preinstalados y configurados</li>
+            <li>✔ 0 perfiles de fábrica (asistente de bienvenida en primer boot)</li>
+            <li>✔ Gestión automática de entorno virtual (.venv)</li>
+          </ul>
+
+          <a href="/download/mac" class="btn btn-primary btn-block">
+            DESCARGAR ZIP PARA MAC
+          </a>
+          <span class="download-hint">Descomprime y haz doble clic en <code>iniciar_cci_mac.command</code></span>
+        </div>
+
+        <!-- Windows Download Card -->
+        <div class="download-card">
+          <div class="os-icon-wrap">
+            <svg class="os-svg" viewBox="0 0 24 24" fill="currentColor"><path d="M0 3.449L9.75 2.1v9.451H0m10.949-9.602L24 0v11.4H10.949M0 12.6h9.75v9.451L0 20.699M10.949 12.6H24V24l-12.9-1.801"/></svg>
+          </div>
+          <h3 class="download-os-title">C.C.I. SYSTEM para Windows</h3>
+          <p class="download-os-sub">Compatible con Windows 10 y Windows 11 (64-bit)</p>
+          
+          <ul class="download-specs">
+            <li>✔ Incluye ejecutable <code>iniciar_cci_windows.bat</code></li>
+            <li>✔ 19 juegos arcade listos con resolución adaptativa</li>
+            <li>✔ 0 perfiles de fábrica (crea tu jugador al instante)</li>
+            <li>✔ Detección automática de dependencias Pygame-CE</li>
+          </ul>
+
+          <a href="/download/windows" class="btn btn-secondary btn-block">
+            DESCARGAR ZIP PARA WINDOWS
+          </a>
+          <span class="download-hint">Descomprime y haz doble clic en <code>iniciar_cci_windows.bat</code></span>
+        </div>
+      </div>
+
+      <!-- Quick Start Steps -->
+      <div class="steps-card">
+        <h4 class="steps-title">PASOS RÁPIDOS PARA COMENZAR</h4>
+        <div class="steps-row">
+          <div class="step-item">
+            <div class="step-num">1</div>
+            <div class="step-desc">Descarga el archivo ZIP de tu sistema operativo y extráelo en cualquier carpeta.</div>
+          </div>
+          <div class="step-item">
+            <div class="step-num">2</div>
+            <div class="step-desc">Ejecuta el lanzador (<code>.command</code> en Mac o <code>.bat</code> en Windows).</div>
+          </div>
+          <div class="step-item">
+            <div class="step-num">3</div>
+            <div class="step-desc">¡Listo! Ingresa tu nombre, elige tu avatar cyberpunk y empieza a jugar tus 19 juegos.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Game Modal Preview -->
+  <div class="modal-backdrop" id="gameModal" style="display: none;">
+    <div class="modal-dialog">
+      <button class="modal-close" id="modalClose">&times;</button>
+      <div class="modal-art-box">
+        <img src="" id="modalImg" alt="Juego">
+      </div>
+      <div class="modal-info-box">
+        <div class="modal-tags-row">
+          <span class="badge-v" id="modalYear">2026</span>
+          <span class="game-tag" id="modalGenre">Acción</span>
+          <span class="game-tag" id="modalPlayers">1 Jugador</span>
+        </div>
+        <h2 class="modal-title" id="modalTitle">TITULO</h2>
+        <p class="modal-dev" id="modalDev">Desarrollador</p>
+        <p class="modal-desc" id="modalDesc">Descripción</p>
+        <div class="modal-launch-note">
+          <span>🎮 Disponible en el paquete descargable de C.C.I. SYSTEM</span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <footer class="footer">
+    <div class="container footer-content">
+      <div class="footer-left">
+        <span class="footer-logo">C.C.I. SYSTEM</span>
+        <p class="footer-copy">
+          Virtual Console & Retro Emulator. Desarrollado por <strong>Camila Carolina Ianni</strong> (2026).
+          Todos los juegos clásicos son propiedad de sus respectivos autores originales y se presentan con fines educativos y de preservación cultural interactiva.
+        </p>
+      </div>
+      <div class="footer-right">
+        <a href="#hero">Inicio</a>
+        <a href="#acerca">La Consola</a>
+        <a href="#juegos">Juegos</a>
+        <a href="#autora">Autora</a>
+        <a href="#descarga">Descargas</a>
+      </div>
+    </div>
+  </footer>
+
+  <script src="/static/js/main.js"></script>
+</body>
+</html>

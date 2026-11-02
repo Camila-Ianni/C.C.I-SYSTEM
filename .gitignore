@@ -33,3 +33,5 @@ METAL SLUG/tests copy/
 .cci-user-data/
 .work/
 outputs/
+web/static/downloads/*.zip
+*.zip

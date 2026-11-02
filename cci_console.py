@@ -412,11 +412,11 @@ def _find_file(folder: Path, starts: str, ends: str = ".png") -> Path | None:
 class UserData:
     """Carga/guarda perfil, configuración, partidas recientes y logros localmente."""
 
-    def __init__(self, path: Path = DATA_FILE):
+    def __init__(self, path: Path | None = DATA_FILE):
         self.path = path
         self.data = _deep_default()
         try:
-            if self.path.exists():
+            if self.path and self.path.exists():
                 loaded = json.loads(self.path.read_text(encoding="utf-8"))
                 if isinstance(loaded, dict):
                     self._merge(self.data, loaded)
@@ -434,6 +434,8 @@ class UserData:
                 target[key] = value
 
     def save(self):
+        if not self.path:
+            return
         try:
             self.path.parent.mkdir(parents=True, exist_ok=True)
             tmp = self.path.with_suffix(".tmp")

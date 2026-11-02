@@ -49,23 +49,19 @@ class UserManager:
 
     def _setup_storage(self):
         self.users_dir.mkdir(parents=True, exist_ok=True)
-        # Migración de perfil previo si existe system.json y users/ está vacío
+        # Migración de perfil previo solo si existe un system.json local en su carpeta de datos
+        local_sys = self.users_dir.parent / "system.json"
         existing_profiles = list(self.users_dir.glob("*.json"))
-        if not existing_profiles and DATA_FILE.exists():
+        if not existing_profiles and local_sys.exists():
             try:
-                raw_data = json.loads(DATA_FILE.read_text(encoding="utf-8"))
+                raw_data = json.loads(local_sys.read_text(encoding="utf-8"))
                 if isinstance(raw_data, dict):
-                    # Asignar a usuario principal CAMI manteniendo todo su progreso previo
                     raw_data["player_name"] = "CAMI"
                     cami_path = self.users_dir / "cami.json"
                     cami_path.write_text(json.dumps(raw_data, ensure_ascii=False, indent=2), encoding="utf-8")
                     print(f"[UserManager] Perfil migrado con éxito a {cami_path}")
             except Exception as exc:
                 print(f"[UserManager] Error en migración de perfil base: {exc}")
-
-        # Si aún no hay usuarios, crear el usuario predeterminado CAMI
-        if not list(self.users_dir.glob("*.json")):
-            self.create_user("CAMI", avatar=0)
 
     def load_users(self):
         self.users.clear()
@@ -93,10 +89,11 @@ class UserManager:
         elif self.users:
             self.active_user_id = next(iter(self.users.keys()))
         else:
-            self.create_user("CAMI", avatar=0)
-            self.active_user_id = "cami"
+            self.active_user_id = ""
 
     def save_active_user_id(self):
+        if not self.active_user_id:
+            return
         try:
             ACTIVE_USER_FILE.parent.mkdir(parents=True, exist_ok=True)
             ACTIVE_USER_FILE.write_text(
@@ -112,7 +109,9 @@ class UserManager:
             if self.users:
                 self.active_user_id = next(iter(self.users.keys()))
             else:
-                self.create_user("CAMI", avatar=0)
+                fallback_ud = UserData(path=None)
+                fallback_ud.data["player_name"] = "NUEVO JUGADOR"
+                return fallback_ud
         return self.users[self.active_user_id]
 
     def select_user(self, user_id: str) -> Optional[UserData]:
@@ -150,21 +149,18 @@ class UserManager:
         return slug
 
     def delete_user(self, user_id: str) -> bool:
-        if len(self.users) <= 1:
-            print("[UserManager] No se puede eliminar el único usuario restante.")
-            return False
         if user_id not in self.users:
             return False
 
         ud = self.users.pop(user_id)
         try:
-            if ud.path.exists():
+            if ud.path and ud.path.exists():
                 ud.path.unlink()
         except OSError as exc:
             print(f"[UserManager] Error al borrar archivo {ud.path}: {exc}")
 
         if self.active_user_id == user_id:
-            self.active_user_id = next(iter(self.users.keys()))
+            self.active_user_id = next(iter(self.users.keys())) if self.users else ""
             self.save_active_user_id()
         return True
 
