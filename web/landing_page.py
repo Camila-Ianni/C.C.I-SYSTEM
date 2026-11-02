@@ -1,6 +1,6 @@
 """web/landing_page.py - Generador 100% Python de la Landing Page de C.C.I. SYSTEM.
-Elimina la necesidad de archivos .html, .css y .js en disco: todo se genera dinámicamente
-en memoria desde este módulo Python nativo.
+Estética fidedigna a la consola virtual: chasis oscuro mate, marcos técnicos biselados,
+telemetría HUD, barras de navegación idénticas a sidebar_ui.py y sin clichés genéricos de IA.
 Autora: Camila Carolina Ianni
 """
 from __future__ import annotations
@@ -8,29 +8,39 @@ from __future__ import annotations
 import html
 
 CYBER_CSS = """
+/* ==============================================================================
+   C.C.I. SYSTEM VIRTUAL CONSOLE — OFFICIAL UI STYLESHEET
+   Paleta extraída de cci_console.py y sidebar_ui.py:
+   DARK=(7,8,10), PANEL=(10,11,13), MID=(95,98,103), LIGHT=(218,220,224),
+   WHITE=(246,247,249), MUTED=(153,157,163), CYAN=#00f0ff, GOLD=#ffb800
+   Autora: Camila Carolina Ianni
+   ============================================================================== */
+
 :root {
-  --bg-darkest: #05070a;
-  --bg-dark: #0a0e15;
-  --bg-card: #101622;
-  --bg-card-hover: #162032;
-  --border-dim: #1e293b;
-  --border-bright: #334155;
-  --accent-cyan: #00e5ff;
-  --accent-cyan-glow: rgba(0, 229, 255, 0.25);
-  --accent-green: #00ff88;
-  --accent-green-glow: rgba(0, 255, 136, 0.25);
-  --accent-yellow: #ffcf25;
-  --accent-purple: #b347eb;
-  --text-main: #f0f4f8;
-  --text-muted: #8b9bb4;
-  --text-dim: #5c6b84;
-  --font-display: 'Orbitron', -apple-system, sans-serif;
+  --cci-bg-void: #050608;
+  --cci-bg-base: #07080a;
+  --cci-bg-panel: #0a0b0d;
+  --cci-bg-surface: #111317;
+  --cci-bg-surface-hover: #171b22;
+  --cci-bg-elevated: #1b1c1f;
+  --cci-border-dim: #1e222b;
+  --cci-border-panel: #2b313d;
+  --cci-border-bright: #3f4756;
+  --cci-border-active: #00f0ff;
+  --cci-cyan: #00f0ff;
+  --cci-cyan-dim: rgba(0, 240, 255, 0.15);
+  --cci-cyan-glow: rgba(0, 240, 255, 0.4);
+  --cci-gold: #ffb800;
+  --cci-green: #00ff88;
+  --cci-white: #f6f7f9;
+  --cci-light: #dadce4;
+  --cci-muted: #999da3;
+  --cci-dim: #5f6267;
+  --font-display: 'Chakra Petch', 'Orbitron', -apple-system, sans-serif;
   --font-ui: 'Rajdhani', -apple-system, sans-serif;
   --font-mono: 'Share Tech Mono', monospace;
-  --radius-sm: 4px;
-  --radius-md: 8px;
-  --radius-lg: 14px;
-  --container-w: 1200px;
+  --font-pixel: 'Press Start 2P', monospace;
+  --container-w: 1240px;
 }
 
 *, *::before, *::after {
@@ -41,8 +51,8 @@ CYBER_CSS = """
 
 html {
   scroll-behavior: smooth;
-  background-color: var(--bg-darkest);
-  color: var(--text-main);
+  background-color: var(--cci-bg-void);
+  color: var(--cci-white);
   font-family: var(--font-ui);
   font-size: 16px;
   line-height: 1.5;
@@ -51,607 +61,635 @@ html {
 body {
   position: relative;
   overflow-x: hidden;
-  background: radial-gradient(circle at 50% 0%, #0e1626 0%, var(--bg-darkest) 75%);
+  background: var(--cci-bg-base);
   min-height: 100vh;
 }
 
-.bg-grid {
+/* CRT Scanlines sutiles de monitor arcade */
+.crt-overlay {
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.22) 50%);
+  background-size: 100% 4px;
+  pointer-events: none;
+  z-index: 999;
+  opacity: 0.7;
+}
+
+/* Trama técnica de cuadrícula industrial */
+.tech-grid-bg {
   position: fixed;
   top: 0; left: 0; right: 0; bottom: 0;
   background-image: 
-    linear-gradient(to right, rgba(0, 229, 255, 0.03) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(0, 229, 255, 0.03) 1px, transparent 1px);
-  background-size: 50px 50px;
+    linear-gradient(to right, rgba(255, 255, 255, 0.015) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.015) 1px, transparent 1px);
+  background-size: 40px 40px;
   pointer-events: none;
   z-index: 0;
-}
-
-.glow-orb {
-  position: absolute;
-  border-radius: 50%;
-  filter: blur(120px);
-  pointer-events: none;
-  z-index: 0;
-}
-.orb-1 {
-  width: 450px; height: 450px;
-  top: 100px; right: 5%;
-  background: rgba(0, 229, 255, 0.08);
-}
-.orb-2 {
-  width: 500px; height: 500px;
-  top: 600px; left: -100px;
-  background: rgba(179, 71, 235, 0.06);
 }
 
 .container {
   width: 100%;
   max-width: var(--container-w);
   margin: 0 auto;
-  padding: 0 24px;
+  padding: 0 28px;
   position: relative;
-  z-index: 1;
+  z-index: 2;
 }
 
-.header {
+/* ==============================================================================
+   CONSOLE TOP HUD BAR (Idéntica a la barra de estado de C.C.I. System)
+   ============================================================================== */
+.top-hud {
   position: fixed;
   top: 0; left: 0; right: 0;
-  height: 72px;
-  background: rgba(10, 14, 21, 0.85);
+  height: 64px;
+  background: rgba(7, 8, 10, 0.94);
   backdrop-filter: blur(12px);
-  border-bottom: 1px solid var(--border-dim);
+  border-bottom: 2px solid var(--cci-border-panel);
   z-index: 100;
   display: flex;
   align-items: center;
 }
 
-.nav-container {
+.hud-container {
   display: flex;
   align-items: center;
   justify-content: space-between;
 }
 
-.brand {
+.hud-brand {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 12px;
   text-decoration: none;
 }
 
-.brand-glitch {
+.brand-badge {
+  background: #000;
+  border: 1px solid var(--cci-cyan);
+  padding: 3px 8px;
   font-family: var(--font-display);
-  font-size: 1.5rem;
-  font-weight: 900;
-  color: #fff;
+  font-size: 1.15rem;
+  font-weight: 800;
   letter-spacing: 2px;
-  text-shadow: 0 0 12px var(--accent-cyan);
-}
-
-.brand-sub {
-  font-family: var(--font-display);
-  font-size: 0.95rem;
-  font-weight: 700;
-  color: var(--accent-cyan);
-  letter-spacing: 3px;
-}
-
-.badge-v {
-  font-family: var(--font-mono);
-  font-size: 0.7rem;
-  background: rgba(0, 229, 255, 0.15);
-  color: var(--accent-cyan);
-  border: 1px solid var(--accent-cyan);
-  padding: 2px 6px;
-  border-radius: var(--radius-sm);
-}
-
-.nav-menu {
-  display: flex;
-  align-items: center;
-  gap: 28px;
-}
-
-.nav-link {
-  font-family: var(--font-ui);
-  font-size: 1.05rem;
-  font-weight: 600;
-  color: var(--text-muted);
-  text-decoration: none;
-  text-transform: uppercase;
-  letter-spacing: 1px;
-  transition: all 0.25s ease;
-  position: relative;
-}
-
-.nav-link:hover, .nav-link.active {
   color: #fff;
+  box-shadow: 0 0 10px var(--cci-cyan-dim);
+}
+.brand-badge span {
+  color: var(--cci-cyan);
 }
 
-.nav-link.nav-cta {
-  background: rgba(0, 229, 255, 0.1);
-  border: 1px solid var(--accent-cyan);
-  color: var(--accent-cyan);
-  padding: 8px 16px;
-  border-radius: var(--radius-sm);
-  font-size: 0.9rem;
-  font-family: var(--font-display);
-  letter-spacing: 1.5px;
-}
-.nav-link.nav-cta:hover {
-  background: var(--accent-cyan);
-  color: #000;
-  box-shadow: 0 0 16px var(--accent-cyan-glow);
-}
-
-.nav-badge-pill {
+.hud-sys-status {
   display: flex;
   align-items: center;
   gap: 8px;
   font-family: var(--font-mono);
   font-size: 0.75rem;
-  background: #111724;
-  border: 1px solid var(--border-bright);
-  padding: 5px 12px;
-  border-radius: 20px;
-  color: var(--accent-green);
+  color: var(--cci-muted);
+  border-left: 1px solid var(--cci-border-panel);
+  padding-left: 12px;
 }
 
-.status-dot {
-  width: 7px; height: 7px;
-  background: var(--accent-green);
+.led-indicator {
+  width: 8px; height: 8px;
+  background: var(--cci-green);
   border-radius: 50%;
-  box-shadow: 0 0 8px var(--accent-green);
-  animation: pulse-dot 2s infinite ease-in-out;
+  box-shadow: 0 0 8px var(--cci-green);
+  animation: pulse-led 2s infinite ease-in-out;
 }
 
-@keyframes pulse-dot {
+@keyframes pulse-led {
   0%, 100% { opacity: 1; transform: scale(1); }
-  50% { opacity: 0.4; transform: scale(0.85); }
+  50% { opacity: 0.4; transform: scale(0.9); }
 }
 
-.hero {
-  padding: 140px 0 80px;
-  min-height: 88vh;
+.hud-nav {
   display: flex;
   align-items: center;
+  gap: 4px;
 }
 
-.hero-grid {
+/* Pestañas de navegación con la misma estética de la barra lateral de la consola */
+.hud-tab {
+  display: inline-flex;
+  align-items: center;
+  padding: 8px 16px;
+  font-family: var(--font-display);
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: var(--cci-muted);
+  text-decoration: none;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  border-bottom: 2px solid transparent;
+  transition: all 0.2s ease;
+}
+
+.hud-tab:hover {
+  color: var(--cci-white);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.hud-tab.active, .hud-tab:hover {
+  border-bottom-color: var(--cci-cyan);
+  color: #fff;
+}
+
+.hud-cta-download {
+  background: var(--cci-cyan);
+  color: #000 !important;
+  font-family: var(--font-display);
+  font-weight: 800;
+  padding: 8px 18px;
+  letter-spacing: 1.5px;
+  border: 1px solid var(--cci-cyan);
+  box-shadow: 0 0 14px var(--cci-cyan-dim);
+  clip-path: polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 8px 100%, 0 calc(100% - 8px));
+  transition: all 0.2s ease;
+}
+.hud-cta-download:hover {
+  background: #fff;
+  border-color: #fff;
+  box-shadow: 0 0 20px rgba(255, 255, 255, 0.6);
+  transform: translateY(-1px);
+}
+
+/* ==============================================================================
+   HERO: CONSOLE VIRTUAL STAGE
+   ============================================================================== */
+.hero {
+  padding: 130px 0 70px;
+  position: relative;
+  border-bottom: 1px solid var(--cci-border-panel);
+  background: radial-gradient(circle at 50% 15%, #10141d 0%, var(--cci-bg-base) 80%);
+}
+
+.hero-layout {
   display: grid;
   grid-template-columns: 1.15fr 1fr;
-  gap: 48px;
+  gap: 40px;
   align-items: center;
 }
 
-.hero-tag {
+.telemetry-tag {
   display: inline-flex;
   align-items: center;
   gap: 8px;
   font-family: var(--font-mono);
-  font-size: 0.8rem;
-  background: rgba(0, 229, 255, 0.08);
-  border: 1px solid rgba(0, 229, 255, 0.3);
-  color: var(--accent-cyan);
-  padding: 6px 14px;
-  border-radius: 20px;
-  margin-bottom: 20px;
-  letter-spacing: 1px;
+  font-size: 0.75rem;
+  color: var(--cci-cyan);
+  background: rgba(0, 240, 255, 0.08);
+  border: 1px solid var(--cci-border-panel);
+  padding: 4px 12px;
+  margin-bottom: 18px;
+  letter-spacing: 1.5px;
 }
 
-.hero-title {
+.hero-headline {
   font-family: var(--font-display);
-  font-size: 2.75rem;
+  font-size: 2.85rem;
   font-weight: 900;
-  line-height: 1.15;
-  letter-spacing: -0.5px;
-  margin-bottom: 20px;
-  background: linear-gradient(135deg, #ffffff 40%, #b0c6e4 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
+  line-height: 1.1;
+  letter-spacing: 0.5px;
+  color: #fff;
+  margin-bottom: 18px;
+  text-transform: uppercase;
+}
+.hero-headline span {
+  color: var(--cci-cyan);
+  text-shadow: 0 0 16px var(--cci-cyan-dim);
 }
 
-.hero-desc {
-  font-size: 1.2rem;
-  color: var(--text-muted);
+.hero-lead {
+  font-size: 1.15rem;
+  color: var(--cci-light);
   line-height: 1.6;
-  margin-bottom: 32px;
+  margin-bottom: 28px;
+  max-width: 620px;
 }
-.hero-desc strong {
+.hero-lead strong {
   color: #fff;
+  font-weight: 700;
 }
 
 .hero-actions {
   display: flex;
   gap: 16px;
   flex-wrap: wrap;
-  margin-bottom: 40px;
+  margin-bottom: 36px;
 }
 
-.btn {
+/* Botones técnicos estilo arcade / gamepad */
+.btn-cci {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 10px;
-  padding: 14px 28px;
+  padding: 14px 26px;
   font-family: var(--font-display);
-  font-size: 0.85rem;
-  font-weight: 700;
+  font-size: 0.9rem;
+  font-weight: 800;
   letter-spacing: 1.5px;
   text-decoration: none;
-  border-radius: var(--radius-sm);
-  transition: all 0.25s ease;
   cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  text-transform: uppercase;
+  clip-path: polygon(0 0, calc(100% - 10px) 0, 100% 10px, 100% 100%, 10px 100%, 0 calc(100% - 10px));
 }
 
-.btn-primary {
-  background: linear-gradient(135deg, #00e5ff 0%, #0099cc 100%);
-  color: #040810;
-  border: none;
-  box-shadow: 0 4px 20px var(--accent-cyan-glow);
+.btn-primary-action {
+  background: var(--cci-cyan);
+  color: #04060a;
+  border: 1px solid var(--cci-cyan);
+  box-shadow: 0 4px 20px var(--cci-cyan-glow);
 }
-.btn-primary:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 28px rgba(0, 229, 255, 0.45);
+.btn-primary-action:hover {
+  background: #fff;
+  border-color: #fff;
   color: #000;
-}
-
-.btn-secondary {
-  background: #121824;
-  color: #fff;
-  border: 1px solid var(--border-bright);
-}
-.btn-secondary:hover {
-  border-color: var(--accent-cyan);
-  background: #182234;
-  color: var(--accent-cyan);
+  box-shadow: 0 6px 28px rgba(255, 255, 255, 0.5);
   transform: translateY(-2px);
 }
 
-.btn-block {
-  width: 100%;
+.btn-secondary-action {
+  background: var(--cci-bg-surface);
+  color: var(--cci-white);
+  border: 1px solid var(--cci-border-bright);
+}
+.btn-secondary-action:hover {
+  border-color: var(--cci-cyan);
+  background: var(--cci-bg-surface-hover);
+  color: var(--cci-cyan);
+  transform: translateY(-2px);
 }
 
-.hero-features-strip {
+.btn-gamepad-key {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  background: rgba(0, 0, 0, 0.4);
+  padding: 2px 6px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: #fff;
+}
+
+/* Tira de telemetría de especificaciones */
+.spec-strip {
   display: flex;
   align-items: center;
-  gap: 24px;
-  background: rgba(16, 22, 34, 0.7);
-  border: 1px solid var(--border-dim);
-  padding: 16px 24px;
-  border-radius: var(--radius-md);
-  max-width: 580px;
+  gap: 20px;
+  background: var(--cci-bg-surface);
+  border: 1px solid var(--cci-border-panel);
+  padding: 14px 20px;
 }
 
-.strip-item {
+.spec-cell {
   display: flex;
   flex-direction: column;
 }
-
-.strip-num {
+.spec-val {
   font-family: var(--font-display);
-  font-size: 1.4rem;
+  font-size: 1.3rem;
   font-weight: 900;
-  color: var(--accent-cyan);
+  color: var(--cci-cyan);
 }
-
-.strip-lbl {
-  font-size: 0.8rem;
-  color: var(--text-dim);
+.spec-lbl {
   font-family: var(--font-mono);
+  font-size: 0.7rem;
+  color: var(--cci-muted);
+  letter-spacing: 1px;
 }
-
-.strip-divider {
+.spec-divider {
   width: 1px;
-  height: 32px;
-  background: var(--border-dim);
+  height: 28px;
+  background: var(--cci-border-panel);
 }
 
-.console-frame {
-  background: #090d14;
-  border: 1px solid var(--border-bright);
-  border-radius: var(--radius-lg);
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.8), 0 0 30px rgba(0, 229, 255, 0.08);
+/* Chasis de pantalla de la consola virtual */
+.console-chassis {
+  background: #000;
+  border: 2px solid var(--cci-border-bright);
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.9), 0 0 30px rgba(0, 240, 255, 0.1);
+  position: relative;
   overflow: hidden;
 }
 
-.frame-header {
-  height: 36px;
-  background: #111722;
-  border-bottom: 1px solid var(--border-dim);
+.chassis-header {
+  height: 32px;
+  background: #0a0c10;
+  border-bottom: 1px solid var(--cci-border-panel);
   display: flex;
   align-items: center;
+  justify-content: space-between;
   padding: 0 14px;
-  gap: 8px;
 }
 
-.dot {
-  width: 10px; height: 10px;
+.chassis-header-left {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.chassis-led {
+  width: 8px; height: 8px;
+  background: var(--cci-cyan);
   border-radius: 50%;
+  box-shadow: 0 0 6px var(--cci-cyan);
 }
-.dot.red { background: #ff5f56; }
-.dot.yellow { background: #ffbd2e; }
-.dot.green { background: #27c93f; }
-
-.frame-title {
-  margin-left: 8px;
+.chassis-title {
   font-family: var(--font-mono);
   font-size: 0.7rem;
-  color: var(--text-dim);
+  color: var(--cci-light);
   letter-spacing: 1px;
 }
 
-.frame-body {
-  position: relative;
-  background: #000;
-  aspect-ratio: 16 / 9;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  overflow: hidden;
+.chassis-res {
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  color: var(--cci-green);
+  background: rgba(0, 255, 136, 0.1);
+  padding: 2px 6px;
+  border: 1px solid rgba(0, 255, 136, 0.3);
 }
 
-.console-screen-img {
+.chassis-screen {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  background: #000;
+}
+.chassis-screen img {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  display: block;
 }
 
-.screen-overlay-scanline {
-  position: absolute;
-  top: 0; left: 0; right: 0; bottom: 0;
-  background: linear-gradient(rgba(18, 16, 16, 0) 50%, rgba(0, 0, 0, 0.25) 50%);
-  background-size: 100% 4px;
-  pointer-events: none;
-}
-
-.screen-badge {
-  position: absolute;
-  top: 12px; right: 12px;
-  background: rgba(0, 0, 0, 0.8);
-  border: 1px solid var(--accent-green);
-  color: var(--accent-green);
-  font-family: var(--font-mono);
-  font-size: 0.65rem;
-  padding: 3px 8px;
-  border-radius: var(--radius-sm);
-  letter-spacing: 1px;
-}
-
-.frame-footer {
-  background: #0c111a;
-  border-top: 1px solid var(--border-dim);
-  padding: 10px 16px;
+.chassis-footer {
+  height: 30px;
+  background: #080a0e;
+  border-top: 1px solid var(--cci-border-panel);
   display: flex;
+  align-items: center;
   justify-content: space-between;
+  padding: 0 14px;
   font-family: var(--font-mono);
   font-size: 0.65rem;
-  color: var(--text-dim);
+  color: var(--cci-muted);
 }
 
+/* ==============================================================================
+   SECTION HEADERS
+   ============================================================================== */
 .section {
-  padding: 90px 0;
+  padding: 80px 0;
   position: relative;
-  z-index: 1;
 }
-
 .section-dark {
-  background: rgba(7, 10, 16, 0.65);
-  border-top: 1px solid var(--border-dim);
-  border-bottom: 1px solid var(--border-dim);
-}
-
-.section-header {
-  margin-bottom: 50px;
-}
-.section-header.text-center {
-  text-align: center;
-  max-width: 720px;
-  margin-left: auto;
-  margin-right: auto;
+  background: var(--cci-bg-panel);
+  border-top: 1px solid var(--cci-border-panel);
+  border-bottom: 1px solid var(--cci-border-panel);
 }
 
 .section-tag {
   display: inline-block;
   font-family: var(--font-mono);
-  font-size: 0.8rem;
-  color: var(--accent-cyan);
+  font-size: 0.75rem;
+  color: var(--cci-cyan);
   letter-spacing: 2px;
-  margin-bottom: 10px;
+  margin-bottom: 8px;
+  text-transform: uppercase;
 }
 
 .section-title {
   font-family: var(--font-display);
-  font-size: 2.2rem;
-  font-weight: 800;
+  font-size: 2.1rem;
+  font-weight: 900;
   letter-spacing: 1px;
-  margin-bottom: 16px;
+  color: var(--cci-white);
+  margin-bottom: 12px;
+  text-transform: uppercase;
 }
 
 .section-desc {
-  font-size: 1.15rem;
-  color: var(--text-muted);
+  font-size: 1.1rem;
+  color: var(--cci-light);
   line-height: 1.6;
+  max-width: 760px;
 }
 
-.features-grid {
+/* ==============================================================================
+   ARCHITECTURE & SUBSYSTEMS (Sin emojis de juguete, estilo industrial)
+   ============================================================================== */
+.subsystems-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
-  gap: 24px;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 20px;
+  margin-top: 40px;
 }
 
-.feature-card {
-  background: var(--bg-card);
-  border: 1px solid var(--border-dim);
-  border-radius: var(--radius-md);
-  padding: 32px 28px;
-  transition: all 0.3s ease;
+.subsystem-card {
+  background: var(--cci-bg-surface);
+  border: 1px solid var(--cci-border-panel);
+  padding: 28px 24px;
+  position: relative;
+  transition: all 0.25s ease;
 }
-.feature-card:hover {
-  background: var(--bg-card-hover);
-  border-color: var(--accent-cyan);
-  transform: translateY(-4px);
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
-}
-
-.feature-icon {
-  font-size: 2.4rem;
-  margin-bottom: 18px;
+.subsystem-card:hover {
+  border-color: var(--cci-cyan);
+  background: var(--cci-bg-surface-hover);
+  transform: translateY(-3px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.7);
 }
 
-.feature-title {
+.subsystem-code {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--cci-cyan);
+  margin-bottom: 12px;
+  letter-spacing: 1px;
+  display: block;
+}
+
+.subsystem-title {
   font-family: var(--font-display);
   font-size: 1.25rem;
-  font-weight: 700;
+  font-weight: 800;
   color: #fff;
-  margin-bottom: 12px;
+  margin-bottom: 10px;
+  text-transform: uppercase;
 }
 
-.feature-text {
-  font-size: 1rem;
-  color: var(--text-muted);
+.subsystem-text {
+  font-size: 0.95rem;
+  color: var(--cci-light);
   line-height: 1.6;
 }
 
-.filters-bar {
+/* ==============================================================================
+   GAMES CATALOG (Estilo Cartucho / Rack Arcade)
+   ============================================================================== */
+.catalog-header-bar {
   display: flex;
-  gap: 8px;
+  justify-content: space-between;
+  align-items: flex-end;
   flex-wrap: wrap;
-  margin-top: 24px;
+  gap: 20px;
+  margin-bottom: 30px;
 }
 
-.filter-btn {
-  background: #111724;
-  border: 1px solid var(--border-dim);
-  color: var(--text-muted);
-  font-family: var(--font-mono);
+.filters-rack {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.filter-chip {
+  background: var(--cci-bg-surface);
+  border: 1px solid var(--cci-border-panel);
+  color: var(--cci-muted);
+  font-family: var(--font-display);
   font-size: 0.8rem;
-  font-weight: 600;
-  padding: 8px 18px;
-  border-radius: var(--radius-sm);
+  font-weight: 700;
+  padding: 8px 16px;
   cursor: pointer;
   letter-spacing: 1px;
   transition: all 0.2s ease;
+  text-transform: uppercase;
 }
-.filter-btn:hover {
-  background: #182236;
+.filter-chip:hover {
+  background: var(--cci-bg-surface-hover);
   color: #fff;
-  border-color: var(--border-bright);
+  border-color: var(--cci-border-bright);
 }
-.filter-btn.active {
-  background: var(--accent-cyan);
-  color: #040810;
-  border-color: var(--accent-cyan);
-  font-weight: 700;
-  box-shadow: 0 0 12px var(--accent-cyan-glow);
+.filter-chip.active {
+  background: var(--cci-bg-elevated);
+  border-color: var(--cci-cyan);
+  color: var(--cci-cyan);
+  box-shadow: inset 3px 0 0 var(--cci-cyan);
 }
 
-.games-grid {
+.games-rack-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(270px, 1fr));
   gap: 20px;
-  margin-top: 36px;
 }
 
-.game-card {
-  background: var(--bg-card);
-  border: 1px solid var(--border-dim);
-  border-radius: var(--radius-md);
+.cartridge-card {
+  background: var(--cci-bg-surface);
+  border: 1px solid var(--cci-border-panel);
   overflow: hidden;
-  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  position: relative;
+  cursor: pointer;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
   display: flex;
   flex-direction: column;
-  cursor: pointer;
-}
-.game-card:hover {
-  transform: translateY(-5px);
-  border-color: var(--accent-cyan);
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.7), 0 0 16px rgba(0, 229, 255, 0.15);
 }
 
-.game-card-art {
+.cartridge-card:hover {
+  border-color: var(--cci-cyan);
+  transform: translateY(-4px);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.8), 0 0 16px var(--cci-cyan-dim);
+}
+
+.cartridge-header {
+  height: 24px;
+  background: #090b0e;
+  border-bottom: 1px solid var(--cci-border-panel);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 10px;
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  color: var(--cci-muted);
+}
+
+.cartridge-slot {
+  color: var(--cci-cyan);
+  font-weight: 700;
+}
+
+.cartridge-art {
   position: relative;
-  width: 100%;
   aspect-ratio: 16 / 9;
   background: #000;
   overflow: hidden;
 }
-.game-card-art img {
+.cartridge-art img {
   width: 100%;
   height: 100%;
   object-fit: cover;
-  transition: transform 0.4s ease;
+  transition: transform 0.35s ease;
+  display: block;
 }
-.game-card:hover .game-card-art img {
-  transform: scale(1.05);
+.cartridge-card:hover .cartridge-art img {
+  transform: scale(1.06);
 }
 
-.game-card-hover-overlay {
+.cartridge-overlay {
   position: absolute;
   top: 0; left: 0; right: 0; bottom: 0;
-  background: rgba(0, 229, 255, 0.2);
+  background: rgba(0, 240, 255, 0.2);
   display: flex;
   align-items: center;
   justify-content: center;
   opacity: 0;
-  transition: opacity 0.25s ease;
+  transition: opacity 0.2s ease;
 }
-.game-card:hover .game-card-hover-overlay {
+.cartridge-card:hover .cartridge-overlay {
   opacity: 1;
 }
 
-.hover-btn {
+.overlay-action-btn {
   background: #000;
-  color: var(--accent-cyan);
-  border: 1px solid var(--accent-cyan);
+  color: var(--cci-cyan);
+  border: 1px solid var(--cci-cyan);
   font-family: var(--font-display);
   font-size: 0.75rem;
-  font-weight: 700;
+  font-weight: 800;
   padding: 6px 14px;
-  border-radius: var(--radius-sm);
   letter-spacing: 1px;
 }
 
-.game-card-info {
-  padding: 18px 16px;
+.cartridge-body {
+  padding: 16px;
   display: flex;
   flex-direction: column;
   flex-grow: 1;
 }
 
-.game-card-meta {
+.cartridge-meta {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 8px;
-}
-
-.game-badge-year {
-  font-family: var(--font-mono);
-  font-size: 0.75rem;
-  color: var(--accent-yellow);
-}
-.game-badge-players {
+  margin-bottom: 6px;
   font-family: var(--font-mono);
   font-size: 0.7rem;
-  color: var(--text-dim);
+}
+.cartridge-year {
+  color: var(--cci-gold);
+}
+.cartridge-players {
+  color: var(--cci-muted);
 }
 
-.game-title {
+.cartridge-title {
   font-family: var(--font-display);
-  font-size: 1.05rem;
-  font-weight: 700;
+  font-size: 1.15rem;
+  font-weight: 800;
   color: #fff;
   margin-bottom: 6px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-.game-subtitle {
+.cartridge-sub {
   font-size: 0.85rem;
-  color: var(--text-muted);
+  color: var(--cci-light);
   line-height: 1.4;
-  margin-bottom: 12px;
+  margin-bottom: 14px;
   flex-grow: 1;
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -659,291 +697,379 @@ body {
   overflow: hidden;
 }
 
-.game-tags {
+.cartridge-tags {
   display: flex;
-  gap: 6px;
+  gap: 5px;
   flex-wrap: wrap;
 }
 
-.game-tag {
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  color: var(--text-dim);
+.cartridge-tag {
+  background: #090b0e;
+  border: 1px solid var(--cci-border-panel);
+  color: var(--cci-muted);
   font-family: var(--font-mono);
   font-size: 0.65rem;
-  padding: 2px 7px;
-  border-radius: var(--radius-sm);
+  padding: 2px 6px;
 }
 
-.author-box {
-  background: linear-gradient(145deg, #111724 0%, #0c101a 100%);
-  border: 1px solid var(--border-bright);
-  border-radius: var(--radius-lg);
-  padding: 50px 48px;
+/* ==============================================================================
+   AUTHOR PROFILE (Estilo Idéntico a la pantalla 'PERFIL' de C.C.I. System)
+   ============================================================================== */
+.profile-screen-card {
+  background: var(--cci-bg-surface);
+  border: 2px solid var(--cci-border-bright);
+  padding: 44px;
   position: relative;
-  overflow: hidden;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.8);
 }
 
-.author-badge-top {
+.profile-hud-header {
   position: absolute;
-  top: 0; right: 48px;
-  background: linear-gradient(90deg, var(--accent-cyan), var(--accent-purple));
-  color: #040810;
-  font-family: var(--font-display);
-  font-size: 0.75rem;
-  font-weight: 800;
-  padding: 4px 16px;
-  border-bottom-left-radius: var(--radius-md);
-  border-bottom-right-radius: var(--radius-md);
-  letter-spacing: 1.5px;
+  top: 0; left: 44px; right: 44px;
+  height: 28px;
+  background: #0a0c10;
+  border-bottom: 1px solid var(--cci-border-panel);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 14px;
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  color: var(--cci-muted);
 }
 
-.author-content-grid {
+.profile-grid {
   display: grid;
   grid-template-columns: 180px 1fr;
   gap: 40px;
   align-items: flex-start;
+  margin-top: 10px;
 }
 
-.author-avatar-wrap {
+.profile-avatar-block {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 14px;
+  gap: 12px;
 }
 
-.author-avatar-circle {
+.profile-avatar-frame {
   width: 140px; height: 140px;
-  border-radius: 50%;
-  background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
-  border: 3px solid var(--accent-cyan);
-  box-shadow: 0 0 24px var(--accent-cyan-glow);
+  background: #07080a;
+  border: 3px solid var(--cci-cyan);
+  box-shadow: 0 0 20px var(--cci-cyan-dim);
   display: flex;
   align-items: center;
   justify-content: center;
-  overflow: hidden;
 }
 
-.avatar-silhouette {
-  width: 100%; height: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: radial-gradient(circle, #1a2538 30%, #0a0f19 90%);
-}
-
-.author-initials {
+.profile-monogram {
   font-family: var(--font-display);
-  font-size: 2.2rem;
+  font-size: 2.8rem;
   font-weight: 900;
-  color: var(--accent-cyan);
+  color: var(--cci-cyan);
   letter-spacing: 2px;
 }
 
-.author-title-pill {
+.profile-badge-pill {
   font-family: var(--font-mono);
   font-size: 0.7rem;
-  background: #192233;
-  color: var(--text-muted);
-  border: 1px solid var(--border-bright);
-  padding: 3px 12px;
-  border-radius: 20px;
-  letter-spacing: 1px;
+  color: var(--cci-gold);
+  background: #090b0e;
+  border: 1px solid var(--cci-border-panel);
+  padding: 4px 10px;
+  text-transform: uppercase;
 }
 
-.author-name {
+.profile-name {
   font-family: var(--font-display);
-  font-size: 2.2rem;
+  font-size: 2.4rem;
   font-weight: 900;
-  letter-spacing: 1px;
   color: #fff;
+  letter-spacing: 1px;
+  text-transform: uppercase;
   margin-bottom: 4px;
 }
 
-.author-institution {
+.profile-inst {
   font-family: var(--font-mono);
   font-size: 0.95rem;
-  color: var(--accent-cyan);
+  color: var(--cci-cyan);
   margin-bottom: 20px;
+  letter-spacing: 0.5px;
 }
 
-.author-bio {
+.profile-bio {
   font-size: 1.1rem;
-  color: var(--text-muted);
+  color: var(--cci-light);
   line-height: 1.7;
-  margin-bottom: 28px;
+  margin-bottom: 26px;
 }
 
-.author-highlights {
+.profile-specs-row {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-  gap: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 14px;
 }
 
-.highlight-item {
-  display: flex;
-  gap: 12px;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.05);
-  padding: 14px 16px;
-  border-radius: var(--radius-sm);
+.profile-spec-item {
+  background: #0a0c10;
+  border: 1px solid var(--cci-border-panel);
+  padding: 12px 16px;
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
 }
-
-.hl-icon {
-  font-size: 1.2rem;
-}
-
-.highlight-item strong {
+.profile-spec-item strong {
   display: block;
-  font-size: 0.95rem;
   color: #fff;
+  font-size: 0.9rem;
   margin-bottom: 2px;
+  font-family: var(--font-display);
 }
-.highlight-item span {
-  font-size: 0.85rem;
-  color: var(--text-dim);
+.profile-spec-item span {
+  color: var(--cci-muted);
 }
 
-.download-grid {
+/* ==============================================================================
+   DOWNLOADS & INSTALLER SECTION
+   ============================================================================== */
+.downloads-panel-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
-  gap: 32px;
-  margin-bottom: 48px;
+  gap: 28px;
+  margin-top: 40px;
 }
 
-.download-card {
-  background: var(--bg-card);
-  border: 1px solid var(--border-bright);
-  border-radius: var(--radius-lg);
-  padding: 40px 36px;
+.download-hardware-card {
+  background: var(--cci-bg-surface);
+  border: 2px solid var(--cci-border-panel);
+  padding: 36px 32px;
   display: flex;
   flex-direction: column;
-  transition: all 0.3s ease;
+  transition: all 0.25s ease;
   position: relative;
 }
-.download-card:hover {
-  border-color: var(--accent-cyan);
-  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.7);
-  transform: translateY(-4px);
+.download-hardware-card:hover {
+  border-color: var(--cci-cyan);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, 0.8);
+  transform: translateY(-3px);
 }
 
-.os-icon-wrap {
-  width: 56px; height: 56px;
-  background: #162030;
-  border: 1px solid var(--border-bright);
-  border-radius: var(--radius-md);
+.hw-icon-box {
+  width: 52px; height: 52px;
+  background: #090b0e;
+  border: 1px solid var(--cci-border-panel);
   display: flex;
   align-items: center;
   justify-content: center;
   margin-bottom: 20px;
+  color: var(--cci-cyan);
 }
 
 .os-svg {
-  width: 32px !important;
-  height: 32px !important;
-  max-width: 32px !important;
-  max-height: 32px !important;
-  color: var(--accent-cyan);
+  width: 30px !important;
+  height: 30px !important;
+  max-width: 30px !important;
+  max-height: 30px !important;
+  color: var(--cci-cyan);
 }
 
-.download-os-title {
+.hw-title {
   font-family: var(--font-display);
-  font-size: 1.5rem;
+  font-size: 1.6rem;
   font-weight: 800;
   color: #fff;
+  text-transform: uppercase;
   margin-bottom: 6px;
 }
 
-.download-os-sub {
-  font-size: 0.95rem;
-  color: var(--text-dim);
+.hw-sub {
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  color: var(--cci-muted);
   margin-bottom: 24px;
 }
 
-.download-specs {
+.hw-checklist {
   list-style: none;
   display: flex;
   flex-direction: column;
   gap: 10px;
-  margin-bottom: 32px;
+  margin-bottom: 30px;
   flex-grow: 1;
 }
 
-.download-specs li {
+.hw-checklist li {
   font-size: 0.95rem;
-  color: var(--text-muted);
+  color: var(--cci-light);
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
-.download-specs code {
-  font-family: var(--font-mono);
-  background: #182234;
-  color: var(--accent-green);
-  padding: 2px 6px;
-  border-radius: var(--radius-sm);
-  font-size: 0.85rem;
+.hw-checklist li::before {
+  content: '▸';
+  color: var(--cci-cyan);
+  font-weight: 900;
 }
 
-.download-hint {
+.hw-btn-wrap {
+  margin-top: auto;
+}
+
+.hw-hint {
   display: block;
   text-align: center;
-  font-size: 0.8rem;
-  color: var(--text-dim);
-  margin-top: 12px;
   font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--cci-muted);
+  margin-top: 10px;
 }
 
-.steps-card {
-  background: rgba(16, 22, 34, 0.5);
-  border: 1px solid var(--border-dim);
-  border-radius: var(--radius-md);
-  padding: 32px 36px;
+/* Quick Start 3-Step Console Boot */
+.boot-steps-card {
+  margin-top: 40px;
+  background: #0a0c10;
+  border: 1px solid var(--cci-border-panel);
+  padding: 30px 32px;
 }
 
-.steps-title {
+.boot-steps-title {
   font-family: var(--font-display);
   font-size: 1.05rem;
+  font-weight: 800;
   letter-spacing: 1.5px;
-  color: var(--accent-cyan);
-  margin-bottom: 24px;
+  color: var(--cci-cyan);
   text-align: center;
+  margin-bottom: 24px;
+  text-transform: uppercase;
 }
 
-.steps-row {
+.boot-steps-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-  gap: 28px;
+  gap: 24px;
 }
 
-.step-item {
+.boot-step {
   display: flex;
-  gap: 16px;
+  gap: 14px;
   align-items: flex-start;
 }
 
-.step-num {
-  width: 36px; height: 36px;
-  background: var(--accent-cyan);
-  color: #040810;
+.boot-step-num {
+  width: 32px; height: 32px;
+  background: var(--cci-cyan);
+  color: #000;
   font-family: var(--font-display);
   font-weight: 900;
-  font-size: 1.1rem;
-  border-radius: 50%;
+  font-size: 1rem;
   display: flex;
   align-items: center;
   justify-content: center;
   flex-shrink: 0;
 }
 
-.step-desc {
+.boot-step-content {
   font-size: 0.95rem;
-  color: var(--text-muted);
+  color: var(--cci-light);
   line-height: 1.5;
 }
+.boot-step-content strong {
+  color: #fff;
+  display: block;
+  margin-bottom: 2px;
+  font-family: var(--font-display);
+}
 
+/* ==============================================================================
+   GAMEPAD CONTROLLER LEGEND BAR (Barra fija / footer de la consola)
+   ============================================================================== */
+.gamepad-legend-bar {
+  background: #06070a;
+  border-top: 2px solid var(--cci-border-panel);
+  padding: 14px 0;
+}
+
+.legend-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 24px;
+  flex-wrap: wrap;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--cci-muted);
+}
+
+.legend-key {
+  color: var(--cci-cyan);
+  font-weight: 700;
+  background: #0e1117;
+  padding: 2px 7px;
+  border: 1px solid var(--cci-border-panel);
+}
+
+/* ==============================================================================
+   FOOTER
+   ============================================================================== */
+.footer {
+  background: var(--cci-bg-void);
+  border-top: 1px solid var(--cci-border-panel);
+  padding: 44px 0 30px;
+  color: var(--cci-dim);
+}
+
+.footer-content {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 20px;
+}
+
+.footer-logo {
+  font-family: var(--font-display);
+  font-size: 1.2rem;
+  font-weight: 900;
+  color: #fff;
+  letter-spacing: 2px;
+  display: block;
+  margin-bottom: 6px;
+}
+
+.footer-copy {
+  font-size: 0.85rem;
+  color: var(--cci-muted);
+  line-height: 1.6;
+}
+.footer-copy strong {
+  color: #fff;
+}
+
+.footer-links {
+  display: flex;
+  gap: 20px;
+}
+.footer-links a {
+  color: var(--cci-muted);
+  text-decoration: none;
+  font-family: var(--font-display);
+  font-size: 0.85rem;
+  font-weight: 700;
+  letter-spacing: 1px;
+  transition: color 0.2s ease;
+}
+.footer-links a:hover {
+  color: var(--cci-cyan);
+}
+
+/* ==============================================================================
+   MODAL FICHA TÉCNICA
+   ============================================================================== */
 .modal-backdrop {
   position: fixed;
   top: 0; left: 0; right: 0; bottom: 0;
-  background: rgba(0, 0, 0, 0.85);
+  background: rgba(0, 0, 0, 0.88);
   backdrop-filter: blur(8px);
   z-index: 1000;
   display: flex;
@@ -953,40 +1079,38 @@ body {
 }
 
 .modal-dialog {
-  background: #0d121c;
-  border: 1px solid var(--accent-cyan);
-  box-shadow: 0 0 40px var(--accent-cyan-glow);
-  border-radius: var(--radius-lg);
+  background: var(--cci-bg-surface);
+  border: 2px solid var(--cci-cyan);
+  box-shadow: 0 0 50px var(--cci-cyan-dim);
   max-width: 680px;
   width: 100%;
   overflow: hidden;
   position: relative;
-  animation: modal-pop 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  animation: modal-pop 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 @keyframes modal-pop {
-  from { opacity: 0; transform: scale(0.92); }
+  from { opacity: 0; transform: scale(0.95); }
   to { opacity: 1; transform: scale(1); }
 }
 
 .modal-close {
   position: absolute;
-  top: 14px; right: 16px;
-  background: rgba(0, 0, 0, 0.6);
-  border: 1px solid var(--border-bright);
+  top: 12px; right: 14px;
+  background: #000;
+  border: 1px solid var(--cci-border-panel);
   color: #fff;
-  width: 34px; height: 34px;
-  border-radius: 50%;
-  font-size: 1.4rem;
+  width: 32px; height: 32px;
+  font-size: 1.2rem;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  z-index: 2;
+  z-index: 10;
   transition: all 0.2s ease;
 }
 .modal-close:hover {
-  background: var(--accent-cyan);
+  background: var(--cci-cyan);
   color: #000;
 }
 
@@ -999,6 +1123,7 @@ body {
 .modal-art-box img {
   width: 100%; height: 100%;
   object-fit: cover;
+  display: block;
 }
 
 .modal-info-box {
@@ -1008,114 +1133,66 @@ body {
 .modal-tags-row {
   display: flex;
   gap: 8px;
-  margin-bottom: 12px;
+  margin-bottom: 10px;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
 }
 
 .modal-title {
   font-family: var(--font-display);
-  font-size: 1.7rem;
-  font-weight: 800;
+  font-size: 1.8rem;
+  font-weight: 900;
   color: #fff;
+  text-transform: uppercase;
   margin-bottom: 4px;
 }
 
 .modal-dev {
   font-family: var(--font-mono);
   font-size: 0.85rem;
-  color: var(--accent-cyan);
+  color: var(--cci-cyan);
   margin-bottom: 14px;
 }
 
 .modal-desc {
   font-size: 1.05rem;
-  color: var(--text-muted);
+  color: var(--cci-light);
   line-height: 1.6;
   margin-bottom: 20px;
 }
 
 .modal-launch-note {
-  background: rgba(0, 255, 136, 0.08);
-  border: 1px solid var(--accent-green);
-  color: var(--accent-green);
+  background: #090b0e;
+  border: 1px solid var(--cci-green);
+  color: var(--cci-green);
   font-family: var(--font-mono);
   font-size: 0.8rem;
   padding: 8px 14px;
-  border-radius: var(--radius-sm);
   text-align: center;
+  letter-spacing: 1px;
 }
 
-.footer {
-  background: #06080d;
-  border-top: 1px solid var(--border-dim);
-  padding: 48px 0;
-  color: var(--text-dim);
-  position: relative;
-  z-index: 1;
-}
-
-.footer-content {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 24px;
-}
-
-.footer-left {
-  max-width: 580px;
-}
-
-.footer-logo {
-  font-family: var(--font-display);
-  font-size: 1.2rem;
-  font-weight: 900;
-  color: #fff;
-  letter-spacing: 2px;
-  display: block;
-  margin-bottom: 8px;
-}
-
-.footer-copy {
-  font-size: 0.85rem;
-  line-height: 1.5;
-}
-.footer-copy strong {
-  color: var(--text-muted);
-}
-
-.footer-right {
-  display: flex;
-  gap: 20px;
-}
-
-.footer-right a {
-  color: var(--text-muted);
-  text-decoration: none;
-  font-size: 0.9rem;
-  transition: color 0.2s ease;
-}
-.footer-right a:hover {
-  color: var(--accent-cyan);
-}
-
+/* ==============================================================================
+   RESPONSIVE DESIGN
+   ============================================================================== */
 @media (max-width: 992px) {
-  .hero-grid { grid-template-columns: 1fr; gap: 40px; }
-  .author-content-grid { grid-template-columns: 1fr; text-align: center; justify-items: center; }
-  .author-badge-top { right: 50%; transform: translateX(50%); }
+  .hero-layout { grid-template-columns: 1fr; gap: 40px; }
+  .profile-grid { grid-template-columns: 1fr; text-align: center; justify-items: center; }
+  .profile-specs-row { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 768px) {
-  .nav-menu { display: none; }
-  .hero-title { font-size: 2.1rem; }
-  .section-title { font-size: 1.8rem; }
+  .hud-nav { display: none; }
+  .hero-headline { font-size: 2.1rem; }
+  .section-title { font-size: 1.7rem; }
   .footer-content { flex-direction: column; text-align: center; }
 }
 """
 
 CLIENT_JS = """
 document.addEventListener('DOMContentLoaded', () => {
-  const filterBtns = document.querySelectorAll('.filter-btn');
-  const gameCards = document.querySelectorAll('.game-card');
+  const filterBtns = document.querySelectorAll('.filter-chip');
+  const gameCards = document.querySelectorAll('.cartridge-card');
 
   filterBtns.forEach(btn => {
     btn.addEventListener('click', () => {
@@ -1127,7 +1204,6 @@ document.addEventListener('DOMContentLoaded', () => {
         const cardCats = (card.dataset.categories || '').toUpperCase().split(' ');
         if (selectedCat === 'TODOS' || cardCats.includes(selectedCat)) {
           card.style.display = 'flex';
-          card.style.animation = 'fadeIn 0.3s ease';
         } else {
           card.style.display = 'none';
         }
@@ -1180,23 +1256,28 @@ document.addEventListener('DOMContentLoaded', () => {
 
 def _render_game_card(g: dict) -> str:
     cats_str = " ".join(g.get("categories", []))
-    tags_html = "".join(f'<span class="game-tag">{html.escape(t)}</span>' for t in g.get("tags", []))
+    tags_html = "".join(f'<span class="cartridge-tag">{html.escape(t)}</span>' for t in g.get("tags", []))
+    slot_num = f"{g.get('slot', 0):02d}"
     return f"""
-    <div class="game-card" data-categories="{html.escape(cats_str)}" data-title="{html.escape(g.get('title',''))}" data-genre="{html.escape(g.get('genre',''))}" data-dev="{html.escape(g.get('developer',''))}" data-year="{html.escape(str(g.get('year','')))}" data-players="{html.escape(str(g.get('players','')))}" data-desc="{html.escape(g.get('subtitle',''))}">
-      <div class="game-card-art">
+    <div class="cartridge-card" data-categories="{html.escape(cats_str)}" data-title="{html.escape(g.get('title',''))}" data-genre="{html.escape(g.get('genre',''))}" data-dev="{html.escape(g.get('developer',''))}" data-year="{html.escape(str(g.get('year','')))}" data-players="{html.escape(str(g.get('players','')))}" data-desc="{html.escape(g.get('subtitle',''))}">
+      <div class="cartridge-header">
+        <span class="cartridge-slot">SLOT {slot_num} // 19</span>
+        <span>REV 2026</span>
+      </div>
+      <div class="cartridge-art">
         <img src="{html.escape(g.get('card_url',''))}" alt="{html.escape(g.get('title',''))}" loading="lazy">
-        <div class="game-card-hover-overlay">
-          <span class="hover-btn">VER FICHA</span>
+        <div class="cartridge-overlay">
+          <span class="overlay-action-btn">[ ⌧ A ] VER FICHA</span>
         </div>
       </div>
-      <div class="game-card-info">
-        <div class="game-card-meta">
-          <span class="game-badge-year">{html.escape(str(g.get('year','')))}</span>
-          <span class="game-badge-players">{html.escape(str(g.get('players','')))} JUGADORES</span>
+      <div class="cartridge-body">
+        <div class="cartridge-meta">
+          <span class="cartridge-year">[ {html.escape(str(g.get('year','')))} ]</span>
+          <span class="cartridge-players">{html.escape(str(g.get('players','')))} JUGADOR(ES)</span>
         </div>
-        <h3 class="game-title">{html.escape(g.get("title",""))}</h3>
-        <p class="game-subtitle">{html.escape(g.get("subtitle",""))}</p>
-        <div class="game-tags">
+        <h3 class="cartridge-title">{html.escape(g.get("title",""))}</h3>
+        <p class="cartridge-sub">{html.escape(g.get("subtitle",""))}</p>
+        <div class="cartridge-tags">
           {tags_html}
         </div>
       </div>
@@ -1207,7 +1288,7 @@ def _render_game_card(g: dict) -> str:
 def build_landing_page(games: list[dict], categories: list[str], author: dict, stats: dict) -> str:
     """Construye y retorna el documento HTML completo generado al 100% en Python."""
     filters_html = "".join(
-        f'<button class="filter-btn {"active" if cat == "TODOS" else ""}" data-cat="{html.escape(cat)}">{html.escape(cat)}</button>'
+        f'<button class="filter-chip {"active" if cat == "TODOS" else ""}" data-cat="{html.escape(cat)}">{html.escape(cat)}</button>'
         for cat in categories
     )
     games_cards_html = "".join(_render_game_card(g) for g in games)
@@ -1221,7 +1302,7 @@ def build_landing_page(games: list[dict], categories: list[str], author: dict, s
   <meta name="description" content="Consola virtual y emulador multiplataforma 100% Python con 19 clásicos retro arcade. Autora: Camila Carolina Ianni.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;700;800;900&family=Rajdhani:wght@500;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@500;600;700&family=Rajdhani:wght@500;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/static/css/style.css">
   <link rel="stylesheet" href="/style.css">
   <style>
@@ -1229,124 +1310,137 @@ def build_landing_page(games: list[dict], categories: list[str], author: dict, s
   </style>
 </head>
 <body>
-  <div class="bg-grid"></div>
-  <div class="glow-orb orb-1"></div>
-  <div class="glow-orb orb-2"></div>
+  <div class="crt-overlay"></div>
+  <div class="tech-grid-bg"></div>
 
-  <!-- Header -->
-  <header class="header">
-    <div class="container nav-container">
-      <a href="#" class="brand">
-        <span class="brand-glitch">C.C.I.</span>
-        <span class="brand-sub">SYSTEM</span>
-        <span class="badge-v">EMULATOR v1.0</span>
+  <!-- HUD Top Bar (Estilo Consola) -->
+  <header class="top-hud">
+    <div class="container hud-container">
+      <a href="#" class="hud-brand">
+        <div class="brand-badge">C.C.I. <span>SYSTEM</span></div>
+        <div class="hud-sys-status">
+          <span class="led-indicator"></span>
+          <span>SYS.ONLINE // 100% PYTHON</span>
+        </div>
       </a>
-      <nav class="nav-menu">
-        <a href="#arquitectura" class="nav-link">Arquitectura</a>
-        <a href="#juegos" class="nav-link">Juegos ({len(games)})</a>
-        <a href="#autora" class="nav-link">Autora</a>
-        <a href="#descarga" class="nav-link nav-cta">DESCARGAR</a>
+      <nav class="hud-nav">
+        <a href="#arquitectura" class="hud-tab">Arquitectura</a>
+        <a href="#catalogo" class="hud-tab">Catálogo ({len(games)})</a>
+        <a href="#autora" class="hud-tab">Autora</a>
+        <a href="#descarga" class="hud-tab hud-cta-download">DESCARGAR EMULADOR</a>
       </nav>
-      <div class="nav-badge-pill">
-        <span class="status-dot"></span>
-        <span>100% PYTHON NATIVO</span>
-      </div>
     </div>
   </header>
 
-  <!-- Hero Section -->
+  <!-- Hero: Virtual Console Stage -->
   <section class="hero">
-    <div class="container hero-grid">
-      <div class="hero-content">
-        <span class="hero-tag">CONSOLA VIRTUAL RETRO · ARQUITECTURA PYTHON PURA</span>
-        <h1 class="hero-title">EXPERIENCIA ARCADE RETROFUTURISTA</h1>
-        <p class="hero-desc">
-          <strong>C.C.I. SYSTEM</strong> es una suite emuladora que integra <strong>19 videojuegos arcade legendarios</strong>
-          en una interfaz de consola con estética Cyberpunk / PS5, sistema multiusuario con perfiles independientes,
-          soporte de gamepad universal y capturador en alta fidelidad.
+    <div class="container hero-layout">
+      <div class="hero-left">
+        <span class="telemetry-tag">// VIRTUAL CONSOLE ARCHITECTURE · 100% PYTHON</span>
+        <h1 class="hero-headline">CONSOLA VIRTUAL RETRO &amp; <span>EMULADOR</span></h1>
+        <p class="hero-lead">
+          <strong>C.C.I. SYSTEM</strong> integra <strong>19 videojuegos arcade clásicos</strong>
+          en una consola virtual integral con arquitectura de estados en Python,
+          renderizado a 60 FPS, sistema multiusuario con gestión de estadísticas independientes,
+          soporte de joystick plug &amp; play y capturador HD sin dependencias externas.
         </p>
         <div class="hero-actions">
-          <a href="#descarga" class="btn btn-primary">
-            DESCARGAR EMULADOR
+          <a href="#descarga" class="btn-cci btn-primary-action">
+            <span class="btn-gamepad-key">⌧ A</span> DESCARGAR EMULADOR
           </a>
-          <a href="#juegos" class="btn btn-secondary">
-            VER CATÁLOGO ({len(games)} JUEGOS)
+          <a href="#catalogo" class="btn-cci btn-secondary-action">
+            <span class="btn-gamepad-key">△ Y</span> VER CATÁLOGO ({len(games)} JUEGOS)
           </a>
         </div>
-        <div class="hero-features-strip">
-          <div class="strip-item">
-            <span class="strip-num">{len(games)}</span>
-            <span class="strip-lbl">Juegos Integrados</span>
+        <div class="spec-strip">
+          <div class="spec-cell">
+            <span class="spec-val">{len(games)}</span>
+            <span class="spec-lbl">JUEGOS ARCADE</span>
           </div>
-          <div class="strip-divider"></div>
-          <div class="strip-item">
-            <span class="strip-num">0</span>
-            <span class="strip-lbl">Perfiles de Fábrica</span>
+          <div class="spec-divider"></div>
+          <div class="spec-cell">
+            <span class="spec-val">0</span>
+            <span class="spec-lbl">PERFILES DE FÁBRICA</span>
           </div>
-          <div class="strip-divider"></div>
-          <div class="strip-item">
-            <span class="strip-num">100%</span>
-            <span class="strip-lbl">Python Puro</span>
+          <div class="spec-divider"></div>
+          <div class="spec-cell">
+            <span class="spec-val">100%</span>
+            <span class="spec-lbl">PYTHON PURO</span>
+          </div>
+          <div class="spec-divider"></div>
+          <div class="spec-cell">
+            <span class="spec-val">60</span>
+            <span class="spec-lbl">FPS ESTABLES</span>
           </div>
         </div>
       </div>
 
-      <div class="hero-visual">
-        <div class="console-frame">
-          <div class="frame-header">
-            <span class="dot red"></span>
-            <span class="dot yellow"></span>
-            <span class="dot green"></span>
-            <span class="frame-title">CCI_SYSTEM_VIRTUAL_CONSOLE_CORE</span>
+      <div class="hero-right">
+        <div class="console-chassis">
+          <div class="chassis-header">
+            <div class="chassis-header-left">
+              <span class="chassis-led"></span>
+              <span class="chassis-title">CCI_SYSTEM_VIRTUAL_CORE</span>
+            </div>
+            <span class="chassis-res">1280x720 @ 60FPS</span>
           </div>
-          <div class="frame-body">
-            <img src="/assets/pantallas/Bienvenida al sistema C.C.I.png" alt="C.C.I. SYSTEM Virtual Console" class="console-screen-img">
-            <div class="screen-overlay-scanline"></div>
-            <div class="screen-badge">1280x720 60FPS</div>
+          <div class="chassis-screen">
+            <img src="/assets/welcome.png" alt="Pantalla C.C.I. SYSTEM">
           </div>
-          <div class="frame-footer">
+          <div class="chassis-footer">
+            <span>MOTOR: PYGAME-CE // STATE_MACHINE</span>
             <span>PLATAFORMA: MAC &amp; WINDOWS</span>
-            <span>MOTOR: PYGAME-CE CORE</span>
           </div>
         </div>
       </div>
     </div>
   </section>
 
-  <!-- Architecture Section -->
+  <!-- Subsystems / Architecture -->
   <section id="arquitectura" class="section">
     <div class="container">
-      <div class="section-header text-center">
-        <span class="section-tag">CARACTERÍSTICAS TÉCNICAS</span>
-        <h2 class="section-title">INGENIERÍA &amp; DISEÑO DE LA CONSOLA</h2>
-        <p class="section-desc">
-          Construida desde cero con estándares de arquitectura orientada a estados y emulación modular en Python.
-        </p>
-      </div>
+      <span class="section-tag">// INGENIERÍA DE LA CONSOLA</span>
+      <h2 class="section-title">ARQUITECTURA DE SOFTWARE 100% PYTHON</h2>
+      <p class="section-desc">
+        Diseñada y desarrollada sin empaquetadores binarios opacos ni wrappers.
+        Cada pantalla, transición, controlador de audio y sistema de entrada funciona íntegramente en Python.
+      </p>
 
-      <div class="features-grid">
-        <div class="feature-card">
-          <div class="feature-icon">⚡</div>
-          <h3 class="feature-title">Motor 100% Python</h3>
-          <p class="feature-text">
-            Sin dependencias binarias externas ni shells. Toda la suite se ejecuta de forma nativa a través
-            del motor de renderizado Pygame-CE con ciclo de eventos a 60 FPS estables.
+      <div class="subsystems-grid">
+        <div class="subsystem-card">
+          <span class="subsystem-code">// KERNEL_01: STATE MACHINE</span>
+          <h3 class="subsystem-title">Motor de Estados Finitos</h3>
+          <p class="subsystem-text">
+            Flujo determinista desacoplado gestionado por máquina de estados (`StateMachine`):
+            `INTRO_VIDEO` → `USER_SELECT` → `MENU` → `GAME_RUNNER`.
+            Cero fugas de memoria y bucle de eventos a 60 FPS estables.
           </p>
         </div>
-        <div class="feature-card">
-          <div class="feature-icon">👤</div>
-          <h3 class="feature-title">Perfiles &amp; Multiusuario</h3>
-          <p class="feature-text">
-            Descarga limpia con 0 perfiles. Al abrir la consola por primera vez, el asistente te invita a crear
-            tu propio perfil personal con avatar Cyberpunk y registro individual de logros y estadísticas.
+
+        <div class="subsystem-card">
+          <span class="subsystem-code">// SUBSYSTEM_02: MULTI-USER</span>
+          <h3 class="subsystem-title">Gestión de Perfiles Limpia</h3>
+          <p class="subsystem-text">
+            Arranque oficial con 0 perfiles de fábrica. Al iniciar por primera vez, el asistente
+            te invita a crear tu usuario, elegir tu avatar cyberpunk y guardar estadísticas de forma aislada.
           </p>
         </div>
-        <div class="feature-card">
-          <div class="feature-icon">🎮</div>
-          <h3 class="feature-title">Control Universal Plug &amp; Play</h3>
-          <p class="feature-text">
-            Compatibilidad total con mandos de PS4, PS5, Xbox Series/One y joysticks USB genéricos, con vibración
-            háptica configurable y navegación total por joystick y cruceta D-Pad.
+
+        <div class="subsystem-card">
+          <span class="subsystem-code">// SUBSYSTEM_03: INPUT ENGINE</span>
+          <h3 class="subsystem-title">Control Universal Plug &amp; Play</h3>
+          <p class="subsystem-text">
+            Mapeo universal con `pygame.joystick` para DualShock 4, DualSense (PS5), mandos Xbox Series/One
+            y joysticks USB arcade. Soporta reconexión en caliente y vibración háptica.
+          </p>
+        </div>
+
+        <div class="subsystem-card">
+          <span class="subsystem-code">// SUBSYSTEM_04: CAPTURE &amp; AUDIO</span>
+          <h3 class="subsystem-title">Captura F12 &amp; Sintetizador</h3>
+          <p class="subsystem-text">
+            Capturador nativo F12 a 720p sin compresión con guardado instantáneo y notificación toast.
+            Sintetizador de audio en tiempo real y banda sonora ambiental BGM.
           </p>
         </div>
       </div>
@@ -1354,57 +1448,56 @@ def build_landing_page(games: list[dict], categories: list[str], author: dict, s
   </section>
 
   <!-- Games Catalog Section -->
-  <section id="juegos" class="section section-dark">
+  <section id="catalogo" class="section section-dark">
     <div class="container">
-      <div class="section-header">
-        <span class="section-tag">CATÁLOGO OFICIAL</span>
-        <h2 class="section-title">{len(games)} JUEGOS DISPONIBLES</h2>
-        <p class="section-desc">
-          Filtra por categoría para explorar cada aventura:
-        </p>
-        <div class="filters-bar" id="filtersBar">
+      <div class="catalog-header-bar">
+        <div>
+          <span class="section-tag">// RACK OFICIAL DE TÍTULOS</span>
+          <h2 class="section-title">BIBLIOTECA ({len(games)} JUEGOS)</h2>
+          <p class="section-desc">Selecciona una categoría para filtrar los títulos:</p>
+        </div>
+        <div class="filters-rack">
           {filters_html}
         </div>
       </div>
 
-      <div class="games-grid" id="gamesGrid">
+      <div class="games-rack-grid">
         {games_cards_html}
       </div>
     </div>
   </section>
 
-  <!-- Author Section -->
+  <!-- Author Section (Estilo pantalla 'PERFIL' de la consola) -->
   <section id="autora" class="section">
     <div class="container">
-      <div class="author-box">
-        <div class="author-badge-top">AUTORA &amp; CREADORA DEL PROYECTO</div>
-        <div class="author-content-grid">
-          <div class="author-avatar-wrap">
-            <div class="author-avatar-circle">
-              <div class="avatar-silhouette">
-                <span class="author-initials">CCI</span>
-              </div>
+      <div class="profile-screen-card">
+        <div class="profile-hud-header">
+          <span>// C.C.I. SYSTEM · FICHA OFICIAL DE AUTORÍA Y DIRECCIÓN</span>
+          <span>DEV_ID: CCI-2026-001</span>
+        </div>
+        <div class="profile-grid">
+          <div class="profile-avatar-block">
+            <div class="profile-avatar-frame">
+              <span class="profile-monogram">CCI</span>
             </div>
-            <div class="author-title-pill">DESARROLLADORA</div>
+            <span class="profile-badge-pill">DESARROLLADORA</span>
           </div>
-          <div class="author-details">
-            <h2 class="author-name">{html.escape(author.get("name",""))}</h2>
-            <p class="author-institution">{html.escape(author.get("institution",""))} · {html.escape(author.get("year",""))}</p>
-            <p class="author-bio">{html.escape(author.get("bio",""))}</p>
-            <div class="author-highlights">
-              <div class="highlight-item">
-                <span class="hl-icon">🐍</span>
-                <div>
-                  <strong>Desarrollo 100% Python:</strong>
-                  <span>Arquitectura de estados finitos, orquestación de subprocesos y virtualización.</span>
-                </div>
+          <div class="profile-details-block">
+            <h2 class="profile-name">{html.escape(author.get("name",""))}</h2>
+            <p class="profile-inst">{html.escape(author.get("institution",""))} · {html.escape(author.get("year",""))}</p>
+            <p class="profile-bio">{html.escape(author.get("bio",""))}</p>
+            <div class="profile-specs-row">
+              <div class="profile-spec-item">
+                <strong>ARQUITECTURA CORE</strong>
+                <span>100% Python nativo sin dependencias externas</span>
               </div>
-              <div class="highlight-item">
-                <span class="hl-icon">🕹️</span>
-                <div>
-                  <strong>Preservación Retro:</strong>
-                  <span>Recreación fidedigna con controles modernos y balance pulido.</span>
-                </div>
+              <div class="profile-spec-item">
+                <strong>PRESERVACIÓN ARCADE</strong>
+                <span>19 títulos adaptados a resolución 720p</span>
+              </div>
+              <div class="profile-spec-item">
+                <strong>SISTEMA MULTIUSUARIO</strong>
+                <span>0 perfiles de fábrica, guardado en JSON local</span>
               </div>
             </div>
           </div>
@@ -1416,72 +1509,101 @@ def build_landing_page(games: list[dict], categories: list[str], author: dict, s
   <!-- Downloads Section -->
   <section id="descarga" class="section section-dark">
     <div class="container">
-      <div class="section-header text-center">
-        <span class="section-tag">INSTALACIÓN &amp; DESCARGA</span>
-        <h2 class="section-title">DESCARGA C.C.I. SYSTEM EMULADOR</h2>
+      <div class="text-center" style="max-width: 720px; margin: 0 auto 30px;">
+        <span class="section-tag">// HARDWARE RELEASES</span>
+        <h2 class="section-title">DESCARGA DEL EMULADOR</h2>
         <p class="section-desc">
-          Elige tu sistema operativo. Ambas versiones vienen con los 19 juegos, instalador gráfico 1-clic
-          y <strong>0 perfiles precargados</strong> para arrancar desde cero.
+          Elige tu sistema operativo. Ambas descargas incluyen los 19 juegos, el asistente gráfico de 1-clic
+          y <strong>0 perfiles precargados</strong> para que crees tu partida desde cero.
         </p>
       </div>
 
-      <div class="download-grid">
+      <div class="downloads-panel-grid">
         <!-- macOS -->
-        <div class="download-card">
-          <div class="os-icon-wrap">
-            <svg class="os-svg" width="32" height="32" style="width:32px;height:32px;max-width:32px;max-height:32px;" viewBox="0 0 24 24" fill="currentColor"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M15.97 6.37c.63-.77 1.06-1.85.94-2.93-.91.04-2.02.61-2.67 1.37-.58.67-.99 1.77-.85 2.83 1.02.08 2.05-.51 2.58-1.27z"/></svg>
+        <div class="download-hardware-card">
+          <div class="hw-icon-box">
+            <svg class="os-svg" width="30" height="30" viewBox="0 0 24 24" fill="currentColor"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M15.97 6.37c.63-.77 1.06-1.85.94-2.93-.91.04-2.02.61-2.67 1.37-.58.67-.99 1.77-.85 2.83 1.02.08 2.05-.51 2.58-1.27z"/></svg>
           </div>
-          <h3 class="download-os-title">C.C.I. SYSTEM para macOS</h3>
-          <p class="download-os-sub">Compatible con Apple Silicon (M1/M2/M3/M4) e Intel (macOS 12+)</p>
-          <ul class="download-specs">
-            <li>✔ Código 100% Python nativo multiplataforma</li>
-            <li>✔ Instalador gráfico interactivo de 1-clic</li>
-            <li>✔ Asistente pop-up de instalación (Escritorio por defecto)</li>
-            <li>✔ 0 perfiles de fábrica (asistente de bienvenida en primer boot)</li>
+          <h3 class="hw-title">C.C.I. SYSTEM para macOS</h3>
+          <p class="hw-sub">Compatible con Apple Silicon (M1/M2/M3/M4) e Intel (macOS 12+)</p>
+          <ul class="hw-checklist">
+            <li>Código 100% Python nativo multiplataforma</li>
+            <li>Instalador gráfico interactivo en 1 clic</li>
+            <li>Asistente pop-up de destino (Escritorio por defecto)</li>
+            <li>0 perfiles de fábrica (creación de jugador en primer boot)</li>
           </ul>
-          <a href="/download/mac" class="btn btn-primary btn-block">DESCARGAR EMULADOR MAC</a>
-          <span class="download-hint">Descomprime y ejecuta el instalador gráfico</span>
+          <div class="hw-btn-wrap">
+            <a href="/download/mac" class="btn-cci btn-primary-action" style="width: 100%;">
+              <span class="btn-gamepad-key">⌧ A</span> DESCARGAR EMULADOR MAC
+            </a>
+            <span class="hw-hint">Descomprime y abre el instalador gráfico</span>
+          </div>
         </div>
 
         <!-- Windows -->
-        <div class="download-card">
-          <div class="os-icon-wrap">
-            <svg class="os-svg" width="32" height="32" style="width:32px;height:32px;max-width:32px;max-height:32px;" viewBox="0 0 24 24" fill="currentColor"><path d="M0 3.449L9.75 2.1v9.451H0m10.949-9.602L24 0v11.4H10.949M0 12.6h9.75v9.451L0 20.699M10.949 12.6H24V24l-12.9-1.801"/></svg>
+        <div class="download-hardware-card">
+          <div class="hw-icon-box">
+            <svg class="os-svg" width="30" height="30" viewBox="0 0 24 24" fill="currentColor"><path d="M0 3.449L9.75 2.1v9.451H0m10.949-9.602L24 0v11.4H10.949M0 12.6h9.75v9.451L0 20.699M10.949 12.6H24V24l-12.9-1.801"/></svg>
           </div>
-          <h3 class="download-os-title">C.C.I. SYSTEM para Windows</h3>
-          <p class="download-os-sub">Compatible con Windows 10 y Windows 11 (100% Python)</p>
-          <ul class="download-specs">
-            <li>✔ Código 100% Python nativo multiplataforma</li>
-            <li>✔ Instalador gráfico directo sin ventana de terminal</li>
-            <li>✔ Asistente pop-up con ubicación por defecto en tu Escritorio</li>
-            <li>✔ 0 perfiles de fábrica (crea tu jugador al instante)</li>
+          <h3 class="hw-title">C.C.I. SYSTEM para Windows</h3>
+          <p class="hw-sub">Compatible con Windows 10 y Windows 11 (100% Python)</p>
+          <ul class="hw-checklist">
+            <li>Código 100% Python nativo multiplataforma</li>
+            <li>Instalador gráfico directo sin ventana de terminal</li>
+            <li>Asistente pop-up con ubicación por defecto en Escritorio</li>
+            <li>0 perfiles de fábrica (crea tu jugador al instante)</li>
           </ul>
-          <a href="/download/windows" class="btn btn-secondary btn-block">DESCARGAR EMULADOR WINDOWS</a>
-          <span class="download-hint">Descomprime y ejecuta el instalador gráfico</span>
+          <div class="hw-btn-wrap">
+            <a href="/download/windows" class="btn-cci btn-secondary-action" style="width: 100%;">
+              <span class="btn-gamepad-key">⌧ A</span> DESCARGAR EMULADOR WINDOWS
+            </a>
+            <span class="hw-hint">Descomprime y abre el instalador gráfico</span>
+          </div>
         </div>
       </div>
 
-      <div class="steps-card">
-        <h4 class="steps-title">EXPERIENCIA DE INSTALACIÓN DE EMULADOR REAL</h4>
-        <div class="steps-row">
-          <div class="step-item">
-            <div class="step-num">1</div>
-            <div class="step-desc"><strong>Descarga el emulador</strong> para tu sistema operativo (Mac o Windows).</div>
+      <!-- Boot Steps -->
+      <div class="boot-steps-card">
+        <h4 class="boot-steps-title">// SECUENCIA DE ARRANQUE DE UN EMULADOR REAL</h4>
+        <div class="boot-steps-grid">
+          <div class="boot-step">
+            <div class="boot-step-num">01</div>
+            <div class="boot-step-content">
+              <strong>DESCARGA EL PAQUETE</strong>
+              Descarga el emulador oficial de C.C.I. SYSTEM para tu sistema operativo.
+            </div>
           </div>
-          <div class="step-item">
-            <div class="step-num">2</div>
-            <div class="step-desc"><strong>Abre el instalador:</strong> un asistente emergente te preguntará dónde ubicar tu consola (por defecto en tu Escritorio).</div>
+          <div class="boot-step">
+            <div class="boot-step-num">02</div>
+            <div class="boot-step-content">
+              <strong>ASISTENTE GRÁFICO POP-UP</strong>
+              Haz doble clic en el instalador: un diálogo te preguntará dónde ubicar la consola (Escritorio por defecto).
+            </div>
           </div>
-          <div class="step-item">
-            <div class="step-num">3</div>
-            <div class="step-desc"><strong>¡Listo para jugar!</strong> Se crea tu acceso directo y la consola se abre de inmediato. Crea tu nuevo jugador desde cero y disfruta.</div>
+          <div class="boot-step">
+            <div class="boot-step-num">03</div>
+            <div class="boot-step-content">
+              <strong>BOOT INMEDIATO Y NUEVO PERFIL</strong>
+              Se genera el acceso directo y la consola se abre de inmediato. Crea tu jugador desde cero y disfruta.
+            </div>
           </div>
         </div>
       </div>
     </div>
   </section>
 
-  <!-- Modal -->
+  <!-- Gamepad Legend Bar (Barra de comandos de la consola) -->
+  <div class="gamepad-legend-bar">
+    <div class="container legend-container">
+      <div><span class="legend-key">⌧ A</span> SELECCIONAR / INICIAR</div>
+      <div><span class="legend-key">◯ B</span> VOLVER</div>
+      <div><span class="legend-key">△ Y</span> DETALLES DE JUEGO</div>
+      <div><span class="legend-key">F12</span> CAPTURADOR HD</div>
+      <div><span class="legend-key">🕹️ STICK / D-PAD</span> NAVEGACIÓN</div>
+    </div>
+  </div>
+
+  <!-- Modal Ficha Técnica -->
   <div class="modal-backdrop" id="gameModal" style="display: none;">
     <div class="modal-dialog">
       <button class="modal-close" id="modalClose">&times;</button>
@@ -1490,13 +1612,13 @@ def build_landing_page(games: list[dict], categories: list[str], author: dict, s
       </div>
       <div class="modal-info-box">
         <div class="modal-tags-row">
-          <span class="game-badge-year" id="modalYear"></span>
-          <span class="game-badge-players" id="modalPlayers"></span>
+          <span style="color: var(--cci-gold);" id="modalYear"></span>
+          <span style="color: var(--cci-muted);" id="modalPlayers"></span>
         </div>
         <h2 class="modal-title" id="modalTitle"></h2>
         <p class="modal-dev" id="modalDev"></p>
         <p class="modal-desc" id="modalDesc"></p>
-        <div class="modal-launch-note">Disponible en la suite C.C.I. SYSTEM</div>
+        <div class="modal-launch-note">DISPONIBLE EN C.C.I. SYSTEM VIRTUAL CONSOLE</div>
       </div>
     </div>
   </div>
@@ -1508,12 +1630,12 @@ def build_landing_page(games: list[dict], categories: list[str], author: dict, s
         <span class="footer-logo">C.C.I. SYSTEM</span>
         <p class="footer-copy">
           Virtual Console &amp; Multiplatform Retro Emulator · Diseñado y desarrollado por <strong>Camila Carolina Ianni</strong>.
-          <br>Arquitectura 100% Python puro con fines de preservación y divulgación académica.
+          <br>Arquitectura 100% Python puro con fines de preservación y divulgación académica (2026).
         </p>
       </div>
-      <div class="footer-right">
+      <div class="footer-links">
         <a href="#arquitectura">Arquitectura</a>
-        <a href="#juegos">Juegos</a>
+        <a href="#catalogo">Catálogo</a>
         <a href="#autora">Autora</a>
         <a href="#descarga">Descargas</a>
       </div>
