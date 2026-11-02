@@ -19,7 +19,6 @@ from pathlib import Path
 import pygame
 from sidebar_ui import SIDEBAR_W, draw_sidebar, load_sidebar, make_sidebar_font, sidebar_destination
 from audio_bgm import BGMManager
-from game_hub import GameHubModal
 from screenshot_manager import ScreenshotManager
 
 LOGICAL_W, LOGICAL_H = 1280, 720
@@ -601,7 +600,6 @@ class CCIConsoleState:
         self.last_drawn_size = None
         self.fanfare_sound = self._make_fanfare_sound() if page == "achievements" else None
         self.awarding_trophy = None
-        self.game_hub = GameHubModal()
 
     def _selected_game_art(self, game_id=None):
         gid = game_id or self.selected_game_id
@@ -1098,9 +1096,6 @@ class CCIConsoleState:
             self._text(f"BÚSQUEDA: {self.search_query}", 283, 584, 13, WHITE, max_width=520)
         if self.search_active:
             self._draw_search_modal()
-        if self.game_hub.is_open():
-            self.game_hub.update(0.016)
-            self.game_hub.draw(self.canvas)
 
     def _draw_doom_card(self, rect):
         pygame.draw.rect(self.canvas, (12, 13, 15), rect, border_radius=5)
@@ -1883,8 +1878,7 @@ class CCIConsoleState:
             self._move_game(4, games)
             return True
         if key in (pygame.K_RETURN, pygame.K_KP_ENTER, pygame.K_SPACE):
-            self.game_hub.open(self._selected_game(), self.user_data, self._selected_game_art())
-            self._feedback()
+            self._launch_selected()
             return True
         if key == pygame.K_f:
             game_id = self.selected_game_id
@@ -2137,12 +2131,12 @@ class CCIConsoleState:
                         self.selected_game_id = games[game_idx]["id"]
                         self._feedback()
                         if getattr(self, "last_clicked_slot", None) == game_idx and time.monotonic() - getattr(self, "last_click_time", 0) < 0.45:
-                            self.game_hub.open(self._selected_game(), self.user_data, self._selected_game_art())
+                            self._launch_selected()
                         self.last_clicked_slot = game_idx
                         self.last_click_time = time.monotonic()
                     return
             if pygame.Rect(1082, 529, 150, 43).collidepoint(pos):
-                self.game_hub.open(self._selected_game(), self.user_data, self._selected_game_art())
+                self._launch_selected()
         elif self.page == "profile":
             if pygame.Rect(670, 540, 130, 40).collidepoint(pos):
                 ScreenshotManager.open_capturas_folder()
@@ -2270,27 +2264,6 @@ class CCIConsoleState:
                         pygame.key.stop_text_input()
                     elif event.key == pygame.K_BACKSPACE:
                         self.name_buffer = self.name_buffer[:-1]
-            return
-        if self.game_hub.is_open():
-            for event in events:
-                action = self.game_hub.handle_event(event)
-                if action == "play":
-                    self.game_hub.close()
-                    self._launch_selected()
-                    return
-                elif action == "favorite":
-                    game_id = self.selected_game_id
-                    favorites = self.user_data.data.setdefault("favorites", [])
-                    if game_id in favorites:
-                        favorites.remove(game_id)
-                        self.toast = "QUITADO DE FAVORITOS"
-                    else:
-                        favorites.append(game_id)
-                        self.toast = "AGREGADO A FAVORITOS"
-                    self.toast_until = time.monotonic() + 1.8
-                    self.user_data.save()
-                elif action == "close":
-                    return
             return
         if self.modal:
             for event in events:

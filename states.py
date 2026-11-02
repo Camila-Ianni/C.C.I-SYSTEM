@@ -625,41 +625,12 @@ class MenuState(BaseState):
             self.font = pygame.font.SysFont("Courier", 13, bold=True)
             self.font_large = pygame.font.SysFont("Courier", 15, bold=True)
 
-        from game_hub import GameHubModal
-        self.game_hub = GameHubModal()
-
     def enter(self):
         self.anim_timer = 0.0
         self.scroll_pos = float(self.selected_index)
         pygame.display.set_caption("C.C.I. SYSTEM - SELECT GAME (14 GAMES)")
 
     def handle_events(self, events):
-        if self.game_hub.is_open():
-            for event in events:
-                action = self.game_hub.handle_event(event)
-                if action == "play":
-                    selected_game = self.game_hub.game["id"]
-                    self.game_hub.close()
-                    self._launch_game(selected_game)
-                    return
-                elif action == "favorite":
-                    try:
-                        from cci_users import UserManager
-                        u = UserManager.get_instance().active_user
-                        if u:
-                            favs = u.data.setdefault("favorites", [])
-                            gid = self.game_hub.game["id"]
-                            if gid in favs:
-                                favs.remove(gid)
-                            else:
-                                favs.append(gid)
-                            u.save()
-                    except Exception:
-                        pass
-                elif action == "close":
-                    return
-            return
-
         num_options = len(self.options)
         for event in events:
             if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
@@ -705,15 +676,7 @@ class MenuState(BaseState):
                 elif event.key in (pygame.K_RETURN, pygame.K_SPACE, pygame.K_KP_ENTER):
                     selected_key = self.options[self.selected_index]["key"]
                     self._play_beep(pitch=900)
-                    from cci_console import CATALOG
-                    game_data = next((g for g in CATALOG if g["id"] == selected_key), None)
-                    if game_data:
-                        from cci_users import UserManager
-                        u = UserManager.get_instance().active_user
-                        art = self.card_surfs.get(selected_key)
-                        self.game_hub.open(game_data, u, art)
-                    else:
-                        self._launch_game(selected_key)
+                    self._launch_game(selected_key)
                 elif event.key == pygame.K_ESCAPE:
                     pygame.event.post(pygame.event.Event(pygame.QUIT))
 
@@ -755,15 +718,7 @@ class MenuState(BaseState):
                 if self.last_mouse_game == index and now - self.last_mouse_time < 0.45:
                     self._play_beep(pitch=900)
                     selected_key = self.options[index]["key"]
-                    from cci_console import CATALOG
-                    game_data = next((g for g in CATALOG if g["id"] == selected_key), None)
-                    if game_data:
-                        from cci_users import UserManager
-                        u = UserManager.get_instance().active_user
-                        art = self.card_surfs.get(selected_key)
-                        self.game_hub.open(game_data, u, art)
-                    else:
-                        self._launch_game(selected_key)
+                    self._launch_game(selected_key)
                 else:
                     self.selected_index = index
                     self._play_beep(pitch=650)
@@ -798,7 +753,6 @@ class MenuState(BaseState):
 
     def update(self, dt):
         self.anim_timer += dt
-        self.game_hub.update(dt)
         
         # Interpolación suave (lerp) del carrusel con envoltura circular más corta
         num_options = len(self.options)
@@ -897,10 +851,6 @@ class MenuState(BaseState):
                     border_surf = pygame.transform.smoothscale(self.selected_border, (bw, bh))
                     b_rect = border_surf.get_rect(center=(int(slot_x), int(slot_y)))
                     screen.blit(border_surf, b_rect)
-
-        # Modal interactivo Game Hub (PS5 Style)
-        if self.game_hub.is_open():
-            self.game_hub.draw(screen)
 
 
 class ScreenPreviewState(BaseState):
