@@ -58,18 +58,9 @@ def create_release_zip(target_platform: str, out_zip: Path):
                 rel = fpath.relative_to(ROOT)
                 rel_str = str(rel)
 
-                # Filtrar lanzadores según plataforma
-                if target_platform == "macOS" and fname.endswith(".bat"):
-                    continue
-                if target_platform == "Windows" and fname.endswith(".command"):
-                    continue
-
                 if _should_include(fpath, rel_str):
                     arcname = f"CCI_System/{rel_str}"
                     zinfo = zipfile.ZipInfo.from_file(fpath, arcname=arcname)
-                    # En macOS preservar permisos de ejecución para .command
-                    if fname.endswith(".command") or fname.endswith(".sh"):
-                        zinfo.external_attr = 0o755 << 16
                     zf.writestr(zinfo, fpath.read_bytes())
                     included_count += 1
 
