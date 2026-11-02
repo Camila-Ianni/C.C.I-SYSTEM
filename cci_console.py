@@ -1182,9 +1182,9 @@ class CCIConsoleState:
 
         # Botón Cambiar Usuario (conduce a USER_SELECT)
         btn_switch = pygame.Rect(620, 178, 120, 24)
-        pygame.draw.rect(self.canvas, (18, 24, 36), btn_switch, border_radius=4)
-        pygame.draw.rect(self.canvas, (0, 229, 255), btn_switch, 1, border_radius=4)
-        self._text("CAMBIAR USUARIO", btn_switch.x + 8, btn_switch.y + 6, 9, (0, 229, 255), True)
+        pygame.draw.rect(self.canvas, (24, 28, 34), btn_switch, border_radius=4)
+        pygame.draw.rect(self.canvas, (75, 79, 85), btn_switch, 1, border_radius=4)
+        self._text("CAMBIAR USUARIO", btn_switch.x + 8, btn_switch.y + 6, 9, LIGHT, True)
 
         seconds = int(self.user_data.data.get("total_seconds", 0))
         xp = (seconds // 60) * 10
@@ -1226,19 +1226,7 @@ class CCIConsoleState:
                 frame = pygame.transform.scale(self.avatar_surfaces[i], rect.size)
                 self.canvas.blit(frame, rect)
                 if i == avatar_index:
-                    pygame.draw.rect(self.canvas, (0, 229, 255), rect.inflate(4, 4), 2, border_radius=4)
-
-        # Galería de Capturas de Pantalla (PS5 Style)
-        cap_box = pygame.Rect(300, 540, 500, 50)
-        pygame.draw.rect(self.canvas, (14, 18, 26), cap_box, border_radius=6)
-        pygame.draw.rect(self.canvas, (0, 229, 255), cap_box, 1, border_radius=6)
-        cap_count = ScreenshotManager.get_capture_count()
-        self._text(f"📸 CAPTURAS: {cap_count} IMÁGENES GUARDADAS", cap_box.x + 14, cap_box.y + 11, 11, (0, 229, 255), True)
-        self._text("Presiona F12 para capturar pantalla en cualquier momento", cap_box.x + 14, cap_box.y + 28, 9, MUTED)
-        btn_open = pygame.Rect(cap_box.right - 120, cap_box.y + 10, 110, 30)
-        pygame.draw.rect(self.canvas, (24, 32, 48), btn_open, border_radius=4)
-        pygame.draw.rect(self.canvas, (0, 229, 255), btn_open, 1, border_radius=4)
-        self._text("ABRIR CARPETA", btn_open.x + 10, btn_open.y + 8, 9, WHITE, True)
+                    pygame.draw.rect(self.canvas, WHITE, rect.inflate(4, 4), 2, border_radius=4)
 
         # Partidas guardadas: datos reales de sesiones recientes.
         pygame.draw.rect(self.canvas, DARK, (832, 194, 403, 366))
@@ -1265,7 +1253,7 @@ class CCIConsoleState:
                 self._text(f"{date} {item.get('time', '')}  {h_play:02d}h {m_play:02d}m", rect.x + 137, rect.y + 54, 10, LIGHT, max_width=245)
             else:
                 self._text("SIN PARTIDAS GUARDADAS", rect.x + 14, rect.y + 28, 11, MUTED)
-        self._text("F2 EDITAR NOMBRE   F3 CAMBIAR USUARIO   G ABRIR CAPTURAS (F12)   ←→ CAMBIAR AVATAR", 192, 665, 11, MUTED, max_width=580)
+        self._text("F2 EDITAR NOMBRE   F3 CAMBIAR USUARIO   ←→ CAMBIAR AVATAR", 192, 665, 12, MUTED, max_width=580)
 
     def _achievement_game_for_row(self, item):
         return item.get("game_id")
@@ -1972,10 +1960,8 @@ class CCIConsoleState:
             self.name_buffer = str(self.user_data.data.get("player_name", "CAMI"))
             pygame.key.start_text_input()
             return True
-        if key in (pygame.K_g, pygame.K_F10):
-            ScreenshotManager.open_capturas_folder()
-            self.toast = "CARPETA CAPTURAS ABIERTA"
-            self.toast_until = time.monotonic() + 2.0
+        if key == pygame.K_F3:
+            self.state_machine.change_state("USER_SELECT")
             return True
         if key in (pygame.K_LEFT, pygame.K_a, pygame.K_RIGHT, pygame.K_d):
             delta = -1 if key in (pygame.K_LEFT, pygame.K_a) else 1
@@ -2138,9 +2124,6 @@ class CCIConsoleState:
             if pygame.Rect(1082, 529, 150, 43).collidepoint(pos):
                 self._launch_selected()
         elif self.page == "profile":
-            if pygame.Rect(670, 540, 130, 40).collidepoint(pos):
-                ScreenshotManager.open_capturas_folder()
-                return
             if pygame.Rect(620, 178, 120, 24).collidepoint(pos):
                 self.state_machine.change_state("USER_SELECT")
                 return

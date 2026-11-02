@@ -100,8 +100,8 @@ class ScreenshotManager:
         overlay = pygame.Surface((banner_w, banner_h), pygame.SRCALPHA)
         # Fondo oscuro translúcido
         pygame.draw.rect(overlay, (10, 14, 22, int(235 * (alpha / 255))), (0, 0, banner_w, banner_h), border_radius=8)
-        # Borde cian PS5
-        pygame.draw.rect(overlay, (0, 229, 255, int(220 * (alpha / 255))), (0, 0, banner_w, banner_h), 2, border_radius=8)
+        # Borde limpio
+        pygame.draw.rect(overlay, (200, 210, 225, int(200 * (alpha / 255))), (0, 0, banner_w, banner_h), 2, border_radius=8)
 
         # Miniatura capturada
         thumb_x = 8
@@ -114,7 +114,7 @@ class ScreenshotManager:
             self._font_bold = pygame.font.SysFont("Helvetica,Arial", 12, bold=True)
             self._font_regular = pygame.font.SysFont("Helvetica,Arial", 11)
 
-        title_surf = self._font_bold.render("📸 CAPTURA GUARDADA", True, (0, 229, 255))
+        title_surf = self._font_bold.render("📸 CAPTURA GUARDADA", True, (245, 247, 250))
         sub_surf = self._font_regular.render(self.toast_filename, True, (230, 235, 245))
         loc_surf = self._font_regular.render("Guardado en carpeta capturas/", True, (150, 155, 165))
 
