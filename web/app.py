@@ -11,7 +11,7 @@ ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 from cci_console import CATALOG, CATEGORIES
-from web.landing_page import build_landing_page
+from web.landing_page import build_landing_page, CYBER_CSS, CLIENT_JS
 
 app = Flask(__name__)
 
@@ -125,6 +125,18 @@ def serve_ui(filename):
 @app.route("/assets/pantallas/<path:filename>")
 def serve_pantallas(filename):
     return send_from_directory(PANTALLAS_DIR, filename)
+
+
+@app.route("/static/css/style.css")
+@app.route("/style.css")
+def serve_css():
+    return Response(CYBER_CSS, mimetype="text/css")
+
+
+@app.route("/static/js/main.js")
+@app.route("/main.js")
+def serve_js():
+    return Response(CLIENT_JS, mimetype="application/javascript")
 
 
 @app.route("/assets/welcome.png")
