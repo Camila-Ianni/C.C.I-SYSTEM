@@ -1,9 +1,12 @@
 #!/usr/bin/env python3
-"""build_distribution.py - Genera los paquetes ZIP limpios (0 perfiles) para Mac y Windows."""
+"""build_distribution.py - Genera los paquetes ZIP limpios (0 perfiles) para Mac y Windows
+con soporte de instalador gráfico emergente de 1-clic (sin terminal).
+Autora: Camila Carolina Ianni
+"""
 from __future__ import annotations
 
 import os
-import shutil
+import stat
 import zipfile
 from pathlib import Path
 
@@ -17,22 +20,29 @@ EXCLUDE_DIRS = {
 EXCLUDE_EXTS = {".pyc", ".pyo", ".DS_Store"}
 
 
-def _should_include(file_path: Path, rel_str: str) -> bool:
+def _should_include(file_path: Path, rel_str: str, target_platform: str) -> bool:
     parts = rel_str.split(os.sep)
     for p in parts:
         if p in EXCLUDE_DIRS:
             return False
     if file_path.suffix in EXCLUDE_EXTS:
         return False
+
+    # Excluir archivos específicos de la otra plataforma
+    if target_platform == "Windows" and "Instalar C.C.I. SYSTEM.app" in parts:
+        return False
+
     # Excluir perfiles de usuario locales para que la descarga sea 100% limpia (0 perfiles)
     if ".cci-user-data" in parts:
         if file_path.name in ("active_user.json", "system.json"):
             return False
         if "users" in parts and file_path.suffix == ".json":
             return False
+
     # Excluir zips previos generados
     if file_path.suffix == ".zip":
         return False
+
     return True
 
 
@@ -50,7 +60,6 @@ def create_release_zip(target_platform: str, out_zip: Path):
 
         for root_dir, dirs, files in os.walk(ROOT):
             r_path = Path(root_dir)
-            # Evitar explorar carpetas excluidas grandes
             dirs[:] = [d for d in dirs if d not in EXCLUDE_DIRS and not d.startswith(".tmp")]
 
             for fname in files:
@@ -58,9 +67,16 @@ def create_release_zip(target_platform: str, out_zip: Path):
                 rel = fpath.relative_to(ROOT)
                 rel_str = str(rel)
 
-                if _should_include(fpath, rel_str):
+                if _should_include(fpath, rel_str, target_platform):
                     arcname = f"CCI_System/{rel_str}"
                     zinfo = zipfile.ZipInfo.from_file(fpath, arcname=arcname)
+                    # Preservar permisos de ejecución para scripts y ejecutables
+                    file_mode = fpath.stat().st_mode
+                    if file_mode & stat.S_IXUSR or fpath.suffix in (".py", ".pyw") or "MacOS" in rel_str:
+                        zinfo.external_attr = (file_mode | 0o755) << 16
+                    else:
+                        zinfo.external_attr = (file_mode | 0o644) << 16
+
                     zf.writestr(zinfo, fpath.read_bytes())
                     included_count += 1
 
