@@ -136,7 +136,7 @@ def serve_welcome():
 
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 5000))
+    port = int(os.environ.get("PORT", 5050))
     print(f"\n=======================================================")
     print(f"  C.C.I. SYSTEM LANDING PAGE — FLASK SERVER")
     print(f"  Servidor iniciado en: http://127.0.0.1:{port}")

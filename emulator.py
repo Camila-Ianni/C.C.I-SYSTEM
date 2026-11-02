@@ -14,6 +14,11 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent
 sys.path.insert(0, str(ROOT))
 
+# Si existe .venv local y no estamos dentro de él, re-ejecutar automáticamente
+venv_py = ROOT / ".venv" / ("Scripts/python.exe" if sys.platform == "win32" else "bin/python")
+if sys.prefix == sys.base_prefix and venv_py.exists():
+    os.execv(str(venv_py), [str(venv_py)] + sys.argv)
+
 REQUIRED_PACKAGES = {
     "pygame": "pygame-ce>=2.5.0",
     "cv2": "opencv-python>=4.8.0",
