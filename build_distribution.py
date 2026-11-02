@@ -28,10 +28,6 @@ def _should_include(file_path: Path, rel_str: str, target_platform: str) -> bool
     if file_path.suffix in EXCLUDE_EXTS:
         return False
 
-    # Excluir archivos específicos de la otra plataforma
-    if target_platform == "Windows" and "Instalar C.C.I. SYSTEM.app" in parts:
-        return False
-
     # Excluir perfiles de usuario locales para que la descarga sea 100% limpia (0 perfiles)
     if ".cci-user-data" in parts:
         if file_path.name in ("active_user.json", "system.json"):

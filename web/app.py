@@ -5,18 +5,15 @@ from __future__ import annotations
 import os
 import sys
 from pathlib import Path
-from flask import Flask, abort, jsonify, render_template, send_from_directory
+from flask import Flask, Response, abort, jsonify, send_from_directory
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 from cci_console import CATALOG, CATEGORIES
+from web.landing_page import build_landing_page
 
-app = Flask(
-    __name__,
-    template_folder="templates",
-    static_folder="static"
-)
+app = Flask(__name__)
 
 DOWNLOADS_DIR = ROOT / "web" / "static" / "downloads"
 CARDS_DIR = ROOT / "assets_cards"
@@ -71,13 +68,13 @@ def index():
         "profiles": "0 Perfiles de fábrica (Arranque limpio para nuevos usuarios)",
         "gamepad": "Soporte Plug & Play (PS4, PS5, Xbox, Mandos Genéricos USB)",
     }
-    return render_template(
-        "index.html",
+    html_content = build_landing_page(
         games=games,
         categories=CATEGORIES,
         author=author_info,
         stats=stats
     )
+    return Response(html_content, mimetype="text/html")
 
 
 @app.route("/api/games")

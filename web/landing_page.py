@@ -1,9 +1,13 @@
-/* ==============================================================================
-   C.C.I. SYSTEM — LANDING PAGE STYLESHEET
-   Estética Cyberpunk / Retrofuturista / Virtual Console
-   Autora: Camila Carolina Ianni
-   ============================================================================== */
+"""web/landing_page.py - Generador 100% Python de la Landing Page de C.C.I. SYSTEM.
+Elimina la necesidad de archivos .html, .css y .js en disco: todo se genera dinámicamente
+en memoria desde este módulo Python nativo.
+Autora: Camila Carolina Ianni
+"""
+from __future__ import annotations
 
+import html
+
+CYBER_CSS = """
 :root {
   --bg-darkest: #05070a;
   --bg-dark: #0a0e15;
@@ -51,7 +55,6 @@ body {
   min-height: 100vh;
 }
 
-/* Background Cyber Grid & Glow Orbs */
 .bg-grid {
   position: fixed;
   top: 0; left: 0; right: 0; bottom: 0;
@@ -90,9 +93,6 @@ body {
   z-index: 1;
 }
 
-/* ==============================================================================
-   HEADER & NAVBAR
-   ============================================================================== */
 .header {
   position: fixed;
   top: 0; left: 0; right: 0;
@@ -209,9 +209,6 @@ body {
   50% { opacity: 0.4; transform: scale(0.85); }
 }
 
-/* ==============================================================================
-   HERO SECTION
-   ============================================================================== */
 .hero {
   padding: 140px 0 80px;
   min-height: 88vh;
@@ -286,11 +283,6 @@ body {
   cursor: pointer;
 }
 
-.btn-icon {
-  width: 18px;
-  height: 18px;
-}
-
 .btn-primary {
   background: linear-gradient(135deg, #00e5ff 0%, #0099cc 100%);
   color: #040810;
@@ -354,7 +346,6 @@ body {
   background: var(--border-dim);
 }
 
-/* Console Frame Mockup */
 .console-frame {
   background: #090d14;
   border: 1px solid var(--border-bright);
@@ -437,9 +428,6 @@ body {
   color: var(--text-dim);
 }
 
-/* ==============================================================================
-   SECTIONS GENERAL
-   ============================================================================== */
 .section {
   padding: 90px 0;
   position: relative;
@@ -485,7 +473,6 @@ body {
   line-height: 1.6;
 }
 
-/* Features Grid */
 .features-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
@@ -525,9 +512,6 @@ body {
   line-height: 1.6;
 }
 
-/* ==============================================================================
-   GAMES CATALOG & FILTERS
-   ============================================================================== */
 .filters-bar {
   display: flex;
   gap: 8px;
@@ -691,9 +675,6 @@ body {
   border-radius: var(--radius-sm);
 }
 
-/* ==============================================================================
-   AUTHOR SECTION (Camila Carolina Ianni)
-   ============================================================================== */
 .author-box {
   background: linear-gradient(145deg, #111724 0%, #0c101a 100%);
   border: 1px solid var(--border-bright);
@@ -824,9 +805,6 @@ body {
   color: var(--text-dim);
 }
 
-/* ==============================================================================
-   DOWNLOADS SECTION
-   ============================================================================== */
 .download-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(360px, 1fr));
@@ -911,7 +889,6 @@ body {
   font-family: var(--font-mono);
 }
 
-/* Steps Card */
 .steps-card {
   background: rgba(16, 22, 34, 0.5);
   border: 1px solid var(--border-dim);
@@ -959,17 +936,7 @@ body {
   color: var(--text-muted);
   line-height: 1.5;
 }
-.step-desc code {
-  font-family: var(--font-mono);
-  color: var(--accent-cyan);
-  background: #111722;
-  padding: 1px 5px;
-  border-radius: var(--radius-sm);
-}
 
-/* ==============================================================================
-   MODAL DIALOG
-   ============================================================================== */
 .modal-backdrop {
   position: fixed;
   top: 0; left: 0; right: 0; bottom: 0;
@@ -1074,9 +1041,6 @@ body {
   text-align: center;
 }
 
-/* ==============================================================================
-   FOOTER
-   ============================================================================== */
 .footer {
   background: #06080d;
   border-top: 1px solid var(--border-dim);
@@ -1131,37 +1095,424 @@ body {
   color: var(--accent-cyan);
 }
 
-/* ==============================================================================
-   RESPONSIVE DESIGN
-   ============================================================================== */
 @media (max-width: 992px) {
-  .hero-grid {
-    grid-template-columns: 1fr;
-    gap: 40px;
-  }
-  .author-content-grid {
-    grid-template-columns: 1fr;
-    text-align: center;
-    justify-items: center;
-  }
-  .author-badge-top {
-    right: 50%;
-    transform: translateX(50%);
-  }
+  .hero-grid { grid-template-columns: 1fr; gap: 40px; }
+  .author-content-grid { grid-template-columns: 1fr; text-align: center; justify-items: center; }
+  .author-badge-top { right: 50%; transform: translateX(50%); }
 }
 
 @media (max-width: 768px) {
-  .nav-menu {
-    display: none;
-  }
-  .hero-title {
-    font-size: 2.1rem;
-  }
-  .section-title {
-    font-size: 1.8rem;
-  }
-  .footer-content {
-    flex-direction: column;
-    text-align: center;
-  }
+  .nav-menu { display: none; }
+  .hero-title { font-size: 2.1rem; }
+  .section-title { font-size: 1.8rem; }
+  .footer-content { flex-direction: column; text-align: center; }
 }
+"""
+
+CLIENT_JS = """
+document.addEventListener('DOMContentLoaded', () => {
+  const filterBtns = document.querySelectorAll('.filter-btn');
+  const gameCards = document.querySelectorAll('.game-card');
+
+  filterBtns.forEach(btn => {
+    btn.addEventListener('click', () => {
+      filterBtns.forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      const selectedCat = (btn.dataset.cat || '').toUpperCase();
+
+      gameCards.forEach(card => {
+        const cardCats = (card.dataset.categories || '').toUpperCase().split(' ');
+        if (selectedCat === 'TODOS' || cardCats.includes(selectedCat)) {
+          card.style.display = 'flex';
+          card.style.animation = 'fadeIn 0.3s ease';
+        } else {
+          card.style.display = 'none';
+        }
+      });
+    });
+  });
+
+  const modal = document.getElementById('gameModal');
+  const modalClose = document.getElementById('modalClose');
+  const modalImg = document.getElementById('modalImg');
+  const modalTitle = document.getElementById('modalTitle');
+  const modalYear = document.getElementById('modalYear');
+  const modalGenre = document.getElementById('modalGenre');
+  const modalPlayers = document.getElementById('modalPlayers');
+  const modalDev = document.getElementById('modalDev');
+  const modalDesc = document.getElementById('modalDesc');
+
+  function openModal(card) {
+    modalTitle.textContent = card.dataset.title;
+    modalGenre.textContent = card.dataset.genre;
+    modalDev.textContent = 'Desarrollador: ' + card.dataset.dev;
+    modalYear.textContent = card.dataset.year;
+    modalPlayers.textContent = card.dataset.players + ' Jugador(es)';
+    modalDesc.textContent = card.dataset.desc;
+    modalImg.src = card.querySelector('img').src;
+    modalImg.alt = card.dataset.title;
+
+    modal.style.display = 'flex';
+    document.body.style.overflow = 'hidden';
+  }
+
+  function closeModal() {
+    modal.style.display = 'none';
+    document.body.style.overflow = '';
+  }
+
+  gameCards.forEach(card => card.addEventListener('click', () => openModal(card)));
+  if (modalClose) modalClose.addEventListener('click', closeModal);
+  if (modal) {
+    modal.addEventListener('click', (e) => {
+      if (e.target === modal) closeModal();
+    });
+  }
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && modal && modal.style.display === 'flex') closeModal();
+  });
+});
+"""
+
+
+def _render_game_card(g: dict) -> str:
+    cats_str = " ".join(g.get("categories", []))
+    tags_html = "".join(f'<span class="game-tag">{html.escape(t)}</span>' for t in g.get("tags", []))
+    return f"""
+    <div class="game-card" data-categories="{html.escape(cats_str)}" data-title="{html.escape(g.get('title',''))}" data-genre="{html.escape(g.get('genre',''))}" data-dev="{html.escape(g.get('developer',''))}" data-year="{html.escape(str(g.get('year','')))}" data-players="{html.escape(str(g.get('players','')))}" data-desc="{html.escape(g.get('subtitle',''))}">
+      <div class="game-card-art">
+        <img src="{html.escape(g.get('card_url',''))}" alt="{html.escape(g.get('title',''))}" loading="lazy">
+        <div class="game-card-hover-overlay">
+          <span class="hover-btn">VER FICHA</span>
+        </div>
+      </div>
+      <div class="game-card-info">
+        <div class="game-card-meta">
+          <span class="game-badge-year">{html.escape(str(g.get('year','')))}</span>
+          <span class="game-badge-players">{html.escape(str(g.get('players','')))} JUGADORES</span>
+        </div>
+        <h3 class="game-title">{html.escape(g.get("title",""))}</h3>
+        <p class="game-subtitle">{html.escape(g.get("subtitle",""))}</p>
+        <div class="game-tags">
+          {tags_html}
+        </div>
+      </div>
+    </div>
+    """
+
+
+def build_landing_page(games: list[dict], categories: list[str], author: dict, stats: dict) -> str:
+    """Construye y retorna el documento HTML completo generado al 100% en Python."""
+    filters_html = "".join(
+        f'<button class="filter-btn {"active" if cat == "TODOS" else ""}" data-cat="{html.escape(cat)}">{html.escape(cat)}</button>'
+        for cat in categories
+    )
+    games_cards_html = "".join(_render_game_card(g) for g in games)
+
+    return f"""<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>C.C.I. SYSTEM — Consola Virtual & Emulador Retro Multiplataforma</title>
+  <meta name="description" content="Consola virtual y emulador multiplataforma 100% Python con 19 clásicos retro arcade. Autora: Camila Carolina Ianni.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@600;700;800;900&family=Rajdhani:wght@500;600;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+  <style>{CYBER_CSS}</style>
+</head>
+<body>
+  <div class="bg-grid"></div>
+  <div class="glow-orb orb-1"></div>
+  <div class="glow-orb orb-2"></div>
+
+  <!-- Header -->
+  <header class="header">
+    <div class="container nav-container">
+      <a href="#" class="brand">
+        <span class="brand-glitch">C.C.I.</span>
+        <span class="brand-sub">SYSTEM</span>
+        <span class="badge-v">EMULATOR v1.0</span>
+      </a>
+      <nav class="nav-menu">
+        <a href="#arquitectura" class="nav-link">Arquitectura</a>
+        <a href="#juegos" class="nav-link">Juegos ({len(games)})</a>
+        <a href="#autora" class="nav-link">Autora</a>
+        <a href="#descarga" class="nav-link nav-cta">DESCARGAR</a>
+      </nav>
+      <div class="nav-badge-pill">
+        <span class="status-dot"></span>
+        <span>100% PYTHON NATIVO</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- Hero Section -->
+  <section class="hero">
+    <div class="container hero-grid">
+      <div class="hero-content">
+        <span class="hero-tag">CONSOLA VIRTUAL RETRO · ARQUITECTURA PYTHON PURA</span>
+        <h1 class="hero-title">EXPERIENCIA ARCADE RETROFUTURISTA</h1>
+        <p class="hero-desc">
+          <strong>C.C.I. SYSTEM</strong> es una suite emuladora que integra <strong>19 videojuegos arcade legendarios</strong>
+          en una interfaz de consola con estética Cyberpunk / PS5, sistema multiusuario con perfiles independientes,
+          soporte de gamepad universal y capturador en alta fidelidad.
+        </p>
+        <div class="hero-actions">
+          <a href="#descarga" class="btn btn-primary">
+            DESCARGAR EMULADOR
+          </a>
+          <a href="#juegos" class="btn btn-secondary">
+            VER CATÁLOGO ({len(games)} JUEGOS)
+          </a>
+        </div>
+        <div class="hero-features-strip">
+          <div class="strip-item">
+            <span class="strip-num">{len(games)}</span>
+            <span class="strip-lbl">Juegos Integrados</span>
+          </div>
+          <div class="strip-divider"></div>
+          <div class="strip-item">
+            <span class="strip-num">0</span>
+            <span class="strip-lbl">Perfiles de Fábrica</span>
+          </div>
+          <div class="strip-divider"></div>
+          <div class="strip-item">
+            <span class="strip-num">100%</span>
+            <span class="strip-lbl">Python Puro</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="hero-visual">
+        <div class="console-frame">
+          <div class="frame-header">
+            <span class="dot red"></span>
+            <span class="dot yellow"></span>
+            <span class="dot green"></span>
+            <span class="frame-title">CCI_SYSTEM_VIRTUAL_CONSOLE_CORE</span>
+          </div>
+          <div class="frame-body">
+            <img src="/assets/pantallas/Bienvenida al sistema C.C.I.png" alt="C.C.I. SYSTEM Virtual Console" class="console-screen-img">
+            <div class="screen-overlay-scanline"></div>
+            <div class="screen-badge">1280x720 60FPS</div>
+          </div>
+          <div class="frame-footer">
+            <span>PLATAFORMA: MAC &amp; WINDOWS</span>
+            <span>MOTOR: PYGAME-CE CORE</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Architecture Section -->
+  <section id="arquitectura" class="section">
+    <div class="container">
+      <div class="section-header text-center">
+        <span class="section-tag">CARACTERÍSTICAS TÉCNICAS</span>
+        <h2 class="section-title">INGENIERÍA &amp; DISEÑO DE LA CONSOLA</h2>
+        <p class="section-desc">
+          Construida desde cero con estándares de arquitectura orientada a estados y emulación modular en Python.
+        </p>
+      </div>
+
+      <div class="features-grid">
+        <div class="feature-card">
+          <div class="feature-icon">⚡</div>
+          <h3 class="feature-title">Motor 100% Python</h3>
+          <p class="feature-text">
+            Sin dependencias binarias externas ni shells. Toda la suite se ejecuta de forma nativa a través
+            del motor de renderizado Pygame-CE con ciclo de eventos a 60 FPS estables.
+          </p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">👤</div>
+          <h3 class="feature-title">Perfiles &amp; Multiusuario</h3>
+          <p class="feature-text">
+            Descarga limpia con 0 perfiles. Al abrir la consola por primera vez, el asistente te invita a crear
+            tu propio perfil personal con avatar Cyberpunk y registro individual de logros y estadísticas.
+          </p>
+        </div>
+        <div class="feature-card">
+          <div class="feature-icon">🎮</div>
+          <h3 class="feature-title">Control Universal Plug &amp; Play</h3>
+          <p class="feature-text">
+            Compatibilidad total con mandos de PS4, PS5, Xbox Series/One y joysticks USB genéricos, con vibración
+            háptica configurable y navegación total por joystick y cruceta D-Pad.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Games Catalog Section -->
+  <section id="juegos" class="section section-dark">
+    <div class="container">
+      <div class="section-header">
+        <span class="section-tag">CATÁLOGO OFICIAL</span>
+        <h2 class="section-title">{len(games)} JUEGOS DISPONIBLES</h2>
+        <p class="section-desc">
+          Filtra por categoría para explorar cada aventura:
+        </p>
+        <div class="filters-bar" id="filtersBar">
+          {filters_html}
+        </div>
+      </div>
+
+      <div class="games-grid" id="gamesGrid">
+        {games_cards_html}
+      </div>
+    </div>
+  </section>
+
+  <!-- Author Section -->
+  <section id="autora" class="section">
+    <div class="container">
+      <div class="author-box">
+        <div class="author-badge-top">AUTORA &amp; CREADORA DEL PROYECTO</div>
+        <div class="author-content-grid">
+          <div class="author-avatar-wrap">
+            <div class="author-avatar-circle">
+              <div class="avatar-silhouette">
+                <span class="author-initials">CCI</span>
+              </div>
+            </div>
+            <div class="author-title-pill">DESARROLLADORA</div>
+          </div>
+          <div class="author-details">
+            <h2 class="author-name">{html.escape(author.get("name",""))}</h2>
+            <p class="author-institution">{html.escape(author.get("institution",""))} · {html.escape(author.get("year",""))}</p>
+            <p class="author-bio">{html.escape(author.get("bio",""))}</p>
+            <div class="author-highlights">
+              <div class="highlight-item">
+                <span class="hl-icon">🐍</span>
+                <div>
+                  <strong>Desarrollo 100% Python:</strong>
+                  <span>Arquitectura de estados finitos, orquestación de subprocesos y virtualización.</span>
+                </div>
+              </div>
+              <div class="highlight-item">
+                <span class="hl-icon">🕹️</span>
+                <div>
+                  <strong>Preservación Retro:</strong>
+                  <span>Recreación fidedigna con controles modernos y balance pulido.</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Downloads Section -->
+  <section id="descarga" class="section section-dark">
+    <div class="container">
+      <div class="section-header text-center">
+        <span class="section-tag">INSTALACIÓN &amp; DESCARGA</span>
+        <h2 class="section-title">DESCARGA C.C.I. SYSTEM EMULADOR</h2>
+        <p class="section-desc">
+          Elige tu sistema operativo. Ambas versiones vienen con los 19 juegos, instalador gráfico 1-clic
+          y <strong>0 perfiles precargados</strong> para arrancar desde cero.
+        </p>
+      </div>
+
+      <div class="download-grid">
+        <!-- macOS -->
+        <div class="download-card">
+          <div class="os-icon-wrap">
+            <svg class="os-svg" viewBox="0 0 24 24" fill="currentColor"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M15.97 6.37c.63-.77 1.06-1.85.94-2.93-.91.04-2.02.61-2.67 1.37-.58.67-.99 1.77-.85 2.83 1.02.08 2.05-.51 2.58-1.27z"/></svg>
+          </div>
+          <h3 class="download-os-title">C.C.I. SYSTEM para macOS</h3>
+          <p class="download-os-sub">Compatible con Apple Silicon (M1/M2/M3/M4) e Intel (macOS 12+)</p>
+          <ul class="download-specs">
+            <li>✔ Código 100% Python nativo multiplataforma</li>
+            <li>✔ Instalador gráfico interactivo de 1-clic</li>
+            <li>✔ Asistente pop-up de instalación (Escritorio por defecto)</li>
+            <li>✔ 0 perfiles de fábrica (asistente de bienvenida en primer boot)</li>
+          </ul>
+          <a href="/download/mac" class="btn btn-primary btn-block">DESCARGAR EMULADOR MAC</a>
+          <span class="download-hint">Descomprime y ejecuta el instalador gráfico</span>
+        </div>
+
+        <!-- Windows -->
+        <div class="download-card">
+          <div class="os-icon-wrap">
+            <svg class="os-svg" viewBox="0 0 24 24" fill="currentColor"><path d="M0 3.449L9.75 2.1v9.451H0m10.949-9.602L24 0v11.4H10.949M0 12.6h9.75v9.451L0 20.699M10.949 12.6H24V24l-12.9-1.801"/></svg>
+          </div>
+          <h3 class="download-os-title">C.C.I. SYSTEM para Windows</h3>
+          <p class="download-os-sub">Compatible con Windows 10 y Windows 11 (100% Python)</p>
+          <ul class="download-specs">
+            <li>✔ Código 100% Python nativo multiplataforma</li>
+            <li>✔ Instalador gráfico directo sin ventana de terminal</li>
+            <li>✔ Asistente pop-up con ubicación por defecto en tu Escritorio</li>
+            <li>✔ 0 perfiles de fábrica (crea tu jugador al instante)</li>
+          </ul>
+          <a href="/download/windows" class="btn btn-secondary btn-block">DESCARGAR EMULADOR WINDOWS</a>
+          <span class="download-hint">Descomprime y ejecuta el instalador gráfico</span>
+        </div>
+      </div>
+
+      <div class="steps-card">
+        <h4 class="steps-title">EXPERIENCIA DE INSTALACIÓN DE EMULADOR REAL</h4>
+        <div class="steps-row">
+          <div class="step-item">
+            <div class="step-num">1</div>
+            <div class="step-desc"><strong>Descarga el emulador</strong> para tu sistema operativo (Mac o Windows).</div>
+          </div>
+          <div class="step-item">
+            <div class="step-num">2</div>
+            <div class="step-desc"><strong>Abre el instalador:</strong> un asistente emergente te preguntará dónde ubicar tu consola (por defecto en tu Escritorio).</div>
+          </div>
+          <div class="step-item">
+            <div class="step-num">3</div>
+            <div class="step-desc"><strong>¡Listo para jugar!</strong> Se crea tu acceso directo y la consola se abre de inmediato. Crea tu nuevo jugador desde cero y disfruta.</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Modal -->
+  <div class="modal-backdrop" id="gameModal" style="display: none;">
+    <div class="modal-dialog">
+      <button class="modal-close" id="modalClose">&times;</button>
+      <div class="modal-art-box">
+        <img src="" id="modalImg" alt="Juego">
+      </div>
+      <div class="modal-info-box">
+        <div class="modal-tags-row">
+          <span class="game-badge-year" id="modalYear"></span>
+          <span class="game-badge-players" id="modalPlayers"></span>
+        </div>
+        <h2 class="modal-title" id="modalTitle"></h2>
+        <p class="modal-dev" id="modalDev"></p>
+        <p class="modal-desc" id="modalDesc"></p>
+        <div class="modal-launch-note">Disponible en la suite C.C.I. SYSTEM</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <footer class="footer">
+    <div class="container footer-content">
+      <div class="footer-left">
+        <span class="footer-logo">C.C.I. SYSTEM</span>
+        <p class="footer-copy">
+          Virtual Console &amp; Multiplatform Retro Emulator · Diseñado y desarrollado por <strong>Camila Carolina Ianni</strong>.
+          <br>Arquitectura 100% Python puro con fines de preservación y divulgación académica.
+        </p>
+      </div>
+      <div class="footer-right">
+        <a href="#arquitectura">Arquitectura</a>
+        <a href="#juegos">Juegos</a>
+        <a href="#autora">Autora</a>
+        <a href="#descarga">Descargas</a>
+      </div>
+    </div>
+  </footer>
+
+  <script>{CLIENT_JS}</script>
+</body>
+</html>"""
