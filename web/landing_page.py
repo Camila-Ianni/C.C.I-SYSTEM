@@ -1545,19 +1545,19 @@ def build_landing_page(games: list[dict], categories: list[str], author: dict, s
           <div class="hw-icon-box">
             <svg class="os-svg" width="30" height="30" viewBox="0 0 24 24" fill="currentColor"><path d="M0 3.449L9.75 2.1v9.451H0m10.949-9.602L24 0v11.4H10.949M0 12.6h9.75v9.451L0 20.699M10.949 12.6H24V24l-12.9-1.801"/></svg>
           </div>
-          <h3 class="hw-title">C.C.I. SYSTEM para Windows</h3>
-          <p class="hw-sub">Compatible con Windows 10 y Windows 11 (100% Python)</p>
+          <h3 class="hw-title">C.C.I. SYSTEM para Windows (.exe)</h3>
+          <p class="hw-sub">Instalador ejecutable nativo PE32 con asistente interactivo</p>
           <ul class="hw-checklist">
-            <li>Código 100% Python nativo multiplataforma</li>
-            <li>Instalador gráfico directo sin ventana de terminal</li>
+            <li>Instalador ejecutable nativo .exe (PE32 GUI)</li>
+            <li>Ejecución directa sin terminal ni comandos</li>
             <li>Asistente pop-up con ubicación por defecto en Escritorio</li>
             <li>0 perfiles de fábrica (crea tu jugador al instante)</li>
           </ul>
           <div class="hw-btn-wrap">
             <a href="/download/windows" class="btn-cci btn-secondary-action" style="width: 100%;">
-              <span class="btn-gamepad-key">⌧ A</span> DESCARGAR EMULADOR WINDOWS
+              <span class="btn-gamepad-key">⌧ A</span> DESCARGAR INSTALADOR EXE (WINDOWS)
             </a>
-            <span class="hw-hint">Descomprime y abre el instalador gráfico</span>
+            <span class="hw-hint">Ejecuta el archivo .exe y sigue el asistente interactivo</span>
           </div>
         </div>
       </div>
@@ -1569,8 +1569,8 @@ def build_landing_page(games: list[dict], categories: list[str], author: dict, s
           <div class="boot-step">
             <div class="boot-step-num">01</div>
             <div class="boot-step-content">
-              <strong>DESCARGA EL INSTALADOR DMG</strong>
-              Descarga la imagen oficial .dmg para macOS o el paquete para Windows.
+              <strong>DESCARGA EL INSTALADOR OFICIAL</strong>
+              Descarga la imagen .dmg para macOS o el ejecutable .exe para Windows.
             </div>
           </div>
           <div class="boot-step">

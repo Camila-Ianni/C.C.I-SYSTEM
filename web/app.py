@@ -109,15 +109,23 @@ def download_mac():
 
 @app.route("/download/windows")
 def download_windows():
+    exe_path = DOWNLOADS_DIR / "CCI_System_Windows_Installer.exe"
+    if exe_path.exists():
+        return send_from_directory(
+            DOWNLOADS_DIR,
+            "CCI_System_Windows_Installer.exe",
+            as_attachment=True,
+            download_name="CCI_System_Windows_Installer.exe"
+        )
     zip_path = DOWNLOADS_DIR / "CCI_System_Windows.zip"
-    if not zip_path.exists():
-        abort(404, description="Paquete para Windows aún no generado.")
-    return send_from_directory(
-        DOWNLOADS_DIR,
-        "CCI_System_Windows.zip",
-        as_attachment=True,
-        download_name="CCI_System_Windows.zip"
-    )
+    if zip_path.exists():
+        return send_from_directory(
+            DOWNLOADS_DIR,
+            "CCI_System_Windows.zip",
+            as_attachment=True,
+            download_name="CCI_System_Windows.zip"
+        )
+    abort(404, description="Paquete para Windows aún no generado.")
 
 
 @app.route("/assets/cards/<path:filename>")

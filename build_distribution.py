@@ -270,15 +270,92 @@ def create_release_zip(target_platform: str, out_zip: Path):
     print(f"[Build] {target_platform} listo: {out_zip.name} ({size_mb:.1f} MB, {included_count} archivos incluidos)")
 
 
+def create_release_exe(out_exe: Path):
+    print("[Build] Generando instalador ejecutable nativo para Windows (.exe)...")
+    out_exe.parent.mkdir(parents=True, exist_ok=True)
+    temp_exe = out_exe.with_suffix(".tmp.exe")
+    if temp_exe.exists():
+        temp_exe.unlink()
+
+    sfx_path = ROOT / "tools" / "7zS.sfx"
+    if not sfx_path.exists():
+        fallback_sfx = Path("/tmp/7zS.sfx")
+        if fallback_sfx.exists():
+            sfx_path = fallback_sfx
+        else:
+            raise RuntimeError("No se encontró 7zS.sfx en tools/ ni /tmp/")
+
+    staging_dir = ROOT / ".tmp_win_staging"
+    if staging_dir.exists():
+        shutil.rmtree(staging_dir, ignore_errors=True)
+    staging_dir.mkdir(parents=True, exist_ok=True)
+
+    # 1. Copiar archivos limpios con 0 perfiles
+    (staging_dir / ".cci-user-data" / "users").mkdir(parents=True, exist_ok=True)
+    (staging_dir / ".cci-user-data" / "users" / ".gitkeep").touch()
+
+    copied_count = 0
+    for root_dir, dirs, files in os.walk(ROOT):
+        r_path = Path(root_dir)
+        dirs[:] = [d for d in dirs if d not in EXCLUDE_DIRS and not d.startswith(".tmp")]
+        for fname in files:
+            fpath = r_path / fname
+            rel = fpath.relative_to(ROOT)
+            rel_str = str(rel)
+            if _should_include(fpath, rel_str, "Windows"):
+                dest = staging_dir / rel
+                dest.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(fpath, dest)
+                copied_count += 1
+
+    # 2. Crear payload .7z con 7zz
+    payload_7z = ROOT / ".tmp_win_payload.7z"
+    if payload_7z.exists():
+        payload_7z.unlink()
+
+    cmd_7z = ["7zz", "a", "-mx=5", "-y", str(payload_7z), f"{staging_dir}/*"]
+    subprocess.run(cmd_7z, check=True)
+
+    # 3. Leer SFX module, config UTF-8 y payload
+    sfx_bytes = sfx_path.read_bytes()
+    config_text = """;!@Install@!UTF-8!
+Title="C.C.I. SYSTEM — Instalación de Emulador"
+BeginPrompt="Bienvenido a C.C.I. SYSTEM de Camila Carolina Ianni.\\n\\n¿Deseas instalar el emulador de consola en tu equipo?"
+RunProgram="Instalar_CCI_System.pyw"
+;!@InstallEnd@!
+"""
+    config_bytes = config_text.encode("utf-8")
+    payload_bytes = payload_7z.read_bytes()
+
+    # 4. Concatenar para formar el ejecutable PE32
+    temp_exe.write_bytes(sfx_bytes + config_bytes + payload_bytes)
+
+    if out_exe.exists():
+        out_exe.unlink()
+    temp_exe.rename(out_exe)
+
+    # Limpieza
+    shutil.rmtree(staging_dir, ignore_errors=True)
+    if payload_7z.exists():
+        payload_7z.unlink()
+
+    size_mb = out_exe.stat().st_size / (1024 * 1024)
+    print(f"[Build] Windows EXE listo: {out_exe.name} ({size_mb:.1f} MB, {copied_count} archivos incluidos)")
+
+
 def build_all():
     DOWNLOADS_DIR.mkdir(parents=True, exist_ok=True)
     mac_dmg = DOWNLOADS_DIR / "CCI_System_macOS.dmg"
+    win_exe = DOWNLOADS_DIR / "CCI_System_Windows_Installer.exe"
     win_zip = DOWNLOADS_DIR / "CCI_System_Windows.zip"
 
     # 1. Generar instalador nativo DMG para Mac
     create_release_dmg(mac_dmg)
 
-    # 2. Generar instalador para Windows
+    # 2. Generar instalador ejecutable nativo para Windows (.exe)
+    create_release_exe(win_exe)
+
+    # 3. Generar respaldo ZIP para Windows
     create_release_zip("Windows", win_zip)
 
     print("[Build] ¡Empaquetado oficial completado con éxito!")

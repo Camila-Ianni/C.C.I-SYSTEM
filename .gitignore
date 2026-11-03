@@ -37,3 +37,6 @@ web/static/downloads/*.zip
 *.zip
 web/static/downloads/*.dmg
 *.dmg
+web/static/downloads/*.exe
+*.exe
+tools/7zS.sfx
