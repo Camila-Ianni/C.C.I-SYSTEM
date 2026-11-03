@@ -11,7 +11,7 @@ from flask import Flask, Response, abort, jsonify, redirect, send_from_directory
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from cci_console import CATALOG, CATEGORIES
+from catalog_data import CATALOG, CATEGORIES
 from web.landing_page import build_landing_page, CYBER_CSS, CLIENT_JS
 
 app = Flask(__name__)
