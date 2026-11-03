@@ -49,15 +49,15 @@ def index():
     games = _format_games()
     author_info = {
         "name": "Camila Carolina Ianni",
-        "title": "Desarrolladora & Diseñadora de C.C.I. SYSTEM",
+        "title": "Desarrolladora & Arquitecta de C.C.I. SYSTEM",
         "bio": (
-            "Estudiante y creadora apasionada por la arquitectura de software, emulación retro "
-            "y desarrollo de experiencias interactivas en Python. C.C.I. SYSTEM nace como un proyecto "
+            "Estudiante de Analista de Sistemas apasionada por la arquitectura de software, "
+            "emulación y desarrollo de sistemas interactivos en Python. C.C.I. SYSTEM nace como un proyecto "
             "integral que transforma una suite de 19 clásicos arcade en una consola virtual moderna con "
             "interfaz Cyberpunk / PS5, sistema multiusuario con gestión de estadísticas independiente, "
             "grabador de capturas y mapeo universal de gamepads."
         ),
-        "institution": "Escuela Da Vinci — Diseño y Programación de Videojuegos",
+        "institution": "Escuela Da Vinci — Analista de Sistemas",
         "year": "2026",
     }
     stats = {
