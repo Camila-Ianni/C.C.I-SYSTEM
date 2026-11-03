@@ -6,15 +6,22 @@ import os
 import sys
 import urllib.parse
 from pathlib import Path
-from flask import Flask, Response, abort, jsonify, redirect, send_from_directory
+from flask import Flask, Response, abort, jsonify, redirect, request, send_from_directory
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
+import cci_database
 from catalog_data import CATALOG, CATEGORIES
 from web.landing_page import build_landing_page, CYBER_CSS, CLIENT_JS
 
 app = Flask(__name__)
+
+# Inicializar base de datos SQLite relacional
+try:
+    cci_database.init_db()
+except Exception as _e:
+    print(f"[web/app.py] Aviso inicialización DB: {_e}")
 
 MAC_DOWNLOAD_URL = os.environ.get(
     "MAC_DOWNLOAD_URL",
@@ -121,13 +128,177 @@ def index():
     return Response(html_content, mimetype="text/html")
 
 
+# ==============================================================================
+# REST API v1 (Fase 2: Arquitectura de Base de Datos y Servicios REST)
+# ==============================================================================
+
 @app.route("/api/games")
+@app.route("/api/v1/games")
 def api_games():
+    """Retorna el catálogo completo de títulos (desde SQLite con fallback)."""
+    try:
+        games = cci_database.get_all_games()
+        if not games:
+            games = _format_games()
+    except Exception:
+        games = _format_games()
     return jsonify({
         "status": "success",
-        "count": len(CATALOG),
-        "games": _format_games()
+        "count": len(games),
+        "games": games
     })
+
+
+@app.route("/api/v1/games/<game_id>")
+def api_game_detail(game_id: str):
+    """Retorna información detallada de un juego y su podio de récords."""
+    game = cci_database.get_game_by_id(game_id)
+    if not game:
+        match = next((g for g in CATALOG if g["id"] == game_id), None)
+        if not match:
+            abort(404, description=f"Juego con id '{game_id}' no encontrado.")
+        game = match
+
+    scores = cci_database.get_leaderboard(game_id=game_id, limit=5)
+    return jsonify({
+        "status": "success",
+        "game": game,
+        "highscores": scores
+    })
+
+
+@app.route("/api/v1/health")
+def api_health():
+    """Estado de salud del backend, base de datos SQLite y telemetría."""
+    return jsonify(cci_database.get_telemetry_summary())
+
+
+@app.route("/api/v1/stats")
+def api_stats():
+    """Telemetría global y métricas de uso del ecosistema."""
+    return jsonify({
+        "status": "success",
+        "telemetry": cci_database.get_telemetry_summary()
+    })
+
+
+@app.route("/api/v1/leaderboards", methods=["GET", "POST"])
+def api_leaderboards():
+    """
+    GET: Retorna el ranking global o filtrado por ?game_id=...&limit=...
+    POST: Registra un nuevo récord arcade con validación de datos.
+    """
+    if request.method == "POST":
+        payload = request.get_json(silent=True) or {}
+        game_id = str(payload.get("game_id", "")).strip()
+        player_name = str(payload.get("player_name", "")).strip().upper()
+        try:
+            score = int(payload.get("score", 0))
+        except (ValueError, TypeError):
+            return jsonify({"status": "error", "message": "El campo 'score' debe ser un entero válido."}), 400
+
+        level = int(payload.get("level", 1))
+        profile_id = payload.get("profile_id")
+
+        if not game_id or not player_name or score <= 0:
+            return jsonify({
+                "status": "error",
+                "message": "Parámetros inválidos. Requiere 'game_id', 'player_name' y 'score' > 0."
+            }), 400
+
+        rec_id = cci_database.record_highscore(
+            game_id=game_id,
+            player_name=player_name,
+            score=score,
+            level=level,
+            profile_id=profile_id
+        )
+        return jsonify({
+            "status": "success",
+            "message": "Récord guardado exitosamente en el salón de la fama.",
+            "record_id": rec_id,
+            "data": {
+                "game_id": game_id,
+                "player_name": player_name,
+                "score": score,
+                "level": level,
+            }
+        }), 201
+
+    # GET
+    game_id = request.args.get("game_id")
+    try:
+        limit = int(request.args.get("limit", 15))
+    except (ValueError, TypeError):
+        limit = 15
+
+    scores = cci_database.get_leaderboard(game_id=game_id, limit=limit)
+    return jsonify({
+        "status": "success",
+        "filter_game": game_id,
+        "count": len(scores),
+        "leaderboard": scores
+    })
+
+
+@app.route("/api/v1/leaderboards/<game_id>")
+def api_leaderboards_game(game_id: str):
+    """Atajo para el podio de un juego específico."""
+    try:
+        limit = int(request.args.get("limit", 10))
+    except (ValueError, TypeError):
+        limit = 10
+    scores = cci_database.get_leaderboard(game_id=game_id, limit=limit)
+    return jsonify({
+        "status": "success",
+        "game_id": game_id,
+        "count": len(scores),
+        "leaderboard": scores
+    })
+
+
+@app.route("/api/v1/profiles", methods=["GET"])
+def api_profiles():
+    """Lista todos los perfiles de jugador sincronizados."""
+    profiles = cci_database.get_all_profiles()
+    return jsonify({
+        "status": "success",
+        "count": len(profiles),
+        "profiles": profiles
+    })
+
+
+@app.route("/api/v1/profiles/<profile_id>", methods=["GET"])
+def api_profile_detail(profile_id: str):
+    """Retorna información detallada, logros y estadísticas de un perfil."""
+    detail = cci_database.get_profile_detail(profile_id)
+    if not detail:
+        abort(404, description=f"Perfil '{profile_id}' no encontrado.")
+    return jsonify({
+        "status": "success",
+        "profile": detail
+    })
+
+
+@app.route("/api/v1/profiles/sync", methods=["POST"])
+def api_profile_sync():
+    """
+    Sincroniza un perfil proveniente del emulador de escritorio C.C.I. SYSTEM.
+    Realiza un upsert no destructivo de tiempo de juego, estadísticas por título y trofeos.
+    """
+    payload = request.get_json(silent=True)
+    if not isinstance(payload, dict):
+        return jsonify({"status": "error", "message": "Payload JSON inválido."}), 400
+
+    try:
+        updated = cci_database.sync_profile_data(payload)
+        return jsonify({
+            "status": "success",
+            "message": "Perfil sincronizado correctamente con la nube C.C.I.",
+            "profile": updated
+        })
+    except Exception as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 500
 
 
 @app.route("/download/mac")

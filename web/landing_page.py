@@ -1395,6 +1395,143 @@ body {
 }
 
 /* ==============================================================================
+   LEADERBOARDS / HALL OF FAME ARCADE (FASE 2)
+   ============================================================================== */
+.leaderboard-wrapper {
+  margin-top: 25px;
+}
+.leaderboard-selector-bar {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+  justify-content: center;
+}
+.lb-tab {
+  padding: 8px 16px;
+  background: rgba(6, 8, 12, 0.8);
+  border: 1px solid var(--cci-border-panel);
+  color: var(--cci-muted);
+  font-family: var(--font-display);
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 1px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  clip-path: polygon(0 0, calc(100% - 6px) 0, 100% 6px, 100% 100%, 6px 100%, 0 calc(100% - 6px));
+}
+.lb-tab:hover {
+  color: #fff;
+  border-color: var(--cci-cyan);
+}
+.lb-tab.active {
+  background: rgba(0, 240, 255, 0.12);
+  border-color: var(--cci-cyan);
+  color: #fff;
+  box-shadow: 0 0 14px var(--cci-cyan-dim);
+}
+.leaderboard-table-card {
+  background: var(--cci-bg-surface);
+  border: 1px solid var(--cci-border-panel);
+  box-shadow: 0 15px 35px rgba(0, 0, 0, 0.6);
+  clip-path: polygon(0 0, calc(100% - 14px) 0, 100% 14px, 100% 100%, 14px 100%, 0 calc(100% - 14px));
+  overflow: hidden;
+}
+.lb-table-header {
+  display: grid;
+  grid-template-columns: 80px 1.4fr 1.4fr 90px 1.2fr;
+  padding: 14px 20px;
+  background: #07090d;
+  border-bottom: 1px solid var(--cci-border-panel);
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  color: var(--cci-cyan);
+  letter-spacing: 1.5px;
+  font-weight: 700;
+}
+.lb-table-body {
+  transition: opacity 0.2s ease;
+}
+.lb-row {
+  display: grid;
+  grid-template-columns: 80px 1.4fr 1.4fr 90px 1.2fr;
+  padding: 13px 20px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  align-items: center;
+  font-size: 0.9rem;
+  transition: background 0.15s ease;
+}
+.lb-row:hover {
+  background: rgba(0, 240, 255, 0.04);
+}
+.lb-rank {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  color: var(--cci-muted);
+}
+.lb-rank.rank-gold {
+  color: #ffd700;
+  text-shadow: 0 0 10px rgba(255, 215, 0, 0.6);
+}
+.lb-rank.rank-silver {
+  color: #d1d5db;
+  text-shadow: 0 0 8px rgba(209, 213, 219, 0.5);
+}
+.lb-rank.rank-bronze {
+  color: #cd7f32;
+  text-shadow: 0 0 8px rgba(205, 127, 50, 0.5);
+}
+.lb-player {
+  font-family: var(--font-display);
+  font-weight: 700;
+  letter-spacing: 1px;
+  color: #fff;
+}
+.lb-game {
+  color: var(--cci-light);
+  font-size: 0.85rem;
+}
+.lb-level {
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  color: var(--cci-cyan);
+}
+.lb-score {
+  font-family: var(--font-mono);
+  color: var(--cci-gold);
+  font-weight: 700;
+  font-size: 1rem;
+  text-align: right;
+  letter-spacing: 1px;
+}
+.lb-empty {
+  padding: 40px 20px;
+  text-align: center;
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  color: var(--cci-muted);
+  letter-spacing: 1px;
+}
+.lb-table-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 20px;
+  background: #07090d;
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  color: var(--cci-muted);
+  border-top: 1px solid var(--cci-border-panel);
+}
+.lb-live-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--cci-cyan);
+  font-weight: 700;
+}
+
+/* ==============================================================================
    RESPONSIVE DESIGN
    ============================================================================== */
 @media (max-width: 992px) {
@@ -1472,6 +1609,60 @@ document.addEventListener('DOMContentLoaded', () => {
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && modal && modal.style.display === 'flex') closeModal();
   });
+
+  // Live Leaderboard / Hall of Fame Tabs (Fase 2)
+  const lbTabs = document.querySelectorAll('.lb-tab');
+  const lbBody = document.getElementById('leaderboardRows');
+
+  async function loadLeaderboard(gameId) {
+    if (!lbBody) return;
+    lbBody.style.opacity = '0.4';
+    try {
+      const url = gameId ? '/api/v1/leaderboards/' + encodeURIComponent(gameId) : '/api/v1/leaderboards?limit=15';
+      const resp = await fetch(url);
+      if (resp.ok) {
+        const data = await resp.json();
+        const list = data.leaderboard || [];
+        if (list.length === 0) {
+          lbBody.innerHTML = '<div class="lb-empty">// NO HAY RÉCORDS REGISTRADOS EN ESTE TÍTULO AÚN //</div>';
+        } else {
+          lbBody.innerHTML = list.map((item, idx) => {
+            const rank = idx + 1;
+            const rankClass = rank === 1 ? 'rank-gold' : rank === 2 ? 'rank-silver' : rank === 3 ? 'rank-bronze' : '';
+            const gtitle = item.game_title || (item.game_id || '').toUpperCase();
+            const scoreFmt = Number(item.score || 0).toLocaleString().replace(/,/g, '.') + ' PTS';
+            return `
+              <div class="lb-row">
+                <span class="lb-rank ${rankClass}">#${rank.toString().padStart(2, '0')}</span>
+                <span class="lb-player">${escapeHtml(item.player_name || 'PILOTO')}</span>
+                <span class="lb-game">${escapeHtml(gtitle)}</span>
+                <span class="lb-level">LVL ${item.level || 1}</span>
+                <span class="lb-score">${scoreFmt}</span>
+              </div>
+            `;
+          }).join('');
+        }
+      }
+    } catch (err) {
+      console.error('Error fetching leaderboard:', err);
+    } finally {
+      lbBody.style.opacity = '1';
+    }
+  }
+
+  function escapeHtml(str) {
+    const p = document.createElement('p');
+    p.textContent = str;
+    return p.innerHTML;
+  }
+
+  lbTabs.forEach(tab => {
+    tab.addEventListener('click', () => {
+      lbTabs.forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+      loadLeaderboard(tab.dataset.game);
+    });
+  });
 });
 """
 
@@ -1507,8 +1698,46 @@ def _render_game_card(g: dict) -> str:
     """
 
 
-def build_landing_page(games: list[dict], categories: list[str], author: dict, stats: dict) -> str:
+def _render_leaderboard_rows(highscores: list[dict]) -> str:
+    if not highscores:
+        return '<div class="lb-empty">// NO HAY RÉCORDS REGISTRADOS AÚN //</div>'
+    out = []
+    for idx, item in enumerate(highscores):
+        rank = idx + 1
+        rank_class = "rank-gold" if rank == 1 else "rank-silver" if rank == 2 else "rank-bronze" if rank == 3 else ""
+        gtitle = item.get("game_title") or item.get("game_id", "ARCADE").upper()
+        pname = item.get("player_name", "PILOTO")
+        lvl = item.get("level", 1)
+        score_val = int(item.get("score", 0))
+        score_fmt = f"{score_val:,} PTS".replace(",", ".")
+        out.append(f"""
+          <div class="lb-row">
+            <span class="lb-rank {rank_class}">#{rank:02d}</span>
+            <span class="lb-player">{html.escape(pname)}</span>
+            <span class="lb-game">{html.escape(gtitle)}</span>
+            <span class="lb-level">LVL {lvl}</span>
+            <span class="lb-score">{score_fmt}</span>
+          </div>
+        """)
+    return "".join(out)
+
+
+def build_landing_page(
+    games: list[dict],
+    categories: list[str],
+    author: dict,
+    stats: dict,
+    highscores: list[dict] = None
+) -> str:
     """Construye y retorna el documento HTML completo generado al 100% en Python."""
+    if highscores is None:
+        try:
+            import cci_database
+            highscores = cci_database.get_leaderboard(limit=12)
+        except Exception:
+            highscores = []
+
+    leaderboard_rows_html = _render_leaderboard_rows(highscores)
     filters_html = "".join(
         f'<button class="filter-chip {"active" if cat == "TODOS" else ""}" data-cat="{html.escape(cat)}">{html.escape(cat)}</button>'
         for cat in categories
@@ -1550,6 +1779,7 @@ def build_landing_page(games: list[dict], categories: list[str], author: dict, s
         <a href="#autora" class="hud-tab">Autora</a>
         <a href="#arquitectura" class="hud-tab">Arquitectura</a>
         <a href="#catalogo" class="hud-tab">Catálogo ({len(games)})</a>
+        <a href="#records" class="hud-tab">Récords</a>
         <a href="#descarga" class="hud-tab hud-cta-download">DESCARGAR EMULADOR</a>
         <div class="hud-social-links">
           <a href="{html.escape(author.get('portfolio_url', 'https://iannicamila.netlify.app'))}" target="_blank" rel="noopener" class="hud-social-btn portfolio-pill">★ PORTFOLIO</a>
@@ -1804,6 +2034,49 @@ def build_landing_page(games: list[dict], categories: list[str], author: dict, s
     </div>
   </section>
 
+  <!-- Leaderboards / Hall of Fame (Fase 2: Base de Datos Relacional & API REST) -->
+  <section id="records" class="section">
+    <div class="container">
+      <div class="text-center" style="max-width: 760px; margin: 0 auto 30px;">
+        <span class="section-tag">// CLOUD DATABASE &amp; REST API V1</span>
+        <h2 class="section-title">SALÓN DE LA FAMA ARCADE</h2>
+        <p class="section-desc">
+          Marcadores globales persistidos en SQLite relacional y sincronizados en tiempo real mediante la API REST de C.C.I. SYSTEM.
+        </p>
+      </div>
+
+      <div class="leaderboard-wrapper">
+        <div class="leaderboard-selector-bar">
+          <button class="lb-tab active" data-game="">TODOS LOS CLÁSICOS</button>
+          <button class="lb-tab" data-game="pacman">PAC-MAN</button>
+          <button class="lb-tab" data-game="asteroids">ASTEROIDS</button>
+          <button class="lb-tab" data-game="space_invaders">SPACE INVADERS</button>
+          <button class="lb-tab" data-game="tetris">TETRIS</button>
+          <button class="lb-tab" data-game="davinci">DA VINCI FIGHTERS</button>
+          <button class="lb-tab" data-game="metalslug">METAL SLUG</button>
+          <button class="lb-tab" data-game="mario">SUPER MARIO</button>
+        </div>
+
+        <div class="leaderboard-table-card">
+          <div class="lb-table-header">
+            <span>RANGO</span>
+            <span>PILOTO / JUGADOR</span>
+            <span>TÍTULO ARCADE</span>
+            <span>NIVEL</span>
+            <span style="text-align: right;">PUNTUACIÓN RECORD</span>
+          </div>
+          <div class="lb-table-body" id="leaderboardRows">
+            {leaderboard_rows_html}
+          </div>
+          <div class="lb-table-footer">
+            <span>// SINCRONIZACIÓN AUTOMÁTICA DESDE ESCRITORIO VÍA /api/v1/leaderboards</span>
+            <span class="lb-live-status"><span class="blink-dot"></span> API REST ACTIVA</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
   <!-- Downloads Section -->
   <section id="descarga" class="section section-dark">
     <div class="container">
@@ -1953,6 +2226,7 @@ def build_landing_page(games: list[dict], categories: list[str], author: dict, s
         <a href="#proyecto">Proyecto</a>
         <a href="#arquitectura">Arquitectura</a>
         <a href="#catalogo">Catálogo</a>
+        <a href="#records">Récords</a>
         <a href="#autora">Autora</a>
         <a href="#descarga">Descargas</a>
         <span class="footer-sep">·</span>
