@@ -296,13 +296,15 @@ def create_release_exe(out_exe: Path):
     if temp_exe.exists():
         temp_exe.unlink()
 
-    sfx_path = ROOT / "tools" / "7zS.sfx"
+    sfx_path = ROOT / "tools" / "7zSD.sfx"
     if not sfx_path.exists():
-        fallback_sfx = Path("/tmp/7zS.sfx")
+        sfx_path = ROOT / "tools" / "7zS.sfx"
+    if not sfx_path.exists():
+        fallback_sfx = Path("/tmp/sfx2605/7zSD.sfx")
         if fallback_sfx.exists():
             sfx_path = fallback_sfx
         else:
-            raise RuntimeError("No se encontró 7zS.sfx en tools/ ni /tmp/")
+            raise RuntimeError("No se encontró 7zSD.sfx en tools/ ni /tmp/")
 
     staging_dir = ROOT / ".tmp_win_staging"
     if staging_dir.exists():
@@ -327,20 +329,20 @@ def create_release_exe(out_exe: Path):
                 shutil.copy2(fpath, dest)
                 copied_count += 1
 
-    # 2. Crear payload .7z con 7zz
+    # 2. Crear payload .7z con 7zz compatible con 7zSD SFX (BCJ + LZMA2)
     payload_7z = ROOT / ".tmp_win_payload.7z"
     if payload_7z.exists():
         payload_7z.unlink()
 
-    cmd_7z = ["7zz", "a", "-mx=5", "-y", str(payload_7z), f"{staging_dir}/*"]
+    cmd_7z = ["7zz", "a", "-m0=BCJ", "-m1=LZMA2:d=32m", "-mx=5", "-y", str(payload_7z), f"{staging_dir}/*"]
     subprocess.run(cmd_7z, check=True)
 
-    # 3. Leer SFX module, config UTF-8 y payload
+    # 3. Leer SFX module moderno, config UTF-8 y payload
     sfx_bytes = sfx_path.read_bytes()
     config_text = """;!@Install@!UTF-8!
 Title="C.C.I. SYSTEM — Instalación de Emulador"
 BeginPrompt="Bienvenido a C.C.I. SYSTEM de Camila Carolina Ianni.\\n\\n¿Deseas instalar el emulador de consola en tu equipo?"
-RunProgram="Instalar_CCI_System.pyw"
+RunProgram="cmd.exe /c start /b pythonw Instalar_CCI_System.pyw 2>nul || start /b python Instalar_CCI_System.pyw 2>nul || start /b pyw Instalar_CCI_System.pyw 2>nul || start Instalar_CCI_System.pyw"
 ;!@InstallEnd@!
 """
     config_bytes = config_text.encode("utf-8")
