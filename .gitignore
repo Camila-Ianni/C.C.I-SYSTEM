@@ -35,3 +35,5 @@ METAL SLUG/tests copy/
 outputs/
 web/static/downloads/*.zip
 *.zip
+web/static/downloads/*.dmg
+*.dmg

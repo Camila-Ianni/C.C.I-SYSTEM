@@ -88,15 +88,23 @@ def api_games():
 
 @app.route("/download/mac")
 def download_mac():
+    dmg_path = DOWNLOADS_DIR / "CCI_System_macOS.dmg"
+    if dmg_path.exists():
+        return send_from_directory(
+            DOWNLOADS_DIR,
+            "CCI_System_macOS.dmg",
+            as_attachment=True,
+            download_name="CCI_System_macOS.dmg"
+        )
     zip_path = DOWNLOADS_DIR / "CCI_System_macOS.zip"
-    if not zip_path.exists():
-        abort(404, description="Paquete para macOS aún no generado.")
-    return send_from_directory(
-        DOWNLOADS_DIR,
-        "CCI_System_macOS.zip",
-        as_attachment=True,
-        download_name="CCI_System_macOS.zip"
-    )
+    if zip_path.exists():
+        return send_from_directory(
+            DOWNLOADS_DIR,
+            "CCI_System_macOS.zip",
+            as_attachment=True,
+            download_name="CCI_System_macOS.zip"
+        )
+    abort(404, description="Paquete para macOS aún no generado.")
 
 
 @app.route("/download/windows")

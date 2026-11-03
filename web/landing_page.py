@@ -1524,19 +1524,19 @@ def build_landing_page(games: list[dict], categories: list[str], author: dict, s
           <div class="hw-icon-box">
             <svg class="os-svg" width="30" height="30" viewBox="0 0 24 24" fill="currentColor"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M15.97 6.37c.63-.77 1.06-1.85.94-2.93-.91.04-2.02.61-2.67 1.37-.58.67-.99 1.77-.85 2.83 1.02.08 2.05-.51 2.58-1.27z"/></svg>
           </div>
-          <h3 class="hw-title">C.C.I. SYSTEM para macOS</h3>
-          <p class="hw-sub">Compatible con Apple Silicon (M1/M2/M3/M4) e Intel (macOS 12+)</p>
+          <h3 class="hw-title">C.C.I. SYSTEM para macOS (.dmg)</h3>
+          <p class="hw-sub">Instalador nativo Apple Disk Image con C.C.I. SYSTEM.app</p>
           <ul class="hw-checklist">
-            <li>Código 100% Python nativo multiplataforma</li>
-            <li>Instalador gráfico interactivo en 1 clic</li>
+            <li>Imagen de disco nativa Apple Disk Image (.dmg)</li>
+            <li>App bundle C.C.I. SYSTEM.app de 1-clic</li>
             <li>Asistente pop-up de destino (Escritorio por defecto)</li>
             <li>0 perfiles de fábrica (creación de jugador en primer boot)</li>
           </ul>
           <div class="hw-btn-wrap">
             <a href="/download/mac" class="btn-cci btn-primary-action" style="width: 100%;">
-              <span class="btn-gamepad-key">⌧ A</span> DESCARGAR EMULADOR MAC
+              <span class="btn-gamepad-key">⌧ A</span> DESCARGAR INSTALADOR DMG (MAC)
             </a>
-            <span class="hw-hint">Descomprime y abre el instalador gráfico</span>
+            <span class="hw-hint">Abre el archivo .dmg y haz doble clic en C.C.I. SYSTEM</span>
           </div>
         </div>
 
@@ -1569,22 +1569,22 @@ def build_landing_page(games: list[dict], categories: list[str], author: dict, s
           <div class="boot-step">
             <div class="boot-step-num">01</div>
             <div class="boot-step-content">
-              <strong>DESCARGA EL PAQUETE</strong>
-              Descarga el emulador oficial de C.C.I. SYSTEM para tu sistema operativo.
+              <strong>DESCARGA EL INSTALADOR DMG</strong>
+              Descarga la imagen oficial .dmg para macOS o el paquete para Windows.
             </div>
           </div>
           <div class="boot-step">
             <div class="boot-step-num">02</div>
             <div class="boot-step-content">
-              <strong>ASISTENTE GRÁFICO POP-UP</strong>
-              Haz doble clic en el instalador: un diálogo te preguntará dónde ubicar la consola (Escritorio por defecto).
+              <strong>MONTA Y ABRE LA APP</strong>
+              Haz doble clic en C.C.I. SYSTEM: un diálogo te preguntará dónde ubicar la consola (Escritorio por defecto).
             </div>
           </div>
           <div class="boot-step">
             <div class="boot-step-num">03</div>
             <div class="boot-step-content">
               <strong>BOOT INMEDIATO Y NUEVO PERFIL</strong>
-              Se genera el acceso directo y la consola se abre de inmediato. Crea tu jugador desde cero y disfruta.
+              Se genera el acceso directo en tu Escritorio y la consola se abre de inmediato lista para crear tu perfil y jugar.
             </div>
           </div>
         </div>
