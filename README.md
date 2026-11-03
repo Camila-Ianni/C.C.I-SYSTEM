@@ -1,15 +1,17 @@
-# 🕹️ C.C.I. SYSTEM - Virtual Arcade Console & Retro Emulator
+# 🕹️ C.C.I. SYSTEM - Virtual Arcade Console & Retro Emulator (v2.1.0)
 
+[![Portfolio](https://img.shields.io/badge/★%20Portfolio-iannicamila.netlify.app-FFB800?style=for-the-badge&logo=netlify&logoColor=black)](https://iannicamila.netlify.app)
+[![LinkedIn](https://img.shields.io/badge/LinkedIn-Camila%20Ianni-0077B5?style=for-the-badge&logo=linkedin&logoColor=white)](https://www.linkedin.com/in/camila-ianni)
 [![Web Oficial](https://img.shields.io/badge/Web%20Oficial-c--c--i--system.onrender.com-00f0ff?style=for-the-badge&logo=render&logoColor=white)](https://c-c-i-system.onrender.com)
 [![macOS Release](https://img.shields.io/badge/Descargar-macOS%20(.dmg)-white?style=for-the-badge&logo=apple&logoColor=black)](https://github.com/Camila-Ianni/C.C.I-SYSTEM/releases/download/v1.0.0/CCI_System_macOS.dmg)
 [![Windows Release](https://img.shields.io/badge/Descargar-Windows%20(.exe)-0078D4?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/Camila-Ianni/C.C.I-SYSTEM/releases/download/v1.0.0/CCI_System_Windows_Installer.exe)
 
 ![Python Version](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12%20%7C%203.14-blue)
 ![Pygame-CE](https://img.shields.io/badge/pygame--ce-2.5%2B-brightgreen)
-![Flask](https://img.shields.io/badge/flask-3.1%2B-lightgrey)
+![Tests](https://img.shields.io/badge/tests-16%2F16%20passed%20(100%25)-success)
+![Database](https://img.shields.io/badge/database-SQLite%20(WAL%20Mode)-orange)
+![API REST](https://img.shields.io/badge/api-REST%20v1%20(Flask)-lightgrey)
 ![Architecture](https://img.shields.io/badge/architecture-State%20Machine-purple)
-![Gamepads](https://img.shields.io/badge/gamepad-DualSense%20%7C%20Xbox%20%7C%20Generic-orange)
-![Haptics](https://img.shields.io/badge/haptics-Rumble%20Feedback-success)
 ![Multi-User](https://img.shields.io/badge/multi--user-0%20Factory%20Profiles-cyan)
 
 **C.C.I. SYSTEM** es una plataforma arcade integral y emulador multiplataforma desarrollado **100% en Python** con **Pygame-CE (Community Edition)** y orquestación web nativa en **Flask**. Unifica **19 clásicos arcade** bajo un entorno retrofuturista Cyberpunk / PS5 de ventana única (`1280x720`), máquina de estados determinista (`State Machine`), háptica universal plug & play, capturador HD y sistema multiusuario con gestión de estadísticas independientes.
@@ -118,11 +120,17 @@ python run_web.py
 
 ```text
 C.C.I-SYSTEM/
-├── main.py                     # Entry point de la consola virtual en Pygame-CE
+├── main.py                     # Entry point de la consola virtual en Pygame-CE (60 FPS)
 ├── emulator.py                 # Launcher y verificador integral multiplataforma
-├── run_web.py                  # Servidor de producción Flask de la landing page
+├── run_web.py                  # Servidor de producción Flask de la landing page y API
+├── run_tests.py                # Test Runner unificado automatizado (16/16 tests passing)
 ├── catalog_data.py             # Metadatos del catálogo oficial de 19 juegos (100% Python)
+├── cci_database.py             # Capa de persistencia SQLite relacional (WAL mode, foreign keys)
+├── cci_sync.py                 # Cliente de sincronización en segundo plano (Daemon Thread)
+├── cci_updater.py              # Módulo de auto-actualización y gestión de versiones SemVer
+├── version.json                # Manifiesto canónico de versión y metadata oficial
 ├── build_distribution.py       # Generador de instaladores nativos (.dmg y .exe)
+├── installer.py                # Asistente gráfico de instalación interactiva 1-clic
 ├── states.py                   # Máquina de estados finita (Boot, Intro, Menu, Playing)
 ├── user_select_state.py        # Selector interactivo de jugadores y creación de perfiles
 ├── cci_console.py              # Hub: Biblioteca, Perfil, Logros y Configuración
@@ -131,12 +139,14 @@ C.C.I-SYSTEM/
 ├── api/
 │   └── index.py                # Entrypoint serverless WSGI
 ├── web/
-│   ├── app.py                  # Aplicación web Flask oficial
-│   └── landing_page.py         # Generador de landing page interactiva Cyberpunk
+│   ├── app.py                  # Aplicación web Flask oficial y API REST v1
+│   └── landing_page.py         # Landing page interactiva, Salón de la Fama y Video en vivo
 ├── fotos web/                  # Logos e ilustraciones oficiales de los 19 juegos para la web
 ├── assets_cards/               # Tarjetas y carátulas nativas para la consola
-├── pantallas/                  # Fondos y paneles de interfaz
-├── documentacion/              # Especificación técnica, SRS IEEE 830 y manuales
+├── pantallas/                  # Fondos y paneles de interfaz retrofuturistas
+├── documentacion/              # Especificación técnica, arquitectura, SRS y manuales
+├── test_phase2.py              # Tests unitarios para BD SQLite y API REST v1
+├── test_phase3.py              # Tests unitarios para Auto-Updater y Manifiesto
 ├── requirements.txt            # Dependencias ligeras para hosting cloud (Flask)
 └── requirements-dev.txt        # Dependencias completas para el emulador (Pygame-CE, OpenCV, Pymunk)
 ```
@@ -146,6 +156,9 @@ C.C.I-SYSTEM/
 ## 👩‍💻 Autora & Dirección de Proyecto
 
 Desarrollado y diseñado por **Camila Carolina Ianni**  
-*Estudiante de Analista de Sistemas — Escuela Da Vinci (2026)*  
-GitHub: [@Camila-Ianni](https://github.com/Camila-Ianni)  
-Web del Proyecto: [https://c-c-i-system.onrender.com](https://c-c-i-system.onrender.com)
+*Estudiante de la carrera de Analista de Sistemas — Escuela Da Vinci (2026)*  
+
+* 🌐 **Portfolio Oficial:** [https://iannicamila.netlify.app](https://iannicamila.netlify.app)
+* 💼 **LinkedIn:** [https://www.linkedin.com/in/camila-ianni](https://www.linkedin.com/in/camila-ianni)
+* 🐙 **GitHub:** [@Camila-Ianni](https://github.com/Camila-Ianni) · [Repositorio C.C.I-SYSTEM](https://github.com/Camila-Ianni/C.C.I-SYSTEM)
+* 🚀 **Plataforma Web en Producción:** [https://c-c-i-system.onrender.com](https://c-c-i-system.onrender.com)

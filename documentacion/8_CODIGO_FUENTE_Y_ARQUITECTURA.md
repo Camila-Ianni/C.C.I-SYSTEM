@@ -1,7 +1,7 @@
 # Arquitectura de Software y Código Fuente
 ## Proyecto: C.C.I. SYSTEM (Virtual Arcade Console Platform)
 **Documento:** Especificación Técnica de Arquitectura, Módulos y Código Fuente  
-**Versión:** 2.0.0  
+**Versión:** 2.1.0 (Ecosistema Completo: Cloud Database, REST API v1, Auto-Updater & Testing CI/CD)  
 
 ---
 
@@ -220,3 +220,131 @@ classDiagram
 * **macOS DMG:** Construye una imagen de disco nativa Apple Disk Image (`.dmg`) mediante `hdiutil` en formato `UDZO` comprimido, con bundle `C.C.I. SYSTEM.app`, archivo `PkgInfo`, firma ad-hoc con `codesign` y asistente de instalación interactivo con destino en el Escritorio.
 * **Windows EXE:** Genera un instalador ejecutable GUI nativo PE32 de 1-clic con cabecera SFX de 7-Zip, extrayendo el contenido y creando el acceso directo en el Escritorio sin necesidad de terminales ni prompts de comandos.
 * **Optimización de Cargas:** Excluye volcados temporales, cachés binarios y archivos no esenciales, reduciendo el tamaño del paquete de distribución de 2.8 GB a 734 MB en macOS y 628 MB en Windows.
+* **Integridad de Fábrica:** Garantiza **0 perfiles precargados** en la distribución final para que cada nuevo jugador inicie su perfil desde cero.
+
+---
+
+### 3.5. Capa de Persistencia Relacional SQLite ([cci_database.py](file:///Users/cami/Desktop/C.C.I%20SYSTEM/cci_database.py))
+* **Motor 100% Python Nativo:** Implementado íntegramente con la librería estándar `sqlite3`, eliminando cualquier dependencia de drivers binarios o servicios externos.
+* **Concurrencia y Robustez:**
+  * Modo **WAL (Write-Ahead Logging)** habilitado por defecto (`PRAGMA journal_mode = WAL`), permitiendo lecturas concurrentes sin bloqueo durante escrituras intensivas.
+  * Claves foráneas activas (`PRAGMA foreign_keys = ON`) con borrado y actualización en cascada (`ON DELETE CASCADE`).
+  * Conexiones thread-safe gestionadas mediante context manager seguro `get_db()` y cerrojo reentrante `threading.RLock()`.
+* **Esquema Relacional:**
+  * `games`: Catálogo oficial de los 19 títulos con metadatos técnicos, categorías JSON y slots asignados.
+  * `profiles`: Perfiles de jugador independientes con identificador slug, tiempo acumulado y nivel XP.
+  * `game_stats`: Estadísticas individualizadas por juego y perfil (segundos jugados, lanzamientos, porcentaje de progreso).
+  * `highscores`: Marcadores arcade globales indexados (`idx_highscores_game`) para consultas instantáneas en el podio.
+  * `achievements_unlocked`: Registro relacional de trofeos y logros desbloqueados por jugador.
+
+---
+
+### 3.6. Arquitectura de Servicios REST v1 ([web/app.py](file:///Users/cami/Desktop/C.C.I%20SYSTEM/web/app.py))
+* **Especificación de Endpoints:**
+  * `GET /api/v1/health`: Diagnóstico del estado del backend, telemetría y salud del motor SQLite.
+  * `GET /api/v1/stats`: Métricas globales del ecosistema (total de juegos, tiempo acumulado, jugadores y récords).
+  * `GET /api/v1/games`: Catálogo completo estructurado con serialización JSON.
+  * `GET /api/v1/games/<game_id>`: Ficha técnica y podio Top 5 del título consultado.
+  * `GET /api/v1/leaderboards`: Consulta del Salón de la Fama con soporte para filtros por juego (`?game_id=...`) y paginación (`?limit=...`).
+  * `POST /api/v1/leaderboards`: Registro y validación estricta de nuevas puntuaciones arcade.
+  * `GET /api/v1/profiles` y `GET /api/v1/profiles/<profile_id>`: Consulta y detalle de perfiles sincronizados.
+  * `POST /api/v1/profiles/sync`: Endpoint de sincronización bidireccional no destructiva de perfiles y trofeos.
+  * `GET /api/v1/version`: Entrega de metadata canónica de versión para el auto-actualizador.
+
+---
+
+### 3.7. Cliente de Sincronización Asíncrona Desacoplada ([cci_sync.py](file:///Users/cami/Desktop/C.C.I%20SYSTEM/cci_sync.py))
+* **Aislamiento del Bucle Temporal de Juego:**
+  * Cualquier envío de perfil o récord arcade se ejecuta en un hilo `threading.Thread(..., daemon=True)` independiente.
+  * El loop principal de Pygame mantiene **60 FPS constantes** sin experimentar latencia I/O de red.
+* **Tolerancia a Fallos y Modo Offline:**
+  * Intenta sincronizar contra la API REST mediante peticiones HTTP estructuradas con timeout corto (1.5 s).
+  * Si el servidor web no está en ejecución o la estación no tiene conexión a internet, conmuta automáticamente a **persistencia directa en la base de datos SQLite local**.
+
+---
+
+### 3.8. Sistema de Versionado Canónico & Auto-Actualizador ([cci_updater.py](file:///Users/cami/Desktop/C.C.I%20SYSTEM/cci_updater.py) & [version.json](file:///Users/cami/Desktop/C.C.I%20SYSTEM/version.json))
+* **SemVer 2.0.0 Puro:**
+  * Parser semántico `parse_semver()` y función determinista `is_newer_version()`.
+* **Verificación Silenciosa:**
+  * Inspección en segundo plano (`check_for_updates_background`) al arrancar la consola.
+  * Alerta de disponibilidad de release sin interrumpir la partida en curso.
+* **Badge Dinámico de Sistema:**
+  * Refleja la versión en tiempo real en la pantalla de Ajustes y en el HUD de la consola.
+
+---
+
+## 4. Diagrama del Ecosistema Integral C.C.I. SYSTEM
+
+```mermaid
+flowchart TD
+    subgraph DESKTOP ["ESTACIÓN DE ESCRITORIO (CLIENTE)"]
+        Launcher["C.C.I. SYSTEM (main.py)"]
+        FSM["Máquina de Estados (states.py)"]
+        Games["19 Motores Arcade (60 FPS)"]
+        SyncWorker["Worker Sync Daemon (cci_sync.py)"]
+        UpdaterWorker["Worker Updater (cci_updater.py)"]
+        LocalDB[("SQLite Local (.cci-user-data)")]
+    end
+
+    subgraph CLOUD ["PLATAFORMA CLOUD (RENDER / LINUX)"]
+        REST["API REST v1 (web/app.py)"]
+        CloudDB[("SQLite Central (WAL Mode)")]
+        Landing["Web UI & Salón de la Fama (landing_page.py)"]
+        LiveVideo["Stream MP4 60 FPS (/assets/video)"]
+    end
+
+    subgraph CI_CD ["ASEGURAMIENTO DE CALIDAD"]
+        TestRunner["Runner Unificado (run_tests.py)"]
+        TestP2["Pruebas BD & REST (test_phase2.py)"]
+        TestP3["Pruebas Packaging (test_phase3.py)"]
+    end
+
+    Launcher --> FSM
+    FSM --> Games
+    Launcher --> SyncWorker
+    Launcher --> UpdaterWorker
+    SyncWorker -. "Fallback Offline" .-> LocalDB
+    SyncWorker == "POST /api/v1/profiles/sync" ==> REST
+    SyncWorker == "POST /api/v1/leaderboards" ==> REST
+    UpdaterWorker -. "GET /api/v1/version" .-> REST
+
+    REST <--> CloudDB
+    REST --> Landing
+    Landing --> LiveVideo
+
+    TestRunner --> TestP2
+    TestRunner --> TestP3
+    TestP2 -. "Verifica" .-> REST
+    TestP2 -. "Verifica" .-> CloudDB
+    TestP3 -. "Verifica" .-> UpdaterWorker
+```
+
+---
+
+## 5. Aseguramiento de Calidad y Suite de Pruebas Automatizadas
+
+El proyecto incorpora un sistema de verificación formal ejecutable mediante `./run_tests.py`:
+
+```bash
+# Ejecución completa de la suite de pruebas
+.venv/bin/python run_tests.py
+```
+
+### Cobertura de Pruebas:
+1. **Fase 2 (Persistencia & Servicios REST):**
+   * Inicialización determinista y migración de semillas arcade (19 títulos oficiales).
+   * Inserción, ordenamiento y recuperación de récords con índices de alta velocidad.
+   * Upsert de perfiles multiusuario, acumulación de tiempo y cálculo de nivel XP.
+   * Diagnóstico de salud HTTP (`/api/v1/health` y `/api/v1/stats`).
+   * Validación de payloads en registros de puntuaciones (código HTTP 201 y 400).
+   * Sincronización desacoplada en hilo `daemon`.
+   * Renderizado en memoria del Salón de la Fama y atributos de accesibilidad.
+
+2. **Fase 3 (Empaquetado & Auto-Updater):**
+   * Validación estructural del manifiesto canónico `version.json`.
+   * Análisis y comparación estricta de versiones según especificación SemVer.
+   * Endpoint de metadatos de versión (`/api/v1/version`).
+   * Comprobación síncrona y asíncrona de actualizaciones.
+   * Filtros de exclusión de binarios, volcados y bases de datos en empaquetado de producción.
+   * Garantía de fábrica de 0 perfiles de usuario.
