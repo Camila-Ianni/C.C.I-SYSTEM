@@ -21,9 +21,11 @@ DOWNLOADS_DIR = ROOT / "web" / "static" / "downloads"
 
 EXCLUDE_DIRS = {
     ".git", ".venv", "__pycache__", ".pytest_cache", ".gemini", "brain",
-    "capturas", "node_modules", "web/static/downloads", ".tmp_dmg_staging"
+    "capturas", "node_modules", "web/static/downloads", ".tmp_dmg_staging",
+    ".tmp_win_staging", "test_output", "scratch", "tests copy",
+    "Archive_Other_Versions"
 }
-EXCLUDE_EXTS = {".pyc", ".pyo", ".DS_Store"}
+EXCLUDE_EXTS = {".pyc", ".pyo", ".DS_Store", ".raw", ".tmp"}
 
 
 def _should_include(file_path: Path, rel_str: str, target_platform: str) -> bool:
@@ -34,6 +36,10 @@ def _should_include(file_path: Path, rel_str: str, target_platform: str) -> bool
     if file_path.suffix in EXCLUDE_EXTS:
         return False
 
+    # Excluir videos pesados de gameplay raw y caches binarios (>1GB)
+    if file_path.name in ("No Commentary].mp4", ".cached_320x224.raw"):
+        return False
+
     # Excluir perfiles de usuario locales para que la descarga sea 100% limpia (0 perfiles)
     if ".cci-user-data" in parts:
         if file_path.name in ("active_user.json", "system.json"):
@@ -42,7 +48,7 @@ def _should_include(file_path: Path, rel_str: str, target_platform: str) -> bool
             return False
 
     # Excluir instaladores previos generados
-    if file_path.suffix in (".zip", ".dmg"):
+    if file_path.suffix in (".zip", ".dmg", ".exe"):
         return False
 
     return True
@@ -117,6 +123,10 @@ if is_mounted_volume:
     if target_app.exists():
         shutil.rmtree(target_app)
     shutil.copytree(APP_BUNDLE, target_app)
+    try:
+        subprocess.run(["xattr", "-cr", str(target_app)], capture_output=True)
+    except Exception:
+        pass
 
     # Si el destino no fue el Escritorio, crear acceso directo en el Escritorio
     if target_app.resolve() != desktop_app.resolve():
@@ -212,14 +222,23 @@ else:
                 shutil.copy2(fpath, dest)
                 copied_count += 1
 
-    # 4. Enlace a Applications en staging
+    # 4. PkgInfo, limpieza xattr y firma ad-hoc
+    pkginfo = app_dir / "Contents" / "PkgInfo"
+    pkginfo.write_text("APPL????", encoding="utf-8")
+    try:
+        subprocess.run(["xattr", "-cr", str(app_dir)], check=False)
+        subprocess.run(["codesign", "--force", "--deep", "--sign", "-", str(app_dir)], check=False)
+    except Exception:
+        pass
+
+    # 5. Enlace a Applications en staging
     apps_link = staging_dir / "Applications"
     try:
         apps_link.symlink_to("/Applications")
     except OSError:
         pass
 
-    # 5. Generar DMG con hdiutil
+    # 6. Generar DMG con hdiutil
     cmd = ["hdiutil", "create", "-volname", "C.C.I. SYSTEM", "-srcfolder", str(staging_dir), "-ov", "-format", "UDZO", str(temp_dmg)]
     subprocess.run(cmd, check=True)
 

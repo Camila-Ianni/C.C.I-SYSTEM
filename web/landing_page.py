@@ -1536,7 +1536,15 @@ def build_landing_page(games: list[dict], categories: list[str], author: dict, s
             <a href="/download/mac" class="btn-cci btn-primary-action" style="width: 100%;">
               <span class="btn-gamepad-key">⌧ A</span> DESCARGAR INSTALADOR DMG (MAC)
             </a>
-            <span class="hw-hint">Abre el archivo .dmg y haz doble clic en C.C.I. SYSTEM</span>
+            <span class="hw-hint">Abre el archivo .dmg y ejecuta C.C.I. SYSTEM</span>
+          </div>
+          <div class="mac-security-notice" style="margin-top: 15px; padding: 12px 14px; background: rgba(255, 180, 0, 0.08); border: 1px solid rgba(255, 180, 0, 0.3); border-radius: 4px; font-size: 0.8rem; text-align: left; line-height: 1.4;">
+            <div style="color: #ffb400; font-weight: 700; margin-bottom: 4px; display: flex; align-items: center; gap: 6px;">
+              <span>⚠️</span> Primer inicio en macOS (Gatekeeper):
+            </div>
+            <div style="color: var(--cci-muted);">
+              Al ser un emulador independiente, si macOS muestra que no se pudo verificar: haz <strong>Clic derecho (o Control + Clic)</strong> en <code style="color: #fff; background: rgba(255,255,255,0.1); padding: 1px 4px;">C.C.I. SYSTEM</code> y selecciona <strong>«Abrir»</strong> (o en <em>Ajustes del Sistema &gt; Privacidad y Seguridad &gt; «Abrir igualmente»</em>). ¡Solo se realiza la primera vez!
+            </div>
           </div>
         </div>
 
@@ -1577,7 +1585,7 @@ def build_landing_page(games: list[dict], categories: list[str], author: dict, s
             <div class="boot-step-num">02</div>
             <div class="boot-step-content">
               <strong>MONTA Y ABRE LA APP</strong>
-              Haz doble clic en C.C.I. SYSTEM: un diálogo te preguntará dónde ubicar la consola (Escritorio por defecto).
+              Abre el instalador. En macOS (primer inicio), haz clic derecho &gt; «Abrir». Un diálogo te preguntará dónde ubicar la consola (Escritorio por defecto).
             </div>
           </div>
           <div class="boot-step">
