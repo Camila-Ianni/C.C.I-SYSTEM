@@ -415,12 +415,39 @@ body {
   position: relative;
   aspect-ratio: 16 / 9;
   background: #000;
+  overflow: hidden;
 }
-.chassis-screen img {
+.chassis-screen img,
+.chassis-screen video {
   width: 100%;
   height: 100%;
   object-fit: cover;
   display: block;
+}
+
+.chassis-live-badge {
+  position: absolute;
+  top: 10px; right: 12px;
+  background: rgba(6, 8, 12, 0.85);
+  border: 1px solid var(--cci-cyan);
+  padding: 4px 10px;
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  color: var(--cci-cyan);
+  letter-spacing: 1px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  backdrop-filter: blur(6px);
+  z-index: 2;
+  box-shadow: 0 0 14px var(--cci-cyan-dim);
+}
+.chassis-live-badge .blink-dot {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: #ff0055;
+  box-shadow: 0 0 8px #ff0055;
+  animation: radar-pulse 1.2s infinite ease-in-out;
 }
 
 .chassis-footer {
@@ -906,6 +933,106 @@ body {
   color: var(--cci-muted);
 }
 
+.profile-actions-bar {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 20px;
+}
+
+.btn-profile-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 18px;
+  background: #090c12;
+  border: 1px solid var(--cci-border-panel);
+  color: #fff;
+  text-decoration: none;
+  font-family: var(--font-display);
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  clip-path: polygon(0 0, calc(100% - 8px) 0, 100% 8px, 100% 100%, 8px 100%, 0 calc(100% - 8px));
+}
+.btn-profile-link:hover {
+  transform: translateY(-2px);
+}
+
+.btn-profile-link.btn-portfolio,
+.btn-profile-link.portfolio {
+  border-color: var(--cci-gold);
+  color: var(--cci-gold);
+  background: rgba(255, 184, 0, 0.06);
+}
+.btn-profile-link.btn-portfolio:hover,
+.btn-profile-link.portfolio:hover {
+  background: var(--cci-gold);
+  color: #000;
+  box-shadow: 0 4px 18px var(--cci-gold-glow);
+}
+
+.btn-profile-link.btn-github,
+.btn-profile-link.github {
+  border-color: #fff;
+  color: #fff;
+}
+.btn-profile-link.btn-github:hover,
+.btn-profile-link.github:hover {
+  background: #fff;
+  color: #000;
+  box-shadow: 0 4px 18px rgba(255, 255, 255, 0.4);
+}
+
+.btn-profile-link.btn-linkedin,
+.btn-profile-link.linkedin {
+  border-color: #0077b5;
+  color: #70b5f9;
+  background: rgba(0, 119, 181, 0.08);
+}
+.btn-profile-link.btn-linkedin:hover,
+.btn-profile-link.linkedin:hover {
+  background: #0077b5;
+  color: #fff;
+  box-shadow: 0 4px 18px rgba(0, 119, 181, 0.5);
+}
+
+.hud-social-links {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: 12px;
+}
+.hud-social-btn {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 1px;
+  color: var(--cci-light);
+  text-decoration: none;
+  padding: 5px 10px;
+  border: 1px solid var(--cci-border-panel);
+  background: rgba(255, 255, 255, 0.03);
+  transition: all 0.2s ease;
+}
+.hud-social-btn:hover {
+  color: var(--cci-cyan);
+  border-color: var(--cci-cyan);
+  background: rgba(0, 240, 255, 0.1);
+}
+.hud-social-btn.portfolio-pill {
+  color: var(--cci-gold);
+  border-color: rgba(255, 184, 0, 0.4);
+  background: rgba(255, 184, 0, 0.08);
+}
+.hud-social-btn.portfolio-pill:hover {
+  background: var(--cci-gold);
+  color: #000;
+  box-shadow: 0 0 12px var(--cci-gold-glow);
+}
+
 /* ==============================================================================
    DOWNLOADS & INSTALLER SECTION
    ============================================================================== */
@@ -1137,6 +1264,17 @@ body {
 }
 .footer-links a:hover {
   color: var(--cci-cyan);
+}
+.footer-links a.footer-highlight {
+  color: var(--cci-yellow);
+}
+.footer-links a.footer-highlight:hover {
+  color: #fff;
+  text-shadow: 0 0 10px rgba(255, 230, 0, 0.6);
+}
+.footer-sep {
+  color: var(--cci-border-panel);
+  margin: 0 4px;
 }
 
 /* ==============================================================================
@@ -1413,6 +1551,10 @@ def build_landing_page(games: list[dict], categories: list[str], author: dict, s
         <a href="#arquitectura" class="hud-tab">Arquitectura</a>
         <a href="#catalogo" class="hud-tab">Catálogo ({len(games)})</a>
         <a href="#descarga" class="hud-tab hud-cta-download">DESCARGAR EMULADOR</a>
+        <div class="hud-social-links">
+          <a href="{html.escape(author.get('portfolio_url', 'https://iannicamila.netlify.app'))}" target="_blank" rel="noopener" class="hud-social-btn portfolio-pill">★ PORTFOLIO</a>
+          <a href="{html.escape(author.get('github_url', 'https://github.com/Camila-Ianni/C.C.I-SYSTEM'))}" target="_blank" rel="noopener" class="hud-social-btn">GITHUB</a>
+        </div>
       </nav>
     </div>
   </header>
@@ -1471,7 +1613,13 @@ def build_landing_page(games: list[dict], categories: list[str], author: dict, s
             <span class="chassis-res">1280x720 @ 60FPS</span>
           </div>
           <div class="chassis-screen">
-            <img src="/assets/welcome.png" alt="Pantalla C.C.I. SYSTEM">
+            <video autoplay loop muted playsinline poster="/assets/welcome.png">
+              <source src="/assets/video/CCI_INTRO.mp4" type="video/mp4">
+              <img src="/assets/welcome.png" alt="Pantalla C.C.I. SYSTEM">
+            </video>
+            <div class="chassis-live-badge">
+              <span class="blink-dot"></span> EN VIVO // 60 FPS
+            </div>
           </div>
           <div class="chassis-footer">
             <span>MOTOR: PYGAME-CE // STATE_MACHINE</span>
@@ -1567,6 +1715,17 @@ def build_landing_page(games: list[dict], categories: list[str], author: dict, s
                 <strong>SISTEMA MULTIUSUARIO</strong>
                 <span>0 perfiles de fábrica, guardado en JSON local</span>
               </div>
+            </div>
+            <div class="profile-actions-bar">
+              <a href="{html.escape(author.get('portfolio_url', 'https://iannicamila.netlify.app'))}" target="_blank" rel="noopener noreferrer" class="btn-profile-link btn-portfolio">
+                ★ VER PORTFOLIO WEB
+              </a>
+              <a href="{html.escape(author.get('github_url', 'https://github.com/Camila-Ianni/C.C.I-SYSTEM'))}" target="_blank" rel="noopener noreferrer" class="btn-profile-link btn-github">
+                ⬡ REPOSITORIO GITHUB
+              </a>
+              <a href="{html.escape(author.get('linkedin_url', 'https://www.linkedin.com/in/camila-ianni'))}" target="_blank" rel="noopener noreferrer" class="btn-profile-link btn-linkedin">
+                in PERFIL LINKEDIN
+              </a>
             </div>
           </div>
         </div>
@@ -1796,6 +1955,10 @@ def build_landing_page(games: list[dict], categories: list[str], author: dict, s
         <a href="#catalogo">Catálogo</a>
         <a href="#autora">Autora</a>
         <a href="#descarga">Descargas</a>
+        <span class="footer-sep">·</span>
+        <a href="{html.escape(author.get('portfolio_url', 'https://iannicamila.netlify.app'))}" target="_blank" rel="noopener noreferrer" class="footer-highlight">★ Portfolio</a>
+        <a href="{html.escape(author.get('github_url', 'https://github.com/Camila-Ianni/C.C.I-SYSTEM'))}" target="_blank" rel="noopener noreferrer">GitHub</a>
+        <a href="{html.escape(author.get('linkedin_url', 'https://www.linkedin.com/in/camila-ianni'))}" target="_blank" rel="noopener noreferrer">LinkedIn</a>
       </div>
     </div>
   </footer>
