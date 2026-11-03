@@ -525,6 +525,58 @@ body {
 }
 
 /* ==============================================================================
+   ACADEMIC MISSION & SYSTEM PURPOSE
+   ============================================================================== */
+.academic-pillars-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 20px;
+  margin-top: 36px;
+}
+
+.academic-pillar-card {
+  background: var(--cci-bg-surface);
+  border: 1px solid var(--cci-border-panel);
+  border-left: 3px solid var(--cci-cyan);
+  padding: 28px 24px;
+  position: relative;
+  transition: all 0.25s ease;
+}
+
+.academic-pillar-card:hover {
+  border-color: var(--cci-cyan);
+  background: var(--cci-bg-surface-hover);
+  transform: translateY(-3px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.7);
+}
+
+.pillar-num {
+  font-family: var(--font-display);
+  font-size: 1.8rem;
+  font-weight: 900;
+  color: var(--cci-cyan);
+  opacity: 0.7;
+  margin-bottom: 8px;
+  letter-spacing: 1px;
+}
+
+.pillar-title {
+  font-family: var(--font-display);
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: #fff;
+  margin-bottom: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.pillar-desc {
+  font-size: 0.95rem;
+  color: var(--cci-light);
+  line-height: 1.6;
+}
+
+/* ==============================================================================
    GAMES CATALOG (Estilo Cartucho / Rack Arcade)
    ============================================================================== */
 .catalog-header-bar {
@@ -765,10 +817,25 @@ body {
   width: 140px; height: 140px;
   background: #07080a;
   border: 3px solid var(--cci-cyan);
-  box-shadow: 0 0 20px var(--cci-cyan-dim);
+  box-shadow: 0 0 24px var(--cci-cyan-dim);
   display: flex;
   align-items: center;
   justify-content: center;
+  overflow: hidden;
+  position: relative;
+}
+
+.profile-avatar-frame img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center 25%;
+  display: block;
+  transition: transform 0.3s ease;
+}
+
+.profile-avatar-frame:hover img {
+  transform: scale(1.05);
 }
 
 .profile-monogram {
@@ -1340,6 +1407,7 @@ def build_landing_page(games: list[dict], categories: list[str], author: dict, s
         </div>
       </a>
       <nav class="hud-nav">
+        <a href="#proyecto" class="hud-tab">Proyecto</a>
         <a href="#arquitectura" class="hud-tab">Arquitectura</a>
         <a href="#catalogo" class="hud-tab">Catálogo ({len(games)})</a>
         <a href="#autora" class="hud-tab">Autora</a>
@@ -1352,11 +1420,12 @@ def build_landing_page(games: list[dict], categories: list[str], author: dict, s
   <section class="hero">
     <div class="container hero-layout">
       <div class="hero-left">
-        <span class="telemetry-tag">// VIRTUAL CONSOLE ARCHITECTURE · 100% PYTHON</span>
+        <span class="telemetry-tag">// PROYECTO ACADÉMICO · ANALISTA DE SISTEMAS · 100% PYTHON</span>
         <h1 class="hero-headline">CONSOLA VIRTUAL RETRO &amp; <span>EMULADOR</span></h1>
         <p class="hero-lead">
-          <strong>C.C.I. SYSTEM</strong> integra <strong>19 videojuegos arcade clásicos</strong>
-          en una consola virtual integral con arquitectura de estados en Python,
+          <strong>C.C.I. SYSTEM</strong> es una plataforma de investigación y desarrollo concebida por
+          <strong>Camila Carolina Ianni</strong> en la carrera de <strong>Analista de Sistemas</strong> (Escuela Da Vinci).
+          Unifica <strong>19 videojuegos arcade clásicos</strong> en una consola virtual integral con arquitectura de estados en Python puro,
           renderizado a 60 FPS, sistema multiusuario con gestión de estadísticas independientes,
           soporte de joystick plug &amp; play y capturador HD sin dependencias externas.
         </p>
@@ -1407,6 +1476,59 @@ def build_landing_page(games: list[dict], categories: list[str], author: dict, s
             <span>MOTOR: PYGAME-CE // STATE_MACHINE</span>
             <span>PLATAFORMA: MAC &amp; WINDOWS</span>
           </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Proyecto Académico & Preservación Digital -->
+  <section id="proyecto" class="section section-dark">
+    <div class="container">
+      <span class="section-tag">// ORIGEN, VISIÓN &amp; TESIS ACADÉMICA</span>
+      <h2 class="section-title">¿QUÉ ES C.C.I. SYSTEM Y POR QUÉ NACE?</h2>
+      <p class="section-desc">
+        C.C.I. SYSTEM surge como un proyecto de investigación y desarrollo integral en la carrera de
+        <strong>Analista de Sistemas</strong> en <strong>Escuela Da Vinci</strong>, orientado a la preservación del patrimonio del videojuego retro
+        y al estudio empírico de la arquitectura de software determinista en Python.
+      </p>
+
+      <div class="academic-pillars-grid">
+        <div class="academic-pillar-card">
+          <div class="pillar-num">01</div>
+          <h3 class="pillar-title">Demostración Académica en Python</h3>
+          <p class="pillar-desc">
+            Desafiar el mito de que Python es inadecuado para software interactivo de alta demanda temporal.
+            El sistema demuestra que con diseño orientado a objetos riguroso, sincronización precisa de ciclos y
+            gestión de memoria eficiente, es factible mantener 60 FPS estables, control de hilos y renderizado fluido sin recurrir a motores comerciales prediseñados.
+          </p>
+        </div>
+
+        <div class="academic-pillar-card">
+          <div class="pillar-num">02</div>
+          <h3 class="pillar-title">Preservación Digital de Clásicos</h3>
+          <p class="pillar-desc">
+            Rescate y adaptación de 19 obras maestras del arcade (1978–2009). Cada título ha sido
+            integrado respetando su identidad estética original (desde resoluciones nativas Neo-Geo 320x224 hasta 720p),
+            incorporando soporte para mandos modernos con vibración háptica y controles configurables.
+          </p>
+        </div>
+
+        <div class="academic-pillar-card">
+          <div class="pillar-num">03</div>
+          <h3 class="pillar-title">Aislamiento &amp; Máquina de Estados (FSM)</h3>
+          <p class="pillar-desc">
+            Resolución de colisiones de namespaces globales y recarga dinámica de módulos en tiempo de ejecución.
+            Al cambiar de juego o volver al menú principal, el sandbox de C.C.I. SYSTEM limpia descriptores, restablece canales de audio y restaura el estado determinista sin fugas de memoria.
+          </p>
+        </div>
+
+        <div class="academic-pillar-card">
+          <div class="pillar-num">04</div>
+          <h3 class="pillar-title">Filosofía de Distribución Limpia</h3>
+          <p class="pillar-desc">
+            Diseño centrado en la experiencia del usuario: instaladores nativos de 1-clic (.dmg en macOS y .exe en Windows),
+            arranque de fábrica con <strong>0 perfiles precargados</strong> para que cada jugador inicie su partida desde cero, y una plataforma web cloud ligera desplegada de forma continua.
+          </p>
         </div>
       </div>
     </div>
@@ -1494,7 +1616,7 @@ def build_landing_page(games: list[dict], categories: list[str], author: dict, s
         <div class="profile-grid">
           <div class="profile-avatar-block">
             <div class="profile-avatar-frame">
-              <span class="profile-monogram">CCI</span>
+              <img src="{html.escape(author.get('avatar_url', '/assets/fotos_web/Cami.jpg'))}" alt="{html.escape(author.get('name',''))}">
             </div>
             <span class="profile-badge-pill">DESARROLLADORA</span>
           </div>
@@ -1658,6 +1780,7 @@ def build_landing_page(games: list[dict], categories: list[str], author: dict, s
         </p>
       </div>
       <div class="footer-links">
+        <a href="#proyecto">Proyecto</a>
         <a href="#arquitectura">Arquitectura</a>
         <a href="#catalogo">Catálogo</a>
         <a href="#autora">Autora</a>

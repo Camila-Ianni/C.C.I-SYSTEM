@@ -88,12 +88,14 @@ def index():
     author_info = {
         "name": "Camila Carolina Ianni",
         "title": "Desarrolladora & Arquitecta de C.C.I. SYSTEM",
+        "avatar_url": "/assets/fotos_web/Cami.jpg",
         "bio": (
-            "Estudiante de Analista de Sistemas apasionada por la arquitectura de software, "
-            "emulación y desarrollo de sistemas interactivos en Python. C.C.I. SYSTEM nace como un proyecto "
-            "integral que transforma una suite de 19 clásicos arcade en una consola virtual moderna con "
-            "interfaz Cyberpunk / PS5, sistema multiusuario con gestión de estadísticas independiente, "
-            "grabador de capturas y mapeo universal de gamepads."
+            "Estudiante de la carrera de Analista de Sistemas en Escuela Da Vinci. "
+            "C.C.I. SYSTEM fue concebido como un proyecto académico integral de ingeniería de software y preservación "
+            "digital, con el propósito de demostrar la capacidad de Python para sostener una plataforma interactiva "
+            "de alto rendimiento a 60 FPS. El proyecto aborda la orquestación determinista de 19 clásicos arcade, "
+            "aislamiento estricto de memoria entre motores independientes, traducción universal de mandos con respuesta háptica "
+            "y una experiencia de usuario limpia con 0 perfiles de fábrica."
         ),
         "institution": "Escuela Da Vinci — Analista de Sistemas",
         "year": "2026",
