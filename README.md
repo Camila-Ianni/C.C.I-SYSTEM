@@ -1,142 +1,84 @@
-# 🕹️ C.C.I. SYSTEM - Virtual Arcade Console
+# 🕹️ C.C.I. SYSTEM - Virtual Arcade Console & Retro Emulator
+
+[![Web Oficial](https://img.shields.io/badge/Web%20Oficial-c--c--i--system.onrender.com-00f0ff?style=for-the-badge&logo=render&logoColor=white)](https://c-c-i-system.onrender.com)
+[![macOS Release](https://img.shields.io/badge/Descargar-macOS%20(.dmg)-white?style=for-the-badge&logo=apple&logoColor=black)](https://github.com/Camila-Ianni/C.C.I-SYSTEM/releases/download/v1.0.0/CCI_System_macOS.dmg)
+[![Windows Release](https://img.shields.io/badge/Descargar-Windows%20(.exe)-0078D4?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/Camila-Ianni/C.C.I-SYSTEM/releases/download/v1.0.0/CCI_System_Windows_Installer.exe)
 
 ![Python Version](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12%20%7C%203.14-blue)
 ![Pygame-CE](https://img.shields.io/badge/pygame--ce-2.5%2B-brightgreen)
-![OpenCV](https://img.shields.io/badge/opencv--python-4.8%2B-red)
+![Flask](https://img.shields.io/badge/flask-3.1%2B-lightgrey)
 ![Architecture](https://img.shields.io/badge/architecture-State%20Machine-purple)
 ![Gamepads](https://img.shields.io/badge/gamepad-DualSense%20%7C%20Xbox%20%7C%20Generic-orange)
 ![Haptics](https://img.shields.io/badge/haptics-Rumble%20Feedback-success)
-![Multi-User](https://img.shields.io/badge/multi--user-Isolated%20Profiles-cyan)
+![Multi-User](https://img.shields.io/badge/multi--user-0%20Factory%20Profiles-cyan)
 
-**C.C.I. SYSTEM** es una plataforma arcade integral desarrollada en **Python** y **Pygame-CE (Community Edition)**. Unifica 26 títulos arcade clásicos e independientes bajo un entorno gráfico retrofuturista de ventana única (`1280x720`), orquestado mediante un patrón de **Máquina de Estados Finita (State Machine)** con aislamiento estricto de namespaces, háptica universal y perfiles multiusuario independientes.
+**C.C.I. SYSTEM** es una plataforma arcade integral y emulador multiplataforma desarrollado **100% en Python** con **Pygame-CE (Community Edition)** y orquestación web nativa en **Flask**. Unifica **19 clásicos arcade** bajo un entorno retrofuturista Cyberpunk / PS5 de ventana única (`1280x720`), máquina de estados determinista (`State Machine`), háptica universal plug & play, capturador HD y sistema multiusuario con gestión de estadísticas independientes.
 
----
-
-## 🎮 Videojuegos Integrados (26 Títulos)
-
-La consola cuenta con un catálogo de **26 juegos** accesibles desde la Biblioteca y el Carrusel 3D del Menú Principal:
-
-| # | Juego | Género | Motor / Características |
-| :-: | :--- | :--- | :--- |
-| 1 | **Da Vinci Fighters** | Lucha 2D Arcade | Motor CPS-1 propio, combate 1P vs CPU y 2P Local, supers, combos, cinemáticas y personajes originales (*Cami, Enith, Martín*). |
-| 2 | **Metal Slug: Super Vehicle-001** | Run & Gun | Motor de físicas Pymunk, renderizado multicapa y vehículos operables. |
-| 3 | **Asteroids** | Arcade Espacial Vectorial | Clásico vectorial con inercia, disparos reactivos y puntuación. |
-| 4 | **Super Mario Bros** | Plataformas 2D | Motor modular por estados, físicas y niveles clásicos. |
-| 5 | **The Legend of Zelda** | Action RPG 2D | Exploración top-down en Hyrule, sistema de armas, magias e inventario. |
-| 6 | **Pac-Man** | Laberinto Arcade | IA de fantasmas basada en cuadrícula, pellets y audio original. |
-| 7 | **Tetris** | Puzzle Clásico | Caída de tetriminos, rotación, cálculo de puntuación y aceleración progresiva. |
-| 8 | **Space Invaders** | Shoot 'em up Fijo | Oleadas alienígenas descendentes, bunkers destructibles y ovnis. |
-| 9 | **DOOM** | First Person Shooter (FPS) | Motor 3D por Raycasting, enemigos animados, mapa laberíntico y captura de ratón. |
-| 10 | **Minecraft** | Sandbox 3D | Construcción de bloques en primera persona con Ursina. |
-| 11 | **Flappy Bird** | Arcade | Vuelo y esquive de tuberías retro. |
-| 12 | **Dino Run** | Endless Runner | Salto y agachado esquivando cactus y pterodáctilos. |
-| 13 | **GhostBusters** | Plataformas / Acción | Scroll con parallax, captura de fantasmas y granadas. |
-| 14 | **Cyberpunk Metroidvania** | Plataformas / Metroidvania | Ambientación distópica con niveles y físicas de plataformas. |
-| 15 | **Pokémon** | RPG por Turnos | Combate por turnos retro, selección de movimientos y animaciones. |
-| 16 | **Street Fighter II** | Lucha 2D | Combates clásicos uno contra uno con ataques especiales. |
-| 17 | **Sonic the Hedgehog** | Plataformas de Velocidad | Físicas de loopings, recolección de anillos y velocidad vertiginosa. |
-| 18 | **Bomberman** | Acción / Laberinto | Colocación táctica de bombas, power-ups y destrucción de bloques. |
-| 19 | **Frogger** | Arcade Clásico | Cruce de autopistas y ríos con temporizador y vidas. |
-| 20 | **Mega Man** | Acción / Plataformas | Disparos buster, saltos calibrados y enemigos de escenario. |
-| 21 | **Mortal Kombat (MK-Ultra)** | Lucha Arcade | Golpes contundentes, guardias y combate cuerpo a cuerpo. |
-| 22 | **Castlevania** | Acción / Aventura Gótica | Látigo Vampire Killer, velas, subarmas y enemigos clásicos. |
-| 23 | **Bubble Bobble** | Plataformas Arcade | Disparo de burbujas, captura de monstruos y frutas. |
-| 24 | **Plants vs. Zombies** | Tower Defense | Siembra estratégica de plantas, soles y oleadas de zombis. |
-| 25 | **Donkey Kong** | Plataformas Arcade | Subida por andamios metálicos esquivando barriles rodantes. |
-| 26 | **Q\*bert** | Arcade Isométrico | Pirámide isométrica de cubos con cambio de color y evasión de enemigos. |
+🌐 **Sitio Web Oficial en Producción:** [https://c-c-i-system.onrender.com](https://c-c-i-system.onrender.com)
 
 ---
 
-## 👤 Sistema Multiusuario Independiente
+## 📦 Descargas Oficiales (Instaladores de 1-Clic)
 
-C.C.I. SYSTEM implementa perfiles de usuario completamente aislados (`.cci-user-data/users/{usuario}.json`):
-- **Datos Segregados:** Cada jugador mantiene sus propios avances, estadísticas por juego, horas jugadas, nivel de experiencia, partidas recientes, favoritos y logros sin mezclarse con otros usuarios.
-- **Perfil Base Migrado:** Los progresos anteriores se conservan en la cuenta principal `CAMI` (más de 36 horas de juego y 33 logros base).
-- **Creación Dinámica de Perfiles:** Interfaz gráfica para dar de alta nuevos jugadores con nombre personalizado y elección de avatar.
-- **Borrado Seguro:** Opción de eliminar perfiles con confirmación modal (protegiendo el último perfil activo).
-- **Cambio Rápido de Cuenta:** Posibilidad de alternar de usuario en cualquier momento desde la pantalla de selección o mediante el botón `CAMBIAR USUARIO` (`F3`) en la sección de Perfil.
+Para jugar de inmediato sin necesidad de abrir la terminal ni instalar Python manualmente:
 
----
+| Plataforma | Formato | Instalación | Enlace Directo |
+| :--- | :--- | :--- | :--- |
+| **macOS** | `.dmg` (Apple Disk Image) | Abre el archivo `.dmg`, ejecuta `C.C.I. SYSTEM.app` y sigue el asistente interactivo (Escritorio por defecto). | [📥 Descargar para Mac (734 MB)](https://github.com/Camila-Ianni/C.C.I-SYSTEM/releases/download/v1.0.0/CCI_System_macOS.dmg) |
+| **Windows** | `.exe` (Instalador GUI) | Haz doble clic en el ejecutable `.exe` y sigue el instalador gráfico interactivo. | [📥 Descargar para Windows (628 MB)](https://github.com/Camila-Ianni/C.C.I-SYSTEM/releases/download/v1.0.0/CCI_System_Windows_Installer.exe) |
 
-## 🎴 Pantalla de Selección de Usuario (`USER_SELECT`)
-
-Situada estratégicamente tras las cinemáticas de inicio del sistema:
-- **Arte Cyberpunk HD:** Integración visual con `Bienvenida al sistema C.C.I.png`.
-- **Avatares Circulares Neón:** 8 retratos circulares transparentes extraídos de `Selector de personajes ciberpunk en blanco-Photoroom.png`.
-- **Correspondencia 1:1:** Cada avatar circular se corresponde exactamente con el avatar cuadrado correspondiente en la vista de Perfil de la consola.
-- **Tarjetas Interactivas:** Cada tarjeta muestra nombre, avatar con anillo luminoso animado, nivel de jugador, logros obtenidos y tiempo total jugado.
-- **Tarjeta `+ NUEVO PERFIL`:** Despliega un modal flotante con caja de texto y selector de los 8 personajes para añadir un nuevo jugador al instante.
+> ⚠️ **Nota para macOS (Primer Inicio):** Al ser un emulador open-source independiente, la primera vez haz **Clic derecho (o Control + Clic)** sobre `C.C.I. SYSTEM` y selecciona **«Abrir»** (o autorízalo en *Ajustes del Sistema > Privacidad y Seguridad > «Abrir igualmente»*). ¡Solo se realiza una única vez!
 
 ---
 
-## 📳 Sistema Háptico / Vibración Universal (`cci_rumble.py`)
+## 🎮 Catálogo Oficial Integrado (19 Títulos)
 
-Integración nativa de vibración táctil para mandos compatibles con SDL2 / Pygame-CE (DualSense PS5, DualShock 4, Xbox One/Series, Switch Pro y USB genéricos):
-- **`hit_rumble()`**: Vibración contundente ante impactos o golpes recibidos por el jugador.
-- **`damage_rumble()`**: Vibración moderada ante daño continuo o pérdida de salud.
-- **`explosion_rumble()`**: Vibración de máxima potencia en explosiones, KO o muerte.
-- **`light_rumble()`**: Vibración sutil en navegación de menús, saltos o impactos menores.
-- **Control Global:** Activación y desactivación inmediata desde el menú de Configuración (`vibration: on/off`).
+La consola incluye 19 videojuegos accesibles desde la Biblioteca, el Carrusel 3D y la Landing Page oficial:
 
----
-
-## 🔄 Arquitectura y Flujo de Estados
-
-El ciclo de vida de la aplicación se ejecuta en una única ventana de `1280x720` sin parpadeos ni fugas de memoria:
-
-```
-[BOOT] (Video de arranque CCI_INTRO.mp4)
-   │  ↳ Salto con ENTER / ESPACIO / Botón Mando ──┐
-   ▼ (Al finalizar)                              │
-[INTRO_AVATAR] (Cinemática interactiva con audio) │
-   │  ↳ Salto con ENTER / ESPACIO / Botón Mando ──┤
-   ▼ (Al finalizar)                              │
-[USER_SELECT] (Selector y creador de perfiles)◄──┘
-   │  ↳ Seleccionar usuario / Crear nuevo
-   ▼
-[MENU] (Carrusel 3D interactivo con los 26 juegos)
-   ├──► [LIBRARY]      (Biblioteca completa, filtros, búsqueda y fichas)
-   ├──► [PROFILE]      (Nivel, horas, sesiones recientes y cambio de avatar)
-   ├──► [ACHIEVEMENTS] (Sistema de logros y trofeos por juego)
-   ├──► [SETTINGS]     (Ajustes de video, CRT, volumen y vibración háptica)
-   └──► [PLAYING]      (Sandbox de ejecución segura del juego seleccionado)
-           │
-           ▼ (Escape o fin de partida)
-        [MENU]
-```
-
-- **Sandbox de Ejecución (`PlayingState`):** Al lanzar y cerrar un juego, el sistema limpia `sys.modules`, restablece descriptores de audio, restaura `sys.path` y `cwd`, garantizando un retorno seguro a la consola.
+| # | Juego | Desarrollador | Año | Género | Características |
+| :-: | :--- | :--- | :-: | :--- | :--- |
+| 1 | **Da Vinci Fighters** | C.C.I. System | 2026 | Acción / Lucha | Motor CPS-1 propio, combate 1P vs CPU y 2P Local, supers y cinemáticas. |
+| 2 | **Asteroids** | Atari | 1979 | Arcade / Shooter | Físicas vectoriales, inercia, disparos reactivos y puntuación. |
+| 3 | **Super Mario Bros** | Nintendo | 1985 | Plataformas | Motor modular por estados, físicas precisas y niveles clásicos. |
+| 4 | **The Legend of Zelda** | Nintendo | 1986 | Acción / RPG | Exploración top-down en Hyrule, armas, magias e inventario. |
+| 5 | **Pac-Man** | Namco | 1980 | Arcade / Laberinto | IA de fantasmas basada en cuadrícula, pellets y audio original. |
+| 6 | **Tetris** | C.C.I. System | 2026 | Puzzle | Caída de tetriminos, rotación, líneas y aceleración progresiva. |
+| 7 | **Space Invaders** | Taito | 1978 | Shooter / Arcade | Oleadas alienígenas descendentes, bunkers destructibles y ovnis. |
+| 8 | **Metal Slug** | SNK | 1996 | Acción / Shooter | Run & Gun clásico, física de proyectiles y vehículos de combate. |
+| 9 | **DOOM** | id Software | 1993 | Shooter / FPS | Motor 3D por Raycasting, enemigos animados y captura de mouse. |
+| 10 | **Flappy Bird** | C.C.I. System | 2026 | Arcade | Vuelo y esquive de tuberías con detección de colisiones al píxel. |
+| 11 | **Dino Run** | C.C.I. System | 2026 | Arcade / Runner | Salto y agachado esquivando cactus y pterodáctilos. |
+| 12 | **Ghostbusters** | C.C.I. System | 2026 | Acción / Aventura | Scroll lateral con parallax, captura de espectros y armamento. |
+| 13 | **Cyberpunk Metroidvania** | C.C.I. System | 2026 | Acción / Plataformas | Ambientación distópica, exploración vertical y parkour. |
+| 14 | **Pokémon** | Game Freak | 1996 | RPG / Aventura | Aventura clásica por Kanto, combate por turnos y selección de ataques. |
+| 15 | **Mega Man** | Capcom | 1987 | Acción / Plataformas | Disparos buster, saltos milimétricos y jefes de nivel. |
+| 16 | **Castlevania** | Konami | 1986 | Acción / Plataformas | Látigo Vampire Killer, velas, subarmas y ambientación gótica. |
+| 17 | **Bubble Bobble** | Taito | 1986 | Arcade / Plataformas | Disparo de burbujas, atrapado de enemigos y frutas bonus. |
+| 18 | **Plants vs. Zombies** | PopCap | 2009 | Estrategia / Defense | Siembra estratégica de plantas, recolección de soles y hordas zombi. |
+| 19 | **Donkey Kong** | Nintendo | 1981 | Arcade / Plataformas | Escalada por andamios metálicos esquivando barriles rodantes. |
 
 ---
 
-## ⌨️ Controles Generales
+## 👤 Sistema Multiusuario Limpio (0 Perfiles de Fábrica)
 
-### 🖥️ Launcher y Pantallas del Sistema
-| Acción | Teclado | Mando / Joystick |
-| :--- | :--- | :--- |
-| **Navegar (Menús / Carrusel / Avatares)** | `W / A / S / D` o `Flechas` | `D-Pad` o `Stick Izquierdo` |
-| **Confirmar / Jugar / Seleccionar** | `Enter` o `Espacio` | `Botón A / Cruz / X` |
-| **Volver / Cancelar** | `Escape` | `Botón B / Círculo` |
-| **Saltar Cinemáticas** | `Enter` o `Espacio` | `Cualquier botón principal` |
-| **Cambiar Usuario** | `F3` (en Perfil o Menú) | `Botón Cambiar Usuario` |
-| **Editar Nombre de Perfil** | `F2` (en Perfil) | `Icono de edición` |
-| **Eliminar Perfil (Multiusuario)** | `Supr` / `Delete` | `Botón Y / Triángulo` |
-| **Atajos directos de pantalla** | `F4` Juegos · `F5` Inicio · `F6` Perfil · `F7` Logros · `F8` Configuración | `Sidebar interactiva` |
-
-### 🥊 Da Vinci Fighters
-| Acción | Teclado P1 | Joystick (P1 / P2) |
-| :--- | :--- | :--- |
-| **Desplazamiento** | `A / D` | `Stick Izquierdo` / `D-Pad` |
-| **Saltar** | `W` | `Botón ✕ (Cruz / A)` |
-| **Agacharse** | `S` | `Stick Izquierdo Abajo` |
-| **Bloqueo / Guardia** | `L` | `Botón ◻ (Cuadrado / X)` |
-| **Patadas** | `U` / `O` | `Botón ◯ (Círculo / B)` |
-| **Ataque Especial** | `I` | `Botón △ (Triángulo / Y)` |
-| **Super / Ultimate** | `P` (con barra llena) | `L2 / LT` o `R2 / RT` |
+- **Distribución Limpia:** El instalador parte con **0 perfiles precreados** para que cada usuario cree su cuenta personalizada desde el primer boot.
+- **Datos Segregados:** Archivos JSON independientes (`.cci-user-data/users/{usuario}.json`) para horas de juego, récords, favoritos y trofeos.
+- **Selector de Avatares:** 8 personajes ciberpunk con anillo luminoso de neón.
+- **Cambio Rápido:** Alterna de usuario en cualquier momento desde el menú con `F3`.
 
 ---
 
-## 🚀 Instalación y Ejecución
+## 📳 Sistema Háptico & Mandos Plug & Play (`cci_rumble.py`)
+
+- Soporte nativo para mandos **Sony DualSense (PS5), DualShock 4, Xbox Series/One, Switch Pro y USB arcade**.
+- **Retroalimentación por eventos:** Vibración adaptativa en golpes (`hit_rumble`), daño sostenido (`damage_rumble`), explosiones (`explosion_rumble`) y navegación sutil (`light_rumble`).
+- **Captura HD Instantánea:** Presionando `F12` guarda un screenshot 720p sin pérdidas en la carpeta `capturas/` con notificación toast.
+
+---
+
+## 💻 Ejecución para Desarrolladores
+
+Si prefieres ejecutar o modificar el código fuente localmente:
 
 ### 1. Clonar el Repositorio
 ```bash
@@ -158,50 +100,52 @@ python -m venv .venv
 ### 3. Instalar Dependencias
 ```bash
 pip install --upgrade pip
-pip install -r requirements.txt
+pip install -r requirements-dev.txt
 ```
 
-> **Nota:** Se utiliza `pygame-ce` (Community Edition). No debe coexistir con `pygame` estándar.
-
-### 4. Iniciar la Consola
+### 4. Lanzar la Consola Emulada o el Servidor Web
 ```bash
+# Iniciar la consola virtual retro
 python main.py
+
+# Iniciar la landing page web oficial
+python run_web.py
 ```
 
 ---
 
-## 📁 Estructura Principal del Proyecto
+## 📁 Estructura del Repositorio
 
 ```text
 C.C.I-SYSTEM/
-├── main.py                     # Entry point y orquestación de la consola virtual
-├── states.py                   # Máquina de estados base (Boot, Intro, Menu, Playing)
-├── user_select_state.py        # Pantalla interactiva de bienvenida y selección de usuario
-├── cci_users.py                # Gestor de almacenamiento multiusuario independiente
-├── cci_console.py              # Estados de consola: Library, Profile, Achievements, Settings
-├── cci_rumble.py               # Motor universal de vibración y retroalimentación háptica
-├── sidebar_ui.py               # Barra lateral de navegación futurista compartida
-├── requirements.txt            # Dependencias del proyecto (pygame-ce, opencv, pymunk, etc.)
-├── README.md                   # Documentación técnica oficial
-├── assets_cards/               # Banners y tarjetas transparentes de los 26 juegos
-├── pantallas/                  # Assets gráficos originales de las interfaces
-├── .cci-user-data/             # Directorio local de perfiles y ajustes (no versionado)
-│   └── users/                  # Archivos JSON independientes por usuario
-└── [Carpetas de Juegos]/       # Módulos de los 26 videojuegos arcade integrados
+├── main.py                     # Entry point de la consola virtual en Pygame-CE
+├── emulator.py                 # Launcher y verificador integral multiplataforma
+├── run_web.py                  # Servidor de producción Flask de la landing page
+├── catalog_data.py             # Metadatos del catálogo oficial de 19 juegos (100% Python)
+├── build_distribution.py       # Generador de instaladores nativos (.dmg y .exe)
+├── states.py                   # Máquina de estados finita (Boot, Intro, Menu, Playing)
+├── user_select_state.py        # Selector interactivo de jugadores y creación de perfiles
+├── cci_console.py              # Hub: Biblioteca, Perfil, Logros y Configuración
+├── cci_rumble.py               # Motor de vibración háptica universal para joysticks
+├── screenshot_manager.py       # Módulo capturador de pantalla F12
+├── api/
+│   └── index.py                # Entrypoint serverless WSGI
+├── web/
+│   ├── app.py                  # Aplicación web Flask oficial
+│   └── landing_page.py         # Generador de landing page interactiva Cyberpunk
+├── fotos web/                  # Logos e ilustraciones oficiales de los 19 juegos para la web
+├── assets_cards/               # Tarjetas y carátulas nativas para la consola
+├── pantallas/                  # Fondos y paneles de interfaz
+├── documentacion/              # Especificación técnica, SRS IEEE 830 y manuales
+├── requirements.txt            # Dependencias ligeras para hosting cloud (Flask)
+└── requirements-dev.txt        # Dependencias completas para el emulador (Pygame-CE, OpenCV, Pymunk)
 ```
 
 ---
 
-## 🛠️ Tecnologías Empleadas
+## 👩‍💻 Autora & Dirección de Proyecto
 
-- **Python 3.10+** (Optimizado para Python 3.14)
-- **Pygame-CE** (Renderizado 2D, SDL2 Gamepad, Haptics y Mixer)
-- **OpenCV (`opencv-python`)** (Decodificación de video BGR $\rightarrow$ RGB de alta precisión)
-- **NumPy** (Procesamiento de buffers gráficos y síntesis de audio)
-- **Pymunk** (Físicas 2D de cuerpos rígidos)
-
----
-
-## 👩‍💻 Autora
-
-Desarrollado por **Camila Ianni** ([@Camila-Ianni](https://github.com/Camila-Ianni))
+Desarrollado y diseñado por **Camila Carolina Ianni**  
+*Estudiante de Analista de Sistemas — Escuela Da Vinci (2026)*  
+GitHub: [@Camila-Ianni](https://github.com/Camila-Ianni)  
+Web del Proyecto: [https://c-c-i-system.onrender.com](https://c-c-i-system.onrender.com)

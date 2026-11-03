@@ -1,167 +1,140 @@
 # Manual de Instalación, Configuración y Despliegue
-## Proyecto: C.C.I. SYSTEM (Virtual Arcade Console Platform)
-**Documento:** Manual Técnico de Instalación y Administración de Entorno  
-**Versión:** 2.0.0  
+## Proyecto: C.C.I. SYSTEM (Virtual Arcade Console Platform & Retro Emulator)
+**Documento:** Manual Técnico de Instalación, Despliegue y Administración de Entorno  
+**Versión:** 3.0.0 (Lanzamiento Multiplataforma & Web Cloud)  
+**URL Oficial en Producción:** [https://c-c-i-system.onrender.com](https://c-c-i-system.onrender.com)  
 
 ---
 
-## 1. Requisitos de Hardware y Arquitectura Soportada
+## 1. Métodos de Instalación y Despliegue
 
-### 1.1. Arquitecturas y Plataformas Homologadas
-* **macOS:** Compatible con macOS Monterey 12.0 o superior en arquitecturas:
-  * **Apple Silicon:** M1, M2, M3, M4 (ejecución nativa `arm64`).
-  * **Intel Core:** Core i5/i7/i9 (`x86_64`).
-* **Linux:** Compatible con distribuciones modernas:
-  * Ubuntu 20.04 LTS / 22.04 LTS / 24.04 LTS.
-  * Debian 11 / 12, Fedora 38+, Arch Linux.
-* **Windows (Experimental):** Windows 10/11 con Python oficial y drivers SDL2 actualizados.
+El sistema ofrece tres canales de instalación y uso según el perfil del usuario:
 
-### 1.2. Especificaciones Mínimas y Recomendadas
-
-| Componente | Especificación Mínima | Especificación Recomendada |
-| :--- | :--- | :--- |
-| **CPU** | Procesador Dual-Core 2.0 GHz | Quad-Core 2.5 GHz o Apple Silicon M-Series |
-| **Memoria RAM** | 4 GB | 8 GB o superior |
-| **Resolución de Pantalla** | 1280 x 720 píxeles (720p) | 1920 x 1080 píxeles (1080p) con escalado |
-| **Tarjeta Gráfica** | Gráficos integrados con soporte OpenGL 2.1 | GPU dedicada o integrada moderna (Metal / Vulkan / Direct3D) |
-| **Tarjeta de Sonido** | Estéreo integrada estándar con soporte de 44.1 kHz | Dispositivo de audio compatible con baja latencia |
-| **Espacio en Disco** | 500 MB libres | 1 GB libre (para paquetes de audio y logs) |
-
----
-
-## 2. Árbol de Directorios y Estructura del Software
-
-Para que el sistema funcione correctamente, la jerarquía de carpetas debe mantenerse intacta:
-
-```text
-C.C.I SYSTEM/
-│
-├── main.py                                      # Entry point principal y ciclo de eventos
-├── states.py                                    # Gestor de Estados, JoystickManager y Runners
-├── requirements.txt                             # Especificación estricta de dependencias
-├── README.md                                    # Resumen rápido del proyecto
-│
-├── CCI_INTRO.mp4                                # Video cinemático de arranque (Boot)
-├── Pixel_girl_reading_dialogue_boxes_....mp4     # Video cinemático de avatar (Intro Cami)
-│
-├── games.png                                    # Arte de fondo base del arcade (1452x1083)
-├── cards-bn.jpeg                                # Grilla de tarjetas en blanco y negro (2400x1792)
-├── cards-color.jpeg                             # Grilla de tarjetas a color (2400x1792)
-│
-├── documentacion/                               # Suite documental técnica integral (8 archivos)
-│   ├── 1_RELEVAMIENTO_Y_ALCANCE.md
-│   ├── 2_PROPUESTA_DE_VALOR.md
-│   ├── 3_SRS_ESPECIFICACION_REQUERIMIENTOS.md
-│   ├── 4_CASOS_DE_USO.md
-│   ├── 5_MANUAL_DE_INSTALACION.md
-│   ├── 6_MANUAL_DE_USUARIO.md
-│   ├── 7_DIAGRAMA_DE_GANTT.md
-│   └── 8_CODIGO_FUENTE_Y_ARQUITECTURA.md
-│
-├── Davinci-Fighter/                             # Cartucho 1: Juego de Pelea 2D
-├── METAL SLUG/                                  # Cartucho 2: Run & Gun Neo-Geo
-├── Mario/                                       # Cartucho 3: Super Mario Bros
-├── PacMan/                                      # Cartucho 4: Pac-Man Clásico
-├── Space-invaders/                              # Cartucho 5: Space Invaders
-└── asteroids/                                   # Cartucho 6: Atari Asteroids Vectorial
+```
+                                ┌─────────────────────────────────────────┐
+                                │        CANALES DE C.C.I. SYSTEM         │
+                                └────────────────────┬────────────────────┘
+                                                     │
+             ┌───────────────────────────────────────┼───────────────────────────────────────┐
+             ▼                                       ▼                                       ▼
+  [ MODO USUARIO FINAL ]                  [ MODO DESARROLLADOR ]                  [ MODO SERVIDOR WEB ]
+  - Web o GitHub Releases                 - Terminal y Git                        - Flask & Render.com
+  - DMG (Mac) / EXE (Win)                 - requirements-dev.txt                  - c-c-i-system.onrender.com
+  - 1-clic con asistente                  - python main.py                        - python run_web.py
 ```
 
 ---
 
-## 3. Guía de Instalación Paso a Paso
+## 2. Método 1: Instalación de Usuario Final (Sin Terminal)
 
-### Paso 1: Clonar el Repositorio Oficial
-Abre una ventana de terminal y descarga el código fuente mediante Git:
+Para usuarios finales que desean jugar de inmediato sin configurar entornos de programación:
+
+### 2.1. macOS (`.dmg`)
+1. Descarga el paquete oficial desde la web o GitHub Releases:
+   * **Enlace Oficial:** `https://github.com/Camila-Ianni/C.C.I-SYSTEM/releases/download/v1.0.0/CCI_System_macOS.dmg`
+2. Abre la imagen de disco descargada `CCI_System_macOS.dmg`.
+3. Haz **Clic derecho** (o `Control + Clic`) en **`C.C.I. SYSTEM`** y selecciona **«Abrir»** (requerido únicamente en el primer inicio por el sistema Gatekeeper de macOS al tratarse de software independiente).
+4. El asistente interactivo te preguntará dónde ubicar la consola (por defecto en tu **Escritorio**).
+5. Se creará el acceso directo y la consola se iniciará de forma automática con 0 perfiles de fábrica, lista para crear tu jugador.
+
+### 2.2. Windows (`.exe`)
+1. Descarga el ejecutable desde la web o GitHub Releases:
+   * **Enlace Oficial:** `https://github.com/Camila-Ianni/C.C.I-SYSTEM/releases/download/v1.0.0/CCI_System_Windows_Installer.exe`
+2. Haz doble clic en `CCI_System_Windows_Installer.exe`.
+3. Sigue el instalador gráfico que extraerá los 19 juegos y generará el acceso directo en tu Escritorio.
+4. La consola se abre directamente sin comandos de PowerShell ni CMD.
+
+---
+
+## 3. Método 2: Despliegue de la Web Oficial (Flask Cloud en Render.com)
+
+La landing page oficial opera 100% en Python mediante Flask y se encuentra desplegada en:
+**`https://c-c-i-system.onrender.com`**
+
+### 3.1. Arquitectura de Despliegue en la Nube
+* **Repositorio de Origen:** `https://github.com/Camila-Ianni/C.C.I-SYSTEM` (rama `main`).
+* **CI/CD Automático:** Cada `git push origin main` desencadena una compilación y despliegue continuo en Render.
+* **Separación de Cargas:** El repositorio almacena el código fuente, la landing page y las imágenes de `fotos web` (~35 MB), mientras que los instaladores pesados (734 MB DMG y 628 MB EXE) residen en **GitHub Releases** y son redirigidos de forma transparente por [web/app.py](file:///Users/cami/Desktop/C.C.I%20SYSTEM/web/app.py) para descarga a máxima velocidad.
+
+### 3.2. Parámetros de Despliegue en Render
+* **Runtime:** Python 3 (3.14.8).
+* **Build Command:** `pip install -r requirements.txt` (instala únicamente dependencias web ligeras: Flask, Werkzeug).
+* **Start Command:** `python run_web.py`.
+* **Variables de Entorno (Opcionales):**
+  * `MAC_DOWNLOAD_URL`: URL oficial de descarga del DMG en GitHub Releases.
+  * `WIN_DOWNLOAD_URL`: URL oficial de descarga del EXE en GitHub Releases.
+
+---
+
+## 4. Método 3: Instalación Local para Desarrolladores
+
+Para depuración, adición de nuevos juegos o modificaciones de código:
+
+### Paso 1: Clonar el Repositorio
 ```bash
 git clone https://github.com/Camila-Ianni/C.C.I-SYSTEM.git
-cd "C.C.I-SYSTEM"
+cd C.C.I-SYSTEM
 ```
 
-### Paso 2: Crear el Entorno Virtual Aislado (`.venv`)
-No instales los paquetes globalmente para evitar conflictos con versiones previas de Pygame o herramientas del sistema operativo.
+### Paso 2: Crear y Activar el Entorno Virtual (`.venv`)
 ```bash
-# Crear entorno virtual con Python 3
+# macOS / Linux:
 python3 -m venv .venv
-
-# Activar el entorno virtual:
-# En macOS / Linux:
 source .venv/bin/activate
-# En Windows (PowerShell):
-# .venv\Scripts\Activate.ps1
-```
-*(Al activarse con éxito, tu prompt mostrará `(.venv)` al inicio de la línea).*
 
-### Paso 3: Actualizar el Gestor Pip e Instalar Dependencias
-Instala las librerías necesarias con las versiones validadas:
+# Windows (PowerShell):
+python -m venv .venv
+.venv\Scripts\Activate.ps1
+```
+
+### Paso 3: Instalar Dependencias de Desarrollo
 ```bash
 pip install --upgrade pip
-pip install -r requirements.txt
+pip install -r requirements-dev.txt
 ```
 
-#### Lista de Paquetes en `requirements.txt`:
-* `pygame-ce==2.5.8`: Motor de renderizado 2D, interfaz con SDL2, audio estéreo y control de eventos.
-* `opencv-python==5.0.0.93`: Decodificador acelerado de video MP4 y lectura de fotogramas en matrices numéricas.
-* `numpy==2.5.4`: Estructuras de datos de alto rendimiento requeridas por OpenCV y transformaciones de superficies.
-* `pymunk==7.3.1`: Motor de físicas 2D basado en Chipmunk (utilizado en las colisiones de Metal Slug).
-* `cffi==2.1.1`: Interfaz de funciones foráneas en C requerida para bindings de bajo nivel.
+#### Dependencias en `requirements-dev.txt`:
+* `pygame-ce>=2.5.8`: Motor gráfico 2D, bucle a 60 FPS, entrada SDL2 y mezclador de audio.
+* `opencv-python>=4.8.0`: Decodificación de video de intro y animaciones.
+* `numpy>=1.24.0`: Procesamiento numérico y síntesis sonora.
+* `pymunk>=6.5.0`: Motor de físicas de cuerpos rígidos para proyectiles.
+* `flask>=3.0.0`: Servidor web para la landing page oficial.
 
-### Paso 4: Comprobación de Integridad de la Instalación
-Ejecuta el siguiente comando para verificar que todas las dependencias y submódulos compilen y carguen correctamente:
+### Paso 4: Comprobación de Diagnóstico
 ```bash
 python -c "
-import pygame, cv2, numpy, pymunk
+import pygame, cv2, numpy, pymunk, flask
 print('--- C.C.I. SYSTEM DIAGNÓSTICO ---')
 print('Pygame-CE :', pygame.__version__)
 print('OpenCV    :', cv2.__version__)
 print('Pymunk    :', pymunk.__version__)
+print('Flask     :', flask.__version__)
 print('Joysticks :', pygame.joystick.get_count())
-print('ESTADO    : TODO CORRECTO PARA EJECUTAR')
+print('ESTADO    : TODO CORRECTO')
 "
 ```
 
----
-
-## 4. Despliegue y Ejecución
-
-Para iniciar la consola virtual, ejecuta en tu terminal con el entorno virtual activo:
+### Paso 5: Ejecución
 ```bash
+# Para ejecutar la consola emuladora:
 python main.py
-```
 
-### Opciones de Ejecución Especiales:
-* **Ejecución directa en pantalla completa / modo arcade:**
-  La ventana está preconfigurada en `1280x720`. Si se desea ejecutar en monitores arcade o televisores de salón, la superficie centra automáticamente el aspecto mediante pillarboxing sin deformar los juegos.
+# Para ejecutar el servidor web localmente:
+python run_web.py
+```
 
 ---
 
-## 5. Matriz de Resolución de Problemas y Diagnósticos Técnicos
+## 5. Matriz de Resolución de Problemas
 
-```
-                               ┌───────────────────────────┐
-                               │   ÁRBOL DE RESOLUCIÓN     │
-                               └─────────────┬─────────────┘
-                                             │
-             ┌───────────────────────────────┴───────────────────────────────┐
-             ▼                                                               ▼
-   [ Error al importar ]                                          [ Problemas de Mandos ]
-             │                                                               │
-   - ¿Activaste .venv?                                            - ¿Mando conectado por USB/BT?
-   - source .venv/bin/activate                                    - Presiona botón para despertar
-   - pip install -r requirements.txt                              - Hotplugging automático activo
-```
+### 5.1. Aviso de macOS: «Apple no pudo verificar que C.C.I. SYSTEM no contenga software malicioso»
+* **Diagnóstico:** Gatekeeper de macOS coloca el atributo `com.apple.quarantine` a descargas web de aplicaciones no notarizadas.
+* **Solución:** Haz **Clic derecho** sobre `C.C.I. SYSTEM.app` -> selecciona **«Abrir»** -> pulsa **«Abrir»** en el cuadro de diálogo. Solo se realiza una única vez; al instalarse en el Escritorio la aplicación limpia sus atributos automáticamente.
 
-### 5.1. Error: `ModuleNotFoundError: No module named 'pygame'`
-* **Diagnóstico:** Se está utilizando el intérprete de Python global del sistema en lugar del entorno virtual.
-* **Solución:** Ejecuta `source .venv/bin/activate` antes de correr el script.
+### 5.2. En macOS: Mensajes de consola `objc[...] Class SDLApplication is implemented in both...`
+* **Diagnóstico:** Duplicación inofensiva de dylibs de SDL2 entre OpenCV y Pygame.
+* **Solución:** Ya se encuentra neutralizado en [main.py](file:///Users/cami/Desktop/C.C.I%20SYSTEM/main.py) y [states.py](file:///Users/cami/Desktop/C.C.I%20SYSTEM/states.py) mediante redirección controlada de descriptores de error durante la importación.
 
-### 5.2. En macOS: `objc[...] Class SDLApplication is implemented in both...`
-* **Diagnóstico:** Conflicto originado cuando `opencv-python` y `pygame-ce` traen librerías SDL2 dinámicas compiladas dentro de sus directorios `.dylibs/`.
-* **Solución:** Ya se encuentra implementado en [main.py](file:///Users/cami/Desktop/C.C.I%20SYSTEM/main.py) y [states.py](file:///Users/cami/Desktop/C.C.I%20SYSTEM/states.py) un supresor de bajo nivel (`os.dup2` sobre el descriptor `stderr` durante la importación inicial), evitando la emisión de estos mensajes sin perjudicar la ejecución.
-
-### 5.3. El audio no se escucha en el video de inicio
-* **Diagnóstico:** En macOS, `afplay` requiere permisos estándar de audio del usuario.
-* **Solución:** Verifica que el volumen del sistema esté encendido y que el archivo `CCI_INTRO.mp4` o `Pixel_girl...mp4` no hayan sido renombrados.
-
-### 5.4. El mando no responde en el menú
-* **Diagnóstico:** Algunos mandos entran en suspensión tras unos minutos de inactividad.
-* **Solución:** Presiona el botón central (PlayStation / Xbox) para reactivar la conexión Bluetooth. Gracias a la clase `JoystickManager`, el sistema detectará el evento `JOYDEVICEADDED` y lo reconfigurará al instante.
+### 5.3. El mando USB / Bluetooth no responde
+* **Diagnóstico:** El gamepad entró en suspensión por inactividad.
+* **Solución:** Presiona el botón central (PlayStation / Guía Xbox). La clase `JoystickManager` detecta la reconexión en caliente y lo reasigna instantáneamente con retroalimentación háptica.

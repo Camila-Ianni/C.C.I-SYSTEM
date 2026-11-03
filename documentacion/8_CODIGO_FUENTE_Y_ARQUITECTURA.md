@@ -205,3 +205,18 @@ classDiagram
   * Cambia al directorio del juego con `os.chdir()` e inserta la ruta al inicio de `sys.path`.
   * **En Metal Slug:** Sobrescribe `ms_instance.draw()` para anular el doble flip y adaptar el renderizado virtual de Neo-Geo (320x224) a 1280x720 con un solo `display.flip()` sincronizado.
   * **En el bloque `finally`:** Detiene la música con `pygame.mixer.music.stop()` y purga los canales con `pygame.mixer.stop()`, garantizando que al regresar al menú no queden sonidos residuales en bucle.
+
+---
+
+### 3.3. Módulo Web Oficial & Despliegue en la Nube ([web/app.py](file:///Users/cami/Desktop/C.C.I%20SYSTEM/web/app.py), [run_web.py](file:///Users/cami/Desktop/C.C.I%20SYSTEM/run_web.py))
+* **Arquitectura 100% Python:** Diseñada sin archivos HTML, CSS ni plantillas externas en disco.
+* **Generación Dinámica ([web/landing_page.py](file:///Users/cami/Desktop/C.C.I%20SYSTEM/web/landing_page.py)):** Sintetiza en memoria la interfaz Cyberpunk completa, estilos CSS responsivos y scripts cliente para filtros por categoría, modales de ficha técnica y navegación.
+* **Desacoplamiento de Datos ([catalog_data.py](file:///Users/cami/Desktop/C.C.I%20SYSTEM/catalog_data.py)):** Extrae los metadatos de los 19 juegos sin depender de librerías nativas compiladas de Pygame/OpenCV, permitiendo que la web se ejecute de forma ultraligera en la nube (Render.com) con consumo mínimo de RAM (~35 MB).
+* **Redirección CDN de Descargas:** Las rutas `/download/mac` y `/download/windows` comprueban si existen instaladores locales o redirigen automáticamente mediante HTTP 302 a los binarios alojados en GitHub Releases, asegurando descargas a alta velocidad sin saturar el servidor web.
+
+---
+
+### 3.4. Motor de Distribución Multiplataforma ([build_distribution.py](file:///Users/cami/Desktop/C.C.I%20SYSTEM/build_distribution.py))
+* **macOS DMG:** Construye una imagen de disco nativa Apple Disk Image (`.dmg`) mediante `hdiutil` en formato `UDZO` comprimido, con bundle `C.C.I. SYSTEM.app`, archivo `PkgInfo`, firma ad-hoc con `codesign` y asistente de instalación interactivo con destino en el Escritorio.
+* **Windows EXE:** Genera un instalador ejecutable GUI nativo PE32 de 1-clic con cabecera SFX de 7-Zip, extrayendo el contenido y creando el acceso directo en el Escritorio sin necesidad de terminales ni prompts de comandos.
+* **Optimización de Cargas:** Excluye volcados temporales, cachés binarios y archivos no esenciales, reduciendo el tamaño del paquete de distribución de 2.8 GB a 734 MB en macOS y 628 MB en Windows.
