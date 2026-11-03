@@ -296,24 +296,25 @@ def create_release_exe(out_exe: Path):
     if temp_exe.exists():
         temp_exe.unlink()
 
-    sfx_path = ROOT / "tools" / "7zSD.sfx"
+    sfx_path = ROOT / "tools" / "7z.sfx"
     if not sfx_path.exists():
-        sfx_path = ROOT / "tools" / "7zS.sfx"
-    if not sfx_path.exists():
-        fallback_sfx = Path("/tmp/sfx2605/7zSD.sfx")
+        fallback_sfx = Path("/tmp/7z_official/7z.sfx")
         if fallback_sfx.exists():
             sfx_path = fallback_sfx
         else:
-            raise RuntimeError("No se encontró 7zSD.sfx en tools/ ni /tmp/")
+            raise RuntimeError("No se encontró 7z.sfx en tools/ ni /tmp/")
 
     staging_dir = ROOT / ".tmp_win_staging"
     if staging_dir.exists():
         shutil.rmtree(staging_dir, ignore_errors=True)
     staging_dir.mkdir(parents=True, exist_ok=True)
 
-    # 1. Copiar archivos limpios con 0 perfiles
-    (staging_dir / ".cci-user-data" / "users").mkdir(parents=True, exist_ok=True)
-    (staging_dir / ".cci-user-data" / "users" / ".gitkeep").touch()
+    package_root = staging_dir / "CCI_System"
+    package_root.mkdir(parents=True, exist_ok=True)
+
+    # 1. Copiar archivos limpios con 0 perfiles dentro de CCI_System/
+    (package_root / ".cci-user-data" / "users").mkdir(parents=True, exist_ok=True)
+    (package_root / ".cci-user-data" / "users" / ".gitkeep").touch()
 
     copied_count = 0
     for root_dir, dirs, files in os.walk(ROOT):
@@ -324,32 +325,24 @@ def create_release_exe(out_exe: Path):
             rel = fpath.relative_to(ROOT)
             rel_str = str(rel)
             if _should_include(fpath, rel_str, "Windows"):
-                dest = staging_dir / rel
+                dest = package_root / rel
                 dest.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(fpath, dest)
                 copied_count += 1
 
-    # 2. Crear payload .7z con 7zz compatible con 7zSD SFX (BCJ + LZMA2)
+    # 2. Crear payload .7z con 7zz compatible con 7z.sfx (BCJ + LZMA2)
     payload_7z = ROOT / ".tmp_win_payload.7z"
     if payload_7z.exists():
         payload_7z.unlink()
 
-    cmd_7z = ["7zz", "a", "-m0=BCJ", "-m1=LZMA2:d=32m", "-mx=5", "-y", str(payload_7z), f"{staging_dir}/*"]
+    cmd_7z = ["7zz", "a", "-m0=BCJ", "-m1=LZMA2:d=32m", "-mx=5", "-y", str(payload_7z), str(package_root)]
     subprocess.run(cmd_7z, check=True)
 
-    # 3. Leer SFX module moderno, config UTF-8 y payload
+    # 3. Concatenar módulo SFX oficial de 7-Zip + payload (sin scripts temporales que activen falsos positivos)
     sfx_bytes = sfx_path.read_bytes()
-    config_text = """;!@Install@!UTF-8!
-Title="C.C.I. SYSTEM — Instalación de Emulador"
-BeginPrompt="Bienvenido a C.C.I. SYSTEM de Camila Carolina Ianni.\\n\\n¿Deseas instalar el emulador de consola en tu equipo?"
-RunProgram="cmd.exe /c start /b pythonw Instalar_CCI_System.pyw 2>nul || start /b python Instalar_CCI_System.pyw 2>nul || start /b pyw Instalar_CCI_System.pyw 2>nul || start Instalar_CCI_System.pyw"
-;!@InstallEnd@!
-"""
-    config_bytes = config_text.encode("utf-8")
     payload_bytes = payload_7z.read_bytes()
 
-    # 4. Concatenar para formar el ejecutable PE32
-    temp_exe.write_bytes(sfx_bytes + config_bytes + payload_bytes)
+    temp_exe.write_bytes(sfx_bytes + payload_bytes)
 
     if out_exe.exists():
         out_exe.unlink()

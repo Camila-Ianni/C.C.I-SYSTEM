@@ -1706,6 +1706,16 @@ def build_landing_page(games: list[dict], categories: list[str], author: dict, s
             </a>
             <span class="hw-hint">Ejecuta el archivo .exe y sigue el asistente interactivo</span>
           </div>
+          <div class="win-security-notice" style="margin-top: 15px; padding: 12px 14px; background: rgba(0, 240, 255, 0.08); border: 1px solid rgba(0, 240, 255, 0.3); border-radius: 4px; font-size: 0.8rem; text-align: left; line-height: 1.4;">
+            <div style="color: var(--cci-cyan); font-weight: 700; margin-bottom: 4px; display: flex; align-items: center; gap: 6px;">
+              <span>🛡️</span> Primer inicio en Windows (SmartScreen):
+            </div>
+            <div style="color: var(--cci-muted);">
+              Al ser un software académico independiente sin certificado comercial de pago:
+              <br>• Si el navegador dice "no habitual": haz clic en <strong>... &gt; Conservar &gt; Conservar de todos modos</strong>.
+              <br>• Si Windows muestra la pantalla azul: haz clic en <strong>«Más información» &gt; «Ejecutar de todas formas»</strong>.
+            </div>
+          </div>
         </div>
       </div>
 
