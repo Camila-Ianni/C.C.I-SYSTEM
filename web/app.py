@@ -6,7 +6,7 @@ import os
 import sys
 import urllib.parse
 from pathlib import Path
-from flask import Flask, Response, abort, jsonify, send_from_directory
+from flask import Flask, Response, abort, jsonify, redirect, send_from_directory
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
@@ -15,6 +15,9 @@ from cci_console import CATALOG, CATEGORIES
 from web.landing_page import build_landing_page, CYBER_CSS, CLIENT_JS
 
 app = Flask(__name__)
+
+MAC_DOWNLOAD_URL = os.environ.get("MAC_DOWNLOAD_URL", "")
+WIN_DOWNLOAD_URL = os.environ.get("WIN_DOWNLOAD_URL", "")
 
 DOWNLOADS_DIR = ROOT / "web" / "static" / "downloads"
 CARDS_DIR = ROOT / "assets_cards"
@@ -117,6 +120,8 @@ def api_games():
 
 @app.route("/download/mac")
 def download_mac():
+    if MAC_DOWNLOAD_URL:
+        return redirect(MAC_DOWNLOAD_URL)
     dmg_path = DOWNLOADS_DIR / "CCI_System_macOS.dmg"
     if dmg_path.exists():
         return send_from_directory(
@@ -138,6 +143,8 @@ def download_mac():
 
 @app.route("/download/windows")
 def download_windows():
+    if WIN_DOWNLOAD_URL:
+        return redirect(WIN_DOWNLOAD_URL)
     exe_path = DOWNLOADS_DIR / "CCI_System_Windows_Installer.exe"
     if exe_path.exists():
         return send_from_directory(
