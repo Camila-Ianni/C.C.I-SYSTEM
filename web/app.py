@@ -173,6 +173,17 @@ def api_health():
     return jsonify(cci_database.get_telemetry_summary())
 
 
+@app.route("/api/v1/version")
+def api_version():
+    """Retorna la versión oficial liberada y metadata para el auto-updater."""
+    from cci_updater import load_local_version
+    ver_data = load_local_version()
+    return jsonify({
+        "status": "success",
+        **ver_data
+    })
+
+
 @app.route("/api/v1/stats")
 def api_stats():
     """Telemetría global y métricas de uso del ecosistema."""

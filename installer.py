@@ -14,6 +14,8 @@ import subprocess
 import sys
 from pathlib import Path
 
+from cci_updater import CURRENT_VERSION
+
 SOURCE_DIR = Path(__file__).resolve().parent
 
 
@@ -128,7 +130,7 @@ else:
     launcher_script.chmod(launcher_script.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
 
     plist_path = app_dir / "Contents" / "Info.plist"
-    plist_content = '''<?xml version="1.0" encoding="UTF-8"?>
+    plist_content = f'''<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
@@ -143,7 +145,7 @@ else:
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>
-    <string>1.0.0</string>
+    <string>{CURRENT_VERSION}</string>
     <key>LSMinimumSystemVersion</key>
     <string>10.15</string>
     <key>NSHighResolutionCapable</key>

@@ -1,0 +1,24 @@
+{
+  "name": "C.C.I. SYSTEM",
+  "version": "2.1.0",
+  "release_name": "Ecosistema Arcade & Cloud Sync",
+  "author": "Camila Carolina Ianni",
+  "academic_project": "Analista de Sistemas — Escuela Da Vinci (Parcial 2)",
+  "release_date": "2026-11-03",
+  "min_supported_version": "1.0.0",
+  "downloads": {
+    "mac": {
+      "filename": "CCI_System_macOS.dmg",
+      "url": "/download/mac"
+    },
+    "windows": {
+      "filename": "CCI_System_Windows_Installer.exe",
+      "url": "/download/windows"
+    }
+  },
+  "changelog": [
+    "Fase 1: HUD con enlaces a portfolio de reclutador y video gameplay 60 FPS en vivo.",
+    "Fase 2: Base de datos relacional SQLite (WAL mode), API REST v1 y Salón de la Fama global.",
+    "Fase 3: Actualizador automático con verificación en segundo plano y empaquetador pulido."
+  ]
+}

@@ -16,6 +16,8 @@ import sys
 import zipfile
 from pathlib import Path
 
+from cci_updater import CURRENT_VERSION
+
 ROOT = Path(__file__).resolve().parent
 DOWNLOADS_DIR = ROOT / "web" / "static" / "downloads"
 
@@ -25,7 +27,7 @@ EXCLUDE_DIRS = {
     ".tmp_win_staging", "test_output", "scratch", "tests copy",
     "Archive_Other_Versions", "fotos web"
 }
-EXCLUDE_EXTS = {".pyc", ".pyo", ".DS_Store", ".raw", ".tmp"}
+EXCLUDE_EXTS = {".pyc", ".pyo", ".DS_Store", ".raw", ".tmp", ".sqlite3", ".db", ".db-wal", ".db-shm"}
 
 
 def _should_include(file_path: Path, rel_str: str, target_platform: str) -> bool:
@@ -180,7 +182,7 @@ else:
 
     # 2. Info.plist
     plist = app_dir / "Contents" / "Info.plist"
-    plist.write_text('''<?xml version="1.0" encoding="UTF-8"?>
+    plist.write_text(f'''<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
@@ -195,7 +197,7 @@ else:
     <key>CFBundlePackageType</key>
     <string>APPL</string>
     <key>CFBundleShortVersionString</key>
-    <string>1.0.0</string>
+    <string>{CURRENT_VERSION}</string>
     <key>LSMinimumSystemVersion</key>
     <string>10.15</string>
     <key>NSHighResolutionCapable</key>
