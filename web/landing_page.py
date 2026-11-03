@@ -800,10 +800,10 @@ body {
 
 .profile-grid {
   display: grid;
-  grid-template-columns: 180px 1fr;
-  gap: 40px;
-  align-items: flex-start;
-  margin-top: 10px;
+  grid-template-columns: 240px 1fr;
+  gap: 36px;
+  align-items: center;
+  margin-top: 14px;
 }
 
 .profile-avatar-block {
@@ -814,7 +814,8 @@ body {
 }
 
 .profile-avatar-frame {
-  width: 140px; height: 140px;
+  width: 240px;
+  height: 380px;
   background: #07080a;
   border: 3px solid var(--cci-cyan);
   box-shadow: 0 0 24px var(--cci-cyan-dim);
@@ -829,13 +830,13 @@ body {
   width: 100%;
   height: 100%;
   object-fit: cover;
-  object-position: center 25%;
+  object-position: center center;
   display: block;
   transition: transform 0.3s ease;
 }
 
 .profile-avatar-frame:hover img {
-  transform: scale(1.05);
+  transform: scale(1.03);
 }
 
 .profile-monogram {
