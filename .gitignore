@@ -42,3 +42,5 @@ web/static/downloads/*.exe
 tools/7zS.sfx
 tools/7zSD.sfx
 tools/*.sfx
+tools/app.ico
+tools/*.ico

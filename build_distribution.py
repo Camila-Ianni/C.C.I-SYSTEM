@@ -296,62 +296,111 @@ def create_release_exe(out_exe: Path):
     if temp_exe.exists():
         temp_exe.unlink()
 
-    sfx_path = ROOT / "tools" / "7z.sfx"
-    if not sfx_path.exists():
-        fallback_sfx = Path("/tmp/7z_official/7z.sfx")
-        if fallback_sfx.exists():
-            sfx_path = fallback_sfx
-        else:
-            raise RuntimeError("No se encontró 7z.sfx en tools/ ni /tmp/")
-
+    has_nsis = shutil.which("makensis") is not None
     staging_dir = ROOT / ".tmp_win_staging"
     if staging_dir.exists():
         shutil.rmtree(staging_dir, ignore_errors=True)
     staging_dir.mkdir(parents=True, exist_ok=True)
 
-    package_root = staging_dir / "CCI_System"
-    package_root.mkdir(parents=True, exist_ok=True)
+    if has_nsis:
+        print("[Build] Detectado NSIS (makensis). Generando instalador profesional con runtime embebido y accesos directos...")
+        runtime_src = Path("/tmp/win_runtime")
+        if runtime_src.exists():
+            shutil.copytree(runtime_src, staging_dir / "runtime")
 
-    # 1. Copiar archivos limpios con 0 perfiles dentro de CCI_System/
-    (package_root / ".cci-user-data" / "users").mkdir(parents=True, exist_ok=True)
-    (package_root / ".cci-user-data" / "users" / ".gitkeep").touch()
+        launcher_src = Path("/tmp/CCI_System_Launcher.exe")
+        if launcher_src.exists():
+            shutil.copy2(launcher_src, staging_dir / "C.C.I. SYSTEM.exe")
 
-    copied_count = 0
-    for root_dir, dirs, files in os.walk(ROOT):
-        r_path = Path(root_dir)
-        dirs[:] = [d for d in dirs if d not in EXCLUDE_DIRS and not d.startswith(".tmp")]
-        for fname in files:
-            fpath = r_path / fname
-            rel = fpath.relative_to(ROOT)
-            rel_str = str(rel)
-            if _should_include(fpath, rel_str, "Windows"):
-                dest = package_root / rel
-                dest.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copy2(fpath, dest)
-                copied_count += 1
+        copied_count = 0
+        for root_dir, dirs, files in os.walk(ROOT):
+            r_path = Path(root_dir)
+            dirs[:] = [d for d in dirs if d not in EXCLUDE_DIRS and not d.startswith(".tmp")]
+            for fname in files:
+                fpath = r_path / fname
+                rel = fpath.relative_to(ROOT)
+                rel_str = str(rel)
+                if _should_include(fpath, rel_str, "Windows"):
+                    dest = staging_dir / rel
+                    dest.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copy2(fpath, dest)
+                    copied_count += 1
 
-    # 2. Crear payload .7z con 7zz compatible con 7z.sfx (BCJ + LZMA2)
-    payload_7z = ROOT / ".tmp_win_payload.7z"
-    if payload_7z.exists():
-        payload_7z.unlink()
+        (staging_dir / ".cci-user-data" / "users").mkdir(parents=True, exist_ok=True)
+        (staging_dir / ".cci-user-data" / "users" / ".gitkeep").touch()
 
-    cmd_7z = ["7zz", "a", "-m0=BCJ", "-m1=LZMA2:d=32m", "-mx=5", "-y", str(payload_7z), str(package_root)]
-    subprocess.run(cmd_7z, check=True)
+        icon_path = ROOT / "fotos web" / "ciberpunk.ico"
+        nsi_script = f"""
+Unicode true
+RequestExecutionLevel user
+SetCompressor /SOLID lzma
 
-    # 3. Concatenar módulo SFX oficial de 7-Zip + payload (sin scripts temporales que activen falsos positivos)
-    sfx_bytes = sfx_path.read_bytes()
-    payload_bytes = payload_7z.read_bytes()
+Name "C.C.I. SYSTEM"
+OutFile "{temp_exe}"
+InstallDir "$LOCALAPPDATA\\Programs\\CCI_System"
+Icon "{icon_path}"
+UninstallIcon "{icon_path}"
 
-    temp_exe.write_bytes(sfx_bytes + payload_bytes)
+Page directory
+Page instfiles
+
+Section "C.C.I. SYSTEM" SecMain
+  SetOutPath "$INSTDIR"
+  File /r "{staging_dir}\\*"
+
+  CreateShortcut "$DESKTOP\\C.C.I. SYSTEM.lnk" "$INSTDIR\\C.C.I. SYSTEM.exe" "" "$INSTDIR\\fotos web\\ciberpunk.ico" 0 SW_SHOWNORMAL "" "C.C.I. SYSTEM — Emulador de Consola Retro"
+  CreateDirectory "$SMPROGRAMS\\C.C.I. SYSTEM"
+  CreateShortcut "$SMPROGRAMS\\C.C.I. SYSTEM\\C.C.I. SYSTEM.lnk" "$INSTDIR\\C.C.I. SYSTEM.exe" "" "$INSTDIR\\fotos web\\ciberpunk.ico" 0 SW_SHOWNORMAL "" "C.C.I. SYSTEM — Emulador de Consola Retro"
+  CreateShortcut "$SMPROGRAMS\\C.C.I. SYSTEM\\Desinstalar.lnk" "$INSTDIR\\Uninstall.exe"
+
+  WriteUninstaller "$INSTDIR\\Uninstall.exe"
+SectionEnd
+
+Function .onInstSuccess
+  Exec '"$INSTDIR\\C.C.I. SYSTEM.exe"'
+FunctionEnd
+
+Section "Uninstall"
+  Delete "$DESKTOP\\C.C.I. SYSTEM.lnk"
+  RMDir /r "$SMPROGRAMS\\C.C.I. SYSTEM"
+  RMDir /r "$INSTDIR"
+SectionEnd
+"""
+        nsi_file = ROOT / ".tmp_installer.nsi"
+        nsi_file.write_text(nsi_script, encoding="utf-8")
+        subprocess.run(["makensis", str(nsi_file)], check=True)
+        nsi_file.unlink(missing_ok=True)
+    else:
+        # Fallback a 7z.sfx si no está makensis
+        sfx_path = ROOT / "tools" / "7z.sfx"
+        package_root = staging_dir / "CCI_System"
+        package_root.mkdir(parents=True, exist_ok=True)
+        (package_root / ".cci-user-data" / "users").mkdir(parents=True, exist_ok=True)
+        (package_root / ".cci-user-data" / "users" / ".gitkeep").touch()
+        copied_count = 0
+        for root_dir, dirs, files in os.walk(ROOT):
+            r_path = Path(root_dir)
+            dirs[:] = [d for d in dirs if d not in EXCLUDE_DIRS and not d.startswith(".tmp")]
+            for fname in files:
+                fpath = r_path / fname
+                rel = fpath.relative_to(ROOT)
+                if _should_include(fpath, str(rel), "Windows"):
+                    dest = package_root / rel
+                    dest.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copy2(fpath, dest)
+                    copied_count += 1
+        payload_7z = ROOT / ".tmp_win_payload.7z"
+        if payload_7z.exists():
+            payload_7z.unlink()
+        subprocess.run(["7zz", "a", "-m0=BCJ", "-m1=LZMA2:d=32m", "-mx=5", "-y", str(payload_7z), str(package_root)], check=True)
+        temp_exe.write_bytes(sfx_path.read_bytes() + payload_7z.read_bytes())
+        if payload_7z.exists():
+            payload_7z.unlink()
 
     if out_exe.exists():
         out_exe.unlink()
     temp_exe.rename(out_exe)
-
-    # Limpieza
     shutil.rmtree(staging_dir, ignore_errors=True)
-    if payload_7z.exists():
-        payload_7z.unlink()
 
     size_mb = out_exe.stat().st_size / (1024 * 1024)
     print(f"[Build] Windows EXE listo: {out_exe.name} ({size_mb:.1f} MB, {copied_count} archivos incluidos)")
