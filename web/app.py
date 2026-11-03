@@ -91,13 +91,13 @@ def index():
         "avatar_url": "/assets/fotos_web/Cami.jpg",
         "bio": (
             "Estudiante de la carrera de Analista de Sistemas en Escuela Da Vinci. "
-            "C.C.I. SYSTEM fue concebido como un proyecto académico integral de ingeniería de software y preservación "
-            "digital, con el propósito de demostrar la capacidad de Python para sostener una plataforma interactiva "
+            "C.C.I. SYSTEM fue concebido como un proyecto académico para el Parcial 2, "
+            "con el propósito de demostrar la capacidad de Python para sostener una plataforma interactiva "
             "de alto rendimiento a 60 FPS. El proyecto aborda la orquestación determinista de 19 clásicos arcade, "
             "aislamiento estricto de memoria entre motores independientes, traducción universal de mandos con respuesta háptica "
             "y una experiencia de usuario limpia con 0 perfiles de fábrica."
         ),
-        "institution": "Escuela Da Vinci — Analista de Sistemas",
+        "institution": "Escuela Da Vinci — Analista de Sistemas · Parcial 2",
         "year": "2026",
     }
     stats = {

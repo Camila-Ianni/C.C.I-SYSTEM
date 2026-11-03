@@ -1484,12 +1484,12 @@ def build_landing_page(games: list[dict], categories: list[str], author: dict, s
   <!-- Proyecto Académico & Preservación Digital -->
   <section id="proyecto" class="section section-dark">
     <div class="container">
-      <span class="section-tag">// ORIGEN, VISIÓN &amp; TESIS ACADÉMICA</span>
+      <span class="section-tag">// PROYECTO ACADÉMICO · PARCIAL 2</span>
       <h2 class="section-title">¿QUÉ ES C.C.I. SYSTEM Y POR QUÉ NACE?</h2>
       <p class="section-desc">
-        C.C.I. SYSTEM surge como un proyecto de investigación y desarrollo integral en la carrera de
-        <strong>Analista de Sistemas</strong> en <strong>Escuela Da Vinci</strong>, orientado a la preservación del patrimonio del videojuego retro
-        y al estudio empírico de la arquitectura de software determinista en Python.
+        C.C.I. SYSTEM surge como un proyecto académico para el <strong>Parcial 2</strong> en la carrera de
+        <strong>Analista de Sistemas</strong> (<strong>Escuela Da Vinci</strong>), orientado a la preservación del patrimonio del videojuego retro
+        y a la aplicación práctica de arquitectura de software determinista en Python.
       </p>
 
       <div class="academic-pillars-grid">
