@@ -16,8 +16,14 @@ from web.landing_page import build_landing_page, CYBER_CSS, CLIENT_JS
 
 app = Flask(__name__)
 
-MAC_DOWNLOAD_URL = os.environ.get("MAC_DOWNLOAD_URL", "")
-WIN_DOWNLOAD_URL = os.environ.get("WIN_DOWNLOAD_URL", "")
+MAC_DOWNLOAD_URL = os.environ.get(
+    "MAC_DOWNLOAD_URL",
+    "https://github.com/Camila-Ianni/C.C.I-SYSTEM/releases/download/v1.0.0/CCI_System_macOS.dmg"
+)
+WIN_DOWNLOAD_URL = os.environ.get(
+    "WIN_DOWNLOAD_URL",
+    "https://github.com/Camila-Ianni/C.C.I-SYSTEM/releases/download/v1.0.0/CCI_System_Windows_Installer.exe"
+)
 
 DOWNLOADS_DIR = ROOT / "web" / "static" / "downloads"
 CARDS_DIR = ROOT / "assets_cards"
@@ -120,8 +126,6 @@ def api_games():
 
 @app.route("/download/mac")
 def download_mac():
-    if MAC_DOWNLOAD_URL:
-        return redirect(MAC_DOWNLOAD_URL)
     dmg_path = DOWNLOADS_DIR / "CCI_System_macOS.dmg"
     if dmg_path.exists():
         return send_from_directory(
@@ -130,21 +134,13 @@ def download_mac():
             as_attachment=True,
             download_name="CCI_System_macOS.dmg"
         )
-    zip_path = DOWNLOADS_DIR / "CCI_System_macOS.zip"
-    if zip_path.exists():
-        return send_from_directory(
-            DOWNLOADS_DIR,
-            "CCI_System_macOS.zip",
-            as_attachment=True,
-            download_name="CCI_System_macOS.zip"
-        )
+    if MAC_DOWNLOAD_URL:
+        return redirect(MAC_DOWNLOAD_URL)
     abort(404, description="Paquete para macOS aún no generado.")
 
 
 @app.route("/download/windows")
 def download_windows():
-    if WIN_DOWNLOAD_URL:
-        return redirect(WIN_DOWNLOAD_URL)
     exe_path = DOWNLOADS_DIR / "CCI_System_Windows_Installer.exe"
     if exe_path.exists():
         return send_from_directory(
@@ -153,14 +149,8 @@ def download_windows():
             as_attachment=True,
             download_name="CCI_System_Windows_Installer.exe"
         )
-    zip_path = DOWNLOADS_DIR / "CCI_System_Windows.zip"
-    if zip_path.exists():
-        return send_from_directory(
-            DOWNLOADS_DIR,
-            "CCI_System_Windows.zip",
-            as_attachment=True,
-            download_name="CCI_System_Windows.zip"
-        )
+    if WIN_DOWNLOAD_URL:
+        return redirect(WIN_DOWNLOAD_URL)
     abort(404, description="Paquete para Windows aún no generado.")
 
 
