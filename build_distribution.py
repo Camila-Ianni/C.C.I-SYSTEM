@@ -23,7 +23,7 @@ EXCLUDE_DIRS = {
     ".git", ".venv", "__pycache__", ".pytest_cache", ".gemini", "brain",
     "capturas", "node_modules", "web/static/downloads", ".tmp_dmg_staging",
     ".tmp_win_staging", "test_output", "scratch", "tests copy",
-    "Archive_Other_Versions"
+    "Archive_Other_Versions", "fotos web"
 }
 EXCLUDE_EXTS = {".pyc", ".pyo", ".DS_Store", ".raw", ".tmp"}
 

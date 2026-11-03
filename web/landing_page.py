@@ -610,19 +610,27 @@ body {
 
 .cartridge-art {
   position: relative;
-  aspect-ratio: 16 / 9;
-  background: #000;
+  aspect-ratio: 16 / 10;
+  background: radial-gradient(circle at center, #151b26 0%, #06080b 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
   overflow: hidden;
+  padding: 14px;
 }
 .cartridge-art img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  transition: transform 0.35s ease;
+  max-width: 100%;
+  max-height: 100%;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  filter: drop-shadow(0 6px 14px rgba(0, 0, 0, 0.75));
+  transition: transform 0.35s cubic-bezier(0.16, 1, 0.3, 1), filter 0.35s ease;
   display: block;
 }
 .cartridge-card:hover .cartridge-art img {
-  transform: scale(1.06);
+  transform: scale(1.08);
+  filter: drop-shadow(0 8px 20px rgba(0, 240, 255, 0.45));
 }
 
 .cartridge-overlay {
@@ -1117,12 +1125,20 @@ body {
 .modal-art-box {
   width: 100%;
   aspect-ratio: 16 / 9;
-  background: #000;
+  background: radial-gradient(circle at center, #151b26 0%, #06080b 100%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
   overflow: hidden;
+  padding: 18px;
 }
 .modal-art-box img {
-  width: 100%; height: 100%;
-  object-fit: cover;
+  max-width: 100%;
+  max-height: 100%;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  filter: drop-shadow(0 8px 24px rgba(0, 0, 0, 0.85));
   display: block;
 }
 

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import sys
+import urllib.parse
 from pathlib import Path
 from flask import Flask, Response, abort, jsonify, send_from_directory
 
@@ -19,15 +20,43 @@ DOWNLOADS_DIR = ROOT / "web" / "static" / "downloads"
 CARDS_DIR = ROOT / "assets_cards"
 UI_DIR = ROOT / "assets_ui"
 PANTALLAS_DIR = ROOT / "pantallas"
+FOTOS_WEB_DIR = ROOT / "fotos web"
+
+WEB_CARDS_MAP = {
+    "davinci": "Street_Fighter_old_logo.png",
+    "asteroids": "asteroids.jpg",
+    "mario": "super mario.jpg",
+    "zelda": "The_Legend_of_Zelda_film_logo.jpg",
+    "pacman": "pac man.jpg",
+    "tetris": "tetris logo .jpg",
+    "space_invaders": "space nvaders.jpg",
+    "metalslug": "metal slug.jpg",
+    "doom": "Doom_logo.png",
+    "flappy": "Flappy_Bird_icon.png",
+    "dino": "dino.jpg",
+    "ghostbusters": "ghostbusters.webp",
+    "cyberpunk": "ciberpunk.ico",
+    "pokemon": "pokemon.webp",
+    "megaman": "megaman.jpg" if (FOTOS_WEB_DIR / "megaman.jpg").exists() else "megaman}",
+    "castlevania": "castlevania.webp",
+    "bubblebobble": "MV5BNDk1NzI2YmEtZGJiNi00Mzc5LTkxMzktMWI4MmQ2YTZmNGQzXkEyXkFqcGc@._V1_.jpg",
+    "plantsvszombies": "pvzr-key-art.png.adapt.crop1x1.767p.png",
+    "donkeykong": "donkeykong.jpg",
+}
 
 
 def _format_games():
-    """Enriquece el catálogo oficial con rutas de imágenes y metadatos para la landing."""
+    """Enriquece el catálogo oficial con las imágenes de 'fotos web' para la landing."""
     formatted = []
     for g in CATALOG:
         gid = g["id"]
-        # Buscar tarjeta limpia o con marco
-        card_img = f"{gid}_clean.png" if (CARDS_DIR / f"{gid}_clean.png").exists() else f"{gid}.png"
+        web_file = WEB_CARDS_MAP.get(gid)
+        if web_file and (FOTOS_WEB_DIR / web_file).exists():
+            card_url = f"/assets/fotos_web/{urllib.parse.quote(web_file)}"
+        else:
+            card_img = f"{gid}_clean.png" if (CARDS_DIR / f"{gid}_clean.png").exists() else f"{gid}.png"
+            card_url = f"/assets/cards/{card_img}"
+
         formatted.append({
             "id": gid,
             "title": g["title"],
@@ -38,7 +67,7 @@ def _format_games():
             "players": g.get("players", "1"),
             "tags": [t.strip() for t in g.get("tags", "").split("·") if t.strip()],
             "categories": sorted(list(g.get("categories", {"ARCADE"}))),
-            "card_url": f"/assets/cards/{card_img}",
+            "card_url": card_url,
             "slot": g.get("slot", 0),
         })
     return formatted
@@ -126,6 +155,11 @@ def download_windows():
             download_name="CCI_System_Windows.zip"
         )
     abort(404, description="Paquete para Windows aún no generado.")
+
+
+@app.route("/assets/fotos_web/<path:filename>")
+def serve_fotos_web(filename):
+    return send_from_directory(FOTOS_WEB_DIR, filename)
 
 
 @app.route("/assets/cards/<path:filename>")
