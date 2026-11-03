@@ -1409,9 +1409,9 @@ def build_landing_page(games: list[dict], categories: list[str], author: dict, s
       </a>
       <nav class="hud-nav">
         <a href="#proyecto" class="hud-tab">Proyecto</a>
+        <a href="#autora" class="hud-tab">Autora</a>
         <a href="#arquitectura" class="hud-tab">Arquitectura</a>
         <a href="#catalogo" class="hud-tab">Catálogo ({len(games)})</a>
-        <a href="#autora" class="hud-tab">Autora</a>
         <a href="#descarga" class="hud-tab hud-cta-download">DESCARGAR EMULADOR</a>
       </nav>
     </div>
@@ -1535,8 +1535,47 @@ def build_landing_page(games: list[dict], categories: list[str], author: dict, s
     </div>
   </section>
 
+  <!-- Author Section (Estilo pantalla 'PERFIL' de la consola) -->
+  <section id="autora" class="section">
+    <div class="container">
+      <div class="profile-screen-card">
+        <div class="profile-hud-header">
+          <span>// C.C.I. SYSTEM · FICHA OFICIAL DE AUTORÍA Y DIRECCIÓN</span>
+          <span>DEV_ID: CCI-2026-001</span>
+        </div>
+        <div class="profile-grid">
+          <div class="profile-avatar-block">
+            <div class="profile-avatar-frame">
+              <img src="{html.escape(author.get('avatar_url', '/assets/fotos_web/Cami.jpg'))}" alt="{html.escape(author.get('name',''))}">
+            </div>
+            <span class="profile-badge-pill">DESARROLLADORA</span>
+          </div>
+          <div class="profile-details-block">
+            <h2 class="profile-name">{html.escape(author.get("name",""))}</h2>
+            <p class="profile-inst">{html.escape(author.get("institution",""))} · {html.escape(author.get("year",""))}</p>
+            <p class="profile-bio">{html.escape(author.get("bio",""))}</p>
+            <div class="profile-specs-row">
+              <div class="profile-spec-item">
+                <strong>ARQUITECTURA CORE</strong>
+                <span>100% Python nativo sin dependencias externas</span>
+              </div>
+              <div class="profile-spec-item">
+                <strong>PRESERVACIÓN ARCADE</strong>
+                <span>19 títulos adaptados a resolución 720p</span>
+              </div>
+              <div class="profile-spec-item">
+                <strong>SISTEMA MULTIUSUARIO</strong>
+                <span>0 perfiles de fábrica, guardado en JSON local</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
   <!-- Subsystems / Architecture -->
-  <section id="arquitectura" class="section">
+  <section id="arquitectura" class="section section-dark">
     <div class="container">
       <span class="section-tag">// INGENIERÍA DE LA CONSOLA</span>
       <h2 class="section-title">ARQUITECTURA DE SOFTWARE 100% PYTHON</h2>
@@ -1587,7 +1626,7 @@ def build_landing_page(games: list[dict], categories: list[str], author: dict, s
   </section>
 
   <!-- Games Catalog Section -->
-  <section id="catalogo" class="section section-dark">
+  <section id="catalogo" class="section">
     <div class="container">
       <div class="catalog-header-bar">
         <div>
@@ -1602,45 +1641,6 @@ def build_landing_page(games: list[dict], categories: list[str], author: dict, s
 
       <div class="games-rack-grid">
         {games_cards_html}
-      </div>
-    </div>
-  </section>
-
-  <!-- Author Section (Estilo pantalla 'PERFIL' de la consola) -->
-  <section id="autora" class="section">
-    <div class="container">
-      <div class="profile-screen-card">
-        <div class="profile-hud-header">
-          <span>// C.C.I. SYSTEM · FICHA OFICIAL DE AUTORÍA Y DIRECCIÓN</span>
-          <span>DEV_ID: CCI-2026-001</span>
-        </div>
-        <div class="profile-grid">
-          <div class="profile-avatar-block">
-            <div class="profile-avatar-frame">
-              <img src="{html.escape(author.get('avatar_url', '/assets/fotos_web/Cami.jpg'))}" alt="{html.escape(author.get('name',''))}">
-            </div>
-            <span class="profile-badge-pill">DESARROLLADORA</span>
-          </div>
-          <div class="profile-details-block">
-            <h2 class="profile-name">{html.escape(author.get("name",""))}</h2>
-            <p class="profile-inst">{html.escape(author.get("institution",""))} · {html.escape(author.get("year",""))}</p>
-            <p class="profile-bio">{html.escape(author.get("bio",""))}</p>
-            <div class="profile-specs-row">
-              <div class="profile-spec-item">
-                <strong>ARQUITECTURA CORE</strong>
-                <span>100% Python nativo sin dependencias externas</span>
-              </div>
-              <div class="profile-spec-item">
-                <strong>PRESERVACIÓN ARCADE</strong>
-                <span>19 títulos adaptados a resolución 720p</span>
-              </div>
-              <div class="profile-spec-item">
-                <strong>SISTEMA MULTIUSUARIO</strong>
-                <span>0 perfiles de fábrica, guardado en JSON local</span>
-              </div>
-            </div>
-          </div>
-        </div>
       </div>
     </div>
   </section>
