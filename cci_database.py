@@ -562,8 +562,8 @@ def create_account(
     clean_user = username.strip().upper()
     if not clean_email or "@" not in clean_email or "." not in clean_email:
         raise ValueError("Correo electrónico inválido.")
-    if len(password) < 6:
-        raise ValueError("La contraseña debe tener al menos 6 caracteres.")
+    if len(password) < 4:
+        raise ValueError("La contraseña debe tener al menos 4 caracteres.")
     if len(clean_user) < 2:
         raise ValueError("El nombre de usuario debe tener al menos 2 caracteres.")
 
