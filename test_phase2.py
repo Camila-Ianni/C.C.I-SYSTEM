@@ -139,6 +139,7 @@ class TestPhase2Backend(unittest.TestCase):
         sync_result = []
         t = cci_sync.sync_profile_background(
             profile_data={"id": "async_hero", "player_name": "ASYNC HERO", "total_seconds": 1200},
+            api_url="http://127.0.0.1:5050",
             on_success=lambda res: sync_result.append(res)
         )
         t.join(timeout=3.0)

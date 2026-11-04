@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import threading
 import urllib.error
 import urllib.request
@@ -18,7 +19,7 @@ logger = logging.getLogger("CCIUpdater")
 ROOT = Path(__file__).resolve().parent
 VERSION_FILE = ROOT / "version.json"
 
-DEFAULT_API_URL = "http://127.0.0.1:5050"
+DEFAULT_API_URL = os.environ.get("CCI_API_URL", "https://c-c-i-system.onrender.com")
 
 
 def load_local_version() -> Dict[str, Any]:

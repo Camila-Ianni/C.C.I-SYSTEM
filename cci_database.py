@@ -7,12 +7,14 @@ from __future__ import annotations
 
 import json
 import os
+import secrets
 import sqlite3
 import threading
 from contextlib import contextmanager
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+from werkzeug.security import check_password_hash, generate_password_hash
 
 ROOT = Path(__file__).resolve().parent
 DATA_DIR = ROOT / ".cci-user-data"
@@ -59,6 +61,19 @@ def init_db(db_path: Optional[Path] = None) -> None:
     with get_db(db_path) as conn:
         cursor = conn.cursor()
 
+        # 0. Cuentas de usuario web / nube
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS accounts (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                email TEXT UNIQUE NOT NULL,
+                username TEXT NOT NULL,
+                password_hash TEXT NOT NULL,
+                token TEXT UNIQUE NOT NULL,
+                created_at TEXT NOT NULL,
+                last_login TEXT
+            )
+        """)
+
         # 1. Catálogo de títulos
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS games (
@@ -85,11 +100,17 @@ def init_db(db_path: Optional[Path] = None) -> None:
                 avatar INTEGER DEFAULT 0,
                 total_seconds INTEGER DEFAULT 0,
                 launch_count INTEGER DEFAULT 0,
+                account_id INTEGER,
                 last_session TEXT,
                 created_at TEXT NOT NULL,
-                updated_at TEXT NOT NULL
+                updated_at TEXT NOT NULL,
+                FOREIGN KEY (account_id) REFERENCES accounts(id) ON DELETE SET NULL
             )
         """)
+        try:
+            cursor.execute("ALTER TABLE profiles ADD COLUMN account_id INTEGER REFERENCES accounts(id)")
+        except Exception:
+            pass
 
         # 3. Estadísticas por juego
         cursor.execute("""
@@ -136,6 +157,8 @@ def init_db(db_path: Optional[Path] = None) -> None:
         """)
 
         # Índices para consultas de alto rendimiento
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_accounts_token ON accounts(token)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_accounts_email ON accounts(email)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_highscores_game ON highscores(game_id, score DESC)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_stats_profile ON game_stats(profile_id)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_achievements_profile ON achievements_unlocked(profile_id)")
@@ -265,13 +288,33 @@ def record_highscore(
     profile_id: Optional[str] = None,
     db_path: Optional[Path] = None
 ) -> int:
+    clean_game = str(game_id).strip().lower()
+    clean_name = str(player_name).upper().strip()
+    try:
+        score_val = int(score)
+    except (ValueError, TypeError):
+        raise ValueError("La puntuación debe ser un entero.")
+    try:
+        level_val = int(level)
+    except (ValueError, TypeError):
+        level_val = 1
+
+    if not clean_game or not clean_name:
+        raise ValueError("El ID del juego y el nombre del jugador son obligatorios.")
+    if len(clean_name) < 2 or len(clean_name) > 24:
+        raise ValueError("El nombre de jugador debe contener entre 2 y 24 caracteres.")
+    if score_val <= 0 or score_val > 99999999:
+        raise ValueError("Puntuación inválida o fuera de los límites permitidos (1 - 99.999.999).")
+    if level_val < 1 or level_val > 999:
+        raise ValueError("Nivel de juego fuera de rango (1 - 999).")
+
     now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     with get_db(db_path) as conn:
         cursor = conn.cursor()
         cursor.execute("""
             INSERT INTO highscores (game_id, player_name, profile_id, score, level, recorded_at)
             VALUES (?, ?, ?, ?, ?, ?)
-        """, (game_id, player_name.upper().strip(), profile_id, int(score), int(level), now_str))
+        """, (clean_game, clean_name, profile_id, score_val, level_val, now_str))
         return cursor.lastrowid
 
 
@@ -503,3 +546,171 @@ def get_telemetry_summary(db_path: Optional[Path] = None) -> Dict[str, Any]:
             "total_playtime_formatted": f"{hours}h {mins:02d}m",
             "server_time": datetime.now().isoformat(timespec="seconds"),
         }
+
+
+# ==============================================================================
+# AUTENTICACIÓN Y CUENTAS DE USUARIO CLOUD
+# ==============================================================================
+
+def create_account(
+    email: str,
+    username: str,
+    password: str,
+    db_path: Optional[Path] = None
+) -> Dict[str, Any]:
+    clean_email = email.strip().lower()
+    clean_user = username.strip().upper()
+    if not clean_email or "@" not in clean_email or "." not in clean_email:
+        raise ValueError("Correo electrónico inválido.")
+    if len(password) < 6:
+        raise ValueError("La contraseña debe tener al menos 6 caracteres.")
+    if len(clean_user) < 2:
+        raise ValueError("El nombre de usuario debe tener al menos 2 caracteres.")
+
+    pwd_hash = generate_password_hash(password)
+    token = secrets.token_hex(24)
+    now_iso = datetime.now().isoformat(timespec="seconds")
+
+    with get_db(db_path) as conn:
+        cursor = conn.cursor()
+        try:
+            cursor.execute("""
+                INSERT INTO accounts (email, username, password_hash, token, created_at, last_login)
+                VALUES (?, ?, ?, ?, ?, ?)
+            """, (clean_email, clean_user, pwd_hash, token, now_iso, now_iso))
+            acc_id = cursor.lastrowid
+            return {
+                "id": acc_id,
+                "email": clean_email,
+                "username": clean_user,
+                "token": token,
+                "created_at": now_iso,
+            }
+        except sqlite3.IntegrityError:
+            raise ValueError("El correo electrónico ya se encuentra registrado.")
+
+
+def authenticate_account(
+    email: str,
+    password: str,
+    db_path: Optional[Path] = None
+) -> Optional[Dict[str, Any]]:
+    clean_email = email.strip().lower()
+    with get_db(db_path) as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM accounts WHERE email = ?", (clean_email,))
+        row = cursor.fetchone()
+        if not row:
+            return None
+        if not check_password_hash(row["password_hash"], password):
+            return None
+
+        now_iso = datetime.now().isoformat(timespec="seconds")
+        cursor.execute("UPDATE accounts SET last_login = ? WHERE id = ?", (now_iso, row["id"]))
+
+        return {
+            "id": row["id"],
+            "email": row["email"],
+            "username": row["username"],
+            "token": row["token"],
+            "created_at": row["created_at"],
+            "last_login": now_iso,
+        }
+
+
+def get_account_by_token(token: str, db_path: Optional[Path] = None) -> Optional[Dict[str, Any]]:
+    if not token:
+        return None
+    with get_db(db_path) as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT id, email, username, token, created_at, last_login FROM accounts WHERE token = ?",
+            (token.strip(),)
+        )
+        row = cursor.fetchone()
+        return dict(row) if row else None
+
+
+def get_account_by_id(account_id: int, db_path: Optional[Path] = None) -> Optional[Dict[str, Any]]:
+    with get_db(db_path) as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT id, email, username, token, created_at, last_login FROM accounts WHERE id = ?",
+            (int(account_id),)
+        )
+        row = cursor.fetchone()
+        return dict(row) if row else None
+
+
+def link_profile_to_account(account_id: int, profile_id: str, db_path: Optional[Path] = None) -> bool:
+    with get_db(db_path) as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            "UPDATE profiles SET account_id = ? WHERE id = ?",
+            (int(account_id), profile_id.strip().lower())
+        )
+        return cursor.rowcount > 0
+
+
+def get_account_dashboard(account_id: int, db_path: Optional[Path] = None) -> Optional[Dict[str, Any]]:
+    with get_db(db_path) as conn:
+        cursor = conn.cursor()
+        cursor.execute(
+            "SELECT id, email, username, token, created_at, last_login FROM accounts WHERE id = ?",
+            (int(account_id),)
+        )
+        row = cursor.fetchone()
+        if not row:
+            return None
+
+        acc = dict(row)
+        cursor.execute("SELECT * FROM profiles WHERE account_id = ?", (int(account_id),))
+        profiles = [dict(p) for p in cursor.fetchall()]
+
+        prof_ids = [p["id"] for p in profiles]
+        if prof_ids:
+            placeholders = ",".join("?" for _ in prof_ids)
+            cursor.execute(f"""
+                SELECT h.*, g.title AS game_title
+                FROM highscores h
+                LEFT JOIN games g ON h.game_id = g.id
+                WHERE h.profile_id IN ({placeholders})
+                ORDER BY h.score DESC
+            """, prof_ids)
+            user_scores = [dict(s) for s in cursor.fetchall()]
+
+            cursor.execute(f"""
+                SELECT s.*, g.title AS game_title, g.genre
+                FROM game_stats s
+                LEFT JOIN games g ON s.game_id = g.id
+                WHERE s.profile_id IN ({placeholders})
+                ORDER BY s.seconds DESC
+            """, prof_ids)
+            game_stats = [dict(st) for st in cursor.fetchall()]
+
+            cursor.execute(f"""
+                SELECT a.*, g.title AS game_title
+                FROM achievements_unlocked a
+                LEFT JOIN games g ON a.game_id = g.id
+                WHERE a.profile_id IN ({placeholders})
+                ORDER BY a.unlocked_at DESC
+            """, prof_ids)
+            trophies = [dict(t) for t in cursor.fetchall()]
+        else:
+            user_scores = []
+            game_stats = []
+            trophies = []
+
+        total_sec = sum(int(p.get("total_seconds", 0)) for p in profiles)
+        hours, mins = divmod(total_sec // 60, 60)
+
+        acc["profiles"] = profiles
+        acc["total_seconds"] = total_sec
+        acc["playtime_formatted"] = f"{hours}h {mins:02d}m"
+        acc["total_launches"] = sum(int(p.get("launch_count", 0)) for p in profiles)
+        acc["highscores"] = user_scores
+        acc["game_stats"] = game_stats
+        acc["trophies"] = trophies
+        acc["total_trophies"] = len(trophies)
+
+        return acc

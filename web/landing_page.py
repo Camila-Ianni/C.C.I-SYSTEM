@@ -1754,6 +1754,7 @@ def build_landing_page(
         <a href="#arquitectura" class="hud-tab">Arquitectura</a>
         <a href="#catalogo" class="hud-tab">Catálogo ({len(games)})</a>
         <a href="#records" class="hud-tab">Récords</a>
+        <a href="/dashboard" class="hud-tab">Mi Cuenta</a>
         <a href="#descarga" class="hud-tab hud-cta-download">DESCARGAR EMULADOR</a>
         <div class="hud-social-links">
           <a href="{html.escape(author.get('github_url', 'https://github.com/Camila-Ianni/C.C.I-SYSTEM'))}" target="_blank" rel="noopener" class="hud-social-btn">GITHUB</a>
@@ -1976,6 +1977,45 @@ def build_landing_page(
             Capturador nativo F12 a 720p sin compresión con guardado instantáneo y notificación toast.
             Sintetizador de audio en tiempo real y banda sonora ambiental BGM.
           </p>
+        </div>
+      </div>
+
+      <!-- Demostración en Video & Pipeline Técnico -->
+      <div style="margin-top: 48px; background: var(--cci-bg-surface); border: 1px solid var(--cci-border-panel); padding: 32px 28px; clip-path: polygon(0 0, calc(100% - 14px) 0, 100% 14px, 100% 100%, 14px 100%, 0 calc(100% - 14px));">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 12px; border-bottom: 1px solid var(--cci-border-panel); padding-bottom: 14px;">
+          <div>
+            <span class="subsystem-code">// DEMOSTRACIÓN TÉCNICA EN EJECUCIÓN // PYGAME-CE KERNEL</span>
+            <h3 style="margin: 4px 0 0; font-family: var(--font-display); font-size: 1.4rem; color: #fff; letter-spacing: 1px;">DEMO EN VIVO: ORQUESTACIÓN A 60 FPS &amp; AISLAMIENTO DE MEMORIA</h3>
+          </div>
+          <span style="font-family: var(--font-mono); font-size: 0.75rem; color: var(--cci-green); background: rgba(0,255,136,0.1); border: 1px solid rgba(0,255,136,0.3); padding: 4px 10px;">60.0 FPS ESTABLES · 0 MEMORY LEAKS</span>
+        </div>
+
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 28px; align-items: center;">
+          <div style="border: 2px solid var(--cci-border-bright); background: #000; box-shadow: 0 10px 30px rgba(0,0,0,0.8); overflow: hidden;">
+            <video controls playsinline poster="/assets/welcome.png" style="width: 100%; display: block; aspect-ratio: 16/9; background: #000;">
+              <source src="/assets/video/CCI_INTRO.mp4" type="video/mp4">
+              Tu navegador no soporta reproducción de video HTML5.
+            </video>
+            <div style="padding: 10px 14px; background: #080a0e; border-top: 1px solid var(--cci-border-panel); display: flex; justify-content: space-between; font-family: var(--font-mono); font-size: 0.7rem; color: var(--cci-muted);">
+              <span>REPRODUCCIÓN DEMO // CAPTURA REAL DE CONSOLA</span>
+              <span style="color: var(--cci-cyan);">RESOLUCIÓN: 1280x720 NATIVA</span>
+            </div>
+          </div>
+
+          <div>
+            <h4 style="font-family: var(--font-display); font-size: 1.1rem; color: var(--cci-cyan); margin: 0 0 12px; text-transform: uppercase;">PIPELINE DE PROCESAMIENTO DETERMINISTA</h4>
+            <div style="font-family: var(--font-mono); font-size: 0.8rem; line-height: 1.7; color: var(--cci-light); background: #06080c; border: 1px solid var(--cci-border-panel); padding: 16px;">
+              <div style="color: var(--cci-gold); font-weight: 700; margin-bottom: 6px;">[01] INICIALIZACIÓN DEL NÚCLEO</div>
+              <div>▸ Pygame-CE Runtime (1280x720, VSync ON)</div>
+              <div>▸ Asignación de canales estéreo &amp; sintetizador BGM</div>
+              <div style="color: var(--cci-gold); font-weight: 700; margin: 10px 0 6px;">[02] STATE MACHINE DETERMINISTA</div>
+              <div>▸ INTRO_VIDEO → USER_SELECT → MENU → GAME</div>
+              <div>▸ Reciclaje estricto de sprites y recolector de basura</div>
+              <div style="color: var(--cci-gold); font-weight: 700; margin: 10px 0 6px;">[03] CLOUD PERSISTENCE &amp; SEGURIDAD</div>
+              <div>▸ Criptografía con Werkzeug + Bearer Token de sesión</div>
+              <div>▸ SQLite Relacional + Anti-cheat en marcadores</div>
+            </div>
+          </div>
         </div>
       </div>
     </div>

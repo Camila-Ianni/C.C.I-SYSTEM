@@ -6,7 +6,7 @@ import os
 import sys
 import urllib.parse
 from pathlib import Path
-from flask import Flask, Response, abort, jsonify, redirect, request, send_from_directory
+from flask import Flask, Response, abort, jsonify, make_response, redirect, request, send_from_directory
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
@@ -14,8 +14,10 @@ sys.path.insert(0, str(ROOT))
 import cci_database
 from catalog_data import CATALOG, CATEGORIES
 from web.landing_page import build_landing_page, CYBER_CSS, CLIENT_JS
+from web.dashboard_views import render_login_page, render_register_page, render_dashboard_page
 
 app = Flask(__name__)
+app.secret_key = os.environ.get("CCI_SECRET_KEY", "cci_virtual_console_secret_2026")
 
 # Inicializar base de datos SQLite relacional
 try:
@@ -87,6 +89,38 @@ def _format_games():
             "slot": g.get("slot", 0),
         })
     return formatted
+
+
+def _get_current_account() -> dict | None:
+    """Extrae y autentica la cuenta del piloto mediante Bearer token, cookie o payload."""
+    auth_header = request.headers.get("Authorization", "")
+    if auth_header.startswith("Bearer "):
+        tok = auth_header[7:].strip()
+        acc = cci_database.get_account_by_token(tok)
+        if acc:
+            return acc
+
+    cookie_tok = request.cookies.get("session_token")
+    if cookie_tok:
+        acc = cci_database.get_account_by_token(cookie_tok)
+        if acc:
+            return acc
+
+    arg_tok = request.args.get("token")
+    if arg_tok:
+        acc = cci_database.get_account_by_token(arg_tok)
+        if acc:
+            return acc
+
+    if request.is_json:
+        data = request.get_json(silent=True) or {}
+        tok = data.get("auth_token") or data.get("token")
+        if tok:
+            acc = cci_database.get_account_by_token(str(tok))
+            if acc:
+                return acc
+
+    return None
 
 
 @app.route("/")
@@ -215,13 +249,17 @@ def api_leaderboards():
                 "message": "Parámetros inválidos. Requiere 'game_id', 'player_name' y 'score' > 0."
             }), 400
 
-        rec_id = cci_database.record_highscore(
-            game_id=game_id,
-            player_name=player_name,
-            score=score,
-            level=level,
-            profile_id=profile_id
-        )
+        try:
+            rec_id = cci_database.record_highscore(
+                game_id=game_id,
+                player_name=player_name,
+                score=score,
+                level=level,
+                profile_id=profile_id
+            )
+        except ValueError as exc:
+            return jsonify({"status": "error", "message": str(exc)}), 400
+
         return jsonify({
             "status": "success",
             "message": "Récord guardado exitosamente en el salón de la fama.",
@@ -294,6 +332,7 @@ def api_profile_sync():
     """
     Sincroniza un perfil proveniente del emulador de escritorio C.C.I. SYSTEM.
     Realiza un upsert no destructivo de tiempo de juego, estadísticas por título y trofeos.
+    Si se proporciona un token de autenticación (Bearer o payload), vincula el perfil a la cuenta.
     """
     payload = request.get_json(silent=True)
     if not isinstance(payload, dict):
@@ -301,13 +340,140 @@ def api_profile_sync():
 
     try:
         updated = cci_database.sync_profile_data(payload)
+        acc = _get_current_account()
+        if acc and updated and updated.get("id"):
+            cci_database.link_profile_to_account(acc["id"], updated["id"])
         return jsonify({
             "status": "success",
             "message": "Perfil sincronizado correctamente con la nube C.C.I.",
-            "profile": updated
+            "profile": updated,
+            "account_linked": acc["id"] if acc else None
         })
     except Exception as exc:
         return jsonify({"status": "error", "message": str(exc)}), 500
+
+
+# ==============================================================================
+# RUTAS DE AUTENTICACIÓN WEB & DASHBOARD PRIVADO (FASE 3 / AUDITORÍA P0-P1)
+# ==============================================================================
+
+@app.route("/login", methods=["GET", "POST"])
+def login_view():
+    if request.method == "POST":
+        email = request.form.get("email", "").strip()
+        password = request.form.get("password", "")
+        if not email or not password:
+            return render_login_page(error="Por favor completa todos los campos.")
+        acc = cci_database.authenticate_account(email, password)
+        if not acc:
+            return render_login_page(error="Credenciales inválidas. Revisa tu email y contraseña.")
+        resp = make_response(redirect("/dashboard"))
+        resp.set_cookie("session_token", acc["token"], max_age=30*86400, httponly=True, samesite="Lax")
+        return resp
+
+    if _get_current_account():
+        return redirect("/dashboard")
+    return render_login_page()
+
+
+@app.route("/register", methods=["GET", "POST"])
+def register_view():
+    if request.method == "POST":
+        email = request.form.get("email", "").strip()
+        username = request.form.get("username", "").strip()
+        password = request.form.get("password", "")
+        if not email or not username or not password:
+            return render_register_page(error="Por favor completa todos los campos.")
+        try:
+            acc = cci_database.create_account(email, username, password)
+            resp = make_response(redirect("/dashboard"))
+            resp.set_cookie("session_token", acc["token"], max_age=30*86400, httponly=True, samesite="Lax")
+            return resp
+        except ValueError as err:
+            return render_register_page(error=str(err))
+
+    if _get_current_account():
+        return redirect("/dashboard")
+    return render_register_page()
+
+
+@app.route("/logout")
+def logout_view():
+    resp = make_response(redirect("/login"))
+    resp.delete_cookie("session_token")
+    return resp
+
+
+@app.route("/dashboard")
+def dashboard_view():
+    acc = _get_current_account()
+    if not acc:
+        return redirect("/login")
+    dash_data = cci_database.get_account_dashboard(acc["id"])
+    if not dash_data:
+        return redirect("/login")
+    return render_dashboard_page(dash_data)
+
+
+# ==============================================================================
+# API REST: AUTENTICACIÓN Y DASHBOARD JSON
+# ==============================================================================
+
+@app.route("/api/v1/auth/register", methods=["POST"])
+def api_auth_register():
+    payload = request.get_json(silent=True) or {}
+    email = str(payload.get("email", "")).strip()
+    username = str(payload.get("username", "")).strip()
+    password = str(payload.get("password", ""))
+    if not email or not username or not password:
+        return jsonify({"status": "error", "message": "Email, username y password son obligatorios."}), 400
+    try:
+        acc = cci_database.create_account(email, username, password)
+        return jsonify({
+            "status": "success",
+            "message": "Cuenta creada exitosamente.",
+            "account": acc
+        }), 201
+    except ValueError as exc:
+        return jsonify({"status": "error", "message": str(exc)}), 400
+
+
+@app.route("/api/v1/auth/login", methods=["POST"])
+def api_auth_login():
+    payload = request.get_json(silent=True) or {}
+    email = str(payload.get("email", "")).strip()
+    password = str(payload.get("password", ""))
+    acc = cci_database.authenticate_account(email, password)
+    if not acc:
+        return jsonify({"status": "error", "message": "Credenciales inválidas."}), 401
+    return jsonify({
+        "status": "success",
+        "message": "Autenticación exitosa.",
+        "account": acc
+    })
+
+
+@app.route("/api/v1/auth/me", methods=["GET"])
+def api_auth_me():
+    acc = _get_current_account()
+    if not acc:
+        return jsonify({"status": "error", "message": "No autenticado o token inválido."}), 401
+    return jsonify({
+        "status": "success",
+        "account": acc
+    })
+
+
+@app.route("/api/v1/dashboard", methods=["GET"])
+def api_dashboard():
+    acc = _get_current_account()
+    if not acc:
+        return jsonify({"status": "error", "message": "No autenticado o token inválido."}), 401
+    dash_data = cci_database.get_account_dashboard(acc["id"])
+    return jsonify({
+        "status": "success",
+        "dashboard": dash_data
+    })
 
 
 @app.route("/download/mac")
