@@ -1506,24 +1506,317 @@ body {
 }
 
 /* ==============================================================================
-   RESPONSIVE DESIGN
+   RESPONSIVE DESIGN (iPad, Tablets, Smartphones)
    ============================================================================== */
-@media (max-width: 992px) {
-  .hero-layout { grid-template-columns: 1fr; gap: 40px; }
-  .profile-grid { grid-template-columns: 1fr; text-align: center; justify-items: center; }
-  .profile-specs-row { grid-template-columns: 1fr; }
+.hud-burger {
+  display: none;
+  background: rgba(6, 8, 12, 0.9);
+  border: 1px solid var(--cci-cyan);
+  box-shadow: 0 0 10px var(--cci-cyan-dim);
+  width: 40px;
+  height: 40px;
+  padding: 8px 7px;
+  cursor: pointer;
+  flex-direction: column;
+  justify-content: space-around;
+  align-items: center;
+  transition: all 0.25s ease;
+  clip-path: polygon(0 0, calc(100% - 6px) 0, 100% 6px, 100% 100%, 6px 100%, 0 calc(100% - 6px));
+  z-index: 102;
+}
+.hud-burger:hover {
+  background: rgba(0, 240, 255, 0.15);
+  box-shadow: 0 0 16px var(--cci-cyan);
+}
+.hud-burger span {
+  display: block;
+  width: 22px;
+  height: 2px;
+  background: var(--cci-cyan);
+  transition: all 0.25s ease;
+}
+.hud-burger.active span:nth-child(1) {
+  transform: translateY(7px) rotate(45deg);
+}
+.hud-burger.active span:nth-child(2) {
+  opacity: 0;
+}
+.hud-burger.active span:nth-child(3) {
+  transform: translateY(-7px) rotate(-45deg);
 }
 
+/* TABLETS & IPADS (<= 1024px) */
+@media (max-width: 1024px) {
+  :root {
+    --container-w: 100%;
+  }
+  .hud-burger {
+    display: flex;
+  }
+  .hud-nav {
+    position: fixed;
+    top: 64px;
+    left: 0;
+    right: 0;
+    background: rgba(6, 8, 12, 0.98);
+    backdrop-filter: blur(16px);
+    border-bottom: 2px solid var(--cci-cyan);
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.95), 0 0 25px var(--cci-cyan-dim);
+    flex-direction: column;
+    padding: 24px 20px;
+    gap: 10px;
+    transform: translateY(-160%);
+    opacity: 0;
+    pointer-events: none;
+    transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.25s ease;
+    max-height: calc(100vh - 64px);
+    overflow-y: auto;
+    z-index: 99;
+  }
+  .hud-nav.open {
+    transform: translateY(0);
+    opacity: 1;
+    pointer-events: auto;
+  }
+  .hud-tab {
+    width: 100%;
+    padding: 14px 18px;
+    font-size: 0.95rem;
+    border-left: 3px solid transparent;
+    border-bottom: none;
+    background: rgba(255, 255, 255, 0.02);
+    min-height: 48px;
+    box-sizing: border-box;
+  }
+  .hud-tab:hover, .hud-tab:active {
+    border-left-color: var(--cci-cyan);
+    background: rgba(0, 240, 255, 0.08);
+    color: #fff;
+  }
+  .hud-cta-download {
+    text-align: center;
+    justify-content: center;
+    margin-top: 8px;
+    padding: 14px 20px;
+  }
+  .hero-layout {
+    grid-template-columns: 1fr;
+    gap: 40px;
+  }
+  .subsystems-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .academic-pillars-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .downloads-panel-grid {
+    grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  }
+  .profile-grid {
+    grid-template-columns: 1fr;
+    text-align: center;
+    justify-items: center;
+    gap: 30px;
+  }
+  .profile-specs-row {
+    grid-template-columns: repeat(3, 1fr);
+  }
+  .profile-actions-bar {
+    justify-content: center;
+  }
+}
+
+/* SMARTPHONES & SMALL TABLETS (<= 768px) */
 @media (max-width: 768px) {
-  .hud-nav { display: none; }
-  .hero-headline { font-size: 2.1rem; }
-  .section-title { font-size: 1.7rem; }
-  .footer-content { flex-direction: column; text-align: center; }
+  html {
+    font-size: 15px;
+  }
+  .container {
+    padding: 0 18px;
+  }
+  .section {
+    padding: 56px 0;
+  }
+  .section-title {
+    font-size: 1.65rem;
+  }
+  .section-desc {
+    font-size: 0.95rem;
+  }
+  .hero {
+    padding: 95px 0 45px;
+  }
+  .hero-headline {
+    font-size: 2.1rem;
+    line-height: 1.15;
+  }
+  .hero-lead {
+    font-size: 1rem;
+    line-height: 1.55;
+    margin-bottom: 22px;
+  }
+  .hero-actions {
+    flex-direction: column;
+    width: 100%;
+    gap: 12px;
+  }
+  .btn-cci {
+    width: 100%;
+    text-align: center;
+    justify-content: center;
+    padding: 14px 20px;
+  }
+  .spec-strip {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+    padding: 16px;
+  }
+  .spec-divider {
+    display: none;
+  }
+  .spec-cell {
+    text-align: center;
+    align-items: center;
+  }
+  .subsystems-grid {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+  .academic-pillars-grid {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+  .profile-screen-card {
+    padding: 36px 18px 24px;
+  }
+  .profile-hud-header {
+    left: 18px;
+    right: 18px;
+    font-size: 0.6rem;
+  }
+  .profile-specs-row {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+  .catalog-header-bar {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 16px;
+  }
+  .filters-rack {
+    display: flex;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 8px;
+    gap: 8px;
+  }
+  .filter-chip {
+    flex-shrink: 0;
+    white-space: nowrap;
+    padding: 8px 14px;
+    font-size: 0.75rem;
+  }
+  .games-rack-grid {
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 16px;
+  }
+  .downloads-panel-grid {
+    grid-template-columns: 1fr;
+    gap: 20px;
+  }
+  .boot-steps-grid {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+  .footer-content {
+    flex-direction: column;
+    text-align: center;
+    gap: 16px;
+  }
+  .footer-links {
+    justify-content: center;
+  }
+  .modal-dialog {
+    max-height: 90vh;
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+  }
+  .modal-info-box {
+    padding: 18px;
+  }
+}
+
+/* SMALL PHONES (<= 480px) */
+@media (max-width: 480px) {
+  html {
+    font-size: 14px;
+  }
+  .container {
+    padding: 0 14px;
+  }
+  .top-hud {
+    height: 58px;
+  }
+  .hud-brand {
+    gap: 8px;
+  }
+  .brand-badge {
+    font-size: 1rem;
+    padding: 2px 6px;
+  }
+  .hud-sys-status {
+    display: none;
+  }
+  .hero-headline {
+    font-size: 1.75rem;
+  }
+  .profile-avatar-frame {
+    width: 180px;
+    height: 260px;
+  }
+  .profile-name {
+    font-size: 1.6rem;
+  }
+  .games-rack-grid {
+    grid-template-columns: 1fr;
+  }
+  .download-hardware-card {
+    padding: 24px 16px;
+  }
+  .hw-title {
+    font-size: 1.35rem;
+  }
 }
 """
 
 CLIENT_JS = """
 document.addEventListener('DOMContentLoaded', () => {
+  // Mobile / Tablet Navigation Toggle
+  const hudBurger = document.getElementById('hudBurger');
+  const hudNav = document.getElementById('hudNav');
+  if (hudBurger && hudNav) {
+    hudBurger.addEventListener('click', (e) => {
+      e.stopPropagation();
+      hudNav.classList.toggle('open');
+      hudBurger.classList.toggle('active');
+    });
+    hudNav.querySelectorAll('.hud-tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        hudNav.classList.remove('open');
+        hudBurger.classList.remove('active');
+      });
+    });
+    document.addEventListener('click', (e) => {
+      if (!hudNav.contains(e.target) && !hudBurger.contains(e.target) && hudNav.classList.contains('open')) {
+        hudNav.classList.remove('open');
+        hudBurger.classList.remove('active');
+      }
+    });
+  }
+
   const filterBtns = document.querySelectorAll('.filter-chip');
   const gameCards = document.querySelectorAll('.cartridge-card');
 
@@ -1722,7 +2015,7 @@ def build_landing_page(
 <html lang="es">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>C.C.I. SYSTEM — Consola Virtual & Emulador Retro Multiplataforma</title>
   <meta name="description" content="Consola virtual y emulador multiplataforma 100% Python con 19 clásicos retro arcade. Autora: Camila Carolina Ianni.">
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -1748,7 +2041,10 @@ def build_landing_page(
           <span>SYS.ONLINE // 100% PYTHON</span>
         </div>
       </a>
-      <nav class="hud-nav">
+      <button class="hud-burger" id="hudBurger" aria-label="Abrir menú de navegación">
+        <span></span><span></span><span></span>
+      </button>
+      <nav class="hud-nav" id="hudNav">
         <a href="#proyecto" class="hud-tab">Proyecto</a>
         <a href="#autora" class="hud-tab">Autora</a>
         <a href="#arquitectura" class="hud-tab">Arquitectura</a>
@@ -2186,7 +2482,6 @@ def build_landing_page(
         <a href="#proyecto">Proyecto</a>
         <a href="#arquitectura">Arquitectura</a>
         <a href="#catalogo">Catálogo</a>
-        <a href="#records">Récords</a>
         <a href="#autora">Autora</a>
         <a href="#descarga">Descargas</a>
         <span class="footer-sep">·</span>
