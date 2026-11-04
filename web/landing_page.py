@@ -1755,9 +1755,6 @@ def build_landing_page(
         <a href="#catalogo" class="hud-tab">Catálogo ({len(games)})</a>
         <a href="/dashboard" class="hud-tab">Mi Cuenta</a>
         <a href="#descarga" class="hud-tab hud-cta-download">DESCARGAR EMULADOR</a>
-        <div class="hud-social-links">
-          <a href="{html.escape(author.get('github_url', 'https://github.com/Camila-Ianni/C.C.I-SYSTEM'))}" target="_blank" rel="noopener" class="hud-social-btn">GITHUB</a>
-        </div>
       </nav>
     </div>
   </header>
