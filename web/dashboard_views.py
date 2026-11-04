@@ -401,7 +401,6 @@ def render_dashboard_page(account: Dict[str, Any]) -> str:
       <nav class="hud-nav">
         <a href="/" class="hud-tab">← Volver al Sitio</a>
         <a href="/#catalogo" class="hud-tab">Catálogo</a>
-        <a href="/#records" class="hud-tab">Salón de la Fama</a>
         <a href="/logout" class="btn-logout">CERRAR SESIÓN</a>
       </nav>
     </div>

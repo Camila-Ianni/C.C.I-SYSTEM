@@ -1753,7 +1753,6 @@ def build_landing_page(
         <a href="#autora" class="hud-tab">Autora</a>
         <a href="#arquitectura" class="hud-tab">Arquitectura</a>
         <a href="#catalogo" class="hud-tab">Catálogo ({len(games)})</a>
-        <a href="#records" class="hud-tab">Récords</a>
         <a href="/dashboard" class="hud-tab">Mi Cuenta</a>
         <a href="#descarga" class="hud-tab hud-cta-download">DESCARGAR EMULADOR</a>
         <div class="hud-social-links">
