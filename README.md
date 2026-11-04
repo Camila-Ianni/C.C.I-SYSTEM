@@ -1,7 +1,6 @@
 # 🕹️ C.C.I. SYSTEM - Virtual Arcade Console & Retro Emulator (v2.1.0)
 
-[![Portfolio](https://img.shields.io/badge/★%20Portfolio-iannicamila.netlify.app-FFB800?style=for-the-badge&logo=netlify&logoColor=black)](https://iannicamila.netlify.app)
-[![LinkedIn](https://img.shields.io/badge/LinkedIn-Camila%20Ianni-0077B5?style=for-the-badge&logo=linkedin&logoColor=white)](https://www.linkedin.com/in/camila-ianni)
+[![GitHub Repo](https://img.shields.io/badge/GitHub-Camila--Ianni%2FC.C.I--SYSTEM-181717?style=for-the-badge&logo=github&logoColor=white)](https://github.com/Camila-Ianni/C.C.I-SYSTEM)
 [![Web Oficial](https://img.shields.io/badge/Web%20Oficial-c--c--i--system.onrender.com-00f0ff?style=for-the-badge&logo=render&logoColor=white)](https://c-c-i-system.onrender.com)
 [![macOS Release](https://img.shields.io/badge/Descargar-macOS%20(.dmg)-white?style=for-the-badge&logo=apple&logoColor=black)](https://github.com/Camila-Ianni/C.C.I-SYSTEM/releases/download/v1.0.0/CCI_System_macOS.dmg)
 [![Windows Release](https://img.shields.io/badge/Descargar-Windows%20(.exe)-0078D4?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/Camila-Ianni/C.C.I-SYSTEM/releases/download/v1.0.0/CCI_System_Windows_Installer.exe)
@@ -158,7 +157,5 @@ C.C.I-SYSTEM/
 Desarrollado y diseñado por **Camila Carolina Ianni**  
 *Estudiante de la carrera de Analista de Sistemas — Escuela Da Vinci (2026)*  
 
-* 🌐 **Portfolio Oficial:** [https://iannicamila.netlify.app](https://iannicamila.netlify.app)
-* 💼 **LinkedIn:** [https://www.linkedin.com/in/camila-ianni](https://www.linkedin.com/in/camila-ianni)
 * 🐙 **GitHub:** [@Camila-Ianni](https://github.com/Camila-Ianni) · [Repositorio C.C.I-SYSTEM](https://github.com/Camila-Ianni/C.C.I-SYSTEM)
 * 🚀 **Plataforma Web en Producción:** [https://c-c-i-system.onrender.com](https://c-c-i-system.onrender.com)

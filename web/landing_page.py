@@ -961,19 +961,6 @@ body {
   transform: translateY(-2px);
 }
 
-.btn-profile-link.btn-portfolio,
-.btn-profile-link.portfolio {
-  border-color: var(--cci-gold);
-  color: var(--cci-gold);
-  background: rgba(255, 184, 0, 0.06);
-}
-.btn-profile-link.btn-portfolio:hover,
-.btn-profile-link.portfolio:hover {
-  background: var(--cci-gold);
-  color: #000;
-  box-shadow: 0 4px 18px var(--cci-gold-glow);
-}
-
 .btn-profile-link.btn-github,
 .btn-profile-link.github {
   border-color: #fff;
@@ -984,19 +971,6 @@ body {
   background: #fff;
   color: #000;
   box-shadow: 0 4px 18px rgba(255, 255, 255, 0.4);
-}
-
-.btn-profile-link.btn-linkedin,
-.btn-profile-link.linkedin {
-  border-color: #0077b5;
-  color: #70b5f9;
-  background: rgba(0, 119, 181, 0.08);
-}
-.btn-profile-link.btn-linkedin:hover,
-.btn-profile-link.linkedin:hover {
-  background: #0077b5;
-  color: #fff;
-  box-shadow: 0 4px 18px rgba(0, 119, 181, 0.5);
 }
 
 .hud-social-links {
@@ -1782,7 +1756,6 @@ def build_landing_page(
         <a href="#records" class="hud-tab">Récords</a>
         <a href="#descarga" class="hud-tab hud-cta-download">DESCARGAR EMULADOR</a>
         <div class="hud-social-links">
-          <a href="{html.escape(author.get('portfolio_url', 'https://iannicamila.netlify.app'))}" target="_blank" rel="noopener" class="hud-social-btn portfolio-pill">★ PORTFOLIO</a>
           <a href="{html.escape(author.get('github_url', 'https://github.com/Camila-Ianni/C.C.I-SYSTEM'))}" target="_blank" rel="noopener" class="hud-social-btn">GITHUB</a>
         </div>
       </nav>
@@ -1947,14 +1920,8 @@ def build_landing_page(
               </div>
             </div>
             <div class="profile-actions-bar">
-              <a href="{html.escape(author.get('portfolio_url', 'https://iannicamila.netlify.app'))}" target="_blank" rel="noopener noreferrer" class="btn-profile-link btn-portfolio">
-                ★ VER PORTFOLIO WEB
-              </a>
               <a href="{html.escape(author.get('github_url', 'https://github.com/Camila-Ianni/C.C.I-SYSTEM'))}" target="_blank" rel="noopener noreferrer" class="btn-profile-link btn-github">
                 ⬡ REPOSITORIO GITHUB
-              </a>
-              <a href="{html.escape(author.get('linkedin_url', 'https://www.linkedin.com/in/camila-ianni'))}" target="_blank" rel="noopener noreferrer" class="btn-profile-link btn-linkedin">
-                in PERFIL LINKEDIN
               </a>
             </div>
           </div>
@@ -2230,9 +2197,7 @@ def build_landing_page(
         <a href="#autora">Autora</a>
         <a href="#descarga">Descargas</a>
         <span class="footer-sep">·</span>
-        <a href="{html.escape(author.get('portfolio_url', 'https://iannicamila.netlify.app'))}" target="_blank" rel="noopener noreferrer" class="footer-highlight">★ Portfolio</a>
         <a href="{html.escape(author.get('github_url', 'https://github.com/Camila-Ianni/C.C.I-SYSTEM'))}" target="_blank" rel="noopener noreferrer">GitHub</a>
-        <a href="{html.escape(author.get('linkedin_url', 'https://www.linkedin.com/in/camila-ianni'))}" target="_blank" rel="noopener noreferrer">LinkedIn</a>
       </div>
     </div>
   </footer>

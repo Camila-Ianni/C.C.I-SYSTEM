@@ -96,10 +96,8 @@ def index():
         "name": "Camila Carolina Ianni",
         "title": "Desarrolladora & Arquitecta de C.C.I. SYSTEM",
         "avatar_url": "/assets/fotos_web/Cami.jpg",
-        "portfolio_url": "https://iannicamila.netlify.app",
         "github_url": "https://github.com/Camila-Ianni/C.C.I-SYSTEM",
         "github_profile": "https://github.com/Camila-Ianni",
-        "linkedin_url": "https://www.linkedin.com/in/camila-ianni",
         "bio": (
             "Estudiante de la carrera de Analista de Sistemas en Escuela Da Vinci. "
             "C.C.I. SYSTEM fue concebido como un proyecto académico para el Parcial 2, "
