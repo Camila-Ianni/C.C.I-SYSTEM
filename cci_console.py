@@ -324,13 +324,6 @@ class UserData:
             tmp = self.path.with_suffix(".tmp")
             tmp.write_text(json.dumps(self.data, ensure_ascii=False, indent=2), encoding="utf-8")
             tmp.replace(self.path)
-            try:
-                import cci_sync
-                payload = dict(self.data)
-                payload["id"] = self.path.stem
-                cci_sync.sync_profile_background(payload)
-            except Exception:
-                pass
         except OSError as exc:
             print(f"[CCI] No se pudo guardar el perfil: {exc}")
 

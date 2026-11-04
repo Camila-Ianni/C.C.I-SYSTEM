@@ -111,40 +111,26 @@ class TestPhase2Backend(unittest.TestCase):
             data = json.loads(resp.read().decode("utf-8"))
             self.assertTrue(any(s["player_name"] == "REST_PRO" for s in data["leaderboard"]))
 
-    def test_07_http_rest_api_profile_sync(self):
-        payload = json.dumps({
-            "id": "cloud_sync_tester",
-            "player_name": "CLOUD TESTER",
-            "avatar": 5,
-            "total_seconds": 7200,
-            "launch_count": 25,
-            "game_stats": {
-                "asteroids": {"seconds": 3600, "launches": 10, "progress": 80}
-            },
-            "claimed_achievements": ["asteroids:PILOTO EN ÓRBITA"]
-        }).encode("utf-8")
-        req = urllib.request.Request(
-            "http://127.0.0.1:5050/api/v1/profiles/sync",
-            data=payload,
-            headers={"Content-Type": "application/json"},
-            method="POST"
-        )
-        with urllib.request.urlopen(req, timeout=3.0) as resp:
-            self.assertEqual(resp.status, 200)
-            data = json.loads(resp.read().decode("utf-8"))
-            self.assertEqual(data["status"], "success")
-            self.assertEqual(data["profile"]["id"], "cloud_sync_tester")
+    def test_07_web_profiles_and_auth_removed(self):
+        # Verificar que /login y /api/v1/profiles no existen en la web
+        for path in ["/login", "/dashboard", "/api/v1/profiles", "/api/v1/profiles/sync"]:
+            req = urllib.request.Request(f"http://127.0.0.1:5050{path}")
+            try:
+                with urllib.request.urlopen(req, timeout=3.0) as resp:
+                    self.assertEqual(resp.status, 404)
+            except urllib.error.HTTPError as err:
+                self.assertEqual(err.code, 404, f"Ruta {path} debe retornar 404 Not Found")
 
-    def test_08_background_sync_client(self):
-        sync_result = []
-        t = cci_sync.sync_profile_background(
-            profile_data={"id": "async_hero", "player_name": "ASYNC HERO", "total_seconds": 1200},
-            api_url="http://127.0.0.1:5050",
-            on_success=lambda res: sync_result.append(res)
-        )
-        t.join(timeout=3.0)
-        self.assertTrue(len(sync_result) > 0, "El hilo daemon de sincronización debe completarse")
-        self.assertEqual(sync_result[0]["status"], "success")
+    def test_08_local_disk_user_persistence(self):
+        from cci_users import UserManager
+        um = UserManager.get_instance()
+        test_uid = f"local_test_{int(time.time())}"
+        created_slug = um.create_user(test_uid, avatar=2)
+        self.assertIn(created_slug, um.users)
+        user_file = um.users_dir / f"{created_slug}.json"
+        self.assertTrue(user_file.exists(), "El usuario debe guardarse exclusivamente en disco local como JSON")
+        um.delete_user(created_slug)
+        self.assertFalse(user_file.exists(), "El archivo de usuario local debe eliminarse limpiamente")
 
     def test_09_web_landing_clean_structure(self):
         req = urllib.request.Request("http://127.0.0.1:5050/")

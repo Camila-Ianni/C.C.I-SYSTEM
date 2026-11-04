@@ -1753,7 +1753,6 @@ def build_landing_page(
         <a href="#autora" class="hud-tab">Autora</a>
         <a href="#arquitectura" class="hud-tab">Arquitectura</a>
         <a href="#catalogo" class="hud-tab">Catálogo ({len(games)})</a>
-        <a href="/dashboard" class="hud-tab">Mi Cuenta</a>
         <a href="#descarga" class="hud-tab hud-cta-download">DESCARGAR EMULADOR</a>
       </nav>
     </div>
@@ -2007,9 +2006,10 @@ def build_landing_page(
               <div style="color: var(--cci-gold); font-weight: 700; margin: 10px 0 6px;">[02] STATE MACHINE DETERMINISTA</div>
               <div>▸ INTRO_VIDEO → USER_SELECT → MENU → GAME</div>
               <div>▸ Reciclaje estricto de sprites y recolector de basura</div>
-              <div style="color: var(--cci-gold); font-weight: 700; margin: 10px 0 6px;">[03] CLOUD PERSISTENCE &amp; SEGURIDAD</div>
-              <div>▸ Criptografía con Werkzeug + Bearer Token de sesión</div>
-              <div>▸ SQLite Relacional + Anti-cheat en marcadores</div>
+              <div style="color: var(--cci-gold); font-weight: 700; margin: 10px 0 6px;">[03] PERSISTENCIA 100% LOCAL &amp; PRIVACIDAD</div>
+              <div>▸ Almacenamiento seguro en disco local (.cci-user-data)</div>
+              <div>▸ Partidas, logros y récords guardados en tu propia máquina</div>
+              <div>▸ Sin cuentas en la nube ni telemetría: privacidad absoluta</div>
             </div>
           </div>
         </div>
