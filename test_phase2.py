@@ -146,15 +146,15 @@ class TestPhase2Backend(unittest.TestCase):
         self.assertTrue(len(sync_result) > 0, "El hilo daemon de sincronización debe completarse")
         self.assertEqual(sync_result[0]["status"], "success")
 
-    def test_09_web_landing_includes_hall_of_fame(self):
+    def test_09_web_landing_clean_structure(self):
         req = urllib.request.Request("http://127.0.0.1:5050/")
         with urllib.request.urlopen(req, timeout=3.0) as resp:
             self.assertEqual(resp.status, 200)
             html = resp.read().decode("utf-8")
-            self.assertIn('id="records"', html, "Debe existir la sección #records en el HTML")
-            self.assertIn("SALÓN DE LA FAMA ARCADE", html)
-            self.assertIn("lb-tab", html)
-            self.assertIn("/api/v1/leaderboards", html)
+            self.assertIn("ARQUITECTURA DE SOFTWARE 100% PYTHON", html)
+            self.assertIn("BIBLIOTECA", html)
+            self.assertIn("DESCARGA DEL EMULADOR", html)
+            self.assertNotIn('id="records"', html, "La sección de records / salón de la fama debe estar eliminada")
 
 
 if __name__ == "__main__":

@@ -386,7 +386,7 @@ def render_dashboard_page(account: Dict[str, Any]) -> str:
           </tr>
         """ for sc in scores)
     else:
-        scores_rows = '<tr><td colspan="4" style="text-align: center; color: var(--cci-muted); padding: 20px;">No has registrado puntuaciones en el Salón de la Fama aún.</td></tr>'
+        scores_rows = '<tr><td colspan="4" style="text-align: center; color: var(--cci-muted); padding: 20px;">No has registrado puntuaciones aún.</td></tr>'
 
     return _auth_head(f"Dashboard · {username}") + f"""
   <header class="top-hud">
@@ -480,7 +480,7 @@ def render_dashboard_page(account: Dict[str, Any]) -> str:
     <!-- Récords Personales -->
     <div class="dash-panel">
       <div class="dash-panel-header">
-        <span>// TUS PUNTUACIONES EN EL SALÓN DE LA FAMA</span>
+        <span>// TUS PUNTUACIONES Y RÉCORDS PERSONALES</span>
       </div>
       <table class="dash-table">
         <thead>

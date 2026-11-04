@@ -2040,49 +2040,6 @@ def build_landing_page(
     </div>
   </section>
 
-  <!-- Leaderboards / Hall of Fame (Fase 2: Base de Datos Relacional & API REST) -->
-  <section id="records" class="section">
-    <div class="container">
-      <div class="text-center" style="max-width: 760px; margin: 0 auto 30px;">
-        <span class="section-tag">// CLOUD DATABASE &amp; REST API V1</span>
-        <h2 class="section-title">SALÓN DE LA FAMA ARCADE</h2>
-        <p class="section-desc">
-          Marcadores globales persistidos en SQLite relacional y sincronizados en tiempo real mediante la API REST de C.C.I. SYSTEM.
-        </p>
-      </div>
-
-      <div class="leaderboard-wrapper">
-        <div class="leaderboard-selector-bar">
-          <button class="lb-tab active" data-game="">TODOS LOS CLÁSICOS</button>
-          <button class="lb-tab" data-game="pacman">PAC-MAN</button>
-          <button class="lb-tab" data-game="asteroids">ASTEROIDS</button>
-          <button class="lb-tab" data-game="space_invaders">SPACE INVADERS</button>
-          <button class="lb-tab" data-game="tetris">TETRIS</button>
-          <button class="lb-tab" data-game="davinci">DA VINCI FIGHTERS</button>
-          <button class="lb-tab" data-game="metalslug">METAL SLUG</button>
-          <button class="lb-tab" data-game="mario">SUPER MARIO</button>
-        </div>
-
-        <div class="leaderboard-table-card">
-          <div class="lb-table-header">
-            <span>RANGO</span>
-            <span>PILOTO / JUGADOR</span>
-            <span>TÍTULO ARCADE</span>
-            <span>NIVEL</span>
-            <span style="text-align: right;">PUNTUACIÓN RECORD</span>
-          </div>
-          <div class="lb-table-body" id="leaderboardRows">
-            {leaderboard_rows_html}
-          </div>
-          <div class="lb-table-footer">
-            <span>// SINCRONIZACIÓN AUTOMÁTICA DESDE ESCRITORIO VÍA /api/v1/leaderboards</span>
-            <span class="lb-live-status"><span class="blink-dot"></span> API REST ACTIVA</span>
-          </div>
-        </div>
-      </div>
-    </div>
-  </section>
-
   <!-- Downloads Section -->
   <section id="descarga" class="section section-dark">
     <div class="container">
