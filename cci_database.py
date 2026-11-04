@@ -165,6 +165,7 @@ def init_db(db_path: Optional[Path] = None) -> None:
 
     _seed_games_catalog(db_path)
     _seed_initial_highscores(db_path)
+    _seed_admin_account(db_path)
 
 
 def _seed_games_catalog(db_path: Optional[Path] = None) -> None:
@@ -239,6 +240,43 @@ def _seed_initial_highscores(db_path: Optional[Path] = None) -> None:
             INSERT INTO highscores (game_id, player_name, score, level, recorded_at)
             VALUES (?, ?, ?, ?, ?)
         """, seed_data)
+
+
+def _seed_admin_account(db_path: Optional[Path] = None) -> None:
+    """Asegura que la cuenta oficial de la autora (mimi) exista en la base de datos cloud."""
+    admin_email = "ianni.camila.c@gmail.com"
+    admin_user = "MIMI"
+    admin_pass = "1234"
+    now_iso = datetime.now().isoformat(timespec="seconds")
+
+    with get_db(db_path) as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT id FROM accounts WHERE email = ?", (admin_email,))
+        row = cursor.fetchone()
+        if not row:
+            token = secrets.token_hex(24)
+            pwd_hash = generate_password_hash(admin_pass)
+            cursor.execute("""
+                INSERT INTO accounts (email, username, password_hash, token, created_at, last_login)
+                VALUES (?, ?, ?, ?, ?, ?)
+            """, (admin_email, admin_user, pwd_hash, token, now_iso, now_iso))
+            acc_id = cursor.lastrowid
+            cursor.execute("""
+                INSERT OR IGNORE INTO profiles (id, player_name, avatar, total_seconds, launch_count, created_at, updated_at, account_id)
+                VALUES (?, ?, ?, 0, 0, ?, ?, ?)
+            """, ("mimi", admin_user, 0, now_iso, now_iso, acc_id))
+            cursor.execute("UPDATE profiles SET account_id = ? WHERE id = ?", (acc_id, "mimi"))
+        else:
+            acc_id = row["id"]
+            pwd_hash = generate_password_hash(admin_pass)
+            cursor.execute("""
+                UPDATE accounts SET username = ?, password_hash = ? WHERE id = ?
+            """, (admin_user, pwd_hash, acc_id))
+            cursor.execute("""
+                INSERT OR IGNORE INTO profiles (id, player_name, avatar, total_seconds, launch_count, created_at, updated_at, account_id)
+                VALUES (?, ?, ?, 0, 0, ?, ?, ?)
+            """, ("mimi", admin_user, 0, now_iso, now_iso, acc_id))
+            cursor.execute("UPDATE profiles SET account_id = ? WHERE id = ?", (acc_id, "mimi"))
 
 
 # ==============================================================================
