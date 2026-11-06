@@ -16,7 +16,7 @@ import os
 import time
 from typing import Any, Dict, Optional
 
-from backend.config import INSECURE_SECRET_PLACEHOLDERS
+from backend.config import INSECURE_SECRET_PLACEHOLDERS, is_insecure_or_placeholder_secret
 
 
 def _base64url_encode(data: bytes) -> str:
@@ -45,13 +45,13 @@ class LiveKitTokenGenerator:
         raw_secret = api_secret if api_secret is not None else os.environ.get("LIVEKIT_API_SECRET", "").strip()
 
         if env == "production":
-            if not raw_key or raw_key in INSECURE_SECRET_PLACEHOLDERS:
+            if is_insecure_or_placeholder_secret(raw_key, min_len=8):
                 raise RuntimeError(
-                    "CRITICAL SECURITY ERROR: LIVEKIT_API_KEY ausente o inseguro ('devkey') en CCI_ENV=production."
+                    "CRITICAL SECURITY ERROR: LIVEKIT_API_KEY ausente, corto o con valor de plantilla en CCI_ENV=production."
                 )
-            if not raw_secret or raw_secret in INSECURE_SECRET_PLACEHOLDERS or len(raw_secret) < 16:
+            if is_insecure_or_placeholder_secret(raw_secret, min_len=32):
                 raise RuntimeError(
-                    "CRITICAL SECURITY ERROR: LIVEKIT_API_SECRET ausente, corto o por defecto en CCI_ENV=production."
+                    "CRITICAL SECURITY ERROR: LIVEKIT_API_SECRET ausente, menor a 32 caracteres o con valor de plantilla en CCI_ENV=production."
                 )
             self.api_key = raw_key
             self.api_secret = raw_secret

@@ -157,60 +157,115 @@ class TestCommunitiesMergeAudit(unittest.TestCase):
     # =========================================================================
 
     def test_03_docker_and_deployment_manifests_integrity(self):
-        """[3.2 P0] Verifica Dockerfile.backend, docker-compose.communities.yml, livekit.yaml, coturn.conf y .env.example."""
+        """[3.1 P0 / 3.4 P1 / 3.5 P1] Verifica alineación de puerto 5050 en Caddy/Dockerfile/Compose, dominios canónicos y SQLite único."""
         dockerfile = ROOT_DIR / "deploy" / "Dockerfile.backend"
         compose = ROOT_DIR / "deploy" / "docker-compose.communities.yml"
+        caddyfile = ROOT_DIR / "deploy" / "Caddyfile"
         env_example = ROOT_DIR / "deploy" / ".env.example"
         lk_yaml = ROOT_DIR / "deploy" / "livekit.yaml"
         coturn_conf = ROOT_DIR / "deploy" / "coturn.conf"
 
         self.assertTrue(dockerfile.exists(), "Falta deploy/Dockerfile.backend")
         self.assertTrue(compose.exists(), "Falta deploy/docker-compose.communities.yml")
+        self.assertTrue(caddyfile.exists(), "Falta deploy/Caddyfile")
         self.assertTrue(env_example.exists(), "Falta deploy/.env.example")
 
         df_text = dockerfile.read_text(encoding="utf-8")
         self.assertIn("USER cciuser", df_text)
+        self.assertIn("EXPOSE 5050", df_text)
         self.assertIn("HEALTHCHECK", df_text)
         self.assertIn("backend.server", df_text)
 
+        # [3.1 P0] Caddyfile debe apuntar a api:5050 (nunca api:8000) y reenviar cabeceras WebSocket Connection/Upgrade
+        caddy_text = caddyfile.read_text(encoding="utf-8")
+        self.assertIn("reverse_proxy api:5050", caddy_text)
+        self.assertNotIn("api:8000", caddy_text)
+        self.assertNotIn("minio:9000", caddy_text)
+        self.assertIn("/socket.io/*", caddy_text)
+        self.assertIn("header_up Connection", caddy_text)
+        self.assertIn("header_up Upgrade", caddy_text)
+        self.assertIn("reverse_proxy livekit:7880", caddy_text)
+
         compose_text = compose.read_text(encoding="utf-8")
         self.assertIn("Dockerfile.backend", compose_text)
+        self.assertIn("CCI_PORT: 5050", compose_text)
         self.assertIn("CCI_COMMUNITIES_DB_PATH: /data/cci_communities.sqlite3", compose_text)
         self.assertIn(":?", compose_text, "docker-compose debe exigir variables de secreto externas (:?)")
         self.assertNotIn("secretkey1234567890abcdef", compose_text)
         self.assertNotIn("cci_jwt_super_secret_signing_key_production", compose_text)
+        # [3.5 P1] Sin contenedores fantasma no integrados (postgres, redis, minio)
+        self.assertNotIn("pgvector/pgvector", compose_text)
+        self.assertNotIn("redis:7-alpine", compose_text)
+        self.assertNotIn("minio/minio", compose_text)
 
+        # [3.4 P1] Dominios canónicos unificados (api.ccisystem.org, rtc.ccisystem.org, turn.ccisystem.org)
+        env_text = env_example.read_text(encoding="utf-8")
         lk_text = lk_yaml.read_text(encoding="utf-8")
+        coturn_text = coturn_conf.read_text(encoding="utf-8")
+
+        for domain in ("api.ccisystem.org", "rtc.ccisystem.org", "turn.ccisystem.org"):
+            self.assertIn(domain, env_text)
+        self.assertIn("api.ccisystem.org", caddy_text)
+        self.assertIn("rtc.ccisystem.org", caddy_text)
+        self.assertIn("turn.ccisystem.org", lk_text)
+        self.assertIn("turn.ccisystem.org", coturn_text)
+        self.assertNotIn(".local", lk_text)
+        self.assertNotIn(".local", coturn_text)
         self.assertNotIn("secretkey1234567890abcdef", lk_text)
 
-        coturn_text = coturn_conf.read_text(encoding="utf-8")
         self.assertIn("use-auth-secret", coturn_text)
         self.assertNotIn("lt-cred-mech", coturn_text)
         self.assertNotIn("cci_turn_static_secret_2026", coturn_text)
 
     # =========================================================================
-    # 3.3 SECRETOS, AUTENTICACIÓN Y TOKENS LIVEKIT (P1)
+    # 3.2 y 3.3 SECRETOS, AUTENTICACIÓN Y TOKENS LIVEKIT (P1)
     # =========================================================================
 
     def test_04_production_secrets_fail_fast_and_livekit_token_security(self):
-        """[3.3 P1] Falla en producción sin secretos reales; tokens LiveKit duran <= 300s y validan claims."""
-        # 1. Falla en producción con secretos por defecto o vacíos
+        """[3.2 P1] Falla en producción con placeholders (.env.example), vacíos o sin TURN_SECRET; acepta secretos reales."""
+        valid_env = {
+            "CCI_ENV": "production",
+            "CCI_SECRET_KEY": "a9f8e7d6c5b4a3f2e1d0c9b8a7f6e5d4c3b2a1f0e9d8c7b6a5f4e3d2c1b0a9f8",
+            "LIVEKIT_API_KEY": "APx9K7mQ2vL8nR4pT6wY1zB3",
+            "LIVEKIT_API_SECRET": "9f8e7d6c5b4a3f2e1d0c9b8a7f6e5d4c3b2a1f0e9d8c7b6a5f4e3d2c1b0a9f8e",
+            "TURN_SECRET": "7e6d5c4b3a2f1e0d9c8b7a6f5e4d3c2b1a0f9e8d7c6b5a4f3e2d1c0b9a8f7e6d",
+        }
+
+        # 1. Rechaza cada uno de los placeholders de deploy/.env.example en producción
+        placeholder_cases = [
+            {"CCI_SECRET_KEY": "REPLACE_WITH_OPENSSL_RAND_HEX_32"},
+            {"LIVEKIT_API_KEY": "REPLACE_WITH_LIVEKIT_API_KEY"},
+            {"LIVEKIT_API_KEY": "LK_PROD_KEY_REPLACE_ME"},
+            {"LIVEKIT_API_SECRET": "REPLACE_WITH_LIVEKIT_API_SECRET_32_CHARS"},
+            {"TURN_SECRET": "REPLACE_WITH_COTURN_SHARED_SECRET_32_CHARS"},
+            {"TURN_SECRET": ""},
+            {"TURN_SECRET": "short_turn_secret"},
+            {"CCI_SECRET_KEY": ""},
+        ]
+        for override in placeholder_cases:
+            env_case = {**valid_env, **override}
+            with patch.dict(os.environ, env_case, clear=False):
+                with self.assertRaises(RuntimeError, msg=f"Debió rechazar en producción: {override}"):
+                    AppConfig.from_env()
+
+        # 2. LiveKitTokenGenerator también rechaza placeholders en producción
         with patch.dict(
             os.environ,
             {
-                "CCI_ENV": "production",
-                "CCI_SECRET_KEY": "devkey",
-                "LIVEKIT_API_KEY": "devkey",
-                "LIVEKIT_API_SECRET": "secretkey1234567890abcdef",
+                **valid_env,
+                "LIVEKIT_API_KEY": "REPLACE_WITH_LIVEKIT_API_KEY",
             },
             clear=False,
         ):
             with self.assertRaises(RuntimeError):
-                AppConfig.validate_production_secrets("production")
-            with self.assertRaises(RuntimeError):
                 LiveKitTokenGenerator()
 
-        # 2. Token LiveKit por defecto tiene TTL 240s (< 5 min) y tope máximo 300s
+        # 3. Con los 4 secretos reales de producción configurados, AppConfig.from_env() inicia correctamente
+        with patch.dict(os.environ, valid_env, clear=False):
+            prod_cfg = AppConfig.from_env()
+            self.assertEqual(prod_cfg.env, "production")
+
+        # 4. Token LiveKit por defecto tiene TTL 240s (< 5 min) y tope máximo 300s
         gen = LiveKitTokenGenerator(
             api_key="lk_prod_key_real_01",
             api_secret="lk_prod_secret_real_0123456789abcdef012345",
@@ -393,10 +448,27 @@ class TestCommunitiesMergeAudit(unittest.TestCase):
             validate_mp3_payload(fake_id3_mp3, declared_duration=2.0)
         self.assertEqual(ctx2.exception.code, "INVALID_FORMAT")
 
-        # 3. Verificar adaptador de captura de streaming y captura de frame real
-        sources = detect_available_capture_sources()
-        self.assertGreaterEqual(len(sources["screens"]), 1)
+        # 3. [3.3 P1] Verificar adaptador de captura de streaming:
+        #    - En modo headless / SDL_VIDEODRIVER=dummy NO inventa pantallas falsas (screens=[], unavailable)
+        #    - Sin procesos activos NO fuerza python_active=True
+        #    - Separa explícitamente source_detection, local_preview_capture y webrtc_media_publishing
+        sources = detect_available_capture_sources(force_headless=True)
+        self.assertEqual(sources["screens"], [])
+        self.assertEqual(sources["subsystem_status"]["screen_capture_status"], "unavailable")
+        self.assertEqual(
+            sources["subsystem_status"]["webrtc_media_publishing"],
+            "external_livekit_sfu_client_required",
+        )
         self.assertGreaterEqual(len(sources["games"]), 10)
+
+        with patch("backend.communities.stream_adapter._list_running_process_names", return_value=[]):
+            sources_no_proc = detect_available_capture_sources(force_headless=True)
+            self.assertEqual(sources_no_proc["windows"], [])
+            self.assertTrue(
+                all(not g["is_running"] for g in sources_no_proc["games"]),
+                "Sin procesos activos, ningún juego debe marcarse con is_running=True",
+            )
+
         frame = capture_stream_frame()
         self.assertEqual(frame["pixel_format"], "RGB24")
         self.assertGreater(frame["byte_length"], 0)

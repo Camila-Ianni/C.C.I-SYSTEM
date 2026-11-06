@@ -19,7 +19,7 @@ El subsistema **CCI Communities** amplía **C.C.I. SYSTEM** para transformarlo e
    - Capa de presentación visual integrada en la consola nativa Pygame 1280x720 (`groups_ui.py`, `sidebar_ui.py`) con estética pixel-art retrofuturista de C.C.I.
    - Núcleo de lógica de negocio y autorización unificado en Python (`Flask` + `Flask-SocketIO` en `backend/server.py` + `backend/communities/`).
    - Transporte multimedia en tiempo real de baja latencia (LiveKit Server SFU + `coturn` para STUN/TURN externo, con emisión local autoritativa de tokens JWT HS256).
-   - Persistencia relacional transaccional en SQLite 3 con `WAL` (`PRAGMA journal_mode=WAL`, `PRAGMA foreign_keys=ON`) en archivo persistente (`.cci-user-data/cci_communities.sqlite3` / `/data/cci_communities.sqlite3`), manteniendo DDL compatible con migración horizontal a PostgreSQL 16 (`schema_postgres.sql`).
+   - Persistencia relacional transaccional en **SQLite 3 con `WAL`** (`PRAGMA journal_mode=WAL`, `PRAGMA foreign_keys=ON`, `PRAGMA busy_timeout=10000`) como **único motor activo y soportado en esta entrega** (`.cci-user-data/cci_communities.sqlite3` en escritorio / `/data/cci_communities.sqlite3` en Docker). El archivo `schema_postgres.sql` se conserva únicamente como artefacto de diseño para una fase futura no integrada en el runtime actual.
 3. **Preservación absoluta del launcher y consola PC**: El motor de juegos de consola (1280x720, 60 FPS, 19 títulos en Pygame) permanece inalterado y soberano. La interfaz de comunidades convive como estados nativos desacoplados (`GROUPS`, `COMMUNITY`).
 4. **Seguridad fail-closed**: El backend C.C.I. es la única autoridad de identidad, pertenencia y roles. Los tokens de LiveKit se emiten con permisos mínimos y expiración corta (`<= 300` segundos / `< 5` minutos, por defecto `240` segundos).
 
@@ -27,49 +27,44 @@ El subsistema **CCI Communities** amplía **C.C.I. SYSTEM** para transformarlo e
 
 ## 2. Arquitectura del Sistema
 
-### 2.1 Diagrama Lógico y Físico de Componentes
+### 2.1 Diagrama Lógico y Físico de Componentes (Arquitectura Activa Fase 0.2)
 
 ```mermaid
 flowchart TD
-    subgraph ClientLayer["Cliente de Escritorio (Desktop PySide6)"]
-        UI["C.C.I. Desktop UI (PySide6)"]
-        ChatUI["Chat & Channels UI"]
-        VoiceUI["Voice & Stream UI"]
-        SoundUI["Sound Deck UI"]
-        AudioDrv["Platform Audio Driver (Pygame / ALSA / WASAPI)"]
-        ClientCore["API Client & Realtime WebSocket"]
-        LiveKitClient["LiveKit WebRTC Client"]
+    subgraph ClientLayer["Cliente de Escritorio (Consola Nativa Pygame 1280x720)"]
+        UI["C.C.I. Console UI (groups_ui.py / sidebar_ui.py)"]
+        UIBridge["CommunitiesUIBridge (Persistencia Directa Local)"]
+        ClientCore["API Client & Socket.IO (/api/v1 & /socket.io)"]
+        LiveKitClient["Cliente Externo WebRTC / LiveKit (Opcional)"]
     end
 
-    subgraph EdgeLayer["Capa de Borde y Enrutamiento"]
-        Caddy["Caddy Reverse Proxy (HTTPS / WSS / TLS)"]
-        Coturn["coturn (STUN / TURN RFC 5766)"]
+    subgraph EdgeLayer["Capa de Borde y Enrutamiento (deploy/)"]
+        Caddy["Caddy Reverse Proxy (api.ccisystem.org / rtc.ccisystem.org)"]
+        Coturn["coturn (turn.ccisystem.org — STUN / TURN RFC 5766)"]
     end
 
     subgraph ServiceLayer["Servicios Backend Autohospedados"]
-        FastAPI["FastAPI Modular Backend (Python 3.14)"]
-        LiveKitSFU["LiveKit Server (SFU WebRTC)"]
+        FlaskAPI["Flask + Flask-SocketIO Backend (puerto 5050)"]
+        LiveKitSFU["LiveKit Server SFU (puerto 7880 / UDP 50000-50100)"]
     end
 
-    subgraph StorageLayer["Persistencia y Estado"]
-        PG[("PostgreSQL 16 (Fuente de Verdad)")]
-        Redis[("Redis 7 (Caché, Presencia, Pub/Sub)")]
-        MinIO[("MinIO S3 (Adjuntos y Audio MP3)")]
+    subgraph StorageLayer["Persistencia Activa (Nodo Único)"]
+        SQLite[("SQLite 3 WAL (/data/cci_communities.sqlite3)")]
+        SoundFS[("Almacenamiento Local de Audio (/data/sounds)")]
     end
 
+    UI --> UIBridge
+    UIBridge --> SQLite
     UI --> ClientCore
-    UI --> LiveKitClient
-    AudioDrv --> LiveKitClient
+    ClientCore -- "HTTPS / WSS (api.ccisystem.org)" --> Caddy
+    LiveKitClient -- "WSS / WebRTC (rtc.ccisystem.org)" --> Caddy
+    LiveKitClient -. "NAT Traversal (turn.ccisystem.org)" .-> Coturn
 
-    ClientCore -- "HTTPS / WSS" --> Caddy
-    LiveKitClient -- "WebRTC (Audio/Video/Screen)" --> LiveKitSFU
-    LiveKitClient -. "NAT Traversal (STUN/TURN)" .-> Coturn
-
-    Caddy -- "Reverse Proxy" --> FastAPI
-    FastAPI -- "SQL (Asyncpg)" --> PG
-    FastAPI -- "Cache / PubSub" --> Redis
-    FastAPI -- "Room & Token API" --> LiveKitSFU
-    FastAPI -- "S3 API" --> MinIO
+    Caddy -- "reverse_proxy api:5050" --> FlaskAPI
+    Caddy -- "reverse_proxy livekit:7880" --> LiveKitSFU
+    FlaskAPI -- "SQLite3 WAL + FK" --> SQLite
+    FlaskAPI -- "Archivos MP3 Validados" --> SoundFS
+    FlaskAPI -- "Emisión JWT HS256 (TTL <= 300s)" --> LiveKitSFU
 ```
 
 ---
@@ -81,26 +76,26 @@ flowchart TD
 ```mermaid
 sequenceDiagram
     autonumber
-    actor User as Usuario (Desktop PySide6)
+    actor User as Usuario (Consola C.C.I.)
     participant Client as Cliente C.C.I.
-    participant API as FastAPI Backend
-    participant PG as PostgreSQL
-    participant LK as LiveKit SFU Server
+    participant API as Flask Backend (:5050)
+    participant DB as SQLite 3 (WAL)
+    participant LK as LiveKit SFU Server (:7880)
 
     User->>Client: Clic en Canal de Voz
     Client->>API: POST /api/v1/channels/{id}/voice-token (Bearer JWT)
     API->>API: Validar sesión y derivar user_id
-    API->>PG: Verificar membresía y permiso 'voice.connect'
+    API->>DB: Verificar membresía y permiso 'voice.connect'
     alt Sin permiso o sala llena
         API-->>Client: 403 Forbidden / 422 Channel Full
         Client-->>User: Notificar denegación de acceso
     else Autorizado
-        API->>API: Firmar LiveKit JWT (RoomName, Identity, Grants)
-        API->>PG: Registrar voice_sessions (joined_at)
+        API->>API: Firmar LiveKit JWT HS256 (RoomName, Identity, Grants, TTL <= 300s)
+        API->>DB: Registrar voice_sessions (joined_at)
         API-->>Client: 200 OK (livekit_token, livekit_url)
         Client->>LK: Conectar WebRTC PeerConnection (Token JWT)
         LK-->>Client: Conexión establecida (Audio Send/Recv)
-        Client->>API: WebSocket: voice.participant_joined
+        Client->>API: Socket.IO: voice.participant_joined
         API-->>User: Estado Conectado (Indicador de voz activo)
     end
 ```
@@ -112,8 +107,8 @@ sequenceDiagram
     autonumber
     actor User as Usuario
     participant Client as Cliente Desktop
-    participant API as FastAPI Backend
-    participant MinIO as MinIO S3
+    participant API as Flask Backend (:5050)
+    participant FS as Almacenamiento Local (/data/sounds)
     participant LK as LiveKit SFU
 
     User->>Client: Presiona botón de Sonido en Sound Deck
@@ -123,7 +118,7 @@ sequenceDiagram
         API-->>Client: 429 Too Many Requests / 403 Forbidden
     else Autorizado
         API-->>Client: 200 OK (asset_url, volume_scale)
-        Client->>MinIO: Descargar/Cargar MP3 en búfer de memoria
+        Client->>FS: Cargar MP3 validado (<= 15s, MPEG Layer III)
         Client->>LK: Publicar AudioTrack temporal en la sala WebRTC
         LK-->>User: Mezcla de sonido distribuida a todos los oyentes
     end
@@ -131,9 +126,9 @@ sequenceDiagram
 
 ---
 
-## 4. Modelo de Datos Relacional (PostgreSQL 16)
+## 4. Modelo de Datos Relacional (SQLite 3 WAL Activo / Referencia Futura PostgreSQL)
 
-El esquema físico canónico está implementado en [`deploy/../documentacion/communities/schema_postgres.sql`](file:///Users/cami/Desktop/C.C.I%20SYSTEM/documentacion/communities/schema_postgres.sql).
+El esquema relacional activo se inicializa y migra automáticamente en **SQLite 3 (`WAL`)** dentro de [`backend/communities/repository.py`](file:///Users/cami/Desktop/C.C.I%20SYSTEM/backend/communities/repository.py). Adicionalmente, [`documentacion/communities/schema_postgres.sql`](file:///Users/cami/Desktop/C.C.I%20SYSTEM/documentacion/communities/schema_postgres.sql) se conserva como especificación de referencia para una fase futura de migración horizontal a PostgreSQL 16 (no integrada en el runtime actual).
 
 ### Entidades principales:
 1. **`users`**: Cuentas con UUID, hash de contraseña argon2/bcrypt, estado de presencia (`online`, `idle`, `dnd`, `offline`, `invisible`) y avatar.
@@ -253,20 +248,20 @@ Formato estándar del payload:
 
 ## 8. Registros de Decisiones de Arquitectura (ADRs) y Estado de Implementación Real
 
-### Matriz de Componentes: Implementado (Fases 1–7) vs. Infraestructura Externa / Escalado (Fase 8+)
+### Matriz de Componentes: Implementado (Fase 0.2) vs. Alcance Parcial / Fase Futura
 | Componente | Estado en Código (`feature/communities-phase0-design`) | Alcance y Notas Operativas |
 | :--- | :--- | :--- |
-| **Backend API & Realtime** | **Implementado** (`Flask` + `Flask-SocketIO` en `backend/server.py` y `backend/communities/routes.py`) | Unificado en el mismo servidor del sistema C.C.I. (`puerto 5050`) para evitar fragmentación de procesos. |
-| **Persistencia Relacional** | **Implementado** (`SQLite 3 WAL` en `backend/communities/repository.py`) | Persistencia en disco (`.cci-user-data/cci_communities.sqlite3` / `/data/cci_communities.sqlite3`), `PRAGMA foreign_keys=ON`, `WAL` y locks transaccionales multihilo. `schema_postgres.sql` se conserva para el perfil opcional `enterprise-cluster`. |
-| **Interfaz Gráfica (UI)** | **Implementado** (`Pygame` nativo en `groups_ui.py` y `sidebar_ui.py`) | Integrada directamente en el bucle de estados de `main.py` (1280x720, 60 FPS) conectada a `CommunitiesService` con persistencia real en SQLite. |
-| **Tokens y Señalización de Voz (LiveKit)** | **Implementado** (`backend/communities/livekit_token.py`) + **SFU Externo** (`deploy/livekit.yaml`) | El backend emite y valida tokens JWT HS256 con TTL `<= 300s` (240s por defecto). El transporte de audio/video WebRTC requiere el contenedor externo `livekit-server` y `coturn`. |
-| **Streaming y Captura** | **Adaptador Local Implementado** (`backend/communities/stream_adapter.py`) | Enumera pantallas reales, procesos activos del SO y títulos del catálogo C.C.I., y captura frames locales. La transmisión de video en red utiliza la sala LiveKit SFU. |
+| **Backend API & Realtime** | **Implementado** (`Flask` + `Flask-SocketIO` en `backend/server.py` y `backend/communities/routes.py`) | Unificado en el mismo servidor del sistema C.C.I. (`puerto 5050` en `Dockerfile.backend`, `docker-compose.communities.yml` y `Caddyfile`). |
+| **Persistencia Relacional** | **Implementado (Único motor activo)** (`SQLite 3 WAL` en `backend/communities/repository.py`) | Persistencia en disco (`.cci-user-data/cci_communities.sqlite3` / `/data/cci_communities.sqlite3`), `PRAGMA foreign_keys=ON`, `WAL`, `busy_timeout=10000` y `RLock` multihilo. PostgreSQL (`schema_postgres.sql`), Redis y MinIO NO están integrados en runtime y quedan documentados como fase futura. |
+| **Interfaz Gráfica (UI)** | **Implementado** (`Pygame` nativo en `groups_ui.py` y `sidebar_ui.py`) | Integrada directamente en el bucle de estados de `main.py` (1280x720, 60 FPS) conectada a `CommunitiesService` con persistencia real en SQLite (`CommunitiesUIBridge`). |
+| **Tokens y Señalización de Voz (LiveKit)** | **Implementado** (`backend/communities/livekit_token.py`) + **SFU Externo** (`deploy/livekit.yaml`) | El backend emite y valida tokens JWT HS256 con TTL `<= 300s` (240s por defecto). El transporte de audio/video WebRTC requiere los contenedores externos `livekit` (`rtc.ccisystem.org`) y `coturn` (`turn.ccisystem.org`). |
+| **Streaming y Captura (`stream_adapter.py`)** | **Alcance Parcial (Detección + Preview Local)** (`backend/communities/stream_adapter.py`) | Separa explícitamente: (1) detección real de fuentes (sin inventar pantallas falsas en modo headless/`dummy` ni forzar `python_active=True`), (2) captura de preview local de la superficie Pygame activa, y (3) publicación multimedia WebRTC externa (`external_livekit_sfu_client_required`). |
 | **Sound Deck (Validador MP3)** | **Implementado** (`backend/communities/sound_validator.py`) | Decodifica cabeceras de tramas MPEG reales (MPEG 1/2/2.5 Layer III y cabeceras VBR Xing/Info) para calcular duración real (`<= 15.0s`), bitrate, sample rate y canales sin confiar en `declared_duration`. |
 | **Métricas y Salud** | **Implementado** (`backend/communities/metrics.py`) | Contadores e histogramas por proceso (`scope: process_local`, no persistentes entre reinicios) expuestos en formato Prometheus y JSON junto con sonda real de base de datos en `/api/v1/communities/health`. |
 
-### ADR-001 (Actualizado): Unificación en Flask + Flask-SocketIO como Monolito Modular
+### ADR-001 (Actualizado): Unificación en Flask + Flask-SocketIO como Monolito Modular (Puerto 5050)
 - **Contexto**: El diseño preliminar evaluó FastAPI, pero el núcleo productivo de C.C.I. SYSTEM ya opera sobre `Flask` + `Flask-SocketIO` (`backend/server.py`, `requirements-server.txt`).
-- **Decisión**: Integrar `backend/communities` como un Blueprint modular dentro del servidor `Flask` + `Flask-SocketIO` existente.
+- **Decisión**: Integrar `backend/communities` como un Blueprint modular dentro del servidor `Flask` + `Flask-SocketIO` existente escuchando en el puerto canónico `5050`, enrutado por Caddy (`reverse_proxy api:5050`) tanto para HTTP (`/api/*`) como para WebSocket (`/socket.io/*`, `/ws/*`).
 - **Consecuencias**: Cero duplicación de servidores, autenticación JWT unificada (`backend/auth.py`) y despliegue único en `deploy/Dockerfile.backend`.
 
 ### ADR-002 (Actualizado): Interfaz Nativa en Pygame Integrada al Launcher
@@ -276,25 +271,32 @@ Formato estándar del payload:
 
 ### ADR-003: LiveKit Server (SFU) Autohospedado sobre WebRTC
 - **Contexto**: Las llamadas grupales WebRTC en topología Mesh saturan la CPU del cliente a partir de 4 participantes.
-- **Decisión**: Desplegar LiveKit Server como SFU autohospedado en contenedor Docker junto con `coturn` para STUN/TURN.
+- **Decisión**: Desplegar LiveKit Server (`rtc.ccisystem.org`) como SFU autohospedado en contenedor Docker junto con `coturn` (`turn.ccisystem.org`) para STUN/TURN.
 - **Consecuencias**: Tokens JWT de corta duración (`240s`, máximo `300s`) firmados por el backend C.C.I.
 
-### ADR-004 (Actualizado): SQLite 3 WAL por Defecto y PostgreSQL 16 para Escalado Horizontal
-- **Contexto**: En despliegues de nodo único y escritorio, SQLite 3 en modo `WAL` provee persistencia ACID inmediata sin requerir demonios externos; para clústeres multi-nodo se incluye el perfil `enterprise-cluster`.
-- **Decisión**: `CommunitiesRepository` persiste por defecto en archivo SQLite (`WAL`, `foreign_keys=ON`), manteniendo `schema_postgres.sql` sincronizado para despliegues PostgreSQL 16.
-- **Consecuencias**: Arranque autónomo inmediato y ruta clara de escalado.
+### ADR-004 (Actualizado Fase 0.2): SQLite 3 (WAL) como Único Motor Activo y Soportado
+- **Contexto**: Para eliminar inconsistencias entre el código real (`sqlite3`) y servicios externos no integrados, se define un único motor oficial para esta entrega.
+- **Decisión**: **SQLite 3 en modo `WAL`** (`PRAGMA journal_mode=WAL`, `PRAGMA foreign_keys=ON`, `PRAGMA busy_timeout=10000`, `PRAGMA synchronous=NORMAL`) es el **único motor de base de datos activo y soportado** en esta entrega (`backend/communities/repository.py`). PostgreSQL (`schema_postgres.sql`), Redis y MinIO quedan fuera del runtime actual y documentados como referencia para una fase futura.
+- **Límites operativos, concurrencia y procedimiento de backup de SQLite 3**:
+  - **Modelo de concurrencia**: Lecturas concurrentes no bloqueantes gracias a `WAL` y escrituras serializadas de forma segura entre hilos mediante `threading.RLock()` de instancia + `PRAGMA busy_timeout=10000` (10 s). Diseñado para despliegues de nodo único (hasta ~100–250 usuarios concurrentes activos y decenas de escrituras por segundo).
+  - **Límite arquitectónico**: No soporta múltiples réplicas de escritura distribuidas sobre sistemas de archivos de red (NFS/SMB); el volumen `cci_app_data:/data` debe residir en disco local POSIX del host.
+  - **Procedimiento de Backup en Caliente (Online Backup)**: Ejecutar `sqlite3 /data/cci_communities.sqlite3 ".backup '/data/backups/cci_communities_$(date +%Y%m%d_%H%M%S).sqlite3'"` (o usar la API `sqlite3.Connection.backup()`), lo cual genera una copia consistente sin detener el servicio `api`.
 
 ---
 
 ## 9. Despliegue de Infraestructura Autohospedada (`docker-compose`)
 
-Configurado en [`deploy/docker-compose.communities.yml`](file:///Users/cami/Desktop/C.C.I%20SYSTEM/deploy/docker-compose.communities.yml) y [`deploy/Dockerfile.backend`](file:///Users/cami/Desktop/C.C.I%20SYSTEM/deploy/Dockerfile.backend):
+Configurado en [`deploy/docker-compose.communities.yml`](file:///Users/cami/Desktop/C.C.I%20SYSTEM/deploy/docker-compose.communities.yml), [`deploy/Dockerfile.backend`](file:///Users/cami/Desktop/C.C.I%20SYSTEM/deploy/Dockerfile.backend) y [`deploy/Caddyfile`](file:///Users/cami/Desktop/C.C.I%20SYSTEM/deploy/Caddyfile):
 
-- **`api`**: Contenedor Python 3.12 non-root (`cciuser`) ejecutando `backend.server` en puerto `5050` con volumen persistente `cci_app_data:/data` y `HEALTHCHECK` activo.
-- **`livekit`**: SFU de distribución multimedia con puertos WebRTC `50000-50100/UDP` y claves inyectadas desde variables de entorno.
-- **`coturn`**: Servidor STUN/TURN RFC 5766 con `use-auth-secret` inyectado desde `${TURN_SECRET}`.
-- **`caddy`**: Proxy inverso de entrada con certificados TLS automáticos.
-- **Perfil opcional `enterprise-cluster`**: Servicios `postgres`, `redis` y `minio` disponibles mediante `docker compose --profile enterprise-cluster up -d`.
+- **Dominios canónicos unificados**:
+  - `api.ccisystem.org`: API REST (`/api/*`) y WebSockets (`/socket.io/*`, `/ws/*`) -> `api:5050`.
+  - `rtc.ccisystem.org`: Señalización WebRTC LiveKit -> `livekit:7880`.
+  - `turn.ccisystem.org`: Relay STUN/TURN RFC 5766 -> `coturn` (`3478/TCP+UDP`, `5349/TCP`, `49152-49252/UDP`).
+- **Servicios activos en `docker-compose.communities.yml`**:
+  - **`api`**: Contenedor Python 3.12 non-root (`cciuser`) ejecutando `backend.server` en puerto `5050` con SQLite 3 WAL en `cci_app_data:/data/cci_communities.sqlite3` y `HEALTHCHECK` activo.
+  - **`livekit`**: SFU de distribución multimedia con puertos `7880/TCP`, `7881/TCP` y `50000-50100/UDP`, y claves inyectadas desde variables de entorno.
+  - **`coturn`**: Servidor STUN/TURN RFC 5766 con `use-auth-secret` inyectado desde `${TURN_SECRET}` (validado en producción con longitud mínima de 32 caracteres).
+  - **`caddy`**: Proxy inverso de entrada con certificados TLS automáticos y cabeceras `Connection`/`Upgrade` para WebSockets hacia `api:5050` y `livekit:7880`.
 
 ---
 

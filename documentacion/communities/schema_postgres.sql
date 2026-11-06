@@ -1,10 +1,13 @@
 -- =============================================================================
 -- C.C.I. SYSTEM — SUBSISTEMA CCI COMMUNITIES
--- Esquema Físico Relacional PostgreSQL 16 (Perfil de Escalado Horizontal)
--- NOTA ARQUITECTÓNICA: El motor por defecto de nodo único en backend/communities/repository.py
--- implementa este mismo modelo relacional sobre SQLite 3 (WAL + PRAGMA foreign_keys=ON)
--- en .cci-user-data/cci_communities.sqlite3. Este archivo se utiliza para el perfil
--- Docker 'enterprise-cluster' (PostgreSQL 16).
+-- Artefacto de Referencia DDL PostgreSQL 16 (Fase Futura / No Integrado en Runtime)
+--
+-- NOTA ARQUITECTÓNICA IMPORTANTE (Fase 0.2):
+-- En esta entrega, SQLite 3 en modo WAL (`PRAGMA journal_mode=WAL`, `PRAGMA foreign_keys=ON`)
+-- es el ÚNICO motor de base de datos activo y soportado en `backend/communities/repository.py`
+-- y en `deploy/docker-compose.communities.yml` (`/data/cci_communities.sqlite3`).
+-- Este archivo se conserva exclusivamente como especificación de referencia de fase futura
+-- para una eventual migración horizontal a PostgreSQL 16 y NO está conectado al runtime actual.
 -- =============================================================================
 
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";

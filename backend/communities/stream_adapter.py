@@ -1,20 +1,25 @@
 """
 backend/communities/stream_adapter.py
-Adaptador de captura de pantalla, ventanas y juegos para Streaming en CCI Communities.
+Adaptador de detección de fuentes, captura local de previsualización y validación de perfiles
+de Streaming en CCI Communities.
 
-Alcance técnico:
-- Valida perfiles de transmisión (resolución, FPS, bitrate).
-- Inspecciona pantallas físicas reales del sistema operativo (vía pygame.display cuando está activo),
-  procesos en ejecución del SO (POSIX/macOS/Linux/Windows) y títulos oficiales de C.C.I. SYSTEM.
-- Provee `capture_stream_frame()` para capturar el framebuffer activo del launcher/juego local.
-- El transporte multimedia WebRTC hacia otros clientes se realiza mediante la sala LiveKit SFU
-  asociada al token emitido por `LiveKitTokenGenerator`.
+DELIMITACIÓN EXPLÍCITA DE ALCANCE (Fase 0.2):
+1. Detección de fuentes (`detect_available_capture_sources`): Inspecciona pantallas reales reportadas
+   por el subsistema gráfico activo y procesos reales del sistema operativo (`ps`). Si no hay pantallas
+   físicas disponibles (ej. entorno headless o driver `dummy`), devuelve `screens: []` y
+   `screen_capture_status: "unavailable"` sin inventar pantallas ficticias.
+2. Captura local (`capture_stream_frame`): Obtiene el framebuffer RGB real únicamente cuando existe
+   una superficie gráfica activa en Pygame. Si no existe superficie, reporta `status: "unavailable"`.
+3. Publicación WebRTC en red (`webrtc_media_publishing`): El backend emite y autoriza sesiones y
+   tokens JWT para LiveKit SFU (`start_stream`, `pause_stream`, `stop_stream`), pero la codificación
+   y transporte continuo de video/audio en red requiere el cliente WebRTC/LiveKit SFU externo
+   (alcance parcial en el backend Python: señalización, control de sesión y captura local).
 """
 from __future__ import annotations
 
 import os
 import subprocess
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Tuple
 
 ALLOWED_RESOLUTIONS = ["720p", "1080p", "1440p", "4k"]
 ALLOWED_FPS = [15, 30, 45, 60]
@@ -29,7 +34,7 @@ STREAM_PROFILES = {
     "1440p_60fps": {"resolution": "1440p", "fps": 60, "bitrate_kbps": 8000},
 }
 
-# Títulos de juegos oficiales de C.C.I. SYSTEM detectables automáticamente
+# Catálogo de títulos de C.C.I. SYSTEM cuyos procesos se verifican contra el SO
 CCI_TITLES = [
     {"game_id": "davinci-fighter", "title": "Davinci-Fighter", "process_name": "Davinci-Fighter"},
     {"game_id": "metal-slug", "title": "METAL SLUG", "process_name": "metal_slug"},
@@ -96,52 +101,53 @@ def _list_running_process_names() -> List[str]:
     return []
 
 
-def detect_available_capture_sources() -> Dict[str, Any]:
+def detect_available_capture_sources(force_headless: bool = False) -> Dict[str, Any]:
     """
-    Detecta fuentes de captura disponibles en el sistema (pantallas físicas, ventanas y juegos C.C.I.).
-    Combina detección dinámica del entorno gráfico con el catálogo de juegos registrados.
+    Detecta fuentes de captura reales disponibles en el sistema operativo.
+    No inventa pantallas ficticias si no hay un display físico activo.
+    Separa explícitamente los estados de detección, captura local y publicación WebRTC.
     """
     screens: List[Dict[str, Any]] = []
-    try:
-        import pygame
-        if pygame.display.get_init():
-            sizes = pygame.display.get_desktop_sizes()
-            for idx, (w, h) in enumerate(sizes):
-                screens.append({
-                    "id": f"screen:{idx}",
-                    "type": "screen",
-                    "name": f"Pantalla {'Principal' if idx == 0 else idx + 1} ({w}x{h})",
-                    "width": int(w),
-                    "height": int(h),
-                    "is_primary": idx == 0,
-                })
-    except Exception:
-        pass
+    has_real_surface = False
+    driver_name = "uninitialized"
 
-    if not screens:
-        screens.append({
-            "id": "screen:0",
-            "type": "screen",
-            "name": "Pantalla Principal (1920x1080)",
-            "width": 1920,
-            "height": 1080,
-            "is_primary": True,
-        })
+    if not force_headless:
+        try:
+            import pygame
+            if pygame.display.get_init():
+                driver_name = pygame.display.get_driver() or "unknown"
+                surf = pygame.display.get_surface()
+                has_real_surface = surf is not None
+                if driver_name != "dummy":
+                    sizes = pygame.display.get_desktop_sizes()
+                    for idx, (w, h) in enumerate(sizes):
+                        if w > 0 and h > 0:
+                            screens.append({
+                                "id": f"screen:{idx}",
+                                "type": "screen",
+                                "name": f"Pantalla {'Principal' if idx == 0 else idx + 1} ({w}x{h})",
+                                "width": int(w),
+                                "height": int(h),
+                                "is_primary": idx == 0,
+                                "driver": driver_name,
+                            })
+        except Exception:
+            pass
 
-    running_procs = _list_running_process_names()
-    python_active = any("python" in p for p in running_procs) or True
+    running_procs = _list_running_process_names() if not force_headless else []
+    python_active = any("python" in p for p in running_procs)
 
-    windows = [
-        {
+    windows: List[Dict[str, Any]] = []
+    if python_active or has_real_surface:
+        windows.append({
             "id": "window:cci_launcher",
             "type": "window",
             "name": "C.C.I. SYSTEM Launcher (1280x720)",
             "app_name": "CCI-Launcher",
-            "is_active": python_active,
-        }
-    ]
+            "is_active": bool(python_active),
+        })
 
-    games = []
+    games: List[Dict[str, Any]] = []
     for g in CCI_TITLES:
         pname = g["process_name"].lower()
         is_running = any(pname in proc for proc in running_procs)
@@ -152,7 +158,7 @@ def detect_available_capture_sources() -> Dict[str, Any]:
             "name": g["title"],
             "process_name": g["process_name"],
             "has_direct_audio": True,
-            "is_running": is_running,
+            "is_running": bool(is_running),
         })
 
     return {
@@ -160,13 +166,21 @@ def detect_available_capture_sources() -> Dict[str, Any]:
         "windows": windows,
         "games": games,
         "profiles": STREAM_PROFILES,
+        "subsystem_status": {
+            "scope": "partial_local_detection_and_signaling",
+            "display_driver": driver_name,
+            "screen_capture_status": "available" if screens else "unavailable",
+            "local_preview_capture": "available" if has_real_surface else "unavailable",
+            "webrtc_media_publishing": "external_livekit_sfu_client_required",
+        },
     }
 
 
 def capture_stream_frame() -> Dict[str, Any]:
     """
-    Captura un frame instantáneo de la superficie activa de C.C.I. SYSTEM (si Pygame está activo)
-    para previsualización local o empaquetado de stream.
+    Captura un frame instantáneo de la superficie activa de Pygame para previsualización local.
+    Si no existe superficie gráfica activa, devuelve `captured: False` y `status: 'unavailable'`
+    sin generar buffers ficticios.
     """
     try:
         import pygame
@@ -177,6 +191,7 @@ def capture_stream_frame() -> Dict[str, Any]:
                 raw_rgb = pygame.image.tobytes(surf, "RGB")
                 return {
                     "captured": True,
+                    "status": "available",
                     "source": "pygame_display_surface",
                     "width": w,
                     "height": h,
@@ -187,9 +202,10 @@ def capture_stream_frame() -> Dict[str, Any]:
         pass
     return {
         "captured": False,
-        "source": "headless_virtual_buffer",
-        "width": 1280,
-        "height": 720,
-        "pixel_format": "RGB24",
-        "byte_length": 1280 * 720 * 3,
+        "status": "unavailable",
+        "source": "none",
+        "width": 0,
+        "height": 0,
+        "pixel_format": "none",
+        "byte_length": 0,
     }

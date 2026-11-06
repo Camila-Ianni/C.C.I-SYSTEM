@@ -1,6 +1,6 @@
 {
-  "timestamp": "2026-11-06T13:21:20.735207",
-  "git_commit_sha": "15641a5d62e0c3ed4c08f7ad39a733dc5f70f53d",
+  "timestamp": "2026-11-06T13:43:38.827057",
+  "git_commit_sha": "a17e308ed7ea46508897acb618a62e58c7c0eb0c",
   "git_branch": "feature/communities-phase0-design",
   "python_interpreter": "/Users/cami/Desktop/C.C.I SYSTEM/.venv/bin/python",
   "python_version": "3.14.5 (main, May 10 2026, 10:21:34) [Clang 21.0.0 (clang-2100.0.123.102)]",
@@ -12,7 +12,7 @@
   "total_passed": 190,
   "total_failed": 0,
   "total_errors": 0,
-  "total_time_seconds": 24.22,
+  "total_time_seconds": 21.28,
   "suites": [
     {
       "suite": "test_phase2.py",
@@ -21,7 +21,7 @@
       "passed": 9,
       "failures": 0,
       "errors": 0,
-      "elapsed": 0.359,
+      "elapsed": 0.398,
       "success": true
     },
     {
@@ -31,7 +31,7 @@
       "passed": 7,
       "failures": 0,
       "errors": 0,
-      "elapsed": 0.124,
+      "elapsed": 0.11,
       "success": true
     },
     {
@@ -41,7 +41,7 @@
       "passed": 9,
       "failures": 0,
       "errors": 0,
-      "elapsed": 0.972,
+      "elapsed": 0.995,
       "success": true
     },
     {
@@ -51,7 +51,7 @@
       "passed": 11,
       "failures": 0,
       "errors": 0,
-      "elapsed": 1.582,
+      "elapsed": 1.373,
       "success": true
     },
     {
@@ -61,7 +61,7 @@
       "passed": 8,
       "failures": 0,
       "errors": 0,
-      "elapsed": 1.309,
+      "elapsed": 1.113,
       "success": true
     },
     {
@@ -71,7 +71,7 @@
       "passed": 8,
       "failures": 0,
       "errors": 0,
-      "elapsed": 1.24,
+      "elapsed": 1.055,
       "success": true
     },
     {
@@ -81,7 +81,7 @@
       "passed": 6,
       "failures": 0,
       "errors": 0,
-      "elapsed": 1.082,
+      "elapsed": 0.924,
       "success": true
     },
     {
@@ -91,7 +91,7 @@
       "passed": 4,
       "failures": 0,
       "errors": 0,
-      "elapsed": 2.177,
+      "elapsed": 1.965,
       "success": true
     },
     {
@@ -101,7 +101,7 @@
       "passed": 8,
       "failures": 0,
       "errors": 0,
-      "elapsed": 0.621,
+      "elapsed": 0.556,
       "success": true
     },
     {
@@ -111,7 +111,7 @@
       "passed": 7,
       "failures": 0,
       "errors": 0,
-      "elapsed": 0.582,
+      "elapsed": 0.509,
       "success": true
     },
     {
@@ -121,7 +121,7 @@
       "passed": 8,
       "failures": 0,
       "errors": 0,
-      "elapsed": 1.756,
+      "elapsed": 1.496,
       "success": true
     },
     {
@@ -131,7 +131,7 @@
       "passed": 12,
       "failures": 0,
       "errors": 0,
-      "elapsed": 2.096,
+      "elapsed": 1.795,
       "success": true
     },
     {
@@ -141,7 +141,7 @@
       "passed": 8,
       "failures": 0,
       "errors": 0,
-      "elapsed": 2.678,
+      "elapsed": 2.449,
       "success": true
     },
     {
@@ -151,7 +151,7 @@
       "passed": 10,
       "failures": 0,
       "errors": 0,
-      "elapsed": 0.537,
+      "elapsed": 0.474,
       "success": true
     },
     {
@@ -161,7 +161,7 @@
       "passed": 10,
       "failures": 0,
       "errors": 0,
-      "elapsed": 0.533,
+      "elapsed": 0.457,
       "success": true
     },
     {
@@ -171,7 +171,7 @@
       "passed": 10,
       "failures": 0,
       "errors": 0,
-      "elapsed": 0.796,
+      "elapsed": 0.688,
       "success": true
     },
     {
@@ -181,7 +181,7 @@
       "passed": 10,
       "failures": 0,
       "errors": 0,
-      "elapsed": 0.601,
+      "elapsed": 0.524,
       "success": true
     },
     {
@@ -191,7 +191,7 @@
       "passed": 10,
       "failures": 0,
       "errors": 0,
-      "elapsed": 0.578,
+      "elapsed": 0.495,
       "success": true
     },
     {
@@ -201,7 +201,7 @@
       "passed": 10,
       "failures": 0,
       "errors": 0,
-      "elapsed": 0.544,
+      "elapsed": 0.466,
       "success": true
     },
     {
@@ -211,7 +211,7 @@
       "passed": 10,
       "failures": 0,
       "errors": 0,
-      "elapsed": 0.53,
+      "elapsed": 0.45,
       "success": true
     },
     {
@@ -221,7 +221,7 @@
       "passed": 6,
       "failures": 0,
       "errors": 0,
-      "elapsed": 0.969,
+      "elapsed": 0.846,
       "success": true
     },
     {
@@ -231,7 +231,7 @@
       "passed": 9,
       "failures": 0,
       "errors": 0,
-      "elapsed": 2.555,
+      "elapsed": 2.146,
       "success": true
     }
   ]

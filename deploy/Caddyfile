@@ -1,26 +1,56 @@
+# deploy/Caddyfile
+# Proxy inverso TLS para C.C.I. Communities.
+# Dominios canónicos unificados:
+#   - API REST + Socket.IO/WebSocket: {$API_DOMAIN:api.ccisystem.org} -> api:5050
+#   - LiveKit SFU Signal WebRTC:      {$RTC_DOMAIN:rtc.ccisystem.org} -> livekit:7880
+
 {
-    email admin@ccisystem.local
-    local_certs
+    email {$ACME_EMAIL:ops@ccisystem.org}
 }
 
-localhost, api.ccisystem.local {
-    # WebSocket & REST API
+{$API_DOMAIN:api.ccisystem.org} {
+    # API REST v1 y endpoints del sistema
     handle /api/* {
-        reverse_proxy api:8000
+        reverse_proxy api:5050 {
+            header_up X-Real-IP {remote_host}
+            header_up X-Forwarded-Proto {scheme}
+        }
     }
+
+    # Transporte en tiempo real Socket.IO y WebSocket (HTTP 101 Upgrade)
+    handle /socket.io/* {
+        reverse_proxy api:5050 {
+            header_up Connection {>Connection}
+            header_up Upgrade {>Upgrade}
+            header_up X-Real-IP {remote_host}
+            header_up X-Forwarded-Proto {scheme}
+        }
+    }
+
     handle /ws/* {
-        reverse_proxy api:8000
+        reverse_proxy api:5050 {
+            header_up Connection {>Connection}
+            header_up Upgrade {>Upgrade}
+            header_up X-Real-IP {remote_host}
+            header_up X-Forwarded-Proto {scheme}
+        }
     }
 
-    # LiveKit Signal & WebRTC HTTP
-    handle /livekit/* {
-        uri strip_prefix /livekit
-        reverse_proxy livekit:7880
+    # Sonda de salud y ruta raíz
+    handle {
+        reverse_proxy api:5050 {
+            header_up X-Real-IP {remote_host}
+            header_up X-Forwarded-Proto {scheme}
+        }
     }
+}
 
-    # S3 Assets MinIO
-    handle /assets/* {
-        uri strip_prefix /assets
-        reverse_proxy minio:9000
+{$RTC_DOMAIN:rtc.ccisystem.org} {
+    # Señalización WebRTC hacia LiveKit SFU Server
+    reverse_proxy livekit:7880 {
+        header_up Connection {>Connection}
+        header_up Upgrade {>Upgrade}
+        header_up X-Real-IP {remote_host}
+        header_up X-Forwarded-Proto {scheme}
     }
 }

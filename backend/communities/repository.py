@@ -1,9 +1,10 @@
 """
 backend/communities/repository.py - Capa de persistencia relacional para CCI Communities.
 
-Implementa el almacenamiento y operaciones sobre el esquema relacional definido en Fase 0:
-comunidades, miembros, roles, permisos, canales, sobrescrituras e invitaciones.
-Compatible con entornos de prueba herméticos (SQLite/Memoria) y despliegues PostgreSQL.
+Motor activo y soportado en esta entrega: SQLite 3 en modo WAL (`PRAGMA journal_mode=WAL`,
+`PRAGMA foreign_keys=ON`, `PRAGMA busy_timeout=10000`) sobre archivo persistente en disco
+(`.cci-user-data/cci_communities.sqlite3` o `/data/cci_communities.sqlite3` en Docker),
+con soporte aislado para pruebas herméticas (`allow_memory=True`).
 """
 from __future__ import annotations
 
