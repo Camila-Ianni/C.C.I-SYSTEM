@@ -163,9 +163,159 @@ def init_db(db_path: Optional[Path] = None) -> None:
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_stats_profile ON game_stats(profile_id)")
         cursor.execute("CREATE INDEX IF NOT EXISTS idx_achievements_profile ON achievements_unlocked(profile_id)")
 
+        # Sistema de migraciones versionadas sin regresión
+        _apply_migrations(cursor)
+
     _seed_games_catalog(db_path)
     _seed_initial_highscores(db_path)
     _seed_admin_account(db_path)
+
+
+def _apply_migrations(cursor: sqlite3.Cursor) -> None:
+    """Aplica migraciones incrementales versionadas garantizando no-regresión."""
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS schema_version (
+            version INTEGER PRIMARY KEY,
+            applied_at TEXT NOT NULL,
+            description TEXT NOT NULL
+        )
+    """)
+    cursor.execute("SELECT MAX(version) FROM schema_version")
+    row = cursor.fetchone()
+    current_version = row[0] if (row and row[0] is not None) else 0
+
+    now_iso = datetime.now().isoformat(timespec="seconds")
+
+    if current_version < 1:
+        cursor.execute("""
+            INSERT INTO schema_version (version, applied_at, description)
+            VALUES (1, ?, 'Esquema base de cuentas, perfiles, juegos, stats y trofeos')
+        """, (now_iso,))
+        current_version = 1
+
+    if current_version < 2:
+        # Migración Fase 1: Multijugador, amigos, grupos, chat, voz y grabaciones
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS friendships (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                requester_id TEXT NOT NULL,
+                addressee_id TEXT NOT NULL,
+                status TEXT NOT NULL CHECK(status IN ('pending', 'accepted', 'rejected', 'blocked')),
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                UNIQUE(requester_id, addressee_id)
+            )
+        """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS groups (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL,
+                owner_id TEXT NOT NULL,
+                avatar TEXT,
+                visibility TEXT NOT NULL DEFAULT 'private' CHECK(visibility IN ('private', 'public')),
+                created_at TEXT NOT NULL
+            )
+        """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS group_members (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                group_id TEXT NOT NULL,
+                user_id TEXT NOT NULL,
+                role TEXT NOT NULL DEFAULT 'member' CHECK(role IN ('owner', 'admin', 'member')),
+                status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active', 'muted', 'banned')),
+                joined_at TEXT NOT NULL,
+                UNIQUE(group_id, user_id),
+                FOREIGN KEY (group_id) REFERENCES groups(id) ON DELETE CASCADE
+            )
+        """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS messages (
+                id TEXT PRIMARY KEY,
+                group_id TEXT NOT NULL,
+                sender_id TEXT NOT NULL,
+                body TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                edited_at TEXT,
+                deleted_at TEXT,
+                FOREIGN KEY (group_id) REFERENCES groups(id) ON DELETE CASCADE
+            )
+        """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS call_sessions (
+                id TEXT PRIMARY KEY,
+                group_id TEXT NOT NULL,
+                started_by TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'active' CHECK(status IN ('active', 'ended')),
+                started_at TEXT NOT NULL,
+                ended_at TEXT,
+                FOREIGN KEY (group_id) REFERENCES groups(id) ON DELETE CASCADE
+            )
+        """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS game_rooms (
+                id TEXT PRIMARY KEY,
+                game_id TEXT NOT NULL,
+                host_id TEXT NOT NULL,
+                visibility TEXT NOT NULL DEFAULT 'public' CHECK(visibility IN ('public', 'private')),
+                status TEXT NOT NULL DEFAULT 'waiting' CHECK(status IN ('waiting', 'playing', 'finished')),
+                invite_code TEXT UNIQUE,
+                created_at TEXT NOT NULL,
+                FOREIGN KEY (game_id) REFERENCES games(id) ON DELETE CASCADE
+            )
+        """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS game_room_members (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                room_id TEXT NOT NULL,
+                user_id TEXT NOT NULL,
+                player_slot INTEGER NOT NULL,
+                ready_state INTEGER NOT NULL DEFAULT 0,
+                connection_state TEXT NOT NULL DEFAULT 'connected' CHECK(connection_state IN ('connected', 'disconnected')),
+                joined_at TEXT NOT NULL,
+                UNIQUE(room_id, user_id),
+                UNIQUE(room_id, player_slot),
+                FOREIGN KEY (room_id) REFERENCES game_rooms(id) ON DELETE CASCADE
+            )
+        """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS matches (
+                id TEXT PRIMARY KEY,
+                room_id TEXT,
+                game_id TEXT NOT NULL,
+                started_at TEXT NOT NULL,
+                ended_at TEXT,
+                result_metadata TEXT,
+                FOREIGN KEY (game_id) REFERENCES games(id) ON DELETE CASCADE
+            )
+        """)
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS gameplay_recordings (
+                id TEXT PRIMARY KEY,
+                owner_id TEXT NOT NULL,
+                game_id TEXT NOT NULL,
+                local_path TEXT NOT NULL,
+                duration_seconds REAL NOT NULL DEFAULT 0.0,
+                size_bytes INTEGER NOT NULL DEFAULT 0,
+                visibility TEXT NOT NULL DEFAULT 'private' CHECK(visibility IN ('private', 'shared')),
+                thumbnail_path TEXT,
+                created_at TEXT NOT NULL,
+                FOREIGN KEY (game_id) REFERENCES games(id) ON DELETE CASCADE
+            )
+        """)
+
+        # Índices de rendimiento para las nuevas entidades
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_friendships_users ON friendships(requester_id, addressee_id)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_group_members_user ON group_members(user_id)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_messages_group ON messages(group_id, created_at)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_game_rooms_status ON game_rooms(status)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_game_room_members_user ON game_room_members(user_id)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_matches_game ON matches(game_id, started_at DESC)")
+        cursor.execute("CREATE INDEX IF NOT EXISTS idx_recordings_owner ON gameplay_recordings(owner_id, created_at DESC)")
+
+        cursor.execute("""
+            INSERT INTO schema_version (version, applied_at, description)
+            VALUES (2, ?, 'Fase 1: Tablas de amigos, grupos, mensajes, llamadas, salas, partidas y grabaciones')
+        """, (now_iso,))
 
 
 def _seed_games_catalog(db_path: Optional[Path] = None) -> None:
@@ -752,3 +902,183 @@ def get_account_dashboard(account_id: int, db_path: Optional[Path] = None) -> Op
         acc["total_trophies"] = len(trophies)
 
         return acc
+
+
+# ==============================================================================
+# HELPER FUNCTIONS: FASE 1 ENTIDADES RELACIONALES (SALAS, AMIGOS, GRUPOS, CHAT)
+# ==============================================================================
+
+def get_schema_version(db_path: Optional[Path] = None) -> int:
+    """Retorna la versión actual aplicada de la base de datos."""
+    with get_db(db_path) as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT MAX(version) FROM schema_version")
+        row = cursor.fetchone()
+        return row[0] if (row and row[0] is not None) else 0
+
+
+def create_game_room(
+    room_id: str,
+    game_id: str,
+    host_id: str,
+    visibility: str = "public",
+    invite_code: Optional[str] = None,
+    db_path: Optional[Path] = None
+) -> Dict[str, Any]:
+    """Crea una sala de juego multijugador y sienta al host en el slot 1."""
+    now_iso = datetime.now().isoformat(timespec="seconds")
+    with get_db(db_path) as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT INTO game_rooms (id, game_id, host_id, visibility, status, invite_code, created_at)
+            VALUES (?, ?, ?, ?, 'waiting', ?, ?)
+        """, (room_id, game_id, host_id, visibility, invite_code, now_iso))
+
+        cursor.execute("""
+            INSERT INTO game_room_members (room_id, user_id, player_slot, ready_state, connection_state, joined_at)
+            VALUES (?, ?, 1, 1, 'connected', ?)
+        """, (room_id, host_id, now_iso))
+
+    return get_game_room(room_id, db_path=db_path)
+
+
+def get_game_room(room_id: str, db_path: Optional[Path] = None) -> Optional[Dict[str, Any]]:
+    """Obtiene los detalles de una sala y sus miembros."""
+    with get_db(db_path) as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM game_rooms WHERE id = ?", (room_id,))
+        row = cursor.fetchone()
+        if not row:
+            return None
+        room = dict(row)
+
+        cursor.execute("SELECT * FROM game_room_members WHERE room_id = ? ORDER BY player_slot ASC", (room_id,))
+        room["members"] = [dict(m) for m in cursor.fetchall()]
+        return room
+
+
+def join_game_room(
+    room_id: str,
+    user_id: str,
+    target_slot: int = 2,
+    db_path: Optional[Path] = None
+) -> bool:
+    """Agrega un segundo jugador a la sala si el slot está libre."""
+    now_iso = datetime.now().isoformat(timespec="seconds")
+    with get_db(db_path) as conn:
+        cursor = conn.cursor()
+        # Verificar estado de sala
+        cursor.execute("SELECT status FROM game_rooms WHERE id = ?", (room_id,))
+        row = cursor.fetchone()
+        if not row or row["status"] != "waiting":
+            return False
+
+        # Verificar si el slot está ocupado
+        cursor.execute("SELECT id FROM game_room_members WHERE room_id = ? AND player_slot = ?", (room_id, target_slot))
+        if cursor.fetchone():
+            return False
+
+        cursor.execute("""
+            INSERT INTO game_room_members (room_id, user_id, player_slot, ready_state, connection_state, joined_at)
+            VALUES (?, ?, ?, 0, 'connected', ?)
+        """, (room_id, user_id, target_slot, now_iso))
+        return True
+
+
+def leave_game_room(room_id: str, user_id: str, db_path: Optional[Path] = None) -> bool:
+    """Remueve a un jugador de la sala. Si era el host, marca la sala como terminada."""
+    with get_db(db_path) as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT host_id FROM game_rooms WHERE id = ?", (room_id,))
+        room = cursor.fetchone()
+        if not room:
+            return False
+
+        cursor.execute("DELETE FROM game_room_members WHERE room_id = ? AND user_id = ?", (room_id, user_id))
+        if room["host_id"] == user_id:
+            cursor.execute("UPDATE game_rooms SET status = 'finished' WHERE id = ?", (room_id,))
+        return True
+
+
+def record_friendship_request(
+    requester_id: str,
+    addressee_id: str,
+    db_path: Optional[Path] = None
+) -> bool:
+    """Crea una solicitud de amistad en estado pending."""
+    now_iso = datetime.now().isoformat(timespec="seconds")
+    with get_db(db_path) as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT OR REPLACE INTO friendships (requester_id, addressee_id, status, created_at, updated_at)
+            VALUES (?, ?, 'pending', ?, ?)
+        """, (requester_id, addressee_id, now_iso, now_iso))
+        return True
+
+
+def update_friendship_status(
+    requester_id: str,
+    addressee_id: str,
+    status: str,
+    db_path: Optional[Path] = None
+) -> bool:
+    """Actualiza estado de amistad (accepted, rejected, blocked)."""
+    now_iso = datetime.now().isoformat(timespec="seconds")
+    with get_db(db_path) as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            UPDATE friendships
+            SET status = ?, updated_at = ?
+            WHERE (requester_id = ? AND addressee_id = ?)
+               OR (requester_id = ? AND addressee_id = ?)
+        """, (status, now_iso, requester_id, addressee_id, addressee_id, requester_id))
+        return cursor.rowcount > 0
+
+
+def get_user_friends(user_id: str, db_path: Optional[Path] = None) -> List[Dict[str, Any]]:
+    """Devuelve la lista de amigos aceptados para un usuario."""
+    with get_db(db_path) as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT * FROM friendships
+            WHERE (requester_id = ? OR addressee_id = ?) AND status = 'accepted'
+            ORDER BY updated_at DESC
+        """, (user_id, user_id))
+        return [dict(f) for f in cursor.fetchall()]
+
+
+def save_gameplay_recording_entry(
+    recording_id: str,
+    owner_id: str,
+    game_id: str,
+    local_path: str,
+    duration_seconds: float,
+    size_bytes: int,
+    thumbnail_path: Optional[str] = None,
+    db_path: Optional[Path] = None
+) -> bool:
+    """Guarda los metadatos de un clip de gameplay."""
+    now_iso = datetime.now().isoformat(timespec="seconds")
+    with get_db(db_path) as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT INTO gameplay_recordings (
+                id, owner_id, game_id, local_path, duration_seconds, size_bytes, visibility, thumbnail_path, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, 'private', ?, ?)
+        """, (recording_id, owner_id, game_id, local_path, duration_seconds, size_bytes, thumbnail_path, now_iso))
+        return True
+
+
+def get_user_gameplay_recordings(owner_id: str, db_path: Optional[Path] = None) -> List[Dict[str, Any]]:
+    """Consulta grabaciones registradas de un usuario ordenadas por fecha."""
+    with get_db(db_path) as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT r.*, g.title AS game_title
+            FROM gameplay_recordings r
+            LEFT JOIN games g ON r.game_id = g.id
+            WHERE r.owner_id = ?
+            ORDER BY r.created_at DESC
+        """, (owner_id,))
+        return [dict(r) for r in cursor.fetchall()]
+
