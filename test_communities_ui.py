@@ -120,6 +120,70 @@ class TestCommunitiesUI(unittest.TestCase):
         self.comm_state.update(0.016)
         self.comm_state.draw(screen)
 
+    def test_07_dynamic_discord_groups_channels_and_invite_links(self):
+        """Verifica canales independientes por grupo, creación de canales [+] y compartición por código/link."""
+        screen = pygame.display.get_surface()
+        self.sm.change_state("GROUPS")
+
+        # 1. Crear un grupo nuevo personalizado con descripción y privacidad
+        self.hub_state.modal_mode = "create"
+        self.hub_state.modal_input = "CLAN CYBERPUNK"
+        self.hub_state.modal_desc_input = "Servidor competitivo de speedruns y torneos."
+        self.hub_state.modal_privacy = "private"
+        self.hub_state._confirm_modal()
+
+        created_grp = self.hub_state.groups[0]
+        self.assertEqual(created_grp["name"], "CLAN CYBERPUNK")
+        self.assertTrue(created_grp.get("invite_code"))
+        self.assertTrue(created_grp.get("invite_link", "").startswith("https://"))
+        self.assertTrue(created_grp.get("invite_uri", "").startswith("cci://invite/"))
+
+        # Renderizar tarjeta procedural y modal de compartir código/link
+        self.hub_state.modal_mode = "share"
+        self.hub_state.draw(screen)
+        self.hub_state.modal_mode = None
+
+        # 2. Verificar que Sakura Club, Da Vinci Team y Clan Cyberpunk tienen canales distintos
+        self.sm.change_state("COMMUNITY", community_id="sakura_club")
+        sakura_text_names = [c[0] for c in self.comm_state.text_channels]
+        self.assertIn("galeria-pixel", sakura_text_names)
+        self.assertNotIn("dev-log", sakura_text_names)
+        self.comm_state.draw(screen)
+
+        self.sm.change_state("COMMUNITY", community_id="da_vinci_team")
+        davinci_text_names = [c[0] for c in self.comm_state.text_channels]
+        self.assertIn("dev-log", davinci_text_names)
+        self.assertNotIn("galeria-pixel", davinci_text_names)
+        self.comm_state.draw(screen)
+
+        # 3. Entrar al grupo creado por el usuario y crear un canal de texto y una sala de voz propios con [+]
+        self.sm.change_state("COMMUNITY", community_id=created_grp["id"])
+        self.comm_state.modal_mode = "create_text_channel"
+        self.comm_state.modal_input = "estrategias-boss"
+        self.comm_state.modal_topic_input = "Guías para vencer jefes finales"
+        self.comm_state._confirm_modal()
+
+        custom_text_names = [c[0] for c in self.comm_state.text_channels]
+        self.assertIn("estrategias-boss", custom_text_names)
+        self.assertEqual(self.comm_state.current_channel, "estrategias-boss")
+
+        self.comm_state.modal_mode = "create_voice_channel"
+        self.comm_state.modal_input = "Raid Nocturno"
+        self.comm_state._confirm_modal()
+        custom_voice_names = [c[0] for c in self.comm_state.voice_channels]
+        self.assertIn("Raid Nocturno", custom_voice_names)
+
+        # El canal creado en Clan Cyberpunk NO debe aparecer en Sakura Club
+        self.sm.change_state("COMMUNITY", community_id="sakura_club")
+        self.assertNotIn("estrategias-boss", [c[0] for c in self.comm_state.text_channels])
+
+        # 4. Unirse mediante un link completo de invitación (https://.../invite/CODIGO)
+        self.sm.change_state("GROUPS")
+        self.hub_state.modal_mode = "join"
+        self.hub_state.modal_input = created_grp["invite_link"]
+        self.hub_state._confirm_modal()
+        self.assertEqual(self.hub_state.groups[0]["name"], "CLAN CYBERPUNK")
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -72,7 +72,9 @@ jobs:
           assert report["total_failed"] == 0, f"Failures: {report['total_failed']}"
           assert report["total_errors"] == 0, f"Errors: {report['total_errors']}"
           assert report["total_skipped"] == 0, f"Skips prohibited: {report['total_skipped']}"
-          assert report["total_passed"] == report["total_run"] == 192, f"Passed {report['total_passed']}/{report['total_run']}"
+          assert report["total_passed"] == report["total_run"] and report["total_passed"] >= 192, (
+              f"Passed {report['total_passed']}/{report['total_run']}"
+          )
 
           audit_suite = [s for s in report["suites"] if s["suite"] == "test_communities_merge_audit.py"][0]
           t11 = [c for c in audit_suite["test_cases"] if "test_11_live_docker_caddy_tls" in c["id"]]
