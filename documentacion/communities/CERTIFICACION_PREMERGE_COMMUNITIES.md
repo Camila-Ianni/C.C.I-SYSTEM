@@ -3,7 +3,7 @@
 **Fecha:** 2026-11-06  
 **Rama Auditada:** `feature/communities-phase0-design`  
 **Rama Destino (Merge Target):** `main`  
-**Estado de Auditoría (Revisión v5):** APROBADO PARA MERGE — Runner Estricto Cero-Skips + TLS CA/Hostname Verificado + Relay TURN Bidireccional entre Peers + Secretos Efímeros + Recreación Aislada de Contenedores  
+**Estado de Auditoría (Revisión v6):** APROBADO PARA MERGE — Proyecto Docker Aislado (`cci_e2e_test_<rand>`) con Protección Verificada de Volúmenes Preexistentes + Runner Estricto Cero-Skips + TLS CA/Hostname Verificado + Relay TURN Bidireccional + CI Python 3.14 Autónomo  
 **Suites Automatizadas:** 22 de 22 suites ejecutadas (`192 / 192` pruebas aprobadas, `0` fallidas, `0` errores, `0` omitidas / `total_skipped: 0`)
 
 ---
@@ -58,11 +58,13 @@ Se confirma explícitamente que la rama `feature/communities-phase0-design` cons
   2. Además, `test_11` verifica en tiempo de ejecución `docker exec cci_communities_api python --version` (`Python 3.14.x`) dentro del contenedor Linux activo.
   3. El workflow incluye un paso de compuerta explícito (`Verify Zero Skips and Mandatory Docker E2E Execution in Report`) que falla si `total_skipped != 0` o si `test_11` no registra `"status": "PASS"`, y publica `evaluations_report.json` como artifact vinculado al SHA (`evaluations-report-${{ github.sha }}`).
 
-### 2.5 [P2] Aislamiento por Ejecución (`--build --force-recreate` + Teardown `down -v`) y Secretos Efímeros
-- **Hallazgo v5**: `test_11` podía reutilizar contenedores previos y empleaba secretos de prueba estáticos.
+### 2.5 [P1/P2 Revisión v6] Aislamiento de Proyecto Docker (`COMPOSE_PROJECT_NAME` Único), Parametrización de Contenedores y Protección de Volúmenes Persistentes
+- **Hallazgo v5/v6**: `test_11` ejecutaba `docker compose down -v --remove-orphans` sobre el proyecto por defecto y con nombres de contenedores fijos (`cci_communities_*`), lo que implicaba riesgo de detener contenedores o borrar volúmenes persistentes (`deploy_cci_app_data`) de una instalación previa.
 - **Solución Aplicada**:
-  1. Tanto en `test_10`, `test_11` como en `.github/workflows/ci-communities-audit.yml` se eliminaron todos los secretos estáticos: cada ejecución genera secretos aleatorios efímeros de 256 bits mediante `secrets.token_hex(32)`.
-  2. `test_11` ejecuta `docker compose down -v --remove-orphans` antes de iniciar, levanta el stack desde cero con `docker compose up -d --build --force-recreate`, inspecciona el contenedor `cci_communities_api` para confirmar que tiene inyectado el `CCI_SECRET_KEY` efímero recién generado, y ejecuta `docker compose down -v --remove-orphans` en un bloque `finally:` al terminar.
+  1. En [`deploy/docker-compose.communities.yml`](file:///Users/cami/Desktop/C.C.I%20SYSTEM/deploy/docker-compose.communities.yml) se parametrizaron los nombres de contenedores con `${CCI_CONTAINER_PREFIX:-cci_communities}_api`, `_livekit`, `_coturn` y `_caddy`, así como los puertos publicados (`API_HOST_PORT`, `CADDY_HTTP_PORT`, `CADDY_HTTPS_PORT`, `LIVEKIT_HTTP_PORT`, `LIVEKIT_RTC_TCP_PORT`, `TURN_PORT`).
+  2. En [`test_11`](file:///Users/cami/Desktop/C.C.I%20SYSTEM/test_communities_merge_audit.py#L719-L760), cada corrida genera un proyecto aislado único `test_project = f"cci_e2e_test_{secrets.token_hex(4)}"`, pasa `-p {test_project}` y `CCI_CONTAINER_PREFIX={test_project}`, y utiliza puertos de test aislados (`18080`, `18443`, `17880`, `17881`, `15050`).
+  3. **Verificación explícita de no eliminación de volúmenes preexistentes**: Antes de iniciar el stack de test, `test_11` garantiza la existencia de los volúmenes preexistentes `deploy_cci_app_data` y `cci_preexisting_prod_guard_vol`; antes del teardown comprueba `self.assertIn("_test_", test_project)` y `self.assertTrue(test_project.startswith("cci_e2e_test_"))`, ejecuta `down -v` **únicamente** sobre `-p {test_project}`, y verifica con `docker volume inspect` que `deploy_cci_app_data` y `cci_preexisting_prod_guard_vol` permanecen intactos tras el teardown.
+  4. **Autonomía en CI (`ubuntu-latest`) y Trazabilidad SHA**: Se dotó a [`test_phase2.py`](file:///Users/cami/Desktop/C.C.I%20SYSTEM/test_phase2.py) y [`test_phase3.py`](file:///Users/cami/Desktop/C.C.I%20SYSTEM/test_phase3.py) de arranque automático de `web/app.py` en `setUpClass` cuando el puerto `5050` no está activo en runners limpios de GitHub Actions, y se añadió `git_code_tree_sha256` en [`run_all_evaluations.py`](file:///Users/cami/Desktop/C.C.I%20SYSTEM/run_all_evaluations.py) junto con la verificación `report["git_commit_sha"] == os.environ["GITHUB_SHA"]` en [`.github/workflows/ci-communities-audit.yml`](file:///Users/cami/Desktop/C.C.I%20SYSTEM/.github/workflows/ci-communities-audit.yml).
 
 ---
 

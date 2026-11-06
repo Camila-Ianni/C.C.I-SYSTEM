@@ -716,47 +716,69 @@ class TestCommunitiesMergeAudit(unittest.TestCase):
         livekit_key = "AP" + secrets.token_hex(11)
         livekit_secret = secrets.token_hex(32)
 
+        # P1 (Revisión v6): Aislar completamente el stack de prueba mediante un COMPOSE_PROJECT_NAME y CCI_CONTAINER_PREFIX únicos
+        # para proteger cualquier contenedor o volumen persistente de desarrollo/producción (ej. deploy_cci_app_data).
+        test_project = f"cci_e2e_test_{secrets.token_hex(4)}"
+        self.assertIn("_test_", test_project)
+        self.assertTrue(test_project.startswith("cci_e2e_test_"))
+        self.assertNotIn(test_project, ("deploy", "cci", "cci_communities", "production"))
+
+        api_container = f"{test_project}_api"
+        livekit_container = f"{test_project}_livekit"
+        coturn_container = f"{test_project}_coturn"
+        caddy_container = f"{test_project}_caddy"
+        caddy_https_port = 18443
+
+        # Crear volúmenes centinela preexistentes del entorno para demostrar que el teardown del test NO los elimina
+        sentinel_vols = ("deploy_cci_app_data", "cci_preexisting_prod_guard_vol")
+        for svol in sentinel_vols:
+            subprocess.run(["docker", "volume", "create", svol], capture_output=True, text=True, check=True)
+
         compose_file = str(ROOT_DIR / "deploy" / "docker-compose.communities.yml")
         env_docker = {
             **os.environ,
+            "COMPOSE_PROJECT_NAME": test_project,
+            "CCI_CONTAINER_PREFIX": test_project,
             "CCI_SECRET_KEY": secret_key,
             "LIVEKIT_API_KEY": livekit_key,
             "LIVEKIT_API_SECRET": livekit_secret,
             "TURN_SECRET": turn_secret,
             "CADDY_TLS_MODE": "internal",
-            "CADDY_HTTP_PORT": "8080",
-            "CADDY_HTTPS_PORT": "8443",
+            "CADDY_HTTP_PORT": "18080",
+            "CADDY_HTTPS_PORT": str(caddy_https_port),
             "API_HOST_PORT": "15050",
+            "LIVEKIT_HTTP_PORT": "17880",
+            "LIVEKIT_RTC_TCP_PORT": "17881",
         }
-
-        # P2: Forzar reconstrucción y recreación limpia del stack por ejecución y garantizar teardown al finalizar
-        subprocess.run(
-            ["docker", "compose", "-f", compose_file, "down", "-v", "--remove-orphans"],
-            env=env_docker,
-            capture_output=True,
-            timeout=60,
-            check=False,
-        )
 
         try:
             subprocess.run(
-                ["docker", "compose", "-f", compose_file, "up", "-d", "--build", "--force-recreate"],
+                ["docker", "compose", "-p", test_project, "-f", compose_file, "up", "-d", "--build", "--force-recreate"],
                 env=env_docker,
                 timeout=180,
                 check=True,
             )
 
-            # 1. Verificar que los 4 contenedores recién recreados estén en ejecución, con el secreto efímero actual y runtime Python 3.14
-            for cname in ("cci_communities_api", "cci_communities_livekit", "cci_communities_coturn", "cci_communities_caddy"):
+            # 1. Verificar que los 4 contenedores aislados estén en ejecución, con el secreto efímero actual y runtime Python 3.14
+            for cname in (api_container, livekit_container, coturn_container, caddy_container):
                 st = subprocess.check_output(
                     ["docker", "inspect", "--format", "{{.State.Running}}", cname], text=True
                 ).strip()
                 self.assertEqual(st, "true", f"El contenedor {cname} no está en ejecución")
 
+            # Verificar que el volumen creado pertenece exclusivamente al proyecto efímero de test
+            ephemeral_vol_inspect = subprocess.run(
+                ["docker", "volume", "inspect", f"{test_project}_cci_app_data"],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            self.assertEqual(ephemeral_vol_inspect.returncode, 0)
+
             api_health = "starting"
             for _ in range(30):
                 api_health = subprocess.check_output(
-                    ["docker", "inspect", "--format", "{{.State.Health.Status}}", "cci_communities_api"], text=True
+                    ["docker", "inspect", "--format", "{{.State.Health.Status}}", api_container], text=True
                 ).strip()
                 if api_health == "healthy":
                     break
@@ -765,12 +787,12 @@ class TestCommunitiesMergeAudit(unittest.TestCase):
 
             # Confirmar que el contenedor no fue reutilizado verificando el secreto efímero inyectado y versión de Python
             api_env_dump = subprocess.check_output(
-                ["docker", "inspect", "--format", "{{range .Config.Env}}{{println .}}{{end}}", "cci_communities_api"],
+                ["docker", "inspect", "--format", "{{range .Config.Env}}{{println .}}{{end}}", api_container],
                 text=True,
             )
             self.assertIn(f"CCI_SECRET_KEY={secret_key}", api_env_dump)
             container_py_ver = subprocess.check_output(
-                ["docker", "exec", "cci_communities_api", "python", "--version"], text=True
+                ["docker", "exec", api_container, "python", "--version"], text=True
             ).strip()
             self.assertTrue(container_py_ver.startswith("Python 3.14"), f"Runtime inesperado en contenedor: {container_py_ver}")
 
@@ -778,11 +800,10 @@ class TestCommunitiesMergeAudit(unittest.TestCase):
                 docker_token = create_access_token("u_docker_audit", "DockerAudit")
 
             # P1: Validación estricta de certificado TLS (CERT_REQUIRED + check_hostname=True) contra la CA local de Caddy
-            # Disparar apretón inicial para que Caddy aprovisione su PKI interna si el volumen acaba de crearse
             bootstrap_ctx = ssl._create_unverified_context()
             for _ in range(15):
                 try:
-                    with socket.create_connection(("127.0.0.1", 8443), timeout=3) as raw_b:
+                    with socket.create_connection(("127.0.0.1", caddy_https_port), timeout=3) as raw_b:
                         with bootstrap_ctx.wrap_socket(raw_b, server_hostname="api.ccisystem.org"):
                             break
                 except OSError:
@@ -791,7 +812,7 @@ class TestCommunitiesMergeAudit(unittest.TestCase):
             root_ca_pem = ""
             for _ in range(15):
                 ca_proc = subprocess.run(
-                    ["docker", "exec", "cci_communities_caddy", "cat", "/data/caddy/pki/authorities/local/root.crt"],
+                    ["docker", "exec", caddy_container, "cat", "/data/caddy/pki/authorities/local/root.crt"],
                     capture_output=True,
                     text=True,
                     check=False,
@@ -810,16 +831,16 @@ class TestCommunitiesMergeAudit(unittest.TestCase):
             # Prueba negativa 1: Sin la CA raíz confiable debe fallar con SSLCertVerificationError
             untrusted_ctx = ssl.create_default_context()
             with self.assertRaises(ssl.SSLCertVerificationError):
-                with socket.create_connection(("127.0.0.1", 8443), timeout=5) as raw_u:
+                with socket.create_connection(("127.0.0.1", caddy_https_port), timeout=5) as raw_u:
                     untrusted_ctx.wrap_socket(raw_u, server_hostname="api.ccisystem.org")
 
             # Prueba negativa 2: Hostname no coincidente debe ser rechazado en el handshake TLS
             with self.assertRaises(ssl.SSLError):
-                with socket.create_connection(("127.0.0.1", 8443), timeout=5) as raw_bad_host:
+                with socket.create_connection(("127.0.0.1", caddy_https_port), timeout=5) as raw_bad_host:
                     verified_ctx.wrap_socket(raw_bad_host, server_hostname="untrusted.invalid.example")
 
             def _caddy_https(method: str, path: str, body=None, headers=None):
-                raw_s = socket.create_connection(("127.0.0.1", 8443), timeout=5)
+                raw_s = socket.create_connection(("127.0.0.1", caddy_https_port), timeout=5)
                 tls_s = verified_ctx.wrap_socket(raw_s, server_hostname="api.ccisystem.org")
                 peercert = tls_s.getpeercert()
                 self.assertIsNotNone(peercert)
@@ -854,7 +875,7 @@ class TestCommunitiesMergeAudit(unittest.TestCase):
             self.assertEqual(health_json["database"], "connected")
 
             # 3. Handshake WebSocket WSS (HTTP/1.1 101 Switching Protocols) con certificado y hostname verificados
-            raw_ws = socket.create_connection(("127.0.0.1", 8443), timeout=5)
+            raw_ws = socket.create_connection(("127.0.0.1", caddy_https_port), timeout=5)
             tls_ws = verified_ctx.wrap_socket(raw_ws, server_hostname="api.ccisystem.org")
             try:
                 self.assertIn(("DNS", "api.ccisystem.org"), tls_ws.getpeercert().get("subjectAltName", ()))
@@ -874,7 +895,7 @@ class TestCommunitiesMergeAudit(unittest.TestCase):
             finally:
                 tls_ws.close()
 
-            # 4. Crear comunidad y mensaje por HTTPS, ejecutar `docker restart cci_communities_api` y verificar persistencia en volumen real
+            # 4. Crear comunidad y mensaje por HTTPS, ejecutar `docker restart <api_container>` y verificar persistencia en volumen real
             st_c, _, bd_c = _caddy_https(
                 "POST",
                 "/api/v1/communities",
@@ -895,17 +916,17 @@ class TestCommunitiesMergeAudit(unittest.TestCase):
             st_m, _, _ = _caddy_https(
                 "POST",
                 f"/api/v1/channels/{ch_id}/messages",
-                body={"content": "Persistencia real en volumen Docker tras docker restart cci_communities_api"},
+                body={"content": "Persistencia real en volumen Docker tras docker restart"},
                 headers={"Authorization": f"Bearer {docker_token}"},
             )
             self.assertIn("201", st_m)
 
-            subprocess.run(["docker", "restart", "cci_communities_api"], timeout=30, check=True)
+            subprocess.run(["docker", "restart", api_container], timeout=30, check=True)
             h_stat = "starting"
             for _ in range(25):
                 time.sleep(1)
                 h_stat = subprocess.check_output(
-                    ["docker", "inspect", "--format", "{{.State.Health.Status}}", "cci_communities_api"], text=True
+                    ["docker", "inspect", "--format", "{{.State.Health.Status}}", api_container], text=True
                 ).strip()
                 if h_stat == "healthy":
                     break
@@ -1028,14 +1049,21 @@ class TestCommunitiesMergeAudit(unittest.TestCase):
                 peer_a.close()
                 peer_b.close()
         finally:
-            # P2: Limpiar contenedores y volúmenes efímeros al finalizar la prueba
+            # P1 (Revisión v6): Verificar que el project name sea estrictamente de test antes de ejecutar down -v
+            self.assertIn("_test_", test_project)
+            self.assertTrue(test_project.startswith("cci_e2e_test_"))
             subprocess.run(
-                ["docker", "compose", "-f", compose_file, "down", "-v", "--remove-orphans"],
+                ["docker", "compose", "-p", test_project, "-f", compose_file, "down", "-v", "--remove-orphans"],
                 env=env_docker,
                 capture_output=True,
                 timeout=60,
                 check=False,
             )
+            # Comprobar que los volúmenes preexistentes del entorno NO se eliminaron tras el teardown
+            for svol in sentinel_vols:
+                chk = subprocess.run(["docker", "volume", "inspect", svol], capture_output=True, text=True, check=False)
+                self.assertEqual(chk.returncode, 0, f"El volumen preexistente {svol} fue eliminado indebidamente")
+            subprocess.run(["docker", "volume", "rm", "cci_preexisting_prod_guard_vol"], capture_output=True, check=False)
 
 
 if __name__ == "__main__":

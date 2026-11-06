@@ -56,13 +56,18 @@ jobs:
         run: |
           python run_all_evaluations.py
 
-      - name: Verify Zero Skips and Mandatory Docker E2E Execution in Report
+      - name: Verify Zero Skips, Exact Commit SHA and Mandatory Docker E2E Execution in Report
         run: |
           python - <<'PY'
-          import json, sys
+          import json, os, sys
           from pathlib import Path
 
           report = json.loads(Path("evaluations_report.json").read_text(encoding="utf-8"))
+          expected_sha = os.environ.get("GITHUB_SHA", "").strip()
+          if expected_sha:
+              assert report["git_commit_sha"] == expected_sha, (
+                  f"Report SHA {report['git_commit_sha']} != GITHUB_SHA {expected_sha}"
+              )
           assert report["suites_executed"] == 22, f"Expected 22 suites, got {report['suites_executed']}"
           assert report["total_failed"] == 0, f"Failures: {report['total_failed']}"
           assert report["total_errors"] == 0, f"Errors: {report['total_errors']}"
@@ -72,7 +77,7 @@ jobs:
           audit_suite = [s for s in report["suites"] if s["suite"] == "test_communities_merge_audit.py"][0]
           t11 = [c for c in audit_suite["test_cases"] if "test_11_live_docker_caddy_tls" in c["id"]]
           assert len(t11) == 1 and t11[0]["status"] == "PASS", f"Mandatory Docker E2E test_11 did not pass: {t11}"
-          print("CI Gate Verified: 192/192 PASS, 0 SKIP, test_11 PASS.")
+          print("CI Gate Verified: 192/192 PASS, 0 SKIP, test_11 PASS, SHA=", report["git_commit_sha"])
           PY
 
       - name: Upload Evaluation Report Artifact

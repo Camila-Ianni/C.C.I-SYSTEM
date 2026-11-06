@@ -16,10 +16,30 @@ import cci_sync
 
 
 class TestPhase2Backend(unittest.TestCase):
+    _srv = None
+
     @classmethod
     def setUpClass(cls):
+        import socket
+        import threading
+        from werkzeug.serving import make_server
+        from web.app import app as web_app
+
         # Asegurar inicialización de base de datos
         cci_database.init_db()
+        try:
+            with socket.create_connection(("127.0.0.1", 5050), timeout=0.5):
+                pass
+        except OSError:
+            cls._srv = make_server("127.0.0.1", 5050, web_app, threaded=True)
+            threading.Thread(target=cls._srv.serve_forever, daemon=True).start()
+
+    @classmethod
+    def tearDownClass(cls):
+        if cls._srv is not None:
+            cls._srv.shutdown()
+            cls._srv.server_close()
+            cls._srv = None
 
     def test_01_database_seed_and_games(self):
         games = cci_database.get_all_games()

@@ -7,7 +7,7 @@ services:
     build:
       context: ..
       dockerfile: deploy/Dockerfile.backend
-    container_name: cci_communities_api
+    container_name: ${CCI_CONTAINER_PREFIX:-cci_communities}_api
     restart: unless-stopped
     depends_on:
       livekit:
@@ -44,15 +44,15 @@ services:
 
   livekit:
     image: livekit/livekit-server:v1.7.2
-    container_name: cci_communities_livekit
+    container_name: ${CCI_CONTAINER_PREFIX:-cci_communities}_livekit
     restart: unless-stopped
     command: --config /etc/livekit.yaml
     volumes:
       - ./livekit.yaml:/etc/livekit.yaml:ro
     ports:
-      - "7880:7880"
-      - "7881:7881"
-      - "50000-50020:50000-50020/udp"
+      - "${LIVEKIT_HTTP_PORT:-7880}:7880"
+      - "${LIVEKIT_RTC_TCP_PORT:-7881}:7881"
+      - "${LIVEKIT_UDP_RANGE:-50000-50020}:50000-50020/udp"
     environment:
       LIVEKIT_KEYS: "${LIVEKIT_API_KEY:?Defina LIVEKIT_API_KEY en .env}: ${LIVEKIT_API_SECRET:?Defina LIVEKIT_API_SECRET en .env}"
     networks:
@@ -60,7 +60,7 @@ services:
 
   coturn:
     image: coturn/coturn:4.6.2-alpine
-    container_name: cci_communities_coturn
+    container_name: ${CCI_CONTAINER_PREFIX:-cci_communities}_coturn
     restart: unless-stopped
     command:
       - "-c"
@@ -68,9 +68,9 @@ services:
       - "--static-auth-secret=${TURN_SECRET:?Defina TURN_SECRET en .env}"
       - "--realm=${TURN_DOMAIN:-turn.ccisystem.org}"
     ports:
-      - "3478:3478/udp"
-      - "3478:3478/tcp"
-      - "49152-49172:49152-49172/udp"
+      - "${TURN_PORT:-3478}:3478/udp"
+      - "${TURN_PORT:-3478}:3478/tcp"
+      - "${TURN_RELAY_RANGE:-49152-49172}:49152-49172/udp"
     volumes:
       - ./coturn.conf:/etc/coturn/turnserver.conf:ro
     networks:
@@ -78,7 +78,7 @@ services:
 
   caddy:
     image: caddy:2.7-alpine
-    container_name: cci_communities_caddy
+    container_name: ${CCI_CONTAINER_PREFIX:-cci_communities}_caddy
     restart: unless-stopped
     environment:
       API_DOMAIN: ${API_DOMAIN:-api.ccisystem.org}

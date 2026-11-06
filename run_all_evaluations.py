@@ -227,6 +227,10 @@ def main():
             f"  {sym} {suite_name:35} | {res['passed']:3}/{res['tests_run']:<3} pass "
             f"| skip={res['skipped']} | {res['elapsed']:6}s"
         )
+        if not res["success"]:
+            print(f"    --- DETALLE DE FALLO EN {suite_name} ---")
+            for line in res["raw_output"].splitlines()[-40:]:
+                print(f"    {line}")
         results.append(res)
 
     print("\n" + "=" * 88)
@@ -266,10 +270,24 @@ def main():
         docker_ver = subprocess.check_output(["docker", "--version"], cwd=str(ROOT_DIR), text=True).strip()
     except Exception:
         docker_ver = "unavailable"
+    try:
+        tracked = subprocess.check_output(["git", "ls-files"], cwd=str(ROOT_DIR), text=True).splitlines()
+        tree_hasher = hashlib.sha256()
+        for rel in sorted(tracked):
+            if rel == "evaluations_report.json":
+                continue
+            fp = ROOT_DIR / rel
+            if fp.is_file():
+                tree_hasher.update(rel.encode("utf-8") + b"\x00")
+                tree_hasher.update(hashlib.sha256(fp.read_bytes()).digest())
+        git_code_tree_sha256 = tree_hasher.hexdigest()
+    except Exception:
+        git_code_tree_sha256 = "unknown"
 
     report = {
         "timestamp": datetime.datetime.now().isoformat(),
         "git_commit_sha": git_sha,
+        "git_code_tree_sha256": git_code_tree_sha256,
         "git_branch": git_branch,
         "python_interpreter": sys.executable,
         "python_version": sys.version,
