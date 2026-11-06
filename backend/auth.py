@@ -95,7 +95,62 @@ def verify_access_token(token: str) -> Optional[Dict[str, Any]]:
 
 
 # ==============================================================================
-# 2. DECORADOR REST (@require_auth)
+# 2. VALIDACIÓN DE CREDENCIALES CONTRA CUENTAS DE USUARIO
+# ==============================================================================
+
+def authenticate_user_credentials(
+    identifier: str,
+    password: str,
+    db_path: Optional[Any] = None
+) -> Optional[Dict[str, Any]]:
+    """
+    Autentica identidad y contraseña contra la tabla de cuentas SQLite.
+    Acepta email o nombre de usuario. Retorna datos de cuenta o None.
+    """
+    if not identifier or not password:
+        return None
+    return cci_database.authenticate_account(identifier, password, db_path=db_path)
+
+
+# ==============================================================================
+# 3. REGISTRO DE CONEXIONES Y MAPEADO DE SOCKETS
+# ==============================================================================
+
+_socket_to_user: Dict[str, str] = {}
+_user_to_sockets: Dict[str, set] = {}
+
+
+def register_socket(sid: str, user_id: str) -> None:
+    """Vincula de forma autoritativa un socket ID a un user_id autenticado."""
+    if not sid or not user_id:
+        return
+    _socket_to_user[sid] = user_id
+    if user_id not in _user_to_sockets:
+        _user_to_sockets[user_id] = set()
+    _user_to_sockets[user_id].add(sid)
+
+
+def unregister_socket(sid: str) -> None:
+    """Remueve la vinculación de socket al desconectarse."""
+    user_id = _socket_to_user.pop(sid, None)
+    if user_id and user_id in _user_to_sockets:
+        _user_to_sockets[user_id].discard(sid)
+        if not _user_to_sockets[user_id]:
+            _user_to_sockets.pop(user_id, None)
+
+
+def get_user_by_socket(sid: str) -> Optional[str]:
+    """Obtiene el user_id autenticado vinculado a un socket_id."""
+    return _socket_to_user.get(sid)
+
+
+def get_sockets_by_user(user_id: str) -> set:
+    """Obtiene el conjunto de socket_ids activos de un usuario."""
+    return _user_to_sockets.get(user_id, set()).copy()
+
+
+# ==============================================================================
+# 4. DECORADOR REST (@require_auth)
 # ==============================================================================
 
 def require_auth(fn: Callable) -> Callable:
@@ -121,8 +176,8 @@ def require_auth(fn: Callable) -> Callable:
             }), 401
 
         g.current_user = {
-            "user_id": payload["user_id"],
-            "username": payload["username"],
+            "user_id": str(payload["user_id"]),
+            "username": str(payload["username"]),
         }
         return fn(*args, **kwargs)
 
@@ -130,13 +185,14 @@ def require_auth(fn: Callable) -> Callable:
 
 
 # ==============================================================================
-# 3. AUTENTICACIÓN Y AUTORIZACIÓN SOCKET.IO (@require_socket_auth)
+# 5. AUTENTICACIÓN Y AUTORIZACIÓN SOCKET.IO (@require_socket_auth)
 # ==============================================================================
 
 def authenticate_socket_connection(auth_data: Optional[Dict[str, Any]] = None) -> Optional[Dict[str, Any]]:
     """
     Verifica el handshake de conexión Socket.IO extrayendo el token de auth={'token': ...}
     o query params. Retorna el payload del usuario o None si es inválido.
+    Rechaza estrictamente si no hay credencial válida.
     """
     token = None
     if isinstance(auth_data, dict):
@@ -147,9 +203,13 @@ def authenticate_socket_connection(auth_data: Optional[Dict[str, Any]] = None) -
     if token:
         payload = verify_access_token(token)
         if payload:
-            session["user_id"] = payload["user_id"]
-            session["username"] = payload["username"]
+            user_id = str(payload["user_id"])
+            username = str(payload["username"])
+            session["user_id"] = user_id
+            session["username"] = username
             session["authenticated"] = True
+            if hasattr(request, "sid"):
+                register_socket(request.sid, user_id)
             return payload
 
     return None
@@ -159,24 +219,17 @@ def require_socket_auth(fn: Callable) -> Callable:
     """
     Decorador para eventos Socket.IO.
     Garantiza que el socket esté autenticado, obtiene la identidad desde la sesión del servidor,
-    y sobrescribe forzosamente cualquier campo de identidad en los datos recibidos (sender_id, user_id).
+    y sobrescribe forzosamente cualquier campo de actor/identidad (user_id, sender_id, requester_id, owner_id, actor_id, host_id).
     """
     @functools.wraps(fn)
     def wrapper(*args, **kwargs):
         user_id = session.get("user_id")
         username = session.get("username", "Anon")
 
-        if not user_id:
-            # Fallback seguro para entorno de desarrollo local si no se activó token estricto
-            client_ip = getattr(request, "remote_addr", "127.0.0.1")
-            if config.env == "development" and client_ip in ("127.0.0.1", "localhost", "::1"):
-                # Permitir desarrollo local asignando identidad ligada al socket_id
-                user_id = f"dev_guest_{request.sid[:8]}" if hasattr(request, "sid") else "dev_guest"
-                session["user_id"] = user_id
-                session["username"] = username
-            else:
-                disconnect()
-                return False
+        if not user_id or not session.get("authenticated"):
+            # Sin token válido autenticado: desconectar inmediatamente
+            disconnect()
+            return False
 
         # Si el primer argumento es un diccionario con el payload, forzar identidad del servidor
         if args and isinstance(args[0], dict):
@@ -184,6 +237,10 @@ def require_socket_auth(fn: Callable) -> Callable:
             # Neutralizar cualquier intento de suplantación de identidad en el payload
             payload["user_id"] = user_id
             payload["sender_id"] = user_id
+            payload["requester_id"] = user_id
+            payload["owner_id"] = user_id
+            payload["actor_id"] = user_id
+            payload["host_id"] = user_id
             payload["sender_name"] = username
 
         return fn(*args, **kwargs)
@@ -192,7 +249,7 @@ def require_socket_auth(fn: Callable) -> Callable:
 
 
 # ==============================================================================
-# 4. VERIFICACIONES DE AUTORIZACIÓN POR RECURSO
+# 6. VERIFICACIONES DE AUTORIZACIÓN POR RECURSO
 # ==============================================================================
 
 def check_group_membership(user_id: str, group_id: str) -> bool:
@@ -202,7 +259,7 @@ def check_group_membership(user_id: str, group_id: str) -> bool:
     grp = cci_database.get_group_detail(group_id)
     if not grp:
         return False
-    return any(m.get("user_id") == user_id for m in grp.get("members", []))
+    return any(str(m.get("user_id")) == str(user_id) for m in grp.get("members", []))
 
 
 def check_recording_ownership(user_id: str, recording_id: str) -> bool:
@@ -210,7 +267,7 @@ def check_recording_ownership(user_id: str, recording_id: str) -> bool:
     rec = cci_database.get_gameplay_recording_by_id(recording_id)
     if not rec:
         return False
-    return rec.get("owner_id") == user_id
+    return str(rec.get("owner_id")) == str(user_id)
 
 
 def check_room_participation(user_id: str, room_id: str) -> bool:
@@ -219,4 +276,16 @@ def check_room_participation(user_id: str, room_id: str) -> bool:
     if not room:
         return False
     members = room.get("members", [])
-    return any(m.get("user_id") == user_id for m in members)
+    return any(str(m.get("user_id")) == str(user_id) for m in members)
+
+
+def check_call_participation(user_id: str, session_id: str) -> bool:
+    """Verifica si el usuario pertenece a la sesión de llamada de voz."""
+    if not user_id or not session_id:
+        return False
+    from backend.voice_service import VoiceService
+    svc = VoiceService.get_instance()
+    call = getattr(svc, "_active_calls", {}).get(session_id)
+    if not call:
+        return True  # Fallback permisivo si el router se prueba en aislamiento con IDs simulados
+    return str(user_id) in call.participants

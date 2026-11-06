@@ -170,6 +170,86 @@ class TestPhase10SecurityAndAuthorization(unittest.TestCase):
         self.assertEqual(len(messages), 0)
         sio_client.disconnect()
 
+    def test_06_token_issuance_requires_valid_credentials(self):
+        """POST /api/v1/auth/token rechaza emisión para IDs arbitrarios sin credenciales reales (P0)."""
+        # 1. Petición solo con user_id elegido arbitrariamente (sin contraseña) -> 401
+        r_spoof = self.client.post("/api/v1/auth/token", json={"user_id": "target_admin"})
+        self.assertEqual(r_spoof.status_code, 401)
+        self.assertIn("Credenciales inválidas", r_spoof.get_json()["error"])
+
+        # 2. Petición con contraseña errónea -> 401
+        r_bad_pwd = self.client.post("/api/v1/auth/token", json={
+            "identifier": "target_admin",
+            "password": "wrong_password_xyz"
+        })
+        self.assertEqual(r_bad_pwd.status_code, 401)
+
+        # 3. Registrar cuenta legítima en base de datos
+        r_reg = self.client.post("/api/v1/auth/register", json={
+            "email": "pilot_val@ccisystem.org",
+            "username": "pilot_val",
+            "password": "SuperSecretPassword123!"
+        })
+        self.assertEqual(r_reg.status_code, 201)
+
+        # 4. Emisión legítima con credenciales válidas -> 200 OK
+        r_ok = self.client.post("/api/v1/auth/token", json={
+            "identifier": "pilot_val@ccisystem.org",
+            "password": "SuperSecretPassword123!"
+        })
+        self.assertEqual(r_ok.status_code, 200)
+        token_data = r_ok.get_json()
+        self.assertTrue(token_data["success"])
+        self.assertIsNotNone(token_data.get("token"))
+        # El token emitido debe ser verificable criptográficamente
+        verified = verify_access_token(token_data["token"])
+        self.assertIsNotNone(verified)
+        self.assertEqual(verified["username"].upper(), "PILOT_VAL")
+
+    def test_07_socketio_handshake_rejection_without_token(self):
+        """Socket.IO rechaza handshake de clientes sin token o con token manipulado (P0)."""
+        # 1. Handshake sin cabecera/parámetro de autenticación -> Rechazado
+        client_no_auth = socketio.test_client(app)
+        self.assertFalse(client_no_auth.is_connected(), "Handshake sin token debe ser rechazado")
+
+        # 2. Handshake con token manipulado -> Rechazado
+        client_bad_auth = socketio.test_client(app, auth={"token": "fake.invalid.token"})
+        self.assertFalse(client_bad_auth.is_connected(), "Handshake con token manipulado debe ser rechazado")
+
+        # 3. Handshake con token válido -> Aceptado
+        valid_token = create_access_token("u_verified", "VerifiedUser")
+        client_ok = socketio.test_client(app, auth={"token": valid_token})
+        self.assertTrue(client_ok.is_connected(), "Handshake con token válido debe ser aceptado")
+        client_ok.disconnect()
+
+    def test_08_rest_global_unauthenticated_rejection_401(self):
+        """Todas las rutas privadas REST rechazan peticiones sin autenticación con 401 (P0)."""
+        endpoints = [
+            ("POST", "/api/v1/friends/request", {"addressee_id": "pilot_x"}),
+            ("POST", "/api/v1/friends/respond", {"requester_id": "pilot_x", "action": "accept"}),
+            ("GET", "/api/v1/friends/pilot_x", None),
+            ("POST", "/api/v1/presence", {"status": "online"}),
+            ("POST", "/api/v1/groups/create", {"name": "Test Group"}),
+            ("POST", "/api/v1/chat/send", {"group_id": "g1", "body": "test"}),
+            ("POST", "/api/v1/multiplayer/rooms/create", {"game_id": "davinci"}),
+            ("POST", "/api/v1/voice/calls/start", {"group_id": "g1"}),
+            ("GET", "/api/v1/recordings/status", None),
+            ("DELETE", "/api/v1/recordings/dummy_clip", None),
+        ]
+
+        for method, path, payload in endpoints:
+            if method == "POST":
+                resp = self.client.post(path, json=payload)
+            elif method == "GET":
+                resp = self.client.get(path)
+            elif method == "DELETE":
+                resp = self.client.delete(path)
+
+            self.assertEqual(
+                resp.status_code, 401,
+                f"Ruta privada {method} {path} debe retornar 401 Unauthorized sin token Bearer"
+            )
+
 
 if __name__ == "__main__":
     unittest.main()

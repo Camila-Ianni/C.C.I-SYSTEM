@@ -185,6 +185,10 @@ class VoiceService:
 
         return {"success": True, "message": "Llamada finalizada."}
 
+    def get_call_session(self, session_id: str) -> Optional[LiveCallSession]:
+        """Obtiene la sesión de llamada activa por su ID."""
+        return self._active_calls.get(session_id)
+
     def get_active_call_for_group(self, group_id: str) -> Optional[LiveCallSession]:
         """Busca llamada en curso para un grupo."""
         for call in self._active_calls.values():

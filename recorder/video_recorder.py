@@ -168,7 +168,7 @@ class GameplayVideoRecorder:
                 "error": "Archivo de video corrupto o sin frames capturados.",
             }
 
-        # Verificar cabecera MP4 (ISO Base Media File Format: ftyp)
+        # Verificar cabecera MP4 (ISO Base Media File Format: ftyp/mdat/moov)
         try:
             with open(filepath, "rb") as f:
                 header = f.read(64)
@@ -181,6 +181,26 @@ class GameplayVideoRecorder:
             return {
                 "success": False,
                 "error": f"Error leyendo contenedor de video: {exc}",
+            }
+
+        # Validación y decodificación real del archivo MP4 mediante OpenCV VideoCapture
+        cap = cv2.VideoCapture(str(filepath))
+        is_opened = cap.isOpened()
+        ret, frame = cap.read() if is_opened else (False, None)
+        decoded_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT)) if is_opened else 0
+        decoded_fps = cap.get(cv2.CAP_PROP_FPS) if is_opened else 0.0
+        cap.release()
+
+        if not is_opened or not ret or frame is None:
+            try:
+                filepath.unlink(missing_ok=True)
+                if thumbpath and thumbpath.exists():
+                    thumbpath.unlink(missing_ok=True)
+            except Exception:
+                pass
+            return {
+                "success": False,
+                "error": "El archivo MP4 no es reproducible o falló la decodificación de video.",
             }
 
         effective_fps = round(self._frames_written / duration, 2)

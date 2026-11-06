@@ -30,11 +30,24 @@ class AppConfig:
     @classmethod
     def from_env(cls) -> AppConfig:
         env = os.getenv("CCI_ENV", "development")
-        secret = os.getenv("CCI_SECRET_KEY", "")
+        secret = os.getenv("CCI_SECRET_KEY", "").strip()
+        data_dir = ROOT / ".cci-user-data"
+        data_dir.mkdir(parents=True, exist_ok=True)
+        key_file = data_dir / ".secret_key"
+
         if not secret or secret == "cci-secret-key-change-in-production":
             if env == "production":
-                import secrets
-                secret = secrets.token_hex(32)
+                # En producción se requiere persistencia entre workers y reinicios
+                if key_file.exists():
+                    secret = key_file.read_text(encoding="utf-8").strip()
+                else:
+                    import secrets
+                    secret = secrets.token_hex(32)
+                    key_file.write_text(secret, encoding="utf-8")
+                    try:
+                        key_file.chmod(0o600)
+                    except Exception:
+                        pass
             else:
                 secret = "cci-dev-secret-key-0123456789abcdef0123456789abcdef"
 

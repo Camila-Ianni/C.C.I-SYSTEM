@@ -17,6 +17,7 @@ import unittest
 from pathlib import Path
 import cci_database
 from backend.friends_service import FriendsService, GroupRole, PresenceStatus
+from backend.auth import create_access_token
 from backend.server import app
 
 
@@ -197,38 +198,48 @@ class TestPhase2RESTEndpoints(unittest.TestCase):
         self.temp_dir.cleanup()
 
     def test_rest_friend_flow(self):
-        # 1. Enviar solicitud
+        token_a = create_access_token("rest_a", "RestA")
+        token_b = create_access_token("rest_b", "RestB")
+
+        # 0. Verificación negativa: sin token debe fallar con 401
+        r_unauth = self.client.post("/api/v1/friends/request", json={"addressee_id": "rest_b"})
+        self.assertEqual(r_unauth.status_code, 401)
+
+        # 1. Enviar solicitud autenticada
         r = self.client.post("/api/v1/friends/request", json={
-            "requester_id": "rest_a",
             "addressee_id": "rest_b"
-        })
+        }, headers={"Authorization": f"Bearer {token_a}"})
         self.assertEqual(r.status_code, 200)
 
         # 2. Consultar lista
-        r_get = self.client.get("/api/v1/friends/rest_b")
+        r_get = self.client.get("/api/v1/friends/rest_b", headers={"Authorization": f"Bearer {token_b}"})
         self.assertEqual(r_get.status_code, 200)
         data = r_get.get_json()
         self.assertEqual(len(data["pending"]["incoming"]), 1)
 
         # 3. Aceptar solicitud
         r_acc = self.client.post("/api/v1/friends/respond", json={
-            "user_id": "rest_b",
             "requester_id": "rest_a",
             "action": "accept"
-        })
+        }, headers={"Authorization": f"Bearer {token_b}"})
         self.assertEqual(r_acc.status_code, 200)
 
     def test_rest_group_flow(self):
-        # Crear grupo
+        token_api = create_access_token("user_api", "UserApi")
+
+        # 0. Verificación negativa: sin token debe fallar con 401
+        r_unauth = self.client.post("/api/v1/groups/create", json={"name": "Grupo REST"})
+        self.assertEqual(r_unauth.status_code, 401)
+
+        # Crear grupo autenticado
         r = self.client.post("/api/v1/groups/create", json={
             "name": "Grupo REST",
-            "owner_id": "user_api"
-        })
+        }, headers={"Authorization": f"Bearer {token_api}"})
         self.assertEqual(r.status_code, 200)
         grp_id = r.get_json()["group"]["id"]
 
         # Consultar grupo
-        r_get = self.client.get(f"/api/v1/groups/{grp_id}")
+        r_get = self.client.get(f"/api/v1/groups/{grp_id}", headers={"Authorization": f"Bearer {token_api}"})
         self.assertEqual(r_get.status_code, 200)
         self.assertEqual(r_get.get_json()["group"]["name"], "Grupo REST")
 

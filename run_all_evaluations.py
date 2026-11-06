@@ -100,15 +100,34 @@ def main():
     print(f"Raíz del Proyecto: {ROOT_DIR}\n")
 
     results = []
+    missing_suites = 0
 
     print("[1/2] Ejecutando Suites Principales de la Consola y Evolución (Fases 1-10)...")
     for suite_name in CORE_EVOLUTION_SUITES:
         suite_path = ROOT_DIR / suite_name
         if not suite_path.is_file():
-            print(f"  [WARN] No encontrada: {suite_name}")
+            print(f"  [CRIT] Suite requerida ausente: {suite_name}")
+            missing_suites += 1
+            results.append({
+                "suite": suite_name,
+                "returncode": 1,
+                "tests_run": 0,
+                "passed": 0,
+                "failures": 1,
+                "errors": 0,
+                "elapsed": 0.0,
+                "success": False,
+                "raw_output": f"Error crítico: El archivo {suite_name} no existe en el repositorio.",
+            })
             continue
 
         res = run_suite_process(suite_path)
+        # Una suite sin tests ejecutados o con código de retorno != 0 es un fallo estricto
+        if res["tests_run"] == 0 or res["returncode"] != 0:
+            res["success"] = False
+            if res["failures"] == 0 and res["errors"] == 0:
+                res["errors"] = 1
+
         sym = "[PASS]" if res["success"] else "[FAIL]"
         print(f"  {sym} {suite_name:35} | {res['tests_run']:3} tests | {res['elapsed']:6}s")
         results.append(res)
@@ -131,12 +150,45 @@ def main():
     print("-" * 80)
     print(f"TOTAL EJECUTADO: {total_run} tests | APROBADOS: {total_passed} | FALLIDOS: {total_failed} | ERRORES: {total_errors} | TIEMPO: {total_time}s")
 
-    all_passed = (total_failed == 0 and total_errors == 0 and total_run > 0)
-    if all_passed:
-        print("\n>>> CERTIFICACIÓN EXITOSA: 100% de las suites de evolución y consola han sido verificadas.")
+    # Guardar reporte estructurado JSON para trazabilidad y CI
+    import json, datetime
+    report = {
+        "timestamp": datetime.datetime.now().isoformat(),
+        "suites_expected": len(CORE_EVOLUTION_SUITES),
+        "suites_executed": len(results),
+        "missing_suites": missing_suites,
+        "total_run": total_run,
+        "total_passed": total_passed,
+        "total_failed": total_failed,
+        "total_errors": total_errors,
+        "total_time_seconds": total_time,
+        "suites": [
+            {
+                "suite": r["suite"],
+                "returncode": r["returncode"],
+                "tests_run": r["tests_run"],
+                "passed": r["passed"],
+                "failures": r["failures"],
+                "errors": r["errors"],
+                "elapsed": r["elapsed"],
+                "success": r["success"],
+            }
+            for r in results
+        ],
+    }
+    report_file = ROOT_DIR / "evaluations_report.json"
+    report_file.write_text(json.dumps(report, indent=2), encoding="utf-8")
+    print(f"\n[INFO] Reporte estructurado generado en: {report_file}")
+
+    all_suites_present = (len(results) == len(CORE_EVOLUTION_SUITES) and missing_suites == 0)
+    all_tests_passed = (total_failed == 0 and total_errors == 0 and total_run > 0)
+    each_suite_ok = all(r["success"] and r["tests_run"] > 0 and r["returncode"] == 0 for r in results)
+
+    if all_suites_present and all_tests_passed and each_suite_ok:
+        print(">>> CERTIFICACIÓN EXITOSA: 100% de las suites de evolución y consola han sido verificadas sin omisiones.")
         sys.exit(0)
     else:
-        print("\n>>> FALLO EN REGRESIÓN: Revise las suites fallidas.")
+        print("\n>>> FALLO EN REGRESIÓN O SUITE OMITIDA: Revise el informe de auditoría.")
         sys.exit(1)
 
 

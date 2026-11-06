@@ -17,6 +17,7 @@ from pathlib import Path
 import cci_database
 from backend.chat_service import ChatService
 from backend.friends_service import FriendsService, GroupRole
+from backend.auth import create_access_token
 from backend.server import app
 
 
@@ -148,33 +149,35 @@ class TestPhase3ChatRESTEndpoints(unittest.TestCase):
         self.temp_dir.cleanup()
 
     def test_chat_rest_flow(self):
-        # 1. Enviar mensaje
+        token_p1 = create_access_token("pilot_1", "PilotOne")
+        token_p2 = create_access_token("pilot_2", "PilotTwo")
+
+        # 0. Verificación negativa: sin token debe fallar con 401
+        r_unauth = self.client.post("/api/v1/chat/send", json={"group_id": self.group_id, "body": "test"})
+        self.assertEqual(r_unauth.status_code, 401)
+
+        # 1. Enviar mensaje autenticado
         r_send = self.client.post("/api/v1/chat/send", json={
             "group_id": self.group_id,
-            "sender_id": "pilot_2",
-            "sender_name": "PilotTwo",
             "body": "Mensaje enviado vía REST API"
-        })
+        }, headers={"Authorization": f"Bearer {token_p2}"})
         self.assertEqual(r_send.status_code, 200)
         msg_id = r_send.get_json()["message"]["message_id"]
 
         # 2. Consultar historial
-        r_hist = self.client.get(f"/api/v1/chat/{self.group_id}/history?limit=10")
+        r_hist = self.client.get(f"/api/v1/chat/{self.group_id}/history?limit=10", headers={"Authorization": f"Bearer {token_p2}"})
         self.assertEqual(r_hist.status_code, 200)
         data = r_hist.get_json()["data"]
         self.assertEqual(data["count"], 1)
 
         # 3. Reportar mensaje
         r_rep = self.client.post(f"/api/v1/chat/message/{msg_id}/report", json={
-            "reporter_id": "pilot_1",
             "reason": "Test de moderación"
-        })
+        }, headers={"Authorization": f"Bearer {token_p1}"})
         self.assertEqual(r_rep.status_code, 200)
 
         # 4. Eliminar mensaje
-        r_del = self.client.delete(f"/api/v1/chat/message/{msg_id}", json={
-            "actor_id": "pilot_2"
-        })
+        r_del = self.client.delete(f"/api/v1/chat/message/{msg_id}", headers={"Authorization": f"Bearer {token_p2}"})
         self.assertEqual(r_del.status_code, 200)
 
 

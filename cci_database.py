@@ -779,14 +779,15 @@ def create_account(
 
 
 def authenticate_account(
-    email: str,
+    identifier: str,
     password: str,
     db_path: Optional[Path] = None
 ) -> Optional[Dict[str, Any]]:
-    clean_email = email.strip().lower()
+    clean_id = identifier.strip()
+    clean_email = clean_id.lower()
     with get_db(db_path) as conn:
         cursor = conn.cursor()
-        cursor.execute("SELECT * FROM accounts WHERE email = ?", (clean_email,))
+        cursor.execute("SELECT * FROM accounts WHERE email = ? OR username = ?", (clean_email, clean_id))
         row = cursor.fetchone()
         if not row:
             return None

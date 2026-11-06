@@ -40,6 +40,101 @@ class VoiceMediaClient:
 
         self._seq = 0
         self._lock = threading.Lock()
+        self.connection_states: Dict[str, str] = {}
+        self._capture_thread: Optional[threading.Thread] = None
+        self._playback_thread: Optional[threading.Thread] = None
+        self._playback_buffer: List[bytes] = []
+
+    def set_transport(self, send_fn: Callable[[Dict[str, Any]], None]) -> None:
+        """Asigna la función de envío de paquetes de audio hacia el socket / peer."""
+        self._send_transport_fn = send_fn
+
+    def start_audio(self) -> bool:
+        """Inicia el pipeline de captura de audio y procesamiento de voz con hilos de servicio."""
+        self.is_active = True
+        if not self._playback_thread or not self._playback_thread.is_alive():
+            self._playback_thread = threading.Thread(target=self._playback_worker, daemon=True, name=f"VoicePlayback-{self.user_id}")
+            self._playback_thread.start()
+        return True
+
+    def stop_audio(self) -> None:
+        """Detiene la captura y desconecta pistas de audio."""
+        self.is_active = False
+        self.is_speaking = False
+        with self._lock:
+            self._remote_audio_queues.clear()
+            self._playback_buffer.clear()
+
+    def _playback_worker(self) -> None:
+        """Hilo de reproducción que mezcla y drena paquetes entrantes de la cola remota."""
+        while self.is_active:
+            frame = self.pop_mixed_playback_frame()
+            if frame:
+                with self._lock:
+                    self._playback_buffer.append(frame)
+                    if len(self._playback_buffer) > 20:
+                        self._playback_buffer.pop(0)
+            time.sleep(self.FRAME_DURATION_MS / 1000.0)
+
+    def pop_mixed_playback_frame(self) -> Optional[bytes]:
+        """Obtiene y mezcla el siguiente bloque PCM disponible de todos los pares remotos activos."""
+        with self._lock:
+            active_frames = []
+            for peer_id, queue in self._remote_audio_queues.items():
+                if queue:
+                    active_frames.append(queue.pop(0))
+
+        if not active_frames:
+            return None
+
+        # Si hay un único frame, retornarlo directamente
+        if len(active_frames) == 1:
+            return active_frames[0]
+
+        # Mezcla saturada de múltiples canales PCM mono 16-bit
+        try:
+            num_samples = len(active_frames[0]) // 2
+            mixed_samples = [0] * num_samples
+            for f in active_frames:
+                samples = struct.unpack(f"<{min(num_samples, len(f)//2)}h", f[:num_samples*2])
+                for i, s in enumerate(samples):
+                    mixed_samples[i] += s
+
+            # Clamping a rango 16-bit (-32768 a 32767)
+            clamped = [max(-32768, min(32767, s)) for s in mixed_samples]
+            return struct.pack(f"<{num_samples}h", *clamped)
+        except Exception:
+            return active_frames[0]
+
+    # ==============================================================================
+    # GESTIÓN DE SEÑALIZACIÓN WEBRTC Y ESTADOS P2P
+    # ==============================================================================
+
+    def create_offer(self, peer_id: str) -> Dict[str, Any]:
+        """Genera una oferta SDP simulada para establecer conexión WebRTC con un peer."""
+        self.connection_states[peer_id] = "connecting"
+        return {
+            "type": "offer",
+            "sender_id": self.user_id,
+            "target_id": peer_id,
+            "sdp": f"v=0\r\no={self.user_id} 12345 2 IN IP4 127.0.0.1\r\ns=AudioSession\r\nt=0 0\r\nm=audio 48000 RTP/SAVPF 111\r\na=rtpmap:111 opus/48000/2\r\n",
+        }
+
+    def create_answer(self, peer_id: str, offer_sdp: str) -> Dict[str, Any]:
+        """Genera una respuesta SDP al recibir una oferta de un peer remoto."""
+        self.connection_states[peer_id] = "connected"
+        return {
+            "type": "answer",
+            "sender_id": self.user_id,
+            "target_id": peer_id,
+            "sdp": f"v=0\r\no={self.user_id} 54321 2 IN IP4 127.0.0.1\r\ns=AudioSession\r\nt=0 0\r\nm=audio 48000 RTP/SAVPF 111\r\na=rtpmap:111 opus/48000/2\r\n",
+        }
+
+    def add_ice_candidate(self, peer_id: str, candidate: Dict[str, Any]) -> bool:
+        """Registra un candidato ICE para traversal NAT / STUN."""
+        if peer_id not in self.connection_states:
+            self.connection_states[peer_id] = "connecting"
+        return True
 
     def set_transport(self, send_fn: Callable[[Dict[str, Any]], None]) -> None:
         """Asigna la función de envío de paquetes de audio hacia el socket / peer."""

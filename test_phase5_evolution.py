@@ -17,6 +17,7 @@ from pathlib import Path
 import cci_database
 from backend.contracts import SocketEvents
 from backend.friends_service import FriendsService
+from backend.auth import create_access_token
 from backend.server import app
 from backend.voice_service import VoiceService
 from backend.webrtc_signaling import WebRTCSignalingRouter
@@ -168,43 +169,42 @@ class TestPhase5VoiceRESTEndpoints(unittest.TestCase):
         self.temp_dir.cleanup()
 
     def test_voice_rest_lifecycle(self):
-        # 1. Iniciar llamada
+        token_host = create_access_token("host_api", "HostApi")
+        token_guest = create_access_token("guest_api", "GuestApi")
+
+        # 0. Verificación negativa: sin token debe fallar con 401
+        r_unauth = self.client.post("/api/v1/voice/calls/start", json={"group_id": self.group_id})
+        self.assertEqual(r_unauth.status_code, 401)
+
+        # 1. Iniciar llamada autenticado
         r_start = self.client.post("/api/v1/voice/calls/start", json={
             "group_id": self.group_id,
-            "user_id": "host_api",
-            "username": "HostApi"
-        })
+        }, headers={"Authorization": f"Bearer {token_host}"})
         self.assertEqual(r_start.status_code, 200)
         session_id = r_start.get_json()["call"]["session_id"]
 
         # 2. Consultar llamada activa
-        r_active = self.client.get(f"/api/v1/voice/calls/active/{self.group_id}")
+        r_active = self.client.get(f"/api/v1/voice/calls/active/{self.group_id}", headers={"Authorization": f"Bearer {token_host}"})
         self.assertEqual(r_active.status_code, 200)
         self.assertTrue(r_active.get_json()["active"])
 
-        # 3. Unirse
-        r_join = self.client.post(f"/api/v1/voice/calls/{session_id}/join", json={
-            "user_id": "guest_api",
-            "username": "GuestApi"
-        })
+        # 3. Unirse autenticado
+        r_join = self.client.post(f"/api/v1/voice/calls/{session_id}/join", json={}, headers={"Authorization": f"Bearer {token_guest}"})
         self.assertEqual(r_join.status_code, 200)
 
-        # 4. Silenciar
+        # 4. Silenciar autenticado
         r_mute = self.client.post(f"/api/v1/voice/calls/{session_id}/mute", json={
-            "user_id": "guest_api",
             "muted": True
-        })
+        }, headers={"Authorization": f"Bearer {token_guest}"})
         self.assertEqual(r_mute.status_code, 200)
 
-        # 5. Obtener servidores ICE
+        # 5. Obtener servidores ICE (Público)
         r_ice = self.client.get("/api/v1/voice/ice-servers")
         self.assertEqual(r_ice.status_code, 200)
         self.assertTrue(len(r_ice.get_json()["ice_servers"]) >= 1)
 
-        # 6. Finalizar llamada
-        r_end = self.client.post(f"/api/v1/voice/calls/{session_id}/end", json={
-            "actor_id": "host_api"
-        })
+        # 6. Finalizar llamada autenticado
+        r_end = self.client.post(f"/api/v1/voice/calls/{session_id}/end", json={}, headers={"Authorization": f"Bearer {token_host}"})
         self.assertEqual(r_end.status_code, 200)
 
 

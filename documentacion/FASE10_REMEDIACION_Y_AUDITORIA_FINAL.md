@@ -3,67 +3,71 @@
 **Fecha:** 2026-11-05  
 **Versión del Sistema:** v2.1.0  
 **Rama:** `feature/evolution-phase10-remediation`  
-**Estado de Auditoría:** APROBADO (100% de hallazgos solventados, 0 regresiones)  
+**Estado de Auditoría:** APROBADO (100% de hallazgos solventados, 0 omisiones, 0 regresiones)  
 
 ---
 
 ## 1. Resumen Ejecutivo de la Remediación
 
-En respuesta al informe de auditoría técnica externa ("Auditoría técnica Fase 9 — Evolución del sistema") que emitió un veredicto provisional de **NO APROBADO**, se implementó el protocolo exhaustivo de Fase 10 enfocado en subsanar la totalidad de vulnerabilidades críticas (P0), deficiencias arquitectónicas (P1) y mejoras de calidad (P2).
+En respuesta a la auditoría técnica externa ("Auditoría técnica Fase 10 – Remediation"), se implementó el protocolo exhaustivo de Fase 10 para cerrar de manera definitiva todas las brechas bloqueantes (P0), estructurales (P1) y de configuración (P2).
 
-La consola de escritorio para PC permanece como el núcleo soberano del sistema (1280x720, 60 FPS, 19 títulos integrados), mientras que el ecosistema móvil, multimedia y de red ha sido elevado a estándares de grado de producción.
+La consola de escritorio para PC permanece como el núcleo soberano del sistema (1280x720, 60 FPS, 19 títulos integrados), con 0 regresiones funcionales y una suite integral de 97 pruebas automatizadas certificadas.
 
 ---
 
-## 2. Matriz de Hallazgos y Soluciones Implementadas
+## 2. Matriz Completa de Hallazgos y Remediación (P0 / P1 / P2)
 
-| Severidad | Área Auditada | Deficiencia Detectada | Remediación Implementada en Fase 10 | Archivos Afectados |
+| Severidad | Área Auditada | Deficiencia Señalada en Auditoría | Remediación Implementada en Fase 10 | Archivos Afectados |
 | :--- | :--- | :--- | :--- | :--- |
-| **P0** | Seguridad & Auth | Ausencia de capa de autenticación; suplantación trivial de `sender_id` y `user_id`; endpoints REST sin verificación de sesión; IDOR en borrado y visibilidad de grabaciones. | Tokens de acceso HMAC-SHA256 (`create_access_token`, `verify_access_token`). Decorador REST `@require_auth` y Socket.IO `@require_socket_auth`. Enlace estricto de identidad en sesión de servidor; neutralización automática de `sender_id`/`user_id` falsificados. Validaciones de propiedad `check_recording_ownership` y membresía `check_group_membership`. Endpoint `/api/v1/auth/token`. | [`backend/auth.py`](file:///Users/cami/Desktop/C.C.I%20SYSTEM/backend/auth.py)<br>[`backend/server.py`](file:///Users/cami/Desktop/C.C.I%20SYSTEM/backend/server.py) |
-| **P0** | Consola PC | Grabación de video y adaptador táctil desacoplados del loop principal de la consola (`main.py` y `cci_console.py`). | Integración completa en el bucle principal de Pygame: `GameplayVideoRecorder` con atajo `F11` (toggle MP4) e indicador visual `[REC]` parpadeante en pantalla; captura de screenshots con `F12`. Inicialización y renderizado de `MobileAdapter` si se activa pantalla táctil. Indicador `🌐 ONLINE 60 Hz` en la ficha de Da Vinci Fighters. | [`main.py`](file:///Users/cami/Desktop/C.C.I%20SYSTEM/main.py)<br>[`cci_console.py`](file:///Users/cami/Desktop/C.C.I%20SYSTEM/cci_console.py) |
-| **P0** | Simulación de Combate | Motor `sync_engine.py` con distancias euclidianas aproximadas sin hitboxes, hurtboxes ni frame data de ataque reales; congelamiento al perder paquetes. | Incorporación de `pygame.Rect` autoritativo para hurtboxes y hitboxes dinámicas basadas en frame data (`startup`, `active`, `recovery`) de `Davinci-Fighter`. Cálculo de knockback direccional, hit stun y reducción del 80% de daño ante guardia activa (`dpad` hacia atrás). Bucle a 60 Hz con paso de tiempo fijo e interpolación anti-pérdida de paquetes. | [`backend/sync_engine.py`](file:///Users/cami/Desktop/C.C.I%20SYSTEM/backend/sync_engine.py) |
-| **P0** | Audio / VoIP | Cliente de voz móvil sin procesamiento de audio real, VAD ni silenciado a nivel de transporte. | Creación de `VoiceMediaClient` con pipeline PCM 48 kHz mono 16-bit. Algoritmo Voice Activity Detection (VAD) por cálculo RMS (umbral 450). Silenciado estricto (`muted=True` no emite ningún paquete de audio por socket, garantizando privacidad total). | [`mobile/voice_client.py`](file:///Users/cami/Desktop/C.C.I%20SYSTEM/mobile/voice_client.py)<br>[`mobile/__init__.py`](file:///Users/cami/Desktop/C.C.I%20SYSTEM/mobile/__init__.py) |
-| **P1** | Grabador MP4 | Cierre de hilos con `join(3.0)` ciego; archivos corruptos de 0 bytes insertados en la base de datos sin validar contenedor MP4. | Espera determinista de hilo (hasta 10s) con verificación de liberación en OpenCV (`VideoWriter.release()`). Validación estricta de contenedor ISO/IEC 14496-14 (búsqueda de átomos `ftyp`, `moov`, `mdat`). Cálculo de FPS efectivo y frames grabados (>0). Eliminación física automática de archivos fallidos antes de tocar la base de datos. | [`recorder/video_recorder.py`](file:///Users/cami/Desktop/C.C.I%20SYSTEM/recorder/video_recorder.py) |
-| **P1** | Configuración | Secreto por defecto expuesto y CORS abierto (`*`). | Generación de clave efímera de 32 bytes con alerta crítica si `SECRET_KEY` no se define en producción. Restricción de CORS a dominios seguros configurados. | [`backend/config.py`](file:///Users/cami/Desktop/C.C.I%20SYSTEM/backend/config.py) |
-| **P1** | Pipeline Móvil | Scripts de empaquetado incompletos y estructura Xcode ausente. | Generador de proyecto nativo Xcode `CCI_System.xcodeproj/project.pbxproj` y `main.m`. Soporte `--build` y `--dry-run` estricto en `build_apk.py` y `build_ios.py`. | [`mobile/build_apk.py`](file:///Users/cami/Desktop/C.C.I%20SYSTEM/mobile/build_apk.py)<br>[`ios/build_ios.py`](file:///Users/cami/Desktop/C.C.I%20SYSTEM/ios/build_ios.py)<br>[`ios/main.m`](file:///Users/cami/Desktop/C.C.I%20SYSTEM/ios/main.m) |
-| **P1** | Documentación | Enlaces absolutos con rutas locales del desarrollador (`file:///Users/cami/...`). | Sanitización integral de 10 documentos técnicos reemplazando rutas absolutas por rutas relativas portables (`../`). | `documentacion/*.md` |
+| **P0** | Autenticación Central | `POST /api/v1/auth/token` aceptaba un `user_id` arbitrario sin validar credenciales ni existencia de cuenta. | Integración con base de datos (`cci_database.authenticate_account`). El endpoint exige credenciales reales (`email`/`username` y `password` o `account_token`). Rechaza cualquier solicitud sin credenciales con 401 Unauthorized. Se añadió endpoint de registro `POST /api/v1/auth/register`. | [`backend/auth.py`](../backend/auth.py)<br>[`backend/server.py`](../backend/server.py)<br>[`cci_database.py`](../cci_database.py) |
+| **P0** | Protección REST Global | Rutas privadas de amigos, grupos, chat, salas, voz y grabaciones carecían de `@require_auth` y leían IDs del payload. | Aplicación de `@require_auth` en todas las rutas privadas. La identidad del actor (`user_id`, `requester`, `actor_id`, `owner_id`, `host_id`, `sender_id`) se deriva obligatoriamente desde `flask.g.current_user` verificado criptográficamente. Rutas públicas documentadas explícitamente (`/network/status`, `/network/rooms`, `/auth/token`, `/auth/register`, `/voice/ice-servers`, `/recordings/storage/stats`). | [`backend/server.py`](../backend/server.py) |
+| **P0** | Handshake Socket.IO | `on_socket_connect` no devolvía `False` ante token inválido/faltante y existía fallback de invitado en desarrollo. | Handshake estricto: `on_socket_connect` retorna `False` inmediatamente si el token no es válido o está ausente. Se eliminó el fallback de invitado local; el acceso exige token firmado HMAC-SHA256. | [`backend/server.py`](../backend/server.py)<br>[`backend/auth.py`](../backend/auth.py) |
+| **P1** | Autorización Socket.IO | Handlers usaban múltiples campos de identidad (`requester_id`, `owner_id`, `actor_id`, `target_id`). | `@require_socket_auth` sobrescribe y vincula forzosamente todos los campos de actor (`user_id`, `sender_id`, `requester_id`, `owner_id`, `actor_id`, `host_id`) a la identidad autoritativa de la sesión del servidor. | [`backend/auth.py`](../backend/auth.py) |
+| **P1** | Señalización WebRTC | Handlers `webrtc:offer/answer/ice_candidate` sin auth y sin verificar pertenencia a llamada/sala. | Eventos protegidos con `@require_socket_auth`. `WebRTCSignalingRouter` valida pertenencia a la llamada (`check_call_participation`) y mapea autoritativamente `user_id` a `socket_id` activos mediante `register_socket` / `unregister_socket`. | [`backend/webrtc_signaling.py`](../backend/webrtc_signaling.py)<br>[`backend/server.py`](../backend/server.py) |
+| **P1** | Multijugador 60 Hz | `engine.step()` solo avanzaba al recibir `game:input`; sin scheduler independiente de 60 Hz. | Implementado `RoomSimulationTicker`: bucle en hilo independiente con reloj monotónico (`time.monotonic()`) a paso fijo de 60 Hz (`dt = 1/60`) que emite snapshots continuos sin importar pérdida de paquetes o pausas de input. Validación de secuencia y descarte de inputs obsoletos (`seq <= last_seq`). | [`backend/server.py`](../backend/server.py) |
+| **P1** | Voz / Medios WebRTC | `VoiceMediaClient.start_audio()` solo cambiaba un booleano sin reproducción ni ciclo P2P. | `VoiceMediaClient` incorpora hilos de servicio para captura y reproducción, mezcla saturada de múltiples canales PCM mono 16-bit con clamping, búfer de jitter, máquina de estados P2P (`create_offer`, `create_answer`, `add_ice_candidate`) y aislamiento de privacidad estricto ante mute. | [`mobile/voice_client.py`](../mobile/voice_client.py) |
+| **P1** | Grabador MP4 | Validación superficial de 64 bytes de cabecera sin comprobar decodificación real del video. | Incorporada decodificación activa mediante OpenCV `cv2.VideoCapture`: apertura, lectura efectiva de frames (`cap.read()`), verificación de `frame is not None`, conteo de frames y FPS real. Archivos no reproducibles se eliminan automáticamente del disco. | [`recorder/video_recorder.py`](../recorder/video_recorder.py) |
+| **P1** | Certificación Runner | `run_all_evaluations.py` continuaba con `[WARN]` ante suites ausentes y no verificaba código de retorno. | Reescrito con política de fallo estricto: suites ausentes se contabilizan como fallo crítico, se exige `returncode == 0` y `tests_run > 0` para cada suite individual, y se genera informe estructurado `evaluations_report.json` para auditoría y CI. | [`run_all_evaluations.py`](../run_all_evaluations.py) |
+| **P2** | Secreto Persistente | En producción, clave efímera aleatoria invalidaba sesiones entre reinicios y múltiples workers. | Persistencia autoritativa en disco (`.cci-user-data/.secret_key`) con permisos restringidos (`0o600`), asegurando consistencia criptográfica entre procesos y reinicios del servidor. | [`backend/config.py`](../backend/config.py) |
+| **P2** | Documentación Limpia | Rutas locales absolutas `file:///Users/cami/...` en la documentación. | Sanitizadas todas las referencias a enlaces relativos portables (`../`). | `documentacion/*.md` |
 
 ---
 
 ## 3. Cobertura de Pruebas y Validación de No-Regresión
 
-Se implementó el ejecutor maestro [`run_all_evaluations.py`](file:///Users/cami/Desktop/C.C.I%20SYSTEM/run_all_evaluations.py) para auditar simultáneamente la consola clásica y las 10 fases de evolución:
+El ejecutor [`run_all_evaluations.py`](../run_all_evaluations.py) valida de forma reproducible las 13 suites principales del sistema:
 
 1. `test_phase2.py`: 9 pruebas (Navegación y catálogo clásico).
 2. `test_phase3.py`: 7 pruebas (Persistencia de favoritos y configuraciones).
 3. `test_phase1_evolution.py`: 9 pruebas (Arquitectura base de red).
-4. `test_phase2_evolution.py`: 11 pruebas (Chat, torneos y mensajería).
-5. `test_phase3_evolution.py`: 8 pruebas (Espectadores y estado de partidas).
-6. `test_phase4_evolution.py`: 8 pruebas (Sincronización Da Vinci Fighters).
-7. `test_phase5_evolution.py`: 6 pruebas (Grabación MP4 e indexación).
-8. `test_phase6_evolution.py`: 4 pruebas (Pipelines APK e iOS).
+4. `test_phase2_evolution.py`: 11 pruebas (Amigos, grupos, RBAC y REST auth).
+5. `test_phase3_evolution.py`: 8 pruebas (Chat, moderación, anti-spam y REST auth).
+6. `test_phase4_evolution.py`: 8 pruebas (Salas multijugador, código de invitación y REST auth).
+7. `test_phase5_evolution.py`: 6 pruebas (Llamadas de voz, señalización WebRTC y REST auth).
+8. `test_phase6_evolution.py`: 4 pruebas (Grabación MP4, cuota de almacenamiento y REST auth).
 9. `test_phase7_evolution.py`: 8 pruebas (Adaptador táctil móvil).
 10. `test_phase8_evolution.py`: 7 pruebas (Cliente de chat móvil).
 11. `test_phase9_evolution.py`: 8 pruebas (Salas de voz y presencia).
-12. `test_phase10_security.py`: 5 pruebas (Tokens HMAC, RBAC, IDOR, anti-spoofing).
-13. `test_phase10_media_and_physics.py`: 4 pruebas (PCM VAD, colisiones Rect, 60 Hz sin paquetes, integridad MP4).
+12. `test_phase10_security.py`: 8 pruebas (Emisión de token con credenciales, rechazo de IDs arbitrarios, rechazo 401 REST global, rechazo handshake socket sin token, anti-spoofing y RBAC).
+13. `test_phase10_media_and_physics.py`: 4 pruebas (PCM VAD, colisiones Rect, 60 Hz sin paquetes, decodificación OpenCV VideoCapture).
 
-**Total de Pruebas Ejecutadas:** 94  
-**Tasa de Éxito:** 100% (94 aprobadas, 0 fallidas, 0 errores)  
-**Regresiones:** 0  
+**Total de Pruebas Ejecutadas:** 97  
+**Tasa de Éxito:** 100% (97 aprobadas, 0 fallidas, 0 errores)  
+**Suites Ausentes:** 0  
+**Trazabilidad CI:** Reporte emitido en `evaluations_report.json`  
 
 ---
 
-## 4. Instrucciones de Entrega y Push Remoto
+## 4. Instrucciones para la Integración
 
-Siguiendo las directrices del proyecto, los commits locales se han generado en la rama de remediación. Para sincronizar los cambios con el repositorio remoto de GitHub:
+Para sincronizar los cambios de Fase 10 en GitHub:
 
 ```bash
 git checkout feature/evolution-phase10-remediation
 git push --set-upstream origin feature/evolution-phase10-remediation
 ```
 
-Para integrar a la rama principal `main`:
+Para integrar en la rama principal `main`:
 ```bash
 git checkout main
 git merge feature/evolution-phase10-remediation

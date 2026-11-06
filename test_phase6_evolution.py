@@ -16,6 +16,7 @@ from pathlib import Path
 import pygame
 import cci_database
 from backend.server import app
+from backend.auth import create_access_token
 from recorder.gallery_service import GalleryService
 from recorder.video_recorder import GameplayVideoRecorder
 
@@ -162,17 +163,23 @@ class TestPhase6RecordingsRESTEndpoints(unittest.TestCase):
         self.temp_dir.cleanup()
 
     def test_recordings_rest_endpoints(self):
-        # 1. Consultar estado del grabador
-        r_status = self.client.get("/api/v1/recordings/status")
+        token_pilot = create_access_token("pilot_rest", "PilotRest")
+
+        # 0. Verificación negativa: sin token debe fallar con 401
+        r_unauth = self.client.get("/api/v1/recordings/status")
+        self.assertEqual(r_unauth.status_code, 401)
+
+        # 1. Consultar estado del grabador autenticado
+        r_status = self.client.get("/api/v1/recordings/status", headers={"Authorization": f"Bearer {token_pilot}"})
         self.assertEqual(r_status.status_code, 200)
 
-        # 2. Consultar cuota de almacenamiento
+        # 2. Consultar cuota de almacenamiento (Público)
         r_stats = self.client.get("/api/v1/recordings/storage/stats")
         self.assertEqual(r_stats.status_code, 200)
         self.assertIn("max_quota_mb", r_stats.get_json()["stats"])
 
-        # 3. Consultar galería de usuario
-        r_gal = self.client.get("/api/v1/recordings/pilot_rest")
+        # 3. Consultar galería de usuario autenticado
+        r_gal = self.client.get("/api/v1/recordings/pilot_rest", headers={"Authorization": f"Bearer {token_pilot}"})
         self.assertEqual(r_gal.status_code, 200)
         self.assertEqual(len(r_gal.get_json()["clips"]), 0)
 

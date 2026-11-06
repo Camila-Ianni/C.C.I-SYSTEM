@@ -21,6 +21,7 @@ from backend.contracts import ConnectionState, PlayerInputPacket, PlayerSlot, Ro
 from backend.multiplayer_client import MultiplayerNetworkClient
 from backend.room_manager import RoomManager
 from backend.server import app
+from backend.auth import create_access_token
 from backend.sync_engine import AuthoritativeSyncEngine
 
 
@@ -217,31 +218,34 @@ class TestPhase4RESTEndpoints(unittest.TestCase):
         self.temp_dir.cleanup()
 
     def test_rest_multiplayer_room_and_history(self):
-        # 1. Crear sala vía REST
+        token_host = create_access_token("api_host", "ApiHost")
+        token_guest = create_access_token("api_guest", "ApiGuest")
+
+        # 0. Verificación negativa: sin token debe fallar con 401
+        r_unauth = self.client.post("/api/v1/multiplayer/rooms/create", json={"game_id": "davinci"})
+        self.assertEqual(r_unauth.status_code, 401)
+
+        # 1. Crear sala vía REST autenticado
         r_create = self.client.post("/api/v1/multiplayer/rooms/create", json={
             "game_id": "davinci",
-            "host_id": "api_host",
-            "username": "ApiHost"
-        })
+        }, headers={"Authorization": f"Bearer {token_host}"})
         self.assertEqual(r_create.status_code, 200)
         room_data = r_create.get_json()["room"]
         room_id = room_data["room_id"]
         invite_code = room_data["invite_code"]
 
-        # 2. Unirse por código
+        # 2. Unirse por código autenticado
         r_join = self.client.post("/api/v1/multiplayer/rooms/join", json={
             "invite_code": invite_code,
-            "user_id": "api_guest",
-            "username": "ApiGuest"
-        })
+        }, headers={"Authorization": f"Bearer {token_guest}"})
         self.assertEqual(r_join.status_code, 200)
 
         # 3. Consultar sala
-        r_get = self.client.get(f"/api/v1/multiplayer/rooms/{room_id}")
+        r_get = self.client.get(f"/api/v1/multiplayer/rooms/{room_id}", headers={"Authorization": f"Bearer {token_host}"})
         self.assertEqual(r_get.status_code, 200)
 
         # 4. Consultar historial
-        r_hist = self.client.get("/api/v1/multiplayer/matches/history")
+        r_hist = self.client.get("/api/v1/multiplayer/matches/history", headers={"Authorization": f"Bearer {token_host}"})
         self.assertEqual(r_hist.status_code, 200)
 
 
