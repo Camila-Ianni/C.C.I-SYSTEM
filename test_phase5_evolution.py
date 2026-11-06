@@ -111,39 +111,63 @@ class TestPhase5VoiceService(unittest.TestCase):
     def test_webrtc_signaling_mesh(self):
         signals = []
 
+        # Registrar llamada autorizada 'call_123' en VoiceService
+        v_svc = VoiceService.get_instance()
+        v_svc.start_call("grp_mesh", "peer_a", "PeerA")
+        call = v_svc.get_active_call_for_group("grp_mesh")
+        call.session_id = "call_123"
+        call.participants["peer_a"] = {"username": "PeerA"}
+        call.participants["peer_b"] = {"username": "PeerB"}
+        call.participants["sock_peer_b"] = {"username": "SockB"}
+        call.participants["sock_peer_a"] = {"username": "SockA"}
+        v_svc._active_calls["call_123"] = call
+
         def mock_emit(ev, data, target=None):
             signals.append((ev, data, target))
 
         router = WebRTCSignalingRouter(mock_emit)
 
-        # 1. Oferta
-        router.handle_signal({
+        # 0. Verificación de seguridad negativa: intruso es rechazado (Fail-Closed)
+        res_intruder = router.handle_signal({
+            "room_id": "call_123",
+            "sender_id": "intruder_x",
+            "target_id": "sock_peer_b",
+            "type": "offer",
+            "payload": {"sdp": "v=0..."},
+        }, "sock_intruder")
+        self.assertFalse(res_intruder, "El router debe rechazar señales de participantes ajenos a la llamada")
+
+        # 1. Oferta autorizada
+        res_offer = router.handle_signal({
             "room_id": "call_123",
             "sender_id": "peer_a",
             "target_id": "sock_peer_b",
             "type": "offer",
             "payload": {"sdp": "v=0..."},
         }, "sock_peer_a")
+        self.assertTrue(res_offer)
         self.assertEqual(signals[-1][0], SocketEvents.WEBRTC_OFFER)
 
-        # 2. Respuesta
-        router.handle_signal({
+        # 2. Respuesta autorizada
+        res_answer = router.handle_signal({
             "room_id": "call_123",
             "sender_id": "peer_b",
             "target_id": "sock_peer_a",
             "type": "answer",
             "payload": {"sdp": "v=0..."},
         }, "sock_peer_b")
+        self.assertTrue(res_answer)
         self.assertEqual(signals[-1][0], SocketEvents.WEBRTC_ANSWER)
 
-        # 3. Candidato ICE
-        router.handle_signal({
+        # 3. Candidato ICE autorizado
+        res_ice = router.handle_signal({
             "room_id": "call_123",
             "sender_id": "peer_a",
             "target_id": "sock_peer_b",
             "type": "ice-candidate",
             "payload": {"candidate": "candidate:1 1 UDP..."},
         }, "sock_peer_a")
+        self.assertTrue(res_ice)
         self.assertEqual(signals[-1][0], SocketEvents.WEBRTC_ICE_CANDIDATE)
 
 

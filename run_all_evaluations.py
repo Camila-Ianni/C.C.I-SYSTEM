@@ -150,10 +150,24 @@ def main():
     print("-" * 80)
     print(f"TOTAL EJECUTADO: {total_run} tests | APROBADOS: {total_passed} | FALLIDOS: {total_failed} | ERRORES: {total_errors} | TIEMPO: {total_time}s")
 
-    # Guardar reporte estructurado JSON para trazabilidad y CI
-    import json, datetime
+    # Guardar reporte estructurado JSON para trazabilidad y CI con vinculación de Commit SHA y Entorno
+    import json, datetime, platform
+    try:
+        git_sha = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=str(ROOT_DIR), text=True).strip()
+    except Exception:
+        git_sha = "unknown"
+    try:
+        git_branch = subprocess.check_output(["git", "rev-parse", "--abbrev-ref", "HEAD"], cwd=str(ROOT_DIR), text=True).strip()
+    except Exception:
+        git_branch = "unknown"
+
     report = {
         "timestamp": datetime.datetime.now().isoformat(),
+        "git_commit_sha": git_sha,
+        "git_branch": git_branch,
+        "python_interpreter": sys.executable,
+        "python_version": sys.version,
+        "platform": platform.platform(),
         "suites_expected": len(CORE_EVOLUTION_SUITES),
         "suites_executed": len(results),
         "missing_suites": missing_suites,

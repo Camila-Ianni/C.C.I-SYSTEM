@@ -177,6 +177,75 @@ class TestPhase10MediaAndCombatPhysics(unittest.TestCase):
         self.assertGreater(res_stop["effective_fps"], 0.0)
         self.assertTrue(Path(res_stop["file_path"]).is_file())
 
+    def test_05_room_simulation_ticker_lifecycle_and_jitter(self):
+        """Verifica que RoomSimulationTicker gestione ciclos de vida (start/pause/resume/stop) y emita a 60 Hz bajo jitter."""
+        from backend.server import RoomSimulationTicker, _start_room_ticker, _stop_room_ticker, room_tickers
+
+        engine = AuthoritativeSyncEngine("room_lifecycle_test")
+        emitted_snapshots = []
+
+        def mock_emit(evt, data, room):
+            emitted_snapshots.append(data)
+
+        ticker = RoomSimulationTicker("room_lifecycle_test", engine, mock_emit)
+
+        # 1. Inicio y emisión a 60 Hz
+        ticker.start()
+        self.assertTrue(ticker.running)
+        time.sleep(0.1)  # ~6 frames
+        self.assertGreater(len(emitted_snapshots), 2)
+
+        # 2. Parada limpia (join sin fugas)
+        ticker.stop(timeout=1.0)
+        self.assertFalse(ticker.running)
+        self.assertIsNone(ticker._thread)
+        count_paused = len(emitted_snapshots)
+
+        # Durante pausa no debe haber emisiones adicionales
+        time.sleep(0.05)
+        self.assertEqual(len(emitted_snapshots), count_paused)
+
+        # 3. Reinicio / Reanudación
+        ticker.start()
+        self.assertTrue(ticker.running)
+        # Simular ráfaga de jitter: inputs llegan a destiempo con gaps
+        inp = PlayerInputPacket(
+            room_id="room_lifecycle_test",
+            player_id=1,
+            tick=engine.tick + 1,
+            seq=10,
+            dpad="right",
+            buttons=[]
+        )
+        engine.push_input(inp)
+        time.sleep(0.1)
+
+        # Debe continuar incrementando ticks autoritativos
+        self.assertGreater(len(emitted_snapshots), count_paused)
+        last_snap = emitted_snapshots[-1]
+        self.assertGreater(last_snap["tick"], 0)
+
+        # Cierre definitivo
+        ticker.stop(timeout=1.0)
+        self.assertFalse(ticker.running)
+
+        # 4. Coordinación global con _start_room_ticker y _stop_room_ticker
+        test_room = "coord_room_99"
+        _start_room_ticker(test_room, engine)
+        self.assertIn(test_room, room_tickers)
+        first_instance = room_tickers[test_room]
+
+        # Re-iniciar sobre la misma sala debe detener y sustituir la anterior sin threads huérfanos
+        _start_room_ticker(test_room, engine)
+        self.assertFalse(first_instance.running)
+        second_instance = room_tickers[test_room]
+        self.assertIsNot(first_instance, second_instance)
+
+        # Detener sala
+        _stop_room_ticker(test_room)
+        self.assertNotIn(test_room, room_tickers)
+        self.assertFalse(second_instance.running)
+
 
 if __name__ == "__main__":
     unittest.main()

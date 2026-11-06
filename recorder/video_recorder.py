@@ -183,15 +183,26 @@ class GameplayVideoRecorder:
                 "error": f"Error leyendo contenedor de video: {exc}",
             }
 
-        # Validación y decodificación real del archivo MP4 mediante OpenCV VideoCapture
+        # Validación y decodificación real del archivo MP4 mediante OpenCV VideoCapture con muestreo distribuido
         cap = cv2.VideoCapture(str(filepath))
         is_opened = cap.isOpened()
-        ret, frame = cap.read() if is_opened else (False, None)
         decoded_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT)) if is_opened else 0
         decoded_fps = cap.get(cv2.CAP_PROP_FPS) if is_opened else 0.0
+
+        valid_sampling = False
+        if is_opened and decoded_frames > 0:
+            sample_points = [0.0, 0.25, 0.50, 0.75, 1.0]
+            sampled_success = 0
+            for pt in sample_points:
+                target_frame_idx = min(int(round(pt * (decoded_frames - 1))), max(0, decoded_frames - 1))
+                cap.set(cv2.CAP_PROP_POS_FRAMES, target_frame_idx)
+                ret_sample, sample_frame = cap.read()
+                if ret_sample and sample_frame is not None and sample_frame.size > 0:
+                    sampled_success += 1
+            valid_sampling = (sampled_success == len(sample_points))
         cap.release()
 
-        if not is_opened or not ret or frame is None:
+        if not is_opened or not valid_sampling:
             try:
                 filepath.unlink(missing_ok=True)
                 if thumbpath and thumbpath.exists():
@@ -200,7 +211,7 @@ class GameplayVideoRecorder:
                 pass
             return {
                 "success": False,
-                "error": "El archivo MP4 no es reproducible o falló la decodificación de video.",
+                "error": "El archivo MP4 no es reproducible o falló la decodificación en muestreo distribuido.",
             }
 
         effective_fps = round(self._frames_written / duration, 2)

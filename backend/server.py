@@ -73,20 +73,29 @@ sync_engines: Dict[str, AuthoritativeSyncEngine] = {}
 import threading
 import time
 
+_ticker_lock = threading.Lock()
+
 class RoomSimulationTicker:
     """Bucle autoritativo independiente de simulación a 60 Hz por sala."""
     def __init__(self, room_id: str, engine: AuthoritativeSyncEngine, emit_fn):
         self.room_id = room_id
         self.engine = engine
         self.emit_fn = emit_fn
-        self.running = True
-        self._thread = threading.Thread(target=self._run, daemon=True, name=f"RoomTicker-{room_id}")
+        self.running = False
+        self._thread: Optional[threading.Thread] = None
 
     def start(self):
+        if self.running:
+            return
+        self.running = True
+        self._thread = threading.Thread(target=self._run, daemon=True, name=f"RoomTicker-{self.room_id}")
         self._thread.start()
 
-    def stop(self):
+    def stop(self, timeout: float = 1.0):
         self.running = False
+        if self._thread and self._thread.is_alive():
+            self._thread.join(timeout=timeout)
+        self._thread = None
 
     def _run(self):
         dt = 1.0 / 60.0
@@ -125,6 +134,23 @@ class RoomSimulationTicker:
                 time.sleep(sleep_sec)
 
 room_tickers: Dict[str, RoomSimulationTicker] = {}
+
+def _start_room_ticker(room_id: str, engine: AuthoritativeSyncEngine):
+    """Garantiza la existencia de exactamente un ticker activo por sala."""
+    with _ticker_lock:
+        existing = room_tickers.pop(room_id, None)
+        if existing:
+            existing.stop(timeout=1.0)
+        ticker = RoomSimulationTicker(room_id, engine, _emit_to)
+        room_tickers[room_id] = ticker
+        ticker.start()
+
+def _stop_room_ticker(room_id: str):
+    """Detiene y remueve el ticker de la sala de forma coordinada."""
+    with _ticker_lock:
+        existing = room_tickers.pop(room_id, None)
+        if existing:
+            existing.stop(timeout=1.0)
 
 def _emit_to(event: str, data: Any, to: Any = None):
     if to:
@@ -809,12 +835,8 @@ def on_game_start(data: Dict[str, Any]):
     sync_engine = AuthoritativeSyncEngine(room_id)
     sync_engines[room_id] = sync_engine
 
-    # Iniciar bucle independiente de simulación a 60 Hz por sala
-    if room_id in room_tickers:
-        room_tickers[room_id].stop()
-    ticker = RoomSimulationTicker(room_id, sync_engine, _emit_to)
-    room_tickers[room_id] = ticker
-    ticker.start()
+    # Iniciar bucle independiente coordinado de simulación a 60 Hz por sala
+    _start_room_ticker(room_id, sync_engine)
 
     initial_snap = sync_engine.get_snapshot().to_dict()
     emit("game:start", {"room_id": room_id, "snapshot": initial_snap}, to=room_id)
@@ -895,9 +917,7 @@ def on_game_pause(data: Dict[str, Any]):
     room = room_mgr.get_room(room_id)
     if room and user_id in room.members:
         room.status = RoomStatus.PAUSED
-        ticker = room_tickers.get(room_id)
-        if ticker:
-            ticker.stop()
+        _stop_room_ticker(room_id)
         emit(SocketEvents.GAME_PAUSE, {"room_id": room_id, "paused_by": user_id}, to=room_id)
 
 
@@ -910,11 +930,7 @@ def on_game_resume(data: Dict[str, Any]):
     engine = sync_engines.get(room_id)
     if room and engine and user_id in room.members:
         room.status = RoomStatus.PLAYING
-        ticker = room_tickers.get(room_id)
-        if not ticker or not ticker.running:
-            ticker = RoomSimulationTicker(room_id, engine, _emit_to)
-            room_tickers[room_id] = ticker
-            ticker.start()
+        _start_room_ticker(room_id, engine)
         full_sync = engine.get_full_world_sync()
         emit(SocketEvents.GAME_RESUME, {"room_id": room_id, "snapshot": full_sync}, to=room_id)
 

@@ -280,12 +280,15 @@ def check_room_participation(user_id: str, room_id: str) -> bool:
 
 
 def check_call_participation(user_id: str, session_id: str) -> bool:
-    """Verifica si el usuario pertenece a la sesión de llamada de voz."""
+    """
+    Verifica si el usuario pertenece a la sesión de llamada de voz activa o a la sala correspondiente.
+    Falla cerrada estrictamente: si la llamada/sala no existe o el usuario no está en ella, devuelve False.
+    """
     if not user_id or not session_id:
         return False
     from backend.voice_service import VoiceService
     svc = VoiceService.get_instance()
     call = getattr(svc, "_active_calls", {}).get(session_id)
-    if not call:
-        return True  # Fallback permisivo si el router se prueba en aislamiento con IDs simulados
-    return str(user_id) in call.participants
+    if call and str(user_id) in call.participants:
+        return True
+    return check_room_membership(user_id, session_id)

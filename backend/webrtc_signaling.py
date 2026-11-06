@@ -19,17 +19,26 @@ class WebRTCSignalingRouter:
         self._emit = emit_fn
 
     def handle_signal(self, payload_dict: Dict[str, Any], sender_sid: str) -> bool:
-        """Enruta la señal al destinatario específico o difunde en la sala."""
+        """Enruta la señal al destinatario específico de forma autoritativa y fail-closed."""
         try:
-            room_id = payload_dict.get("room_id", "")
-            sender_id = payload_dict.get("sender_id", "")
+            room_id = str(payload_dict.get("room_id", "")).strip()
+            sender_id = str(payload_dict.get("sender_id", "")).strip()
             target_id = payload_dict.get("target_id")
-            sig_type = payload_dict.get("type", "")
+            sig_type = str(payload_dict.get("type", "")).strip()
 
-            # Si hay session_id de llamada de voz, validar pertenencia
-            if room_id and not check_call_participation(sender_id, room_id):
-                # Si no está en la llamada, rechazar señal
+            # Validación de presencia obligatoria de sesión y tipo
+            if not room_id or not sender_id or sig_type not in ("offer", "answer", "ice-candidate"):
                 return False
+
+            # Comprobar pertenencia del emisor a la llamada activa (Fail-Closed estricto)
+            if not check_call_participation(sender_id, room_id):
+                return False
+
+            # Si target_id está definido, validar que el destinatario PERTENEZCA a la misma llamada
+            if target_id:
+                target_str = str(target_id).strip()
+                if not check_call_participation(target_str, room_id):
+                    return False
 
             payload = WebRTCSignalingPayload(
                 room_id=room_id,
@@ -40,19 +49,20 @@ class WebRTCSignalingRouter:
             )
 
             data = payload.to_dict()
-            target_destination = target_id
 
             # Si target_id es un user_id, buscar sus sockets activos
             if target_id:
-                user_sids = get_sockets_by_user(target_id)
+                user_sids = get_sockets_by_user(str(target_id))
                 if user_sids:
-                    # Enviar a todos los sockets del usuario objetivo
                     for sid in user_sids:
                         self._dispatch_event(sig_type, data, sid)
                     return True
+                # Si target_id no tiene socket registrado, emitir directamente al canal de target
+                self._dispatch_event(sig_type, data, str(target_id))
+                return True
 
-            # Si target_id es un room o sid directo
-            self._dispatch_event(sig_type, data, target_destination)
+            # Si target_id es la sala completa
+            self._dispatch_event(sig_type, data, room_id)
             return True
         except Exception as exc:
             print(f"[WebRTCSignaling] Error procesando señalización: {exc}")

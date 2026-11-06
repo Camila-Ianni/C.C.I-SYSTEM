@@ -163,6 +163,15 @@ class TestWebRTCSignaling(unittest.TestCase):
     """Verifica el enrutamiento de paquetes SDP e ICE."""
 
     def test_signaling_route(self):
+        from backend.voice_service import VoiceService
+        voice_svc = VoiceService.get_instance()
+        voice_svc.start_call("grp_room_1", "user_a", "UserA")
+        call = voice_svc.get_active_call_for_group("grp_room_1")
+        call.session_id = "room_1"
+        call.participants["user_a"] = {"username": "UserA"}
+        call.participants["socket_user_b"] = {"username": "UserB"}
+        voice_svc._active_calls["room_1"] = call
+
         emitted_events = []
 
         def mock_emit(ev, data, target=None):
