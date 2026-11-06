@@ -2,6 +2,7 @@
 
 **Fecha:** 2026-11-06  
 **Rama Auditada:** `feature/communities-phase0-design`  
+**Commit SHA Certificado:** `1d16a98043e8289e78a1ac8781a04e59d1510e1d`  
 **Rama Destino (Merge Target):** `main`  
 **Estado de Auditoría (Revisión v3):** APROBADO PARA MERGE (100% de hallazgos P0, P1 y P2 cerrados)  
 **Suites Automatizadas:** 22 de 22 suites ejecutadas (`191 / 191` pruebas aprobadas, `0` fallidas, `0` errores)

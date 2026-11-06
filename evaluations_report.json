@@ -1,6 +1,6 @@
 {
-  "timestamp": "2026-11-06T13:43:38.827057",
-  "git_commit_sha": "a17e308ed7ea46508897acb618a62e58c7c0eb0c",
+  "timestamp": "2026-11-06T14:08:53.856894",
+  "git_commit_sha": "1d16a98043e8289e78a1ac8781a04e59d1510e1d",
   "git_branch": "feature/communities-phase0-design",
   "python_interpreter": "/Users/cami/Desktop/C.C.I SYSTEM/.venv/bin/python",
   "python_version": "3.14.5 (main, May 10 2026, 10:21:34) [Clang 21.0.0 (clang-2100.0.123.102)]",
@@ -8,11 +8,11 @@
   "suites_expected": 22,
   "suites_executed": 22,
   "missing_suites": 0,
-  "total_run": 190,
-  "total_passed": 190,
+  "total_run": 191,
+  "total_passed": 191,
   "total_failed": 0,
   "total_errors": 0,
-  "total_time_seconds": 21.28,
+  "total_time_seconds": 235.73,
   "suites": [
     {
       "suite": "test_phase2.py",
@@ -21,7 +21,7 @@
       "passed": 9,
       "failures": 0,
       "errors": 0,
-      "elapsed": 0.398,
+      "elapsed": 0.451,
       "success": true
     },
     {
@@ -31,7 +31,7 @@
       "passed": 7,
       "failures": 0,
       "errors": 0,
-      "elapsed": 0.11,
+      "elapsed": 0.127,
       "success": true
     },
     {
@@ -41,7 +41,7 @@
       "passed": 9,
       "failures": 0,
       "errors": 0,
-      "elapsed": 0.995,
+      "elapsed": 1.192,
       "success": true
     },
     {
@@ -51,7 +51,7 @@
       "passed": 11,
       "failures": 0,
       "errors": 0,
-      "elapsed": 1.373,
+      "elapsed": 1.618,
       "success": true
     },
     {
@@ -61,7 +61,7 @@
       "passed": 8,
       "failures": 0,
       "errors": 0,
-      "elapsed": 1.113,
+      "elapsed": 1.216,
       "success": true
     },
     {
@@ -71,7 +71,7 @@
       "passed": 8,
       "failures": 0,
       "errors": 0,
-      "elapsed": 1.055,
+      "elapsed": 1.157,
       "success": true
     },
     {
@@ -81,7 +81,7 @@
       "passed": 6,
       "failures": 0,
       "errors": 0,
-      "elapsed": 0.924,
+      "elapsed": 1.036,
       "success": true
     },
     {
@@ -91,7 +91,7 @@
       "passed": 4,
       "failures": 0,
       "errors": 0,
-      "elapsed": 1.965,
+      "elapsed": 212.221,
       "success": true
     },
     {
@@ -101,7 +101,7 @@
       "passed": 8,
       "failures": 0,
       "errors": 0,
-      "elapsed": 0.556,
+      "elapsed": 0.62,
       "success": true
     },
     {
@@ -111,7 +111,7 @@
       "passed": 7,
       "failures": 0,
       "errors": 0,
-      "elapsed": 0.509,
+      "elapsed": 0.583,
       "success": true
     },
     {
@@ -121,7 +121,7 @@
       "passed": 8,
       "failures": 0,
       "errors": 0,
-      "elapsed": 1.496,
+      "elapsed": 1.707,
       "success": true
     },
     {
@@ -131,7 +131,7 @@
       "passed": 12,
       "failures": 0,
       "errors": 0,
-      "elapsed": 1.795,
+      "elapsed": 2.092,
       "success": true
     },
     {
@@ -141,7 +141,7 @@
       "passed": 8,
       "failures": 0,
       "errors": 0,
-      "elapsed": 2.449,
+      "elapsed": 2.629,
       "success": true
     },
     {
@@ -151,7 +151,7 @@
       "passed": 10,
       "failures": 0,
       "errors": 0,
-      "elapsed": 0.474,
+      "elapsed": 0.531,
       "success": true
     },
     {
@@ -161,7 +161,7 @@
       "passed": 10,
       "failures": 0,
       "errors": 0,
-      "elapsed": 0.457,
+      "elapsed": 0.536,
       "success": true
     },
     {
@@ -171,7 +171,7 @@
       "passed": 10,
       "failures": 0,
       "errors": 0,
-      "elapsed": 0.688,
+      "elapsed": 0.795,
       "success": true
     },
     {
@@ -181,7 +181,7 @@
       "passed": 10,
       "failures": 0,
       "errors": 0,
-      "elapsed": 0.524,
+      "elapsed": 0.58,
       "success": true
     },
     {
@@ -191,7 +191,7 @@
       "passed": 10,
       "failures": 0,
       "errors": 0,
-      "elapsed": 0.495,
+      "elapsed": 0.58,
       "success": true
     },
     {
@@ -201,7 +201,7 @@
       "passed": 10,
       "failures": 0,
       "errors": 0,
-      "elapsed": 0.466,
+      "elapsed": 0.539,
       "success": true
     },
     {
@@ -211,7 +211,7 @@
       "passed": 10,
       "failures": 0,
       "errors": 0,
-      "elapsed": 0.45,
+      "elapsed": 0.528,
       "success": true
     },
     {
@@ -221,17 +221,17 @@
       "passed": 6,
       "failures": 0,
       "errors": 0,
-      "elapsed": 0.846,
+      "elapsed": 0.97,
       "success": true
     },
     {
       "suite": "test_communities_merge_audit.py",
       "returncode": 0,
-      "tests_run": 9,
-      "passed": 9,
+      "tests_run": 10,
+      "passed": 10,
       "failures": 0,
       "errors": 0,
-      "elapsed": 2.146,
+      "elapsed": 4.021,
       "success": true
     }
   ]
