@@ -1,0 +1,316 @@
+"""
+backend/communities/routes.py - Rutas REST de la API de Communities para C.C.I. SYSTEM.
+
+Expone endpoints bajo /api/v1/communities e invitaciones protegidos con autenticación JWT Bearer.
+"""
+from __future__ import annotations
+
+from flask import Blueprint, g, jsonify, request
+from backend.auth import require_auth
+from backend.communities.service import CommunitiesService
+
+communities_bp = Blueprint("communities", __name__)
+
+
+def get_service() -> CommunitiesService:
+    return CommunitiesService.get_instance()
+
+
+@communities_bp.route("/communities", methods=["POST"])
+@require_auth
+def create_community_route():
+    data = request.get_json() or {}
+    name = data.get("name", "").strip()
+    if not name:
+        return jsonify({"error": "El campo 'name' es requerido"}), 400
+
+    desc = data.get("description")
+    visibility = data.get("visibility", "private")
+    slug = data.get("slug")
+    user_id = g.current_user["user_id"]
+
+    try:
+        comm = get_service().create_community(
+            owner_id=user_id,
+            name=name,
+            description=desc,
+            visibility=visibility,
+            slug=slug,
+        )
+        return jsonify({"community": comm}), 201
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+
+
+@communities_bp.route("/communities", methods=["GET"])
+@require_auth
+def list_communities_route():
+    user_id = g.current_user["user_id"]
+    discover = request.args.get("visibility") == "public"
+    items = get_service().list_communities(user_id, discover_public=discover)
+    return jsonify({"communities": items}), 200
+
+
+@communities_bp.route("/communities/<community_id>", methods=["GET"])
+@require_auth
+def get_community_route(community_id: str):
+    user_id = g.current_user["user_id"]
+    comm = get_service().get_community(community_id, user_id)
+    if not comm:
+        return jsonify({"error": "Comunidad no encontrada o acceso denegado"}), 403
+    return jsonify({"community": comm}), 200
+
+
+@communities_bp.route("/communities/<community_id>", methods=["PATCH"])
+@require_auth
+def update_community_route(community_id: str):
+    user_id = g.current_user["user_id"]
+    data = request.get_json() or {}
+    try:
+        updated = get_service().update_community(community_id, user_id, data)
+        return jsonify({"community": updated}), 200
+    except PermissionError as e:
+        return jsonify({"error": str(e)}), 403
+    except LookupError as e:
+        return jsonify({"error": str(e)}), 404
+
+
+@communities_bp.route("/communities/<community_id>", methods=["DELETE"])
+@require_auth
+def delete_community_route(community_id: str):
+    user_id = g.current_user["user_id"]
+    try:
+        get_service().delete_community(community_id, user_id)
+        return jsonify({"status": "deleted"}), 200
+    except PermissionError as e:
+        return jsonify({"error": str(e)}), 403
+    except LookupError as e:
+        return jsonify({"error": str(e)}), 404
+
+
+@communities_bp.route("/communities/<community_id>/transfer-ownership", methods=["POST"])
+@require_auth
+def transfer_ownership_route(community_id: str):
+    user_id = g.current_user["user_id"]
+    data = request.get_json() or {}
+    new_owner_id = data.get("new_owner_id")
+    if not new_owner_id:
+        return jsonify({"error": "new_owner_id requerido"}), 400
+
+    try:
+        get_service().transfer_ownership(community_id, user_id, new_owner_id)
+        return jsonify({"status": "transferred", "new_owner_id": new_owner_id}), 200
+    except PermissionError as e:
+        return jsonify({"error": str(e)}), 403
+    except (LookupError, ValueError) as e:
+        return jsonify({"error": str(e)}), 400
+
+
+@communities_bp.route("/communities/<community_id>/invitations", methods=["POST"])
+@require_auth
+def create_invitation_route(community_id: str):
+    user_id = g.current_user["user_id"]
+    data = request.get_json() or {}
+    max_uses = int(data.get("max_uses", 0))
+    expires_in_hours = data.get("expires_in_hours")
+    if expires_in_hours is not None:
+        expires_in_hours = int(expires_in_hours)
+
+    try:
+        inv = get_service().create_invitation(community_id, user_id, max_uses, expires_in_hours)
+        return jsonify({"invitation": inv}), 201
+    except PermissionError as e:
+        return jsonify({"error": str(e)}), 403
+    except LookupError as e:
+        return jsonify({"error": str(e)}), 404
+
+
+@communities_bp.route("/invitations/<code_str>/accept", methods=["POST"])
+@require_auth
+def accept_invitation_route(code_str: str):
+    user_id = g.current_user["user_id"]
+    try:
+        res = get_service().join_via_invitation(code_str, user_id)
+        return jsonify(res), 200
+    except LookupError as e:
+        return jsonify({"error": str(e)}), 404
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+
+
+@communities_bp.route("/communities/<community_id>/members", methods=["GET"])
+@require_auth
+def list_members_route(community_id: str):
+    user_id = g.current_user["user_id"]
+    comm = get_service().get_community(community_id, user_id)
+    if not comm:
+        return jsonify({"error": "Acceso denegado a la comunidad"}), 403
+    members = get_service().repo.list_members(community_id)
+    return jsonify({"members": members}), 200
+
+
+@communities_bp.route("/communities/<community_id>/members/<target_id>/kick", methods=["POST"])
+@require_auth
+def kick_member_route(community_id: str, target_id: str):
+    user_id = g.current_user["user_id"]
+    try:
+        get_service().kick_member(community_id, user_id, target_id)
+        return jsonify({"status": "kicked", "target_id": target_id}), 200
+    except PermissionError as e:
+        return jsonify({"error": str(e)}), 403
+    except LookupError as e:
+        return jsonify({"error": str(e)}), 404
+
+
+@communities_bp.route("/communities/<community_id>/leave", methods=["POST"])
+@require_auth
+def leave_community_route(community_id: str):
+    user_id = g.current_user["user_id"]
+    try:
+        get_service().leave_community(community_id, user_id)
+        return jsonify({"status": "left"}), 200
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    except LookupError as e:
+        return jsonify({"error": str(e)}), 404
+
+
+@communities_bp.route("/communities/<community_id>/roles", methods=["GET"])
+@require_auth
+def list_roles_route(community_id: str):
+    user_id = g.current_user["user_id"]
+    comm = get_service().get_community(community_id, user_id)
+    if not comm:
+        return jsonify({"error": "Acceso denegado a la comunidad"}), 403
+    roles = get_service().repo.list_roles(community_id)
+    return jsonify({"roles": roles}), 200
+
+
+@communities_bp.route("/communities/<community_id>/roles", methods=["POST"])
+@require_auth
+def create_role_route(community_id: str):
+    user_id = g.current_user["user_id"]
+    data = request.get_json() or {}
+    name = data.get("name", "").strip()
+    if not name:
+        return jsonify({"error": "El nombre del rol es requerido"}), 400
+
+    color = data.get("color", "#99AAB5")
+    position = int(data.get("position", 100))
+    is_admin = bool(data.get("is_admin", False))
+    permissions = data.get("permissions", [])
+
+    try:
+        role = get_service().create_role(
+            community_id=community_id,
+            requester_id=user_id,
+            name=name,
+            color=color,
+            position=position,
+            is_admin=is_admin,
+            permissions=permissions,
+        )
+        return jsonify({"role": role}), 201
+    except PermissionError as e:
+        return jsonify({"error": str(e)}), 403
+
+
+@communities_bp.route("/communities/<community_id>/members/<target_id>/roles", methods=["POST"])
+@require_auth
+def assign_role_route(community_id: str, target_id: str):
+    user_id = g.current_user["user_id"]
+    data = request.get_json() or {}
+    role_id = data.get("role_id")
+    if not role_id:
+        return jsonify({"error": "role_id es requerido"}), 400
+
+    try:
+        get_service().assign_role(community_id, user_id, target_id, role_id)
+        return jsonify({"status": "role_assigned"}), 200
+    except PermissionError as e:
+        return jsonify({"error": str(e)}), 403
+    except LookupError as e:
+        return jsonify({"error": str(e)}), 404
+
+
+@communities_bp.route("/communities/<community_id>/channels", methods=["GET"])
+@require_auth
+def list_channels_route(community_id: str):
+    user_id = g.current_user["user_id"]
+    comm = get_service().get_community(community_id, user_id)
+    if not comm:
+        return jsonify({"error": "Acceso denegado a la comunidad"}), 403
+    channels = get_service().list_channels(community_id, user_id)
+    return jsonify({"channels": channels}), 200
+
+
+@communities_bp.route("/communities/<community_id>/channels", methods=["POST"])
+@require_auth
+def create_channel_route(community_id: str):
+    user_id = g.current_user["user_id"]
+    data = request.get_json() or {}
+    name = data.get("name", "").strip()
+    if not name:
+        return jsonify({"error": "El nombre del canal es requerido"}), 400
+
+    ch_type = data.get("type", "text")
+    is_private = bool(data.get("is_private", False))
+    topic = data.get("topic")
+
+    try:
+        ch = get_service().create_channel(
+            community_id=community_id,
+            requester_id=user_id,
+            name=name,
+            channel_type=ch_type,
+            topic=topic,
+            is_private=is_private,
+        )
+        return jsonify({"channel": ch}), 201
+    except PermissionError as e:
+        return jsonify({"error": str(e)}), 403
+
+
+@communities_bp.route("/communities/<community_id>/channels/<channel_id>", methods=["DELETE"])
+@require_auth
+def delete_channel_route(community_id: str, channel_id: str):
+    user_id = g.current_user["user_id"]
+    try:
+        get_service().delete_channel(community_id, channel_id, user_id)
+        return jsonify({"status": "deleted"}), 200
+    except PermissionError as e:
+        return jsonify({"error": str(e)}), 403
+    except LookupError as e:
+        return jsonify({"error": str(e)}), 404
+
+
+@communities_bp.route("/communities/<community_id>/channels/<channel_id>/overrides", methods=["POST"])
+@require_auth
+def set_channel_override_route(community_id: str, channel_id: str):
+    user_id = g.current_user["user_id"]
+    data = request.get_json() or {}
+    target_type = data.get("target_type")
+    target_id = data.get("target_id")
+    permission_id = data.get("permission_id")
+    allow = bool(data.get("allow", False))
+    deny = bool(data.get("deny", False))
+
+    if not all([target_type, target_id, permission_id]):
+        return jsonify({"error": "target_type, target_id y permission_id son requeridos"}), 400
+
+    try:
+        get_service().set_channel_override(
+            community_id=community_id,
+            channel_id=channel_id,
+            requester_id=user_id,
+            target_type=target_type,
+            target_id=target_id,
+            permission_id=permission_id,
+            allow=allow,
+            deny=deny,
+        )
+        return jsonify({"status": "override_set"}), 200
+    except PermissionError as e:
+        return jsonify({"error": str(e)}), 403
+    except LookupError as e:
+        return jsonify({"error": str(e)}), 404

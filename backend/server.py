@@ -37,6 +37,9 @@ from backend.auth import (
 app = Flask(__name__)
 app.config["SECRET_KEY"] = config.secret_key
 
+from backend.communities.routes import communities_bp
+app.register_blueprint(communities_bp, url_prefix="/api/v1")
+
 # Socket.IO con soporte multi-origen y autorización centralizada
 socketio = SocketIO(
     app,
