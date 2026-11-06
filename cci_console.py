@@ -974,9 +974,9 @@ class CCIConsoleState:
 
         self._draw_category_highlight()
         self._draw_game_detail(self._selected_game())
-        pygame.draw.rect(self.canvas, DARK, (160, 649, 550, 43))
-        hint = "←→ ELEGIR   Q/E FILTRO   PgUp/Dn PÁGINA   ENTER JUGAR   F FAVORITO   F3 BUSCAR"
-        self._text(hint, 188, 668, 11, MUTED, max_width=510)
+        pygame.draw.rect(self.canvas, DARK, (160, 649, 680, 43))
+        hint = "←→ ELEGIR   Q/E FILTRO   ENTER JUGAR   F FAVORITO   F11 GRABAR MP4   F12 FOTO"
+        self._text(hint, 188, 668, 11, MUTED, max_width=660)
         if self.search_query:
             self._text(f"BÚSQUEDA: {self.search_query}", 283, 584, 13, WHITE, max_width=520)
         if self.search_active:
@@ -1013,6 +1013,11 @@ class CCIConsoleState:
         area = outer.inflate(-10, -10)
         pygame.draw.rect(self.canvas, PANEL, area, border_radius=6)
         self._text(game["title"], 880, 154, 18, WHITE, True, 350)
+        if game.get("multiplayer", {}).get("online") or game["id"] == "davinci":
+            online_rect = pygame.Rect(1080, 154, 140, 20)
+            pygame.draw.rect(self.canvas, (10, 40, 60), online_rect, border_radius=4)
+            pygame.draw.rect(self.canvas, (0, 240, 255), online_rect, 1, border_radius=4)
+            self._text("🌐 ONLINE 60 Hz", online_rect.x + 8, online_rect.y + 4, 10, (0, 240, 255), True)
         self._text(game["tags"], 880, 184, 11, LIGHT, max_width=210)
         if game["id"] in self.user_data.data.get("favorites", []):
             self._text("★ FAVORITO", 1090, 184, 10, WHITE, True, 140)

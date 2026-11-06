@@ -109,7 +109,7 @@ def execute_build(mode: str = "debug") -> int:
 
 def main():
     parser = argparse.ArgumentParser(description="Empaquetador y verificador APK para C.C.I. SYSTEM")
-    parser.add_argument("--dry-run", action="store_true", default=True, help="Solo validar entorno y spec")
+    parser.add_argument("--dry-run", action="store_true", help="Solo validar entorno y spec")
     parser.add_argument("--build", choices=["debug", "release"], help="Compilar APK")
     args = parser.parse_args()
 

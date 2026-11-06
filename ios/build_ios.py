@@ -84,6 +84,13 @@ def run_ios_preflight(root_dir: Path) -> bool:
         return False
     print(" [OK] ios/Entitlements.plist encontrado.")
 
+    # Proyecto nativo Xcode
+    xcode_proj = root_dir / "ios" / "CCI_System.xcodeproj"
+    if not xcode_proj.exists():
+        print(" [FAIL] ios/CCI_System.xcodeproj no encontrado.")
+        return False
+    print(" [OK] ios/CCI_System.xcodeproj encontrado.")
+
     # Módulo mobile/ios_adapter.py
     adapter_path = root_dir / "mobile" / "ios_adapter.py"
     if not adapter_path.is_file():
@@ -101,9 +108,33 @@ def run_ios_preflight(root_dir: Path) -> bool:
     return True
 
 
+def execute_ios_build(root_dir: Path, configuration: str = "Release") -> int:
+    """Compila el proyecto Xcode usando xcodebuild."""
+    proj_path = root_dir / "ios" / "CCI_System.xcodeproj"
+    cmd = [
+        "xcodebuild",
+        "-project", str(proj_path),
+        "-scheme", "CCISystem",
+        "-configuration", configuration,
+        "CODE_SIGNING_ALLOWED=NO",
+        "build"
+    ]
+    print(f"\nEjecutando: {' '.join(cmd)}")
+    try:
+        res = subprocess.run(cmd, check=True)
+        return res.returncode
+    except subprocess.CalledProcessError as e:
+        print(f"xcodebuild falló con código {e.returncode}")
+        return e.returncode
+    except FileNotFoundError:
+        print("xcodebuild no encontrado. Asegúrese de tener Xcode instalado.")
+        return 127
+
+
 def main():
     parser = argparse.ArgumentParser(description="Verificador y empaquetador iOS para C.C.I. SYSTEM")
-    parser.add_argument("--dry-run", action="store_true", default=True, help="Solo validar plist y entorno")
+    parser.add_argument("--dry-run", action="store_true", help="Solo validar plist y entorno")
+    parser.add_argument("--build", action="store_true", help="Compilar proyecto Xcode nativo")
     args = parser.parse_args()
 
     root_dir = Path(__file__).resolve().parent.parent
@@ -111,6 +142,11 @@ def main():
 
     if not ok:
         sys.exit(1)
+
+    if args.build:
+        code = execute_ios_build(root_dir)
+        sys.exit(code)
+
     print("\nPre-flight check de iOS completado con éxito.")
     sys.exit(0)
 

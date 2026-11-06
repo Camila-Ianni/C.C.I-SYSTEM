@@ -12,10 +12,10 @@ La Fase 2 implementa el Módulo B (Amigos y Grupos) mediante lógica de negocio 
 
 | Módulo / Archivo | Responsabilidad Técnica |
 |---|---|
-| [backend/friends_service.py](file:///Users/cami/Desktop/C.C.I%20SYSTEM/backend/friends_service.py) | Servicio de amistades, presencia en tiempo real (online, away, busy, offline), juego activo, creación de grupos y jerarquía de permisos. |
-| [cci_database.py](file:///Users/cami/Desktop/C.C.I%20SYSTEM/cci_database.py) | Métodos relacionales de persistencia en SQLite para `friendships`, `groups` y `group_members`. |
-| [backend/server.py](file:///Users/cami/Desktop/C.C.I%20SYSTEM/backend/server.py) | Endpoints REST para solicitudes, bloqueos, presencia, gestión de grupos, expulsiones y transferencia de propiedad. |
-| [test_phase2_evolution.py](file:///Users/cami/Desktop/C.C.I%20SYSTEM/test_phase2_evolution.py) | 11 pruebas unitarias e integración que validan el 100% de los flujos y restricciones. |
+| [backend/friends_service.py](../backend/friends_service.py) | Servicio de amistades, presencia en tiempo real (online, away, busy, offline), juego activo, creación de grupos y jerarquía de permisos. |
+| [cci_database.py](../cci_database.py) | Métodos relacionales de persistencia en SQLite para `friendships`, `groups` y `group_members`. |
+| [backend/server.py](../backend/server.py) | Endpoints REST para solicitudes, bloqueos, presencia, gestión de grupos, expulsiones y transferencia de propiedad. |
+| [test_phase2_evolution.py](../test_phase2_evolution.py) | 11 pruebas unitarias e integración que validan el 100% de los flujos y restricciones. |
 
 ---
 
@@ -66,4 +66,4 @@ OK (100% de éxito en todas las suites acumuladas)
 - test_phase2.py: 9 tests pasados
 - test_phase3.py: 7 tests pasados
 ```
-- Consola de escritorio [main.py](file:///Users/cami/Desktop/C.C.I%20SYSTEM/main.py) y catálogo de 19 juegos permanecen 100% estables e intactos.
+- Consola de escritorio [main.py](../main.py) y catálogo de 19 juegos permanecen 100% estables e intactos.

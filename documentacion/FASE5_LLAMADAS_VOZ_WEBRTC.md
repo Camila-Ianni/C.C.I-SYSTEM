@@ -12,11 +12,11 @@ La Fase 5 implementa el sistema de llamadas de voz grupales de baja latencia (M�
 
 | Módulo / Archivo | Responsabilidad Técnica |
 |---|---|
-| [backend/voice_service.py](file:///Users/cami/Desktop/C.C.I%20SYSTEM/backend/voice_service.py) | Gestión en memoria de sesiones de llamada, participantes, control de micrófono (`muted`), autodetección de llamadas activas por grupo y finalización automática. |
-| [backend/webrtc_signaling.py](file:///Users/cami/Desktop/C.C.I%20SYSTEM/backend/webrtc_signaling.py) | Enrutador de ofertas y respuestas SDP y candidatos ICE sobre la conexión WebSocket de Socket.IO. |
-| [cci_database.py](file:///Users/cami/Desktop/C.C.I%20SYSTEM/cci_database.py) | Persistencia de sesiones en `call_sessions` (`status='active'`, `status='ended'`, `started_at`, `ended_at`). |
-| [backend/server.py](file:///Users/cami/Desktop/C.C.I%20SYSTEM/backend/server.py) | Endpoints REST (`/api/v1/voice/...`) y eventos WebSocket (`call:start`, `call:join`, `call:leave`, `call:mute`, `webrtc:offer`, `webrtc:answer`, `webrtc:ice_candidate`). |
-| [test_phase5_evolution.py](file:///Users/cami/Desktop/C.C.I%20SYSTEM/test_phase5_evolution.py) | 6 pruebas automatizadas que verifican el ciclo de vida de llamada, privacidad (no-grabación), silenciamiento, enrutamiento WebRTC y configuración ICE. |
+| [backend/voice_service.py](../backend/voice_service.py) | Gestión en memoria de sesiones de llamada, participantes, control de micrófono (`muted`), autodetección de llamadas activas por grupo y finalización automática. |
+| [backend/webrtc_signaling.py](../backend/webrtc_signaling.py) | Enrutador de ofertas y respuestas SDP y candidatos ICE sobre la conexión WebSocket de Socket.IO. |
+| [cci_database.py](../cci_database.py) | Persistencia de sesiones en `call_sessions` (`status='active'`, `status='ended'`, `started_at`, `ended_at`). |
+| [backend/server.py](../backend/server.py) | Endpoints REST (`/api/v1/voice/...`) y eventos WebSocket (`call:start`, `call:join`, `call:leave`, `call:mute`, `webrtc:offer`, `webrtc:answer`, `webrtc:ice_candidate`). |
+| [test_phase5_evolution.py](../test_phase5_evolution.py) | 6 pruebas automatizadas que verifican el ciclo de vida de llamada, privacidad (no-grabación), silenciamiento, enrutamiento WebRTC y configuración ICE. |
 
 ---
 
@@ -77,4 +77,4 @@ OK (100% de éxito en todas las suites acumuladas)
 - test_phase2.py: 9 tests pasados
 - test_phase3.py: 7 tests pasados
 ```
-- Consola de escritorio [main.py](file:///Users/cami/Desktop/C.C.I%20SYSTEM/main.py) y catálogo de 19 títulos continúan 100% operativos.
+- Consola de escritorio [main.py](../main.py) y catálogo de 19 títulos continúan 100% operativos.

@@ -12,13 +12,13 @@ La Fase 4 implementa el Módulo A (Multijugador Online) con un juego piloto inte
 
 | Módulo / Archivo | Responsabilidad Técnica |
 |---|---|
-| [catalog_data.py](file:///Users/cami/Desktop/C.C.I%20SYSTEM/catalog_data.py) | Declaración formal de modalidades multijugador (`single`, `local`, `online`). Da Vinci Fighters habilitado para online; los demás preservan modos locales e individuales. |
-| [backend/room_manager.py](file:///Users/cami/Desktop/C.C.I%20SYSTEM/backend/room_manager.py) | Creación y administración de salas en memoria con código de invitación alfanumérico, roles de anfitrión (iniciar, expulsar, transferir) y ventana de gracia por desconexión (5 segundos). |
-| [backend/sync_engine.py](file:///Users/cami/Desktop/C.C.I%20SYSTEM/backend/sync_engine.py) | Motor autoritativo a 60 Hz (paso de tiempo fijo de 16.66ms): consumo de entradas por tick, validación de hitboxes, resta de vida autoritativa en servidor, progresión al mejor de 3 rounds (Best of 3) y empate/victoria. |
-| [backend/multiplayer_client.py](file:///Users/cami/Desktop/C.C.I%20SYSTEM/backend/multiplayer_client.py) | Cliente de red ligero en Python para Pygame: medición de latencia/RTT, predicción local, buffer de interpolación y reconexión suave. |
-| [cci_database.py](file:///Users/cami/Desktop/C.C.I%20SYSTEM/cci_database.py) | Persistencia relacional de partidas en `matches` y búsqueda de salas por `invite_code`. |
-| [backend/server.py](file:///Users/cami/Desktop/C.C.I%20SYSTEM/backend/server.py) | Endpoints REST (`/api/v1/multiplayer/...`) y eventos en tiempo real (`game:start`, `game:input`, `game:snapshot`, `game:pause`, `game:resume`). |
-| [test_phase4_evolution.py](file:///Users/cami/Desktop/C.C.I%20SYSTEM/test_phase4_evolution.py) | 8 pruebas automatizadas de extremo a extremo que validan salas privadas, anfitrión, simulación autoritativa, rounds, desconexión/reconexión y persistencia. |
+| [catalog_data.py](../catalog_data.py) | Declaración formal de modalidades multijugador (`single`, `local`, `online`). Da Vinci Fighters habilitado para online; los demás preservan modos locales e individuales. |
+| [backend/room_manager.py](../backend/room_manager.py) | Creación y administración de salas en memoria con código de invitación alfanumérico, roles de anfitrión (iniciar, expulsar, transferir) y ventana de gracia por desconexión (5 segundos). |
+| [backend/sync_engine.py](../backend/sync_engine.py) | Motor autoritativo a 60 Hz (paso de tiempo fijo de 16.66ms): consumo de entradas por tick, validación de hitboxes, resta de vida autoritativa en servidor, progresión al mejor de 3 rounds (Best of 3) y empate/victoria. |
+| [backend/multiplayer_client.py](../backend/multiplayer_client.py) | Cliente de red ligero en Python para Pygame: medición de latencia/RTT, predicción local, buffer de interpolación y reconexión suave. |
+| [cci_database.py](../cci_database.py) | Persistencia relacional de partidas en `matches` y búsqueda de salas por `invite_code`. |
+| [backend/server.py](../backend/server.py) | Endpoints REST (`/api/v1/multiplayer/...`) y eventos en tiempo real (`game:start`, `game:input`, `game:snapshot`, `game:pause`, `game:resume`). |
+| [test_phase4_evolution.py](../test_phase4_evolution.py) | 8 pruebas automatizadas de extremo a extremo que validan salas privadas, anfitrión, simulación autoritativa, rounds, desconexión/reconexión y persistencia. |
 
 ---
 
@@ -69,4 +69,4 @@ OK (100% de éxito en todas las suites acumuladas)
 - test_phase2.py: 9 tests pasados
 - test_phase3.py: 7 tests pasados
 ```
-- Consola de escritorio [main.py](file:///Users/cami/Desktop/C.C.I%20SYSTEM/main.py) y catálogo de 19 títulos continúan 100% operativos.
+- Consola de escritorio [main.py](../main.py) y catálogo de 19 títulos continúan 100% operativos.

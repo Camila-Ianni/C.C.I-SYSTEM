@@ -12,10 +12,10 @@ El repositorio base contiene una arquitectura híbrida de consola arcade de escr
 
 | Métrica / Componente | Estado Real Auditado |
 |---|---|
-| **Versión declarada** | `v2.1.0` en [version.json](file:///Users/cami/Desktop/C.C.I%20SYSTEM/version.json) |
-| **Batería de tests existente** | 16/16 tests pasados (9 en [test_phase2.py](file:///Users/cami/Desktop/C.C.I%20SYSTEM/test_phase2.py), 7 en [test_phase3.py](file:///Users/cami/Desktop/C.C.I%20SYSTEM/test_phase3.py)) |
+| **Versión declarada** | `v2.1.0` en [version.json](../version.json) |
+| **Batería de tests existente** | 16/16 tests pasados (9 en [test_phase2.py](../test_phase2.py), 7 en [test_phase3.py](../test_phase3.py)) |
 | **Entorno de ejecución** | Python 3.14.5, Pygame-CE 2.5.8, OpenCV 5.0.0, NumPy 2.5.4, Pymunk 7.3.1, Flask 3.1.3 |
-| **Catálogo total** | 19 títulos declarados en [catalog_data.py](file:///Users/cami/Desktop/C.C.I%20SYSTEM/catalog_data.py) |
+| **Catálogo total** | 19 títulos declarados en [catalog_data.py](../catalog_data.py) |
 | **Juegos internos (in-process)** | **9 títulos** (integrados en `states.py` dentro de la misma ventana Pygame) |
 | **Juegos externos (subprocesos)** | **10 títulos** (ejecutados mediante `subprocess.run([sys.executable, ...])`) |
 
@@ -23,7 +23,7 @@ El repositorio base contiene una arquitectura híbrida de consola arcade de escr
 
 ## 2. Inventario y Auditoría Arquitectónica del Catálogo (19 Juegos)
 
-La auditoría del código real en [states.py](file:///Users/cami/Desktop/C.C.I%20SYSTEM/states.py) y [catalog_data.py](file:///Users/cami/Desktop/C.C.I%20SYSTEM/catalog_data.py) revela una bifurcación crítica que el README no explicitaba:
+La auditoría del código real en [states.py](../states.py) y [catalog_data.py](../catalog_data.py) revela una bifurcación crítica que el README no explicitaba:
 
 ### 2.1 Juegos Internos (Ejecución dentro del bucle de Pygame)
 Estos títulos comparten la superficie `screen`, no abren ventanas secundarias y su estado de ejecución puede ser interceptado y sincronizado:
@@ -67,7 +67,7 @@ Para el **Módulo A (Fase 4: Multijugador Piloto)**, se auditaron los juegos con
 ## 4. Auditoría de Señalización, WebSockets y Llamadas WebRTC
 
 ### 4.1 Estado Actual
-- El backend web actual ([web/app.py](file:///Users/cami/Desktop/C.C.I%20SYSTEM/web/app.py)) es Flask REST síncrono.
+- El backend web actual ([web/app.py](../web/app.py)) es Flask REST síncrono.
 - No existe servidor WebSocket activo ni dependencias de tiempo real instaladas en el `.venv`.
 
 ### 4.2 Arquitectura Recomendada para Red y Tiempo Real
@@ -84,7 +84,7 @@ Para el **Módulo A (Fase 4: Multijugador Piloto)**, se auditaron los juegos con
 
 ## 5. Auditoría de Base de Datos y Persistencia
 
-### 5.1 Tablas Actuales en [cci_database.py](file:///Users/cami/Desktop/C.C.I%20SYSTEM/cci_database.py)
+### 5.1 Tablas Actuales en [cci_database.py](../cci_database.py)
 - `accounts`: Cuentas y tokens.
 - `games`: Catálogo de juegos.
 - `profiles`: Perfiles de usuario.
@@ -109,7 +109,7 @@ Se diseñarán migraciones versionadas (sin borrar datos existentes):
 ## 6. Auditoría de Grabaciones de Gameplay (Módulo C)
 
 ### 6.1 Estado Actual
-- [screenshot_manager.py](file:///Users/cami/Desktop/C.C.I%20SYSTEM/screenshot_manager.py) captura imágenes fijas en PNG a la carpeta `capturas/` mediante `pygame.image.save()`.
+- [screenshot_manager.py](../screenshot_manager.py) captura imágenes fijas en PNG a la carpeta `capturas/` mediante `pygame.image.save()`.
 - No existe infraestructura de captura de video ni codificación temporal.
 
 ### 6.2 Factibilidad Técnica de Grabación en Python

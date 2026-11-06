@@ -12,10 +12,10 @@ La Fase 3 implementa el sistema de chat grupal persistente en tiempo real (Módu
 
 | Módulo / Archivo | Responsabilidad Técnica |
 |---|---|
-| [backend/chat_service.py](file:///Users/cami/Desktop/C.C.I%20SYSTEM/backend/chat_service.py) | Servicio de mensajería con protección anti-spam por ventana deslizante (sliding window), validación de longitud (1 a 500 caracteres), control de silenciados (muted/banned), borrado lógico y reportes. |
-| [cci_database.py](file:///Users/cami/Desktop/C.C.I%20SYSTEM/cci_database.py) | Persistencia de mensajes en tabla `messages` e indexación de reportes en `message_reports`. |
-| [backend/server.py](file:///Users/cami/Desktop/C.C.I%20SYSTEM/backend/server.py) | Endpoints REST (`/api/v1/chat/...`) y eventos WebSocket bidireccionales (`chat:join`, `chat:leave`, `chat:send`, `chat:typing`, `chat:message`). |
-| [test_phase3_evolution.py](file:///Users/cami/Desktop/C.C.I%20SYSTEM/test_phase3_evolution.py) | 8 pruebas automatizadas que verifican anti-spam, longitud, no-miembros, silenciados, borrado lógico por permisos y reportes de moderación. |
+| [backend/chat_service.py](../backend/chat_service.py) | Servicio de mensajería con protección anti-spam por ventana deslizante (sliding window), validación de longitud (1 a 500 caracteres), control de silenciados (muted/banned), borrado lógico y reportes. |
+| [cci_database.py](../cci_database.py) | Persistencia de mensajes en tabla `messages` e indexación de reportes en `message_reports`. |
+| [backend/server.py](../backend/server.py) | Endpoints REST (`/api/v1/chat/...`) y eventos WebSocket bidireccionales (`chat:join`, `chat:leave`, `chat:send`, `chat:typing`, `chat:message`). |
+| [test_phase3_evolution.py](../test_phase3_evolution.py) | 8 pruebas automatizadas que verifican anti-spam, longitud, no-miembros, silenciados, borrado lógico por permisos y reportes de moderación. |
 
 ---
 
@@ -66,4 +66,4 @@ OK (100% de éxito en todas las suites acumuladas)
 - test_phase2.py: 9 tests pasados
 - test_phase3.py: 7 tests pasados
 ```
-- Consola de escritorio [main.py](file:///Users/cami/Desktop/C.C.I%20SYSTEM/main.py) y catálogo de 19 títulos continúan 100% operativos.
+- Consola de escritorio [main.py](../main.py) y catálogo de 19 títulos continúan 100% operativos.

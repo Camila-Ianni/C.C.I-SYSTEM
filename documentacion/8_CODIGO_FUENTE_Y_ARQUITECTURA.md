@@ -141,7 +141,7 @@ classDiagram
 
 ## 3. Desglose Técnico de los Componentes del Código Fuente
 
-### 3.1. [main.py](file:///Users/cami/Desktop/C.C.I%20SYSTEM/main.py)
+### 3.1. [main.py](../main.py)
 * **Propósito:** Actúa como el Kernel / Launcher de la consola virtual.
 * **Aspectos Técnicos Destacados:**
   * **Orden de Importación:** Importa `states` antes de `pygame` para que el supresor de descriptores de archivo de bajo nivel silencie los avisos de Objective-C antes de que las librerías dinámicas se carguen en memoria.
@@ -167,7 +167,7 @@ classDiagram
 
 ---
 
-### 3.2. [states.py](file:///Users/cami/Desktop/C.C.I%20SYSTEM/states.py): Módulos Clave
+### 3.2. [states.py](../states.py): Módulos Clave
 
 #### A. Capa de Periféricos: `JoystickManager`
 * **Problema Resuelto:** Los juegos clásicos de Python estaban diseñados para leer el teclado físico. Los mandos USB eran completamente ignorados.
@@ -208,15 +208,15 @@ classDiagram
 
 ---
 
-### 3.3. Módulo Web Oficial & Despliegue en la Nube ([web/app.py](file:///Users/cami/Desktop/C.C.I%20SYSTEM/web/app.py), [run_web.py](file:///Users/cami/Desktop/C.C.I%20SYSTEM/run_web.py))
+### 3.3. Módulo Web Oficial & Despliegue en la Nube ([web/app.py](../web/app.py), [run_web.py](../run_web.py))
 * **Arquitectura 100% Python:** Diseñada sin archivos HTML, CSS ni plantillas externas en disco.
-* **Generación Dinámica ([web/landing_page.py](file:///Users/cami/Desktop/C.C.I%20SYSTEM/web/landing_page.py)):** Sintetiza en memoria la interfaz Cyberpunk completa, estilos CSS responsivos y scripts cliente para filtros por categoría, modales de ficha técnica y navegación.
-* **Desacoplamiento de Datos ([catalog_data.py](file:///Users/cami/Desktop/C.C.I%20SYSTEM/catalog_data.py)):** Extrae los metadatos de los 19 juegos sin depender de librerías nativas compiladas de Pygame/OpenCV, permitiendo que la web se ejecute de forma ultraligera en la nube (Render.com) con consumo mínimo de RAM (~35 MB).
+* **Generación Dinámica ([web/landing_page.py](../web/landing_page.py)):** Sintetiza en memoria la interfaz Cyberpunk completa, estilos CSS responsivos y scripts cliente para filtros por categoría, modales de ficha técnica y navegación.
+* **Desacoplamiento de Datos ([catalog_data.py](../catalog_data.py)):** Extrae los metadatos de los 19 juegos sin depender de librerías nativas compiladas de Pygame/OpenCV, permitiendo que la web se ejecute de forma ultraligera en la nube (Render.com) con consumo mínimo de RAM (~35 MB).
 * **Redirección CDN de Descargas:** Las rutas `/download/mac` y `/download/windows` comprueban si existen instaladores locales o redirigen automáticamente mediante HTTP 302 a los binarios alojados en GitHub Releases, asegurando descargas a alta velocidad sin saturar el servidor web.
 
 ---
 
-### 3.4. Motor de Distribución Multiplataforma ([build_distribution.py](file:///Users/cami/Desktop/C.C.I%20SYSTEM/build_distribution.py))
+### 3.4. Motor de Distribución Multiplataforma ([build_distribution.py](../build_distribution.py))
 * **macOS DMG:** Construye una imagen de disco nativa Apple Disk Image (`.dmg`) mediante `hdiutil` en formato `UDZO` comprimido, con bundle `C.C.I. SYSTEM.app`, archivo `PkgInfo`, firma ad-hoc con `codesign` y asistente de instalación interactivo con destino en el Escritorio.
 * **Windows EXE:** Genera un instalador ejecutable GUI nativo PE32 de 1-clic con cabecera SFX de 7-Zip, extrayendo el contenido y creando el acceso directo en el Escritorio sin necesidad de terminales ni prompts de comandos.
 * **Optimización de Cargas:** Excluye volcados temporales, cachés binarios y archivos no esenciales, reduciendo el tamaño del paquete de distribución de 2.8 GB a 734 MB en macOS y 628 MB en Windows.
@@ -224,7 +224,7 @@ classDiagram
 
 ---
 
-### 3.5. Capa de Persistencia Relacional SQLite ([cci_database.py](file:///Users/cami/Desktop/C.C.I%20SYSTEM/cci_database.py))
+### 3.5. Capa de Persistencia Relacional SQLite ([cci_database.py](../cci_database.py))
 * **Motor 100% Python Nativo:** Implementado íntegramente con la librería estándar `sqlite3`, eliminando cualquier dependencia de drivers binarios o servicios externos.
 * **Concurrencia y Robustez:**
   * Modo **WAL (Write-Ahead Logging)** habilitado por defecto (`PRAGMA journal_mode = WAL`), permitiendo lecturas concurrentes sin bloqueo durante escrituras intensivas.
@@ -239,7 +239,7 @@ classDiagram
 
 ---
 
-### 3.6. Arquitectura de Servicios REST v1 ([web/app.py](file:///Users/cami/Desktop/C.C.I%20SYSTEM/web/app.py))
+### 3.6. Arquitectura de Servicios REST v1 ([web/app.py](../web/app.py))
 * **Especificación de Endpoints:**
   * `GET /api/v1/health`: Diagnóstico del estado del backend, telemetría y salud del motor SQLite.
   * `GET /api/v1/stats`: Métricas globales del ecosistema (total de juegos, tiempo acumulado, jugadores y récords).
@@ -253,7 +253,7 @@ classDiagram
 
 ---
 
-### 3.7. Cliente de Sincronización Asíncrona Desacoplada ([cci_sync.py](file:///Users/cami/Desktop/C.C.I%20SYSTEM/cci_sync.py))
+### 3.7. Cliente de Sincronización Asíncrona Desacoplada ([cci_sync.py](../cci_sync.py))
 * **Aislamiento del Bucle Temporal de Juego:**
   * Cualquier envío de perfil o récord arcade se ejecuta en un hilo `threading.Thread(..., daemon=True)` independiente.
   * El loop principal de Pygame mantiene **60 FPS constantes** sin experimentar latencia I/O de red.
@@ -263,7 +263,7 @@ classDiagram
 
 ---
 
-### 3.8. Sistema de Versionado Canónico & Auto-Actualizador ([cci_updater.py](file:///Users/cami/Desktop/C.C.I%20SYSTEM/cci_updater.py) & [version.json](file:///Users/cami/Desktop/C.C.I%20SYSTEM/version.json))
+### 3.8. Sistema de Versionado Canónico & Auto-Actualizador ([cci_updater.py](../cci_updater.py) & [version.json](../version.json))
 * **SemVer 2.0.0 Puro:**
   * Parser semántico `parse_semver()` y función determinista `is_newer_version()`.
 * **Verificación Silenciosa:**

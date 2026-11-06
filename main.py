@@ -1,11 +1,11 @@
 """Punto de entrada de la consola virtual C.C.I. System (Pygame-CE)."""
 from __future__ import annotations
 
-# C.C.I. SYSTEM v2.0 — 100% Python Architecture
-VERSION = "2.0.0"
+# C.C.I. SYSTEM v2.1.0 — 100% Python Architecture (Desktop & Mobile)
+VERSION = "2.1.0"
 
 import sys
-
+import time
 import pygame
 
 from cci_console import CATALOG, CCIConsoleState, UserData
@@ -13,6 +13,8 @@ from cci_users import UserManager
 from user_select_state import UserSelectState
 from screenshot_manager import ScreenshotManager
 from audio_bgm import BGMManager
+from mobile.mobile_adapter import MobileAdapter
+from recorder.video_recorder import GameplayVideoRecorder
 from states import (
     SCREEN_HEIGHT,
     SCREEN_WIDTH,
@@ -24,7 +26,7 @@ from states import (
 )
 
 FPS = 60
-SYSTEM_TITLE = "C.C.I. SYSTEM — VIRTUAL CONSOLE"
+SYSTEM_TITLE = "C.C.I. SYSTEM — VIRTUAL CONSOLE (v2.1.0)"
 
 
 def init_subsystems():
@@ -112,25 +114,59 @@ def main():
     state_machine.change_state("BOOT")
 
     running = True
+    mobile_adapter = MobileAdapter(SCREEN_WIDTH, SCREEN_HEIGHT)
+    video_recorder = GameplayVideoRecorder.get_instance()
+
+    # Callback botón físico Volver en Android
+    mobile_adapter.on_back_pressed = lambda: state_machine.change_state("MENU")
+
     while running:
         dt = clock.tick(FPS) / 1000.0
         events = pygame.event.get()
         for event in events:
+            # Procesar ciclo de vida móvil y eventos táctiles
+            mobile_adapter.handle_event(event)
+
             if event.type == pygame.QUIT:
                 running = False
             elif event.type == pygame.KEYDOWN and event.key in (pygame.K_F12, pygame.K_PRINT, pygame.K_F10):
                 current_surf = pygame.display.get_surface() or screen
                 ScreenshotManager.get_instance().take_screenshot(current_surf)
+            elif event.type == pygame.KEYDOWN and event.key == pygame.K_F11:
+                # F11: Alternar Grabación Asíncrona de Gameplay en MP4 (Fase 6)
+                if video_recorder.is_recording:
+                    video_recorder.stop_recording()
+                else:
+                    active_game = getattr(state_machine.current_state, "game_key", "general")
+                    owner = user_manager.active_user.username if user_manager.active_user else "pilot"
+                    video_recorder.start_recording(game_id=active_game, owner_id=owner)
             elif event.type == pygame.JOYBUTTONDOWN and event.button in (6, 8):
                 current_surf = pygame.display.get_surface() or screen
                 ScreenshotManager.get_instance().take_screenshot(current_surf)
+
         state_machine.handle_events(events)
         state_machine.update(dt)
         screen = pygame.display.get_surface() or screen
         state_machine.screen = screen
         state_machine.draw(screen)
+
+        # Captura asíncrona de frame si la grabación está activa
+        if video_recorder.is_recording:
+            video_recorder.capture_surface(screen)
+            # Indicador visual REC parpadeante en esquina superior derecha
+            if int(time.time() * 2) % 2 == 0:
+                pygame.draw.circle(screen, (255, 30, 30), (screen.get_width() - 85, 25), 7)
+                font = pygame.font.Font(None, 24)
+                rec_txt = font.render("REC", True, (255, 50, 50))
+                screen.blit(rec_txt, (screen.get_width() - 72, 17))
+
+        # Render de overlay táctil virtual (Android / iOS)
+        mobile_adapter.render(screen)
         ScreenshotManager.get_instance().draw_overlay(screen)
         pygame.display.flip()
+
+    if video_recorder.is_recording:
+        video_recorder.stop_recording()
 
     pygame.quit()
     return 0

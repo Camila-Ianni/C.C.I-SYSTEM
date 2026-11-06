@@ -12,11 +12,11 @@ La Fase 6 implementa el Módulo C (Galería de Grabaciones de Gameplay) mediante
 
 | Módulo / Archivo | Responsabilidad Técnica |
 |---|---|
-| [recorder/video_recorder.py](file:///Users/cami/Desktop/C.C.I%20SYSTEM/recorder/video_recorder.py) | Grabador de gameplay desacoplado en segundo plano: encolamiento no bloqueante de frames desde Pygame, codificación MP4 en Worker Thread a 30 FPS (resolución 960×540, ~9.7 MB/min), captura de miniatura PNG y control de cuota FIFO. |
-| [recorder/gallery_service.py](file:///Users/cami/Desktop/C.C.I%20SYSTEM/recorder/gallery_service.py) | Servicio de gestión de galería: filtrado por juego, cálculo de cuotas de disco, actualización de privacidad (`private`/`shared`), eliminación física de video y miniatura, y apertura con reproductor nativo del SO. |
-| [cci_database.py](file:///Users/cami/Desktop/C.C.I%20SYSTEM/cci_database.py) | Persistencia y consultas en tabla `gameplay_recordings` (usuario, juego, ruta, duración, bytes, miniatura, privacidad). |
-| [backend/server.py](file:///Users/cami/Desktop/C.C.I%20SYSTEM/backend/server.py) | Endpoints REST (`/api/v1/recordings/...`) para control de grabación, consulta de cuota, listado de galería, visibilidad y reproducción. |
-| [test_phase6_evolution.py](file:///Users/cami/Desktop/C.C.I%20SYSTEM/test_phase6_evolution.py) | 4 pruebas automatizadas que verifican la creación de MP4 válido, generación de miniatura PNG, persistencia de metadatos, purga FIFO ante exceso de cuota y endpoints REST. |
+| [recorder/video_recorder.py](../recorder/video_recorder.py) | Grabador de gameplay desacoplado en segundo plano: encolamiento no bloqueante de frames desde Pygame, codificación MP4 en Worker Thread a 30 FPS (resolución 960×540, ~9.7 MB/min), captura de miniatura PNG y control de cuota FIFO. |
+| [recorder/gallery_service.py](../recorder/gallery_service.py) | Servicio de gestión de galería: filtrado por juego, cálculo de cuotas de disco, actualización de privacidad (`private`/`shared`), eliminación física de video y miniatura, y apertura con reproductor nativo del SO. |
+| [cci_database.py](../cci_database.py) | Persistencia y consultas en tabla `gameplay_recordings` (usuario, juego, ruta, duración, bytes, miniatura, privacidad). |
+| [backend/server.py](../backend/server.py) | Endpoints REST (`/api/v1/recordings/...`) para control de grabación, consulta de cuota, listado de galería, visibilidad y reproducción. |
+| [test_phase6_evolution.py](../test_phase6_evolution.py) | 4 pruebas automatizadas que verifican la creación de MP4 válido, generación de miniatura PNG, persistencia de metadatos, purga FIFO ante exceso de cuota y endpoints REST. |
 
 ---
 
@@ -29,7 +29,7 @@ La Fase 6 implementa el Módulo C (Galería de Grabaciones de Gameplay) mediante
    - Consume únicamente **~9.7 MB por minuto** de juego grabado.
    - Genera una miniatura fija de 320×180 píxeles a partir del primer cuadro capturado.
 3. **Política de Depuración Automática FIFO (First In, First Out):**
-   - Límite de disco por defecto: **2048 MB (2 GB)** configurables en [.env.example](file:///Users/cami/Desktop/C.C.I%20SYSTEM/.env.example).
+   - Límite de disco por defecto: **2048 MB (2 GB)** configurables en [.env.example](../.env.example).
    - Cuando el disco supera la cuota permitida, el sistema purga automáticamente la grabación más antigua (eliminando el archivo MP4, el thumbnail PNG y la fila en SQLite).
 4. **Privacidad de Clips:**
    - Todo clip nuevo se registra como `visibility = 'private'` por defecto.
@@ -63,4 +63,4 @@ OK (100% de éxito en todas las suites acumuladas)
 - test_phase2.py: 9 tests pasados
 - test_phase3.py: 7 tests pasados
 ```
-- Consola de escritorio [main.py](file:///Users/cami/Desktop/C.C.I%20SYSTEM/main.py) y catálogo de 19 títulos continúan 100% operativos.
+- Consola de escritorio [main.py](../main.py) y catálogo de 19 títulos continúan 100% operativos.

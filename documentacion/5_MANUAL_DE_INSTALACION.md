@@ -54,7 +54,7 @@ La landing page oficial opera 100% en Python mediante Flask y se encuentra despl
 ### 3.1. Arquitectura de Despliegue en la Nube
 * **Repositorio de Origen:** `https://github.com/Camila-Ianni/C.C.I-SYSTEM` (rama `main`).
 * **CI/CD Automático:** Cada `git push origin main` desencadena una compilación y despliegue continuo en Render.
-* **Separación de Cargas:** El repositorio almacena el código fuente, la landing page y las imágenes de `fotos web` (~35 MB), mientras que los instaladores pesados (734 MB DMG y 628 MB EXE) residen en **GitHub Releases** y son redirigidos de forma transparente por [web/app.py](file:///Users/cami/Desktop/C.C.I%20SYSTEM/web/app.py) para descarga a máxima velocidad.
+* **Separación de Cargas:** El repositorio almacena el código fuente, la landing page y las imágenes de `fotos web` (~35 MB), mientras que los instaladores pesados (734 MB DMG y 628 MB EXE) residen en **GitHub Releases** y son redirigidos de forma transparente por [web/app.py](../web/app.py) para descarga a máxima velocidad.
 
 ### 3.2. Parámetros de Despliegue en Render
 * **Runtime:** Python 3 (3.14.8).
@@ -133,7 +133,7 @@ python run_web.py
 
 ### 5.2. En macOS: Mensajes de consola `objc[...] Class SDLApplication is implemented in both...`
 * **Diagnóstico:** Duplicación inofensiva de dylibs de SDL2 entre OpenCV y Pygame.
-* **Solución:** Ya se encuentra neutralizado en [main.py](file:///Users/cami/Desktop/C.C.I%20SYSTEM/main.py) y [states.py](file:///Users/cami/Desktop/C.C.I%20SYSTEM/states.py) mediante redirección controlada de descriptores de error durante la importación.
+* **Solución:** Ya se encuentra neutralizado en [main.py](../main.py) y [states.py](../states.py) mediante redirección controlada de descriptores de error durante la importación.
 
 ### 5.3. El mando USB / Bluetooth no responde
 * **Diagnóstico:** El gamepad entró en suspensión por inactividad.

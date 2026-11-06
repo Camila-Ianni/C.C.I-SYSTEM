@@ -8,7 +8,7 @@
 
 ## 1. Verificación Individual de Compatibilidad Móvil (9 Juegos Internos)
 
-No se asume compatibilidad automática por el simple hecho de ejecutarse en el proceso de Pygame. Se auditó el código fuente, la resolución interna, el consumo de memoria, el método de renderizado y el esquema de controles de cada uno de los 9 títulos integrados en [states.py](file:///Users/cami/Desktop/C.C.I%20SYSTEM/states.py):
+No se asume compatibilidad automática por el simple hecho de ejecutarse en el proceso de Pygame. Se auditó el código fuente, la resolución interna, el consumo de memoria, el método de renderizado y el esquema de controles de cada uno de los 9 títulos integrados en [states.py](../states.py):
 
 | Juego | Motor / Render | Resolución Base | Controles Requeridos | Viabilidad Android / iOS | Riesgos y Adaptación Obligatoria |
 |---|---|---|---|---|---|
@@ -140,7 +140,7 @@ Al importar `cv2` y `pygame` juntos, el linker de macOS emitió la siguiente adv
 > `Class SDL_RumbleMotor is implemented in both cv2/.dylibs/libSDL2 and pygame/.dylibs/libSDL2. One of the duplicates must be removed or renamed.`
 
 **Causa:** La distribución binaria de `opencv-python` contiene su propia compilación de SDL2 embebida para HighGUI.  
-**Solución Arquitectónica:** En [requirements.txt](file:///Users/cami/Desktop/C.C.I%20SYSTEM/requirements.txt) se debe utilizar **`opencv-python-headless`** (en lugar de `opencv-python`). La versión headless no incluye interfaz gráfica ni librerías SDL2 duplicadas, eliminando por completo el conflicto de símbolos en memoria y reduciendo el tamaño del binario.
+**Solución Arquitectónica:** En [requirements.txt](../requirements.txt) se debe utilizar **`opencv-python-headless`** (en lugar de `opencv-python`). La versión headless no incluye interfaz gráfica ni librerías SDL2 duplicadas, eliminando por completo el conflicto de símbolos en memoria y reduciendo el tamaño del binario.
 
 ### 4.3 Captura de Audio y Almacenamiento
 - **Audio:** Pygame no provee un stream de captura del master mixer. Se implementa una pista de audio sintetizada a partir de los eventos sonoros disparados o mediante captura de loopback de sistema (en escritorio vía PyAudio / SoundCard).

@@ -13,12 +13,12 @@ La Fase 1 establece los cimientos técnicos sin alterar la experiencia de usuari
 | Componente | Archivo / Recurso | Descripción |
 |---|---|---|
 | **Copia de seguridad BD** | `.cci-user-data/cci_system.sqlite3.backup_fase1` | Snapshot seguro de 94 KB antes de aplicar migraciones. |
-| **Migración relacional v2** | [cci_database.py](file:///Users/cami/Desktop/C.C.I%20SYSTEM/cci_database.py) | `schema_version` (v2) y 9 tablas nuevas con índices y claves foráneas. |
-| **Separación de requisitos** | [requirements.txt](file:///Users/cami/Desktop/C.C.I%20SYSTEM/requirements.txt) | Cliente de escritorio con `opencv-python-headless` (evita conflicto SDL2 en macOS). |
-| **Requisitos de servidor** | [requirements-server.txt](file:///Users/cami/Desktop/C.C.I%20SYSTEM/requirements-server.txt) | Dependencias backend: `Flask`, `Flask-SocketIO`, `python-socketio`, `simple-websocket`. |
-| **Variables de entorno** | [.env.example](file:///Users/cami/Desktop/C.C.I%20SYSTEM/.env.example) | Puertos, STUN/TURN, rutas de grabaciones y límites de almacenamiento. |
-| **Módulos de backend** | [backend/](file:///Users/cami/Desktop/C.C.I%20SYSTEM/backend/) | Servicios desacoplados: configuración, contratos tipados, salas, motor de simulación y señalización WebRTC. |
-| **Suite de pruebas unitarias** | [test_phase1_evolution.py](file:///Users/cami/Desktop/C.C.I%20SYSTEM/test_phase1_evolution.py) | 9 tests unitarios para verificar migraciones, salas, simulación autoritativa y señalización. |
+| **Migración relacional v2** | [cci_database.py](../cci_database.py) | `schema_version` (v2) y 9 tablas nuevas con índices y claves foráneas. |
+| **Separación de requisitos** | [requirements.txt](../requirements.txt) | Cliente de escritorio con `opencv-python-headless` (evita conflicto SDL2 en macOS). |
+| **Requisitos de servidor** | [requirements-server.txt](../requirements-server.txt) | Dependencias backend: `Flask`, `Flask-SocketIO`, `python-socketio`, `simple-websocket`. |
+| **Variables de entorno** | [.env.example](../.env.example) | Puertos, STUN/TURN, rutas de grabaciones y límites de almacenamiento. |
+| **Módulos de backend** | [backend/](../backend/) | Servicios desacoplados: configuración, contratos tipados, salas, motor de simulación y señalización WebRTC. |
+| **Suite de pruebas unitarias** | [test_phase1_evolution.py](../test_phase1_evolution.py) | 9 tests unitarios para verificar migraciones, salas, simulación autoritativa y señalización. |
 
 ---
 
@@ -46,7 +46,7 @@ cp .cci-user-data/cci_system.sqlite3.backup_fase1 .cci-user-data/cci_system.sqli
 
 ---
 
-## 3. Contratos de Eventos y Señalización ([backend/contracts.py](file:///Users/cami/Desktop/C.C.I%20SYSTEM/backend/contracts.py))
+## 3. Contratos de Eventos y Señalización ([backend/contracts.py](../backend/contracts.py))
 
 - **Salas:** `room:create`, `room:join`, `room:leave`, `room:ready`, `room:state`, `room:error`.
 - **Multijugador:** `game:input` (60 Hz), `game:snapshot` (30 Hz), `game:pause`, `game:resume`, `game:round_end`.
@@ -61,4 +61,4 @@ cp .cci-user-data/cci_system.sqlite3.backup_fase1 .cci-user-data/cci_system.sqli
 Ran 25 tests in 0.921s
 OK (100% éxito en test_phase1_evolution.py, test_phase2.py y test_phase3.py)
 ```
-- Consola de escritorio [main.py](file:///Users/cami/Desktop/C.C.I%20SYSTEM/main.py) y lanzador [emulator.py](file:///Users/cami/Desktop/C.C.I%20SYSTEM/emulator.py) intactos y funcionales.
+- Consola de escritorio [main.py](../main.py) y lanzador [emulator.py](../emulator.py) intactos y funcionales.

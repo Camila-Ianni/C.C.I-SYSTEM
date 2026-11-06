@@ -29,13 +29,29 @@ class AppConfig:
 
     @classmethod
     def from_env(cls) -> AppConfig:
+        env = os.getenv("CCI_ENV", "development")
+        secret = os.getenv("CCI_SECRET_KEY", "")
+        if not secret or secret == "cci-secret-key-change-in-production":
+            if env == "production":
+                import secrets
+                secret = secrets.token_hex(32)
+            else:
+                secret = "cci-dev-secret-key-0123456789abcdef0123456789abcdef"
+
+        cors = os.getenv("CCI_CORS_ORIGINS", "")
+        if not cors:
+            if env == "production":
+                cors = "https://c-c-i-system.onrender.com,https://ccisystem.org"
+            else:
+                cors = "*"
+
         return cls(
-            env=os.getenv("CCI_ENV", "development"),
+            env=env,
             host=os.getenv("CCI_HOST", "0.0.0.0"),
             port=int(os.getenv("CCI_PORT", "5050")),
             debug=os.getenv("CCI_DEBUG", "false").lower() in ("true", "1", "yes"),
-            secret_key=os.getenv("CCI_SECRET_KEY", "cci-secret-key-change-in-production"),
-            cors_origins=os.getenv("CCI_CORS_ORIGINS", "*"),
+            secret_key=secret,
+            cors_origins=cors,
             database_path=Path(os.getenv("CCI_DATABASE_PATH", str(ROOT / ".cci-user-data" / "cci_system.sqlite3"))),
             stun_server=os.getenv("CCI_STUN_SERVER", "stun:stun.l.google.com:19302"),
             turn_server=os.getenv("CCI_TURN_SERVER", ""),

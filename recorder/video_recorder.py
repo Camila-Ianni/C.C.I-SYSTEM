@@ -125,30 +125,77 @@ class GameplayVideoRecorder:
             return False
 
     def stop_recording(self) -> Dict[str, Any]:
-        """Detiene la grabación, finaliza el contenedor MP4 y persiste metadatos en SQLite."""
+        """
+        Detiene la grabación, vacía la cola de frames, asegura el cierre de OpenCV VideoWriter,
+        valida la integridad física del contenedor MP4 y persiste metadatos garantizados en SQLite.
+        """
         if not self.is_recording:
             return {"success": False, "error": "No hay grabación activa."}
 
         self.is_recording = False
         self._stop_event.set()
 
+        # Esperar finalización del worker asegurando que todos los frames en cola se escriban
         if self._worker_thread and self._worker_thread.is_alive():
-            self._worker_thread.join(timeout=3.0)
+            self._worker_thread.join(timeout=10.0)
+            if self._worker_thread.is_alive():
+                return {
+                    "success": False,
+                    "error": "Timeout esperando cierre del hilo codificador de video.",
+                }
 
         duration = max(0.1, time.monotonic() - self._start_time)
-        file_size = self._active_filepath.stat().st_size if (self._active_filepath and self._active_filepath.exists()) else 0
+        filepath = self._active_filepath
+        thumbpath = self._active_thumbpath
 
-        # Persistir en SQLite
+        # Validación de integridad del archivo MP4
+        if not filepath or not filepath.exists():
+            return {
+                "success": False,
+                "error": "El archivo de video MP4 no fue generado en disco.",
+            }
+
+        file_size = filepath.stat().st_size
+        if file_size < 32 or self._frames_written == 0:
+            try:
+                filepath.unlink(missing_ok=True)
+                if thumbpath and thumbpath.exists():
+                    thumbpath.unlink(missing_ok=True)
+            except Exception:
+                pass
+            return {
+                "success": False,
+                "error": "Archivo de video corrupto o sin frames capturados.",
+            }
+
+        # Verificar cabecera MP4 (ISO Base Media File Format: ftyp)
+        try:
+            with open(filepath, "rb") as f:
+                header = f.read(64)
+                if b"ftyp" not in header and b"mdat" not in header and b"moov" not in header:
+                    return {
+                        "success": False,
+                        "error": "Cabecera de contenedor MP4 inválida.",
+                    }
+        except Exception as exc:
+            return {
+                "success": False,
+                "error": f"Error leyendo contenedor de video: {exc}",
+            }
+
+        effective_fps = round(self._frames_written / duration, 2)
+
+        # Persistir en SQLite únicamente con integridad certificada
         rec_id = self.current_recording_id or f"rec_{secrets.token_hex(4)}"
         try:
             cci_database.save_gameplay_recording_entry(
                 recording_id=rec_id,
                 owner_id=self.current_owner_id,
                 game_id=self.current_game_id,
-                local_path=str(self._active_filepath),
+                local_path=str(filepath),
                 duration_seconds=round(duration, 1),
                 size_bytes=file_size,
-                thumbnail_path=str(self._active_thumbpath) if (self._active_thumbpath and self._active_thumbpath.exists()) else None,
+                thumbnail_path=str(thumbpath) if (thumbpath and thumbpath.exists()) else None,
             )
         except Exception as exc:
             print(f"[VideoRecorder] Error guardando metadatos en SQLite: {exc}")
@@ -159,8 +206,10 @@ class GameplayVideoRecorder:
             "game_id": self.current_game_id,
             "duration_seconds": round(duration, 1),
             "size_bytes": file_size,
-            "file_path": str(self._active_filepath),
-            "thumbnail_path": str(self._active_thumbpath),
+            "frames_written": self._frames_written,
+            "effective_fps": effective_fps,
+            "file_path": str(filepath),
+            "thumbnail_path": str(thumbpath) if (thumbpath and thumbpath.exists()) else None,
         }
 
         self.current_recording_id = None

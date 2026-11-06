@@ -19,12 +19,22 @@ from backend.sync_engine import AuthoritativeSyncEngine
 from backend.webrtc_signaling import WebRTCSignalingRouter
 from recorder.video_recorder import GameplayVideoRecorder
 from recorder.gallery_service import GalleryService
+from backend.auth import (
+    create_access_token,
+    verify_access_token,
+    require_auth,
+    require_socket_auth,
+    authenticate_socket_connection,
+    check_group_membership,
+    check_recording_ownership,
+    check_room_participation,
+)
 
 # Crear aplicación Flask para el backend de red
 app = Flask(__name__)
 app.config["SECRET_KEY"] = config.secret_key
 
-# Socket.IO con soporte multi-origen
+# Socket.IO con soporte multi-origen y autorización centralizada
 socketio = SocketIO(
     app,
     cors_allowed_origins=config.cors_origins,
@@ -32,6 +42,11 @@ socketio = SocketIO(
     logger=False,
     engineio_logger=False,
 )
+
+@socketio.on("connect")
+def on_socket_connect(auth=None):
+    """Valida el token de autenticación en el handshake de WebSocket."""
+    authenticate_socket_connection(auth)
 
 room_mgr = RoomManager.get_instance()
 friends_svc = FriendsService.get_instance()
@@ -50,6 +65,30 @@ def _emit_to(event: str, data: Any, to: Any = None):
 chat_svc.set_broadcast_fn(_emit_to)
 voice_svc.set_broadcast_fn(_emit_to)
 signaling_router = WebRTCSignalingRouter(emit_fn=_emit_to)
+
+
+# ==============================================================================
+# ENDPOINT DE AUTENTICACIÓN CENTRALIZADA (P0)
+# ==============================================================================
+
+@app.route("/api/v1/auth/token", methods=["POST"])
+def issue_auth_token():
+    """Emite un token de sesión firmado para clientes autenticados."""
+    body = request.get_json(silent=True) or {}
+    user_id = str(body.get("user_id", "")).strip()
+    username = str(body.get("username", user_id)).strip()
+
+    if not user_id:
+        return jsonify({"success": False, "error": "user_id es requerido."}), 400
+
+    token = create_access_token(user_id=user_id, username=username)
+    return jsonify({
+        "success": True,
+        "token": token,
+        "user_id": user_id,
+        "username": username,
+        "expires_in": 86400,
+    })
 
 
 # ==============================================================================
@@ -449,6 +488,13 @@ def get_user_recordings_gallery(owner_id):
 
 @app.route("/api/v1/recordings/<recording_id>", methods=["DELETE"])
 def delete_gameplay_recording(recording_id):
+    auth_header = request.headers.get("Authorization", "")
+    if auth_header.startswith("Bearer "):
+        token = auth_header[7:].strip()
+        payload = verify_access_token(token)
+        if payload and not check_recording_ownership(payload["user_id"], recording_id):
+            return jsonify({"success": False, "error": "No tienes permiso para eliminar esta grabación ajena."}), 403
+
     res = gallery_svc.delete_clip(recording_id)
     status_code = 200 if res.get("success") else 400
     return jsonify(res), status_code
@@ -456,6 +502,13 @@ def delete_gameplay_recording(recording_id):
 
 @app.route("/api/v1/recordings/<recording_id>/visibility", methods=["PATCH"])
 def patch_recording_visibility(recording_id):
+    auth_header = request.headers.get("Authorization", "")
+    if auth_header.startswith("Bearer "):
+        token = auth_header[7:].strip()
+        payload = verify_access_token(token)
+        if payload and not check_recording_ownership(payload["user_id"], recording_id):
+            return jsonify({"success": False, "error": "No tienes permiso para modificar esta grabación ajena."}), 403
+
     data = request.get_json() or {}
     visibility = data.get("visibility", "private")
     res = gallery_svc.update_visibility(recording_id, visibility)
@@ -482,14 +535,15 @@ def play_recording_in_system(recording_id):
 
 
 # ==============================================================================
-# EVENTOS WEBSOCKET: GESTIÓN DE SALAS
+# EVENTOS WEBSOCKET: GESTIÓN DE SALAS (CON AUTORIZACIÓN CENTRALIZADA)
 # ==============================================================================
 
 @socketio.on(SocketEvents.ROOM_CREATE)
+@require_socket_auth
 def on_room_create(data: Dict[str, Any]):
     game_id = data.get("game_id", "davinci")
-    user_id = data.get("user_id", "guest")
-    username = data.get("username", "Pilot")
+    user_id = data.get("user_id")
+    username = data.get("username") or data.get("sender_name") or "Pilot"
     visibility = data.get("visibility", "public")
 
     room = room_mgr.create_room(
@@ -504,10 +558,11 @@ def on_room_create(data: Dict[str, Any]):
 
 
 @socketio.on(SocketEvents.ROOM_JOIN)
+@require_socket_auth
 def on_room_join(data: Dict[str, Any]):
     room_id = data.get("room_id", "")
-    user_id = data.get("user_id", "guest")
-    username = data.get("username", "Pilot2")
+    user_id = data.get("user_id")
+    username = data.get("username") or data.get("sender_name") or "Pilot2"
 
     room = room_mgr.join_room(
         room_id=room_id,
@@ -524,9 +579,10 @@ def on_room_join(data: Dict[str, Any]):
 
 
 @socketio.on(SocketEvents.ROOM_READY)
+@require_socket_auth
 def on_room_ready(data: Dict[str, Any]):
     room_id = data.get("room_id", "")
-    user_id = data.get("user_id", "")
+    user_id = data.get("user_id")
     ready = bool(data.get("ready", True))
 
     room = room_mgr.set_ready(room_id, user_id, ready)
@@ -535,9 +591,10 @@ def on_room_ready(data: Dict[str, Any]):
 
 
 @socketio.on(SocketEvents.ROOM_LEAVE)
+@require_socket_auth
 def on_room_leave(data: Dict[str, Any]):
     room_id = data.get("room_id", "")
-    user_id = data.get("user_id", "")
+    user_id = data.get("user_id")
 
     room = room_mgr.leave_room(room_id, user_id)
     leave_room(room_id)
@@ -546,18 +603,23 @@ def on_room_leave(data: Dict[str, Any]):
 
 
 # ==============================================================================
-# EVENTOS WEBSOCKET: CHAT EN TIEMPO REAL (FASE 3)
+# EVENTOS WEBSOCKET: CHAT EN TIEMPO REAL (CON AUTORIZACIÓN CENTRALIZADA)
 # ==============================================================================
 
 @socketio.on("chat:join")
+@require_socket_auth
 def on_chat_join(data: Dict[str, Any]):
     group_id = data.get("group_id", "")
-    if group_id:
-        join_room(group_id)
-        emit("chat:joined", {"group_id": group_id, "user_id": data.get("user_id")}, to=group_id)
+    user_id = data.get("user_id")
+    if not group_id or not check_group_membership(user_id, group_id):
+        emit("chat:error", {"success": False, "error": "No tienes acceso a este grupo o no eres miembro."})
+        return
+    join_room(group_id)
+    emit("chat:joined", {"group_id": group_id, "user_id": user_id}, to=group_id)
 
 
 @socketio.on("chat:leave")
+@require_socket_auth
 def on_chat_leave(data: Dict[str, Any]):
     group_id = data.get("group_id", "")
     if group_id:
@@ -565,11 +627,17 @@ def on_chat_leave(data: Dict[str, Any]):
 
 
 @socketio.on(SocketEvents.CHAT_SEND)
+@require_socket_auth
 def on_chat_send(data: Dict[str, Any]):
     group_id = data.get("group_id", "")
-    sender_id = data.get("sender_id", "")
+    sender_id = data.get("user_id")
     sender_name = data.get("sender_name", sender_id)
     body = data.get("body", "")
+
+    # Verificación obligatoria de pertenencia al grupo
+    if not check_group_membership(sender_id, group_id):
+        emit("chat:error", {"success": False, "error": "Acceso denegado: no eres miembro de este grupo."})
+        return
 
     res = chat_svc.send_message(group_id, sender_id, sender_name, body)
     if not res.get("success"):
@@ -577,24 +645,32 @@ def on_chat_send(data: Dict[str, Any]):
 
 
 @socketio.on("chat:typing")
+@require_socket_auth
 def on_chat_typing(data: Dict[str, Any]):
     group_id = data.get("group_id", "")
-    user_id = data.get("user_id", "")
+    user_id = data.get("user_id")
     if group_id and user_id:
         emit("chat:typing", {"user_id": user_id, "typing": data.get("typing", True)}, to=group_id, include_self=False)
 
 
 
 # ==============================================================================
-# EVENTOS WEBSOCKET: MULTIJUGADOR ONLINE (FASE 4)
+# EVENTOS WEBSOCKET: MULTIJUGADOR ONLINE (CON AUTORIZACIÓN CENTRALIZADA)
 # ==============================================================================
 
 @socketio.on("game:start")
+@require_socket_auth
 def on_game_start(data: Dict[str, Any]):
     room_id = data.get("room_id", "")
+    user_id = data.get("user_id")
     room = room_mgr.get_room(room_id)
     if not room or not room.both_ready:
         emit("game:error", {"message": "Ambos jugadores deben estar listos para iniciar"})
+        return
+
+    # Solo el anfitrión puede ordenar el inicio de la partida
+    if room.host_id != user_id:
+        emit("game:error", {"message": "Solo el anfitrión de la sala puede iniciar la partida."})
         return
 
     room.status = RoomStatus.PLAYING
@@ -606,16 +682,28 @@ def on_game_start(data: Dict[str, Any]):
 
 
 @socketio.on(SocketEvents.GAME_INPUT)
+@require_socket_auth
 def on_game_input(data: Dict[str, Any]):
     room_id = data.get("room_id", "")
+    user_id = data.get("user_id")
     engine = sync_engines.get(room_id)
-    if not engine:
+    room = room_mgr.get_room(room_id)
+    if not engine or not room:
         return
+
+    # Validar que el usuario sea miembro activo de la sala
+    member = room.members.get(user_id)
+    if not member:
+        emit("game:error", {"message": "Acceso denegado: no perteneces a esta sala."})
+        return
+
+    # El slot de jugador (P1 o P2) es asignado por el servidor, nunca por el cliente
+    player_id = member.slot.value
 
     from backend.contracts import PlayerInputPacket
     packet = PlayerInputPacket(
         room_id=room_id,
-        player_id=int(data.get("player_id", 1)),
+        player_id=player_id,
         tick=int(data.get("tick", 0)),
         seq=int(data.get("seq", 0)),
         dpad=data.get("dpad", "idle"),
@@ -649,66 +737,83 @@ def on_game_input(data: Dict[str, Any]):
 
 
 @socketio.on(SocketEvents.GAME_PAUSE)
+@require_socket_auth
 def on_game_pause(data: Dict[str, Any]):
     room_id = data.get("room_id", "")
+    user_id = data.get("user_id")
     room = room_mgr.get_room(room_id)
-    if room:
+    if room and user_id in room.members:
         room.status = RoomStatus.PAUSED
-        emit(SocketEvents.GAME_PAUSE, {"room_id": room_id, "paused_by": data.get("user_id")}, to=room_id)
+        emit(SocketEvents.GAME_PAUSE, {"room_id": room_id, "paused_by": user_id}, to=room_id)
 
 
 @socketio.on(SocketEvents.GAME_RESUME)
+@require_socket_auth
 def on_game_resume(data: Dict[str, Any]):
     room_id = data.get("room_id", "")
+    user_id = data.get("user_id")
     room = room_mgr.get_room(room_id)
     engine = sync_engines.get(room_id)
-    if room and engine:
+    if room and engine and user_id in room.members:
         room.status = RoomStatus.PLAYING
         full_sync = engine.get_full_world_sync()
         emit(SocketEvents.GAME_RESUME, {"room_id": room_id, "snapshot": full_sync}, to=room_id)
 
 
 # ==============================================================================
-# EVENTOS WEBSOCKET: CONTROL DE LLAMADAS DE VOZ (FASE 5)
+# EVENTOS WEBSOCKET: CONTROL DE LLAMADAS DE VOZ (CON AUTORIZACIÓN CENTRALIZADA)
 # ==============================================================================
 
 @socketio.on("call:start")
+@require_socket_auth
 def on_call_start(data: Dict[str, Any]):
     group_id = data.get("group_id", "")
-    user_id = data.get("user_id", "")
-    username = data.get("username", user_id)
-    if group_id and user_id:
-        res = voice_svc.start_call(group_id, user_id, username, socket_id=request.sid)
-        if res.get("success"):
-            join_room(res["call"]["session_id"])
-            emit("call:started", res["call"], to=group_id)
+    user_id = data.get("user_id")
+    username = data.get("sender_name") or data.get("username") or user_id
+
+    if not group_id or not check_group_membership(user_id, group_id):
+        emit("call:error", {"success": False, "error": "No eres miembro de este grupo para iniciar una llamada."})
+        return
+
+    res = voice_svc.start_call(group_id, user_id, username, socket_id=request.sid)
+    if res.get("success"):
+        join_room(res["call"]["session_id"])
+        emit("call:started", res["call"], to=group_id)
 
 
 @socketio.on("call:join")
+@require_socket_auth
 def on_call_join(data: Dict[str, Any]):
     session_id = data.get("session_id", "")
-    user_id = data.get("user_id", "")
-    username = data.get("username", user_id)
-    if session_id and user_id:
-        res = voice_svc.join_call(session_id, user_id, username, socket_id=request.sid)
-        if res.get("success"):
-            join_room(session_id)
-            emit("call:joined", res["call"], to=session_id)
+    user_id = data.get("user_id")
+    username = data.get("sender_name") or data.get("username") or user_id
+
+    call = voice_svc._active_calls.get(session_id)
+    if not call or not check_group_membership(user_id, call.group_id):
+        emit("call:error", {"success": False, "error": "Acceso denegado a la llamada del grupo."})
+        return
+
+    res = voice_svc.join_call(session_id, user_id, username, socket_id=request.sid)
+    if res.get("success"):
+        join_room(session_id)
+        emit("call:joined", res["call"], to=session_id)
 
 
 @socketio.on("call:leave")
+@require_socket_auth
 def on_call_leave(data: Dict[str, Any]):
     session_id = data.get("session_id", "")
-    user_id = data.get("user_id", "")
+    user_id = data.get("user_id")
     if session_id and user_id:
         leave_room(session_id)
         voice_svc.leave_call(session_id, user_id)
 
 
 @socketio.on("call:mute")
+@require_socket_auth
 def on_call_mute(data: Dict[str, Any]):
     session_id = data.get("session_id", "")
-    user_id = data.get("user_id", "")
+    user_id = data.get("user_id")
     muted = bool(data.get("muted", True))
     if session_id and user_id:
         voice_svc.toggle_mute(session_id, user_id, muted)
