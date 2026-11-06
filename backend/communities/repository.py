@@ -8,6 +8,7 @@ Compatible con entornos de prueba herméticos (SQLite/Memoria) y despliegues Pos
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 import sqlite3
 import threading
@@ -15,15 +16,93 @@ import time
 from typing import Any, Dict, List, Optional
 import uuid
 
+from backend.config import config
+
+
+def _resolve_default_communities_db_path(requested_path: Optional[str] = None, allow_memory: bool = False) -> str:
+    """Resuelve la ruta de base de datos persistente para Communities evitando :memory: por defecto."""
+    env = os.getenv("CCI_ENV", config.env).strip().lower()
+    if requested_path:
+        raw = str(requested_path).strip()
+        if raw == ":memory:":
+            if env == "production" and not allow_memory:
+                raise RuntimeError(
+                    "CRITICAL ERROR: CommunitiesRepository no permite db_path=':memory:' en producción (CCI_ENV=production)."
+                )
+            return ":memory:"
+        return raw
+
+    comm_env = os.getenv("CCI_COMMUNITIES_DB_PATH", "").strip()
+    if comm_env:
+        if comm_env == ":memory:" and env == "production" and not allow_memory:
+            raise RuntimeError(
+                "CRITICAL ERROR: CCI_COMMUNITIES_DB_PATH=':memory:' prohibido en producción (CCI_ENV=production)."
+            )
+        return comm_env
+
+    db_env = os.getenv("CCI_DATABASE_PATH", "").strip()
+    if db_env:
+        if db_env == ":memory:":
+            if env == "production" and not allow_memory:
+                raise RuntimeError(
+                    "CRITICAL ERROR: CCI_DATABASE_PATH=':memory:' prohibido en producción (CCI_ENV=production)."
+                )
+            return ":memory:"
+        candidate = Path(db_env)
+        # Si el archivo ya existe y pertenece al esquema legacy cci_database (messages con sender_id),
+        # derivar archivo hermano para no colisionar con la tabla messages de cci_database.
+        if candidate.exists():
+            try:
+                with sqlite3.connect(str(candidate)) as probe:
+                    cols = [r[1] for r in probe.execute("PRAGMA table_info(messages)").fetchall()]
+                    if cols and "sender_id" in cols and "channel_id" not in cols:
+                        candidate = candidate.with_name(f"{candidate.stem}_communities{candidate.suffix or '.sqlite3'}")
+            except Exception:
+                pass
+        return str(candidate)
+
+    default_path = Path(config.communities_database_path)
+    if default_path.exists():
+        try:
+            with sqlite3.connect(str(default_path)) as probe:
+                cols = [r[1] for r in probe.execute("PRAGMA table_info(messages)").fetchall()]
+                if cols and "sender_id" in cols and "channel_id" not in cols:
+                    default_path = default_path.parent / "cci_communities.sqlite3"
+        except Exception:
+            pass
+    default_path.parent.mkdir(parents=True, exist_ok=True)
+    return str(default_path)
+
 
 class CommunitiesRepository:
     """Repositorio de base de datos relacional para comunidades, canales, roles e invitaciones."""
 
     _instance: Optional[CommunitiesRepository] = None
-    _lock = threading.Lock()
+    _lock = threading.RLock()
 
-    def __init__(self, db_path: Optional[str] = None):
-        self.db_path = db_path or ":memory:"
+    def __init__(self, db_path: Optional[str] = None, allow_memory: bool = False):
+        resolved = _resolve_default_communities_db_path(db_path, allow_memory=allow_memory)
+        self.db_path = resolved
+        self._is_memory = resolved == ":memory:" or "mode=memory" in resolved
+        self._use_uri = False
+        self._connect_target = resolved
+        self._temp_mem_file: Optional[str] = None
+        self._all_connections: List[sqlite3.Connection] = []
+        self._tx_lock = threading.RLock()
+
+        if resolved == ":memory:":
+            # Respaldar el modo efímero de pruebas con un archivo temporal WAL aislado por instancia
+            # para permitir conexiones independientes por hilo sin bloqueos de tabla ni pérdida de esquema entre hilos.
+            import tempfile
+            fd, tmp_path = tempfile.mkstemp(prefix="cci_comm_ephemeral_", suffix=".sqlite3")
+            os.close(fd)
+            self._temp_mem_file = tmp_path
+            self._connect_target = tmp_path
+        elif resolved.startswith("file:"):
+            self._use_uri = True
+        else:
+            Path(resolved).parent.mkdir(parents=True, exist_ok=True)
+
         self._local = threading.local()
         self._init_schema()
 
@@ -35,13 +114,29 @@ class CommunitiesRepository:
             return cls._instance
 
     def close(self) -> None:
-        """Cierra de forma limpia la conexión de base de datos del hilo actual."""
-        if hasattr(self._local, "conn") and self._local.conn is not None:
-            try:
-                self._local.conn.close()
-            except Exception:
-                pass
-            self._local.conn = None
+        """Cierra de forma limpia las conexiones de base de datos del repositorio."""
+        with self._tx_lock:
+            if hasattr(self._local, "conn") and self._local.conn is not None:
+                try:
+                    self._local.conn.close()
+                except Exception:
+                    pass
+                self._local.conn = None
+            for conn in list(self._all_connections):
+                try:
+                    conn.close()
+                except Exception:
+                    pass
+            self._all_connections.clear()
+            if self._temp_mem_file:
+                for suffix in ("", "-wal", "-shm"):
+                    try:
+                        p = Path(self._temp_mem_file + suffix)
+                        if p.exists():
+                            p.unlink()
+                    except Exception:
+                        pass
+                self._temp_mem_file = None
 
     @classmethod
     def reset_instance(cls, db_path: Optional[str] = None) -> CommunitiesRepository:
@@ -52,16 +147,42 @@ class CommunitiesRepository:
             return cls._instance
 
     def _get_connection(self) -> sqlite3.Connection:
-        if not hasattr(self._local, "conn") or self._local.conn is None:
-            conn = sqlite3.connect(self.db_path, check_same_thread=False)
-            conn.row_factory = sqlite3.Row
-            conn.execute("PRAGMA foreign_keys = ON;")
-            self._local.conn = conn
-        return self._local.conn
+        conn = getattr(self._local, "conn", None)
+        if conn is not None:
+            try:
+                conn.execute("SELECT 1;")
+                return conn
+            except Exception:
+                self._local.conn = None
+
+        conn = sqlite3.connect(
+            self._connect_target,
+            timeout=15.0,
+            check_same_thread=False,
+            uri=self._use_uri,
+        )
+        conn.row_factory = sqlite3.Row
+        conn.execute("PRAGMA foreign_keys = ON;")
+        conn.execute("PRAGMA busy_timeout = 5000;")
+        try:
+            conn.execute("PRAGMA journal_mode = WAL;")
+            conn.execute("PRAGMA synchronous = NORMAL;")
+        except Exception:
+            pass
+        self._local.conn = conn
+        with self._tx_lock:
+            self._all_connections.append(conn)
+        return conn
+
+    def check_health(self) -> bool:
+        """Verifica conectividad real e integridad básica del esquema."""
+        conn = self._get_connection()
+        row = conn.execute("SELECT COUNT(*) AS cnt FROM permissions;").fetchone()
+        return bool(row and row["cnt"] > 0)
 
     def _init_schema(self) -> None:
         conn = self._get_connection()
-        with conn:
+        with self._tx_lock, conn:
             conn.executescript("""
             CREATE TABLE IF NOT EXISTS communities (
                 id TEXT PRIMARY KEY,
@@ -313,6 +434,14 @@ class CommunitiesRepository:
                 details_json TEXT NULL,
                 created_at REAL NOT NULL
             );
+
+            CREATE INDEX IF NOT EXISTS idx_communities_owner ON communities(owner_id);
+            CREATE INDEX IF NOT EXISTS idx_channels_community ON channels(community_id, position);
+            CREATE INDEX IF NOT EXISTS idx_messages_channel_created ON messages(channel_id, created_at DESC);
+            CREATE INDEX IF NOT EXISTS idx_members_user ON community_members(user_id);
+            CREATE INDEX IF NOT EXISTS idx_audit_community_created ON audit_log(community_id, created_at DESC);
+            CREATE INDEX IF NOT EXISTS idx_voice_sessions_channel ON voice_sessions(channel_id, left_at);
+            CREATE INDEX IF NOT EXISTS idx_stream_sessions_channel ON stream_sessions(channel_id, ended_at);
             """)
 
             # Sembrar catálogo canónico de permisos
@@ -358,7 +487,7 @@ class CommunitiesRepository:
         comm_id = str(uuid.uuid4())
         now = time.time()
         conn = self._get_connection()
-        with conn:
+        with self._tx_lock, conn:
             conn.execute(
                 """
                 INSERT INTO communities (id, owner_id, name, slug, description, icon_url, banner_url, visibility, created_at, updated_at)
@@ -420,14 +549,14 @@ class CommunitiesRepository:
         values = list(updates.values()) + [community_id]
 
         conn = self._get_connection()
-        with conn:
+        with self._tx_lock, conn:
             conn.execute(f"UPDATE communities SET {clause} WHERE id = ? AND deleted_at IS NULL", values)
         return self.get_community(community_id)
 
     def delete_community(self, community_id: str) -> bool:
         now = time.time()
         conn = self._get_connection()
-        with conn:
+        with self._tx_lock, conn:
             cur = conn.execute(
                 "UPDATE communities SET deleted_at = ? WHERE id = ? AND deleted_at IS NULL",
                 (now, community_id)
@@ -437,7 +566,7 @@ class CommunitiesRepository:
     def transfer_ownership(self, community_id: str, new_owner_id: str) -> bool:
         now = time.time()
         conn = self._get_connection()
-        with conn:
+        with self._tx_lock, conn:
             cur = conn.execute(
                 "UPDATE communities SET owner_id = ?, updated_at = ? WHERE id = ? AND deleted_at IS NULL",
                 (new_owner_id, now, community_id)
@@ -461,7 +590,7 @@ class CommunitiesRepository:
         role_id = str(uuid.uuid4())
         now = time.time()
         conn = self._get_connection()
-        with conn:
+        with self._tx_lock, conn:
             conn.execute(
                 """
                 INSERT INTO roles (id, community_id, name, color, position, is_default, is_admin, created_at)
@@ -516,7 +645,7 @@ class CommunitiesRepository:
         updates = {k: v for k, v in fields.items() if k in allowed}
 
         conn = self._get_connection()
-        with conn:
+        with self._tx_lock, conn:
             if updates:
                 clause = ", ".join(f"{k} = ?" for k in updates)
                 conn.execute(f"UPDATE roles SET {clause} WHERE id = ?", list(updates.values()) + [role_id])
@@ -532,7 +661,7 @@ class CommunitiesRepository:
 
     def delete_role(self, role_id: str) -> bool:
         conn = self._get_connection()
-        with conn:
+        with self._tx_lock, conn:
             cur = conn.execute("DELETE FROM roles WHERE id = ? AND is_default = 0", (role_id,))
             return cur.rowcount > 0
 
@@ -543,7 +672,7 @@ class CommunitiesRepository:
     def add_member(self, community_id: str, user_id: str, nickname: Optional[str] = None) -> bool:
         now = time.time()
         conn = self._get_connection()
-        with conn:
+        with self._tx_lock, conn:
             conn.execute(
                 """
                 INSERT OR REPLACE INTO community_members (community_id, user_id, nickname, status, joined_at)
@@ -565,7 +694,7 @@ class CommunitiesRepository:
 
     def remove_member(self, community_id: str, user_id: str) -> bool:
         conn = self._get_connection()
-        with conn:
+        with self._tx_lock, conn:
             cur = conn.execute(
                 "DELETE FROM community_members WHERE community_id = ? AND user_id = ?",
                 (community_id, user_id)
@@ -617,7 +746,7 @@ class CommunitiesRepository:
 
     def assign_role_to_member(self, community_id: str, user_id: str, role_id: str) -> bool:
         conn = self._get_connection()
-        with conn:
+        with self._tx_lock, conn:
             conn.execute(
                 "INSERT OR IGNORE INTO member_roles (community_id, user_id, role_id) VALUES (?, ?, ?)",
                 (community_id, user_id, role_id)
@@ -626,7 +755,7 @@ class CommunitiesRepository:
 
     def remove_role_from_member(self, community_id: str, user_id: str, role_id: str) -> bool:
         conn = self._get_connection()
-        with conn:
+        with self._tx_lock, conn:
             cur = conn.execute(
                 "DELETE FROM member_roles WHERE community_id = ? AND user_id = ? AND role_id = ?",
                 (community_id, user_id, role_id)
@@ -652,7 +781,7 @@ class CommunitiesRepository:
         chan_id = str(uuid.uuid4())
         now = time.time()
         conn = self._get_connection()
-        with conn:
+        with self._tx_lock, conn:
             conn.execute(
                 """
                 INSERT INTO channels (id, community_id, category_id, name, type, topic, position, is_private, max_participants, bitrate_kbps, created_at, updated_at)
@@ -693,14 +822,14 @@ class CommunitiesRepository:
         updates["updated_at"] = time.time()
         clause = ", ".join(f"{k} = ?" for k in updates)
         conn = self._get_connection()
-        with conn:
+        with self._tx_lock, conn:
             conn.execute(f"UPDATE channels SET {clause} WHERE id = ? AND deleted_at IS NULL", list(updates.values()) + [channel_id])
         return self.get_channel(channel_id)
 
     def delete_channel(self, channel_id: str) -> bool:
         now = time.time()
         conn = self._get_connection()
-        with conn:
+        with self._tx_lock, conn:
             cur = conn.execute("UPDATE channels SET deleted_at = ? WHERE id = ? AND deleted_at IS NULL", (now, channel_id))
             return cur.rowcount > 0
 
@@ -714,7 +843,7 @@ class CommunitiesRepository:
         deny: bool = False,
     ) -> bool:
         conn = self._get_connection()
-        with conn:
+        with self._tx_lock, conn:
             conn.execute(
                 """
                 INSERT OR REPLACE INTO channel_permission_overrides (channel_id, target_type, target_id, permission_id, allow, deny)
@@ -749,7 +878,7 @@ class CommunitiesRepository:
         expires_at = (now + expires_in_hours * 3600) if expires_in_hours else None
 
         conn = self._get_connection()
-        with conn:
+        with self._tx_lock, conn:
             conn.execute(
                 """
                 INSERT INTO invitations (id, community_id, inviter_id, code, max_uses, uses_count, expires_at, created_at)
@@ -767,7 +896,7 @@ class CommunitiesRepository:
     def consume_invitation(self, code: str) -> bool:
         now = time.time()
         conn = self._get_connection()
-        with conn:
+        with self._tx_lock, conn:
             inv = self.get_invitation_by_code(code)
             if not inv:
                 return False
@@ -797,7 +926,7 @@ class CommunitiesRepository:
         msg_id = str(uuid.uuid4())
         now = time.time()
         conn = self._get_connection()
-        with conn:
+        with self._tx_lock, conn:
             conn.execute(
                 """
                 INSERT INTO messages (id, channel_id, author_id, content, reply_to_id, is_pinned, created_at)
@@ -861,7 +990,7 @@ class CommunitiesRepository:
     def update_message(self, message_id: str, new_content: str) -> Optional[Dict[str, Any]]:
         now = time.time()
         conn = self._get_connection()
-        with conn:
+        with self._tx_lock, conn:
             cur = conn.execute(
                 "UPDATE messages SET content = ?, edited_at = ? WHERE id = ? AND deleted_at IS NULL",
                 (new_content, now, message_id)
@@ -873,7 +1002,7 @@ class CommunitiesRepository:
     def delete_message(self, message_id: str) -> bool:
         now = time.time()
         conn = self._get_connection()
-        with conn:
+        with self._tx_lock, conn:
             cur = conn.execute(
                 "UPDATE messages SET deleted_at = ? WHERE id = ? AND deleted_at IS NULL",
                 (now, message_id)
@@ -892,7 +1021,7 @@ class CommunitiesRepository:
     ) -> Dict[str, Any]:
         now = time.time()
         conn = self._get_connection()
-        with conn:
+        with self._tx_lock, conn:
             conn.execute(
                 """
                 INSERT INTO user_presence (user_id, status, custom_status, last_seen)
@@ -950,7 +1079,7 @@ class CommunitiesRepository:
         session_id = str(uuid.uuid4())
         now = time.time()
         conn = self._get_connection()
-        with conn:
+        with self._tx_lock, conn:
             # Finalizar cualquier sesión previa activa del usuario en este canal
             conn.execute(
                 "UPDATE voice_sessions SET left_at = ? WHERE channel_id = ? AND user_id = ? AND left_at IS NULL",
@@ -979,7 +1108,7 @@ class CommunitiesRepository:
     def end_voice_session(self, channel_id: str, user_id: str) -> bool:
         now = time.time()
         conn = self._get_connection()
-        with conn:
+        with self._tx_lock, conn:
             cur = conn.execute(
                 "UPDATE voice_sessions SET left_at = ? WHERE channel_id = ? AND user_id = ? AND left_at IS NULL",
                 (now, channel_id, user_id)
@@ -988,7 +1117,7 @@ class CommunitiesRepository:
 
     def update_voice_session_mute(self, channel_id: str, user_id: str, is_muted: bool) -> bool:
         conn = self._get_connection()
-        with conn:
+        with self._tx_lock, conn:
             cur = conn.execute(
                 "UPDATE voice_sessions SET is_muted = ? WHERE channel_id = ? AND user_id = ? AND left_at IS NULL",
                 (int(is_muted), channel_id, user_id)
@@ -1036,7 +1165,7 @@ class CommunitiesRepository:
     ) -> Dict[str, Any]:
         conn = self._get_connection()
         now = time.time()
-        with conn:
+        with self._tx_lock, conn:
             conn.execute(
                 """
                 INSERT INTO sound_categories (id, scope_type, scope_id, name, position, created_at)
@@ -1097,7 +1226,7 @@ class CommunitiesRepository:
     ) -> Dict[str, Any]:
         conn = self._get_connection()
         now = time.time()
-        with conn:
+        with self._tx_lock, conn:
             conn.execute(
                 """
                 INSERT INTO sound_assets (
@@ -1210,7 +1339,7 @@ class CommunitiesRepository:
         if not updates:
             return self.get_sound_asset(sound_id)
         params.append(sound_id)
-        with conn:
+        with self._tx_lock, conn:
             conn.execute(
                 f"UPDATE sound_assets SET {', '.join(updates)} WHERE id = ? AND deleted_at IS NULL",
                 tuple(params)
@@ -1220,7 +1349,7 @@ class CommunitiesRepository:
     def delete_sound_asset(self, sound_id: str) -> bool:
         conn = self._get_connection()
         now = time.time()
-        with conn:
+        with self._tx_lock, conn:
             cur = conn.execute(
                 "UPDATE sound_assets SET deleted_at = ? WHERE id = ? AND deleted_at IS NULL",
                 (now, sound_id)
@@ -1236,7 +1365,7 @@ class CommunitiesRepository:
     ) -> bool:
         conn = self._get_connection()
         now = time.time()
-        with conn:
+        with self._tx_lock, conn:
             if is_favorite:
                 conn.execute(
                     """
@@ -1278,7 +1407,7 @@ class CommunitiesRepository:
     def record_sound_play(self, play_id: str, sound_id: str, user_id: str, channel_id: str) -> float:
         conn = self._get_connection()
         now = time.time()
-        with conn:
+        with self._tx_lock, conn:
             conn.execute(
                 """
                 INSERT INTO sound_play_events (id, sound_id, user_id, channel_id, played_at)
@@ -1326,7 +1455,7 @@ class CommunitiesRepository:
     ) -> Dict[str, Any]:
         conn = self._get_connection()
         now = time.time()
-        with conn:
+        with self._tx_lock, conn:
             conn.execute(
                 """
                 INSERT INTO stream_sessions (
@@ -1409,7 +1538,7 @@ class CommunitiesRepository:
 
     def pause_stream_session(self, session_id: str, is_paused: bool = True) -> bool:
         conn = self._get_connection()
-        with conn:
+        with self._tx_lock, conn:
             cur = conn.execute(
                 "UPDATE stream_sessions SET is_paused = ? WHERE id = ? AND ended_at IS NULL",
                 (int(is_paused), session_id)
@@ -1419,7 +1548,7 @@ class CommunitiesRepository:
     def end_stream_session(self, session_id: str) -> bool:
         conn = self._get_connection()
         now = time.time()
-        with conn:
+        with self._tx_lock, conn:
             # Obtener channel_id y user_id antes de cerrar
             row = conn.execute("SELECT channel_id, user_id FROM stream_sessions WHERE id = ?", (session_id,)).fetchone()
             cur = conn.execute(
@@ -1436,7 +1565,7 @@ class CommunitiesRepository:
     def end_active_streams_for_user(self, channel_id: str, user_id: str) -> int:
         conn = self._get_connection()
         now = time.time()
-        with conn:
+        with self._tx_lock, conn:
             cur = conn.execute(
                 "UPDATE stream_sessions SET ended_at = ? WHERE channel_id = ? AND user_id = ? AND ended_at IS NULL",
                 (now, channel_id, user_id)
@@ -1463,7 +1592,7 @@ class CommunitiesRepository:
     ) -> Dict[str, Any]:
         conn = self._get_connection()
         now = time.time()
-        with conn:
+        with self._tx_lock, conn:
             conn.execute(
                 """
                 INSERT INTO moderation_actions (
@@ -1558,7 +1687,7 @@ class CommunitiesRepository:
     ) -> Dict[str, Any]:
         conn = self._get_connection()
         now = time.time()
-        with conn:
+        with self._tx_lock, conn:
             conn.execute(
                 """
                 INSERT INTO reports (
@@ -1603,7 +1732,7 @@ class CommunitiesRepository:
     ) -> Optional[Dict[str, Any]]:
         conn = self._get_connection()
         now = time.time()
-        with conn:
+        with self._tx_lock, conn:
             conn.execute(
                 """
                 UPDATE reports
@@ -1625,7 +1754,7 @@ class CommunitiesRepository:
     ) -> Dict[str, Any]:
         conn = self._get_connection()
         now = time.time()
-        with conn:
+        with self._tx_lock, conn:
             conn.execute(
                 """
                 INSERT INTO audit_log (

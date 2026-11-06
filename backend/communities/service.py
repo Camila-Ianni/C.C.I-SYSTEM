@@ -9,6 +9,7 @@ Implementa las reglas de producto de la Fase 1:
 """
 from __future__ import annotations
 
+import os
 import re
 import time
 import uuid
@@ -87,19 +88,32 @@ class CommunitiesService:
         """
         Evalúa jerárquicamente si un usuario tiene un permiso específico.
         Reglas:
-        1. Propietario (owner_id) -> ALLOW total.
-        2. Rol con is_admin=True -> ALLOW total.
-        3. Conjunto de permisos base acumulado de todos sus roles.
-        4. Sobrescrituras a nivel de canal (para usuario y para roles).
-        5. Denegación estricta por defecto (Fail-closed).
+        1. Verificación estricta de comunidad existente y pertenencia de channel_id a community_id.
+        2. Propietario (owner_id) -> ALLOW total.
+        3. Bloqueo inmediato si el usuario está baneado o no es miembro activo.
+        4. Rol con is_admin=True -> ALLOW total.
+        5. En canales privados: acceso previo obligatorio al canal (messages.read / voice.connect) mediante override explícito.
+        6. Precedencia determinista de overrides de canal:
+           User Deny > User Allow > Role Deny (jerarquía superior) > Role Allow > Permiso Base de Rol > Fail-closed (False).
         """
         comm = self.repo.get_community(community_id)
         if not comm:
             return False
 
-        # 1. Propietario absoluto
+        chan: Optional[Dict[str, Any]] = None
+        if channel_id:
+            chan = self.repo.get_channel(channel_id)
+            # Rechazar de inmediato cualquier channel_id inexistente o perteneciente a otra comunidad
+            if not chan or chan.get("community_id") != community_id:
+                return False
+
+        # 1. Propietario absoluto (tras validar pertenencia del canal a su comunidad)
         if comm["owner_id"] == user_id:
             return True
+
+        # 2. Usuario baneado o sin membresía activa -> denegado
+        if self.repo.is_user_banned(community_id, user_id):
+            return False
 
         member = self.repo.get_member(community_id, user_id)
         if not member or member.get("status") != "active":
@@ -107,59 +121,77 @@ class CommunitiesService:
 
         user_roles = member.get("roles", [])
 
-        # 2. Administrador total
+        # 3. Administrador total
         if any(r.get("is_admin") for r in user_roles):
             return True
 
-        # 3. Permisos base de los roles
+        # 4. Permisos base de los roles activos del miembro
         base_allowed = False
+        role_positions: Dict[str, int] = {}
         for r in user_roles:
-            role_obj = self.repo.get_role(r["id"])
-            if role_obj and permission_id in role_obj.get("permissions", []):
-                base_allowed = True
-                break
+            rid = r["id"]
+            role_obj = self.repo.get_role(rid)
+            if role_obj:
+                role_positions[rid] = int(role_obj.get("position", 1000))
+                if permission_id in role_obj.get("permissions", []):
+                    base_allowed = True
 
-        # 4. Sobrescrituras por canal (si aplica)
-        if channel_id:
-            chan = self.repo.get_channel(channel_id)
-            if not chan:
-                return False
-
+        # 5. Sobrescrituras por canal (si aplica)
+        if chan is not None and channel_id is not None:
             overrides = self.repo.get_channel_overrides(channel_id)
+            role_ids = set(role_positions.keys()) | {r["id"] for r in user_roles}
 
-            # 4a. Sobrescritura específica para el usuario
-            for ov in overrides:
-                if ov["target_type"] == "user" and ov["target_id"] == user_id and ov["permission_id"] == permission_id:
-                    if ov["deny"]:
-                        return False
-                    if ov["allow"]:
-                        return True
+            def _resolve_override(perm_id: str) -> Optional[bool]:
+                # 5a. Sobrescritura específica de usuario (Deny > Allow)
+                for ov in overrides:
+                    if ov["target_type"] == "user" and ov["target_id"] == user_id and ov["permission_id"] == perm_id:
+                        if ov["deny"]:
+                            return False
+                        if ov["allow"]:
+                            return True
 
-            # 4b. Sobrescritura para los roles del usuario
-            role_ids = {r["id"] for r in user_roles}
-            has_role_allow = False
-            has_role_deny = False
-            for ov in overrides:
-                if ov["target_type"] == "role" and ov["target_id"] in role_ids and ov["permission_id"] == permission_id:
-                    if ov["deny"]:
-                        has_role_deny = True
-                    if ov["allow"]:
-                        has_role_allow = True
+                # 5b. Sobrescrituras de roles ordenadas por jerarquía (menor position = mayor rango)
+                matching_role_ovs = [
+                    ov for ov in overrides
+                    if ov["target_type"] == "role" and ov["target_id"] in role_ids and ov["permission_id"] == perm_id
+                ]
+                if not matching_role_ovs:
+                    return None
 
-            if has_role_deny and not has_role_allow:
-                return False
-            if has_role_allow:
-                return True
-
-            # Si el canal es privado, cualquier acción exige allow explícito o rol de gestión
-            if chan.get("is_private"):
-                has_channel_access = has_role_allow or any(
-                    ov["allow"] for ov in overrides
-                    if (ov["target_type"] == "user" and ov["target_id"] == user_id) or
-                       (ov["target_type"] == "role" and ov["target_id"] in role_ids)
-                )
-                if not has_channel_access:
+                matching_role_ovs.sort(key=lambda o: role_positions.get(o["target_id"], 1000))
+                top_pos = role_positions.get(matching_role_ovs[0]["target_id"], 1000)
+                top_tier = [o for o in matching_role_ovs if role_positions.get(o["target_id"], 1000) == top_pos]
+                # En el nivel jerárquico más alto con override explícito, Deny prevalece sobre Allow
+                if any(o["deny"] for o in top_tier):
                     return False
+                if any(o["allow"] for o in top_tier):
+                    return True
+                return None
+
+            if chan.get("is_private"):
+                access_perm = "messages.read" if chan.get("type") == "text" else "voice.connect"
+                access_ov = _resolve_override(access_perm)
+                perm_ov = _resolve_override(permission_id)
+
+                # Si cualquiera de los dos está explícitamente denegado, bloquear
+                if perm_ov is False or access_ov is False:
+                    return False
+
+                if permission_id == access_perm:
+                    return bool(access_ov is True)
+
+                # Para otras acciones dentro de un canal privado (ej. messages.send, voice.speak),
+                # el usuario debe tener override explícito de acceso al canal o de la acción solicitada
+                if perm_ov is True and access_ov is True:
+                    return True
+                if access_ov is True:
+                    return base_allowed
+                return False
+
+            # Canal público dentro de la comunidad
+            perm_ov = _resolve_override(permission_id)
+            if perm_ov is not None:
+                return perm_ov
 
         return base_allowed
 
@@ -238,15 +270,18 @@ class CommunitiesService:
         return comm
 
     def get_community(self, community_id: str, requester_id: str) -> Optional[Dict[str, Any]]:
-        """Consulta información de una comunidad respetando privacidad pública/privada."""
+        """Consulta información de una comunidad respetando privacidad pública/privada y bloqueos."""
         comm = self.repo.get_community(community_id)
         if not comm:
             return None
 
-        # Si es privada, exige ser miembro o propietario
+        if comm["owner_id"] != requester_id and self.repo.is_user_banned(community_id, requester_id):
+            return None
+
+        # Si es privada, exige ser miembro activo o propietario
         if comm["visibility"] == "private":
             member = self.repo.get_member(community_id, requester_id)
-            if not member and comm["owner_id"] != requester_id:
+            if (not member or member.get("status") != "active") and comm["owner_id"] != requester_id:
                 return None  # No autorizado a ver comunidad privada
 
         res = dict(comm)
@@ -446,15 +481,30 @@ class CommunitiesService:
         )
 
     def list_channels(self, community_id: str, requester_id: str) -> List[Dict[str, Any]]:
-        """Lista canales visibles para el solicitante (filtra canales privados sin acceso)."""
+        """Lista canales visibles para el solicitante (filtra canales privados o explícitamente denegados)."""
+        comm = self.repo.get_community(community_id)
+        if not comm:
+            return []
+        if comm["owner_id"] != requester_id and self.repo.is_user_banned(community_id, requester_id):
+            return []
+        if comm["visibility"] == "private" and comm["owner_id"] != requester_id:
+            member = self.repo.get_member(community_id, requester_id)
+            if not member or member.get("status") != "active":
+                return []
+
         all_channels = self.repo.list_channels(community_id)
         visible = []
         for ch in all_channels:
+            perm_needed = "messages.read" if ch["type"] == "text" else "voice.connect"
             if not ch.get("is_private"):
-                visible.append(ch)
+                # En canales públicos de la comunidad, mostrar a miembros salvo deny explícito
+                member = self.repo.get_member(community_id, requester_id)
+                if comm["owner_id"] == requester_id or (
+                    member and self.has_permission(community_id, requester_id, perm_needed, channel_id=ch["id"])
+                ) or (not member and comm["visibility"] == "public"):
+                    visible.append(ch)
             else:
-                # Si es privado, comprobar si puede leer (texto) o conectar (voz)
-                perm_needed = "messages.read" if ch["type"] == "text" else "voice.connect"
+                # Si es privado, exige permiso efectivo (con override explícito para no-admins)
                 if self.has_permission(community_id, requester_id, perm_needed, channel_id=ch["id"]):
                     visible.append(ch)
         return visible
@@ -663,8 +713,11 @@ class CommunitiesService:
             if current_count >= max_p:
                 raise ValueError("La sala de voz ha alcanzado su límite de participantes")
 
-        # Comprobar permiso de transmisión de micrófono
-        can_speak = self.has_permission(community_id, user_id, "voice.speak", channel_id=channel_id)
+        # Comprobar permiso de transmisión de micrófono y estado de muteo comunitario
+        can_speak = (
+            self.has_permission(community_id, user_id, "voice.speak", channel_id=channel_id)
+            and not self.repo.is_user_muted(community_id, user_id)
+        )
 
         room_name = f"comm_{community_id[:8]}_chan_{channel_id[:8]}"
         generator = LiveKitTokenGenerator()
@@ -675,7 +728,7 @@ class CommunitiesService:
             can_publish=can_speak,
             can_subscribe=True,
             can_publish_data=True,
-            valid_for_seconds=600,
+            valid_for_seconds=240,
         )
 
         # Registrar sesión de voz activa en base de datos
@@ -809,9 +862,11 @@ class CommunitiesService:
         cooldown_seconds: int = 5,
         declared_duration: Optional[float] = None,
         is_admin: bool = False,
-        storage_dir: str = "storage/sounds",
+        storage_dir: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Sube y valida un archivo MP3 asociándolo al scope correspondiente."""
+        from backend.config import config as app_config
+        effective_storage_dir = storage_dir or os.getenv("CCI_SOUNDS_STORAGE_PATH") or str(app_config.sounds_storage_path)
         if owner_type not in ("global", "user", "community"):
             raise ValueError(f"Tipo de propietario no reconocido: {owner_type}")
 
@@ -849,9 +904,9 @@ class CommunitiesService:
         except SoundValidationError as e:
             raise ValueError(f"Validación de audio falló [{e.code}]: {e.message}")
 
-        # 3. Guardar archivo en almacenamiento
+        # 3. Guardar archivo en almacenamiento persistente
         sound_id = str(uuid.uuid4())
-        storage_key = save_sound_file(storage_dir, sound_id, file_bytes)
+        storage_key = save_sound_file(effective_storage_dir, sound_id, file_bytes)
 
         # 4. Registrar en repositorio
         return self.repo.create_sound_asset(
@@ -1124,7 +1179,7 @@ class CommunitiesService:
             can_publish=True,
             can_subscribe=True,
             can_publish_data=True,
-            valid_for_seconds=1800,
+            valid_for_seconds=240,
         )
 
         session_id = str(uuid.uuid4())

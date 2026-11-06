@@ -24,9 +24,12 @@ def record_community_request_start():
 
 @communities_bp.after_request
 def record_community_request_latency(response):
+    collector = CommunityMetricsCollector.get_instance()
     if hasattr(request, "_start_time"):
         elapsed = time.time() - request._start_time
-        CommunityMetricsCollector.get_instance().record_latency(elapsed)
+        collector.record_latency(elapsed)
+    if response.status_code >= 400:
+        collector.record_error("api")
     return response
 
 
@@ -1362,20 +1365,23 @@ def list_audit_log_route(community_id: str):
 @communities_bp.route("/communities/health", methods=["GET"])
 def health_check_route():
     """Diagnóstico de salud integral de los componentes de Communities."""
+    collector = CommunityMetricsCollector.get_instance()
     repo_ok = False
     try:
         # Consulta de validación básica contra el repositorio
         repo_ok = get_service().repo.get_community("00000000-0000-0000-0000-000000000000") is None
     except Exception:
         repo_ok = False
+        collector.record_error("db")
 
-    metrics = CommunityMetricsCollector.get_instance().get_snapshot()
+    metrics = collector.get_snapshot()
     status = "healthy" if repo_ok else "degraded"
     return jsonify({
         "status": status,
         "database": "connected" if repo_ok else "disconnected",
         "livekit_sfu": "ready",
         "storage": "local_storage_ready",
+        "metrics_scope": "process_local",
         "uptime_seconds": metrics["uptime_seconds"],
         "version": "2.1.0-communities-v1.0",
     }), 200 if repo_ok else 503

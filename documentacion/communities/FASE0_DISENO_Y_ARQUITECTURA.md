@@ -15,13 +15,13 @@ El subsistema **CCI Communities** amplía **C.C.I. SYSTEM** para transformarlo e
 
 ### Principios rectores de diseño:
 1. **Infraestructura soberana y autohospedada**: Eliminación de dependencias de servicios en la nube propietarios (Discord, Twilio, Agora). Todo el stack se ejecuta en servidores propios mediante contenedores Docker.
-2. **Desacoplamiento arquitectónico**: Separación estricta entre:
-   - Capa de presentación visual (PySide6 con estilo retrofuturista de C.C.I.).
-   - Núcleo de lógica de negocio y autorización (Python / FastAPI modular).
-   - Transporte multimedia en tiempo real de baja latencia (LiveKit Server SFU + coturn).
-   - Persistencia relacional (PostgreSQL 16) y estado efímero (Redis 7).
-3. **Preservación absoluta del launcher y consola PC**: El motor de juegos de consola (1280x720, 60 FPS, 19 títulos en Pygame) permanece inalterado y soberano. La interfaz de comunidades convive como un panel/módulo de escritorio desacoplado.
-4. **Seguridad fail-closed**: El backend C.C.I. es la única autoridad de identidad, pertenencia y roles. Los tokens de LiveKit se emiten con permisos mínimos y expiración corta (< 5 minutos).
+2. **Desacoplamiento arquitectónico y unificación con C.C.I. SYSTEM**: Separación estricta entre:
+   - Capa de presentación visual integrada en la consola nativa Pygame 1280x720 (`groups_ui.py`, `sidebar_ui.py`) con estética pixel-art retrofuturista de C.C.I.
+   - Núcleo de lógica de negocio y autorización unificado en Python (`Flask` + `Flask-SocketIO` en `backend/server.py` + `backend/communities/`).
+   - Transporte multimedia en tiempo real de baja latencia (LiveKit Server SFU + `coturn` para STUN/TURN externo, con emisión local autoritativa de tokens JWT HS256).
+   - Persistencia relacional transaccional en SQLite 3 con `WAL` (`PRAGMA journal_mode=WAL`, `PRAGMA foreign_keys=ON`) en archivo persistente (`.cci-user-data/cci_communities.sqlite3` / `/data/cci_communities.sqlite3`), manteniendo DDL compatible con migración horizontal a PostgreSQL 16 (`schema_postgres.sql`).
+3. **Preservación absoluta del launcher y consola PC**: El motor de juegos de consola (1280x720, 60 FPS, 19 títulos en Pygame) permanece inalterado y soberano. La interfaz de comunidades convive como estados nativos desacoplados (`GROUPS`, `COMMUNITY`).
+4. **Seguridad fail-closed**: El backend C.C.I. es la única autoridad de identidad, pertenencia y roles. Los tokens de LiveKit se emiten con permisos mínimos y expiración corta (`<= 300` segundos / `< 5` minutos, por defecto `240` segundos).
 
 ---
 
@@ -251,51 +251,50 @@ Formato estándar del payload:
 
 ---
 
-## 8. Registros de Decisiones de Arquitectura (ADRs)
+## 8. Registros de Decisiones de Arquitectura (ADRs) y Estado de Implementación Real
 
-### ADR-001: Adopción de FastAPI como Monolito Modular Asíncrono
-- **Contexto**: El backend actual C.C.I. utiliza Flask. Para Communities se requiere alta concurrencia de WebSockets, tipado estricto con Pydantic y soporte nativo asíncrono para bases de datos (asyncpg).
-- **Decisión**: Implementar el backend de Communities en FastAPI con arquitectura monolítica modular (`app/communities`, `app/chat`, `app/voice`, `app/soundboard`).
-- **Consecuencias**: Excelente rendimiento asíncrono, OpenAPI autogenerado y código desacoplado.
+### Matriz de Componentes: Implementado (Fases 1–7) vs. Infraestructura Externa / Escalado (Fase 8+)
+| Componente | Estado en Código (`feature/communities-phase0-design`) | Alcance y Notas Operativas |
+| :--- | :--- | :--- |
+| **Backend API & Realtime** | **Implementado** (`Flask` + `Flask-SocketIO` en `backend/server.py` y `backend/communities/routes.py`) | Unificado en el mismo servidor del sistema C.C.I. (`puerto 5050`) para evitar fragmentación de procesos. |
+| **Persistencia Relacional** | **Implementado** (`SQLite 3 WAL` en `backend/communities/repository.py`) | Persistencia en disco (`.cci-user-data/cci_communities.sqlite3` / `/data/cci_communities.sqlite3`), `PRAGMA foreign_keys=ON`, `WAL` y locks transaccionales multihilo. `schema_postgres.sql` se conserva para el perfil opcional `enterprise-cluster`. |
+| **Interfaz Gráfica (UI)** | **Implementado** (`Pygame` nativo en `groups_ui.py` y `sidebar_ui.py`) | Integrada directamente en el bucle de estados de `main.py` (1280x720, 60 FPS) conectada a `CommunitiesService` con persistencia real en SQLite. |
+| **Tokens y Señalización de Voz (LiveKit)** | **Implementado** (`backend/communities/livekit_token.py`) + **SFU Externo** (`deploy/livekit.yaml`) | El backend emite y valida tokens JWT HS256 con TTL `<= 300s` (240s por defecto). El transporte de audio/video WebRTC requiere el contenedor externo `livekit-server` y `coturn`. |
+| **Streaming y Captura** | **Adaptador Local Implementado** (`backend/communities/stream_adapter.py`) | Enumera pantallas reales, procesos activos del SO y títulos del catálogo C.C.I., y captura frames locales. La transmisión de video en red utiliza la sala LiveKit SFU. |
+| **Sound Deck (Validador MP3)** | **Implementado** (`backend/communities/sound_validator.py`) | Decodifica cabeceras de tramas MPEG reales (MPEG 1/2/2.5 Layer III y cabeceras VBR Xing/Info) para calcular duración real (`<= 15.0s`), bitrate, sample rate y canales sin confiar en `declared_duration`. |
+| **Métricas y Salud** | **Implementado** (`backend/communities/metrics.py`) | Contadores e histogramas por proceso (`scope: process_local`, no persistentes entre reinicios) expuestos en formato Prometheus y JSON junto con sonda real de base de datos en `/api/v1/communities/health`. |
 
-### ADR-002: PySide6 para la Interfaz de Comunidades Desktop
-- **Contexto**: La consola de juegos corre en Pygame a 60 FPS (1280x720). Incrustar un cliente social completo tipo Discord (listas dinámicas, scroll, campos de texto enriquecido, renderizado de avatares) dentro de un loop de Pygame generaría sobrecarga y complejidad inmanejable.
-- **Decisión**: Utilizar PySide6 (Qt para Python) para la aplicación de escritorio y paneles de comunidad, manteniendo interoperabilidad mediante sockets locales y procesos compartidos con el launcher de Pygame.
-- **Consecuencias**: Controles nativos fluidos, aceleración gráfica por hardware y modularidad completa.
+### ADR-001 (Actualizado): Unificación en Flask + Flask-SocketIO como Monolito Modular
+- **Contexto**: El diseño preliminar evaluó FastAPI, pero el núcleo productivo de C.C.I. SYSTEM ya opera sobre `Flask` + `Flask-SocketIO` (`backend/server.py`, `requirements-server.txt`).
+- **Decisión**: Integrar `backend/communities` como un Blueprint modular dentro del servidor `Flask` + `Flask-SocketIO` existente.
+- **Consecuencias**: Cero duplicación de servidores, autenticación JWT unificada (`backend/auth.py`) y despliegue único en `deploy/Dockerfile.backend`.
 
-### ADR-003: LiveKit Server (SFU) Autohospedado sobre WebRTC Mesh
-- **Contexto**: Las llamadas grupales WebRTC en topología Mesh saturan la CPU y ancho de banda del cliente a partir de 3-4 participantes ($N \times (N-1)$ conexiones).
-- **Decisión**: Desplegar LiveKit Server como SFU (Selective Forwarding Unit) autohospedado en contenedor Docker.
-- **Consecuencias**: Cada cliente envía 1 pista y recibe las pistas suscritas. Escala hasta cientos de usuarios por sala con mínimo uso de CPU cliente. Requiere servidor con puertos UDP públicos y coturn para STUN/TURN.
+### ADR-002 (Actualizado): Interfaz Nativa en Pygame Integrada al Launcher
+- **Contexto**: Para mantener una experiencia visual 100% homogénea en la consola (1280x720, pixel-art C.C.I.) sin abrir ventanas externas de Qt/PySide6.
+- **Decisión**: Implementar `GroupsHubState` y `CommunityViewState` en `groups_ui.py` dentro del motor de estados de `main.py`, respaldados por `CommunitiesService` y SQLite.
+- **Consecuencias**: Transiciones instantáneas desde la barra lateral (`sidebar_ui.py`) y persistencia real de mensajes, grupos e invitaciones.
 
-### ADR-004: PostgreSQL 16 y Redis 7 para Persistencia y Estado Efímero
-- **Contexto**: SQLite local no permite concurrencia multi-cliente en red; Redis es indispensable para presencia de usuarios, rate-limiting y fan-out de WebSockets entre workers.
-- **Decisión**: PostgreSQL 16 es la fuente de verdad persistente (relaciones N:M, integridad referencial y borrado lógico). Redis 7 almacena sesiones activas, presencia y colas Pub/Sub.
-- **Consecuencias**: Infraestructura estándar, robusta y escalable.
+### ADR-003: LiveKit Server (SFU) Autohospedado sobre WebRTC
+- **Contexto**: Las llamadas grupales WebRTC en topología Mesh saturan la CPU del cliente a partir de 4 participantes.
+- **Decisión**: Desplegar LiveKit Server como SFU autohospedado en contenedor Docker junto con `coturn` para STUN/TURN.
+- **Consecuencias**: Tokens JWT de corta duración (`240s`, máximo `300s`) firmados por el backend C.C.I.
 
-### ADR-005: MinIO S3 para Almacenamiento de Adjuntos y Sound Deck
-- **Contexto**: Los avatares, capturas y pistas MP3 de la soundboard no deben residir en la base de datos relacional.
-- **Decisión**: Contenedor MinIO compatible con API Amazon S3 para almacenamiento de blobs con URLs prefirmadas de subida y lectura.
-- **Consecuencias**: Gestión eficiente de archivos estáticos y desacoplamiento del almacenamiento.
-
-### ADR-006: Canal de Audio Compartido en LiveKit para el Sound Deck
-- **Contexto**: La especificación exige que los sonidos de la soundboard se transmitan a todos los oyentes de la llamada de voz.
-- **Decisión**: El cliente desktop abre una pista de audio secundaria (`MicrophoneAudioTrack` o `CustomAudioTrack`) en la sesión LiveKit activa y reproduce el búfer PCM decodificado del MP3.
-- **Consecuencias**: No requiere puentes de red adicionales; el sonido viaja sincronizado por el mismo canal WebRTC de la sala.
+### ADR-004 (Actualizado): SQLite 3 WAL por Defecto y PostgreSQL 16 para Escalado Horizontal
+- **Contexto**: En despliegues de nodo único y escritorio, SQLite 3 en modo `WAL` provee persistencia ACID inmediata sin requerir demonios externos; para clústeres multi-nodo se incluye el perfil `enterprise-cluster`.
+- **Decisión**: `CommunitiesRepository` persiste por defecto en archivo SQLite (`WAL`, `foreign_keys=ON`), manteniendo `schema_postgres.sql` sincronizado para despliegues PostgreSQL 16.
+- **Consecuencias**: Arranque autónomo inmediato y ruta clara de escalado.
 
 ---
 
 ## 9. Despliegue de Infraestructura Autohospedada (`docker-compose`)
 
-Configurado en [`deploy/docker-compose.communities.yml`](file:///Users/cami/Desktop/C.C.I%20SYSTEM/deploy/docker-compose.communities.yml):
+Configurado en [`deploy/docker-compose.communities.yml`](file:///Users/cami/Desktop/C.C.I%20SYSTEM/deploy/docker-compose.communities.yml) y [`deploy/Dockerfile.backend`](file:///Users/cami/Desktop/C.C.I%20SYSTEM/deploy/Dockerfile.backend):
 
-- **`postgres`**: PostgreSQL 16 Alpine con inicialización automática del esquema [`schema_postgres.sql`](file:///Users/cami/Desktop/C.C.I%20SYSTEM/documentacion/communities/schema_postgres.sql).
-- **`redis`**: Redis 7 Alpine con contraseña y persistencia AOF habilitada.
-- **`minio`**: Servidor S3 con consola de administración web en puerto 9001.
-- **`coturn`**: Servidor STUN/TURN RFC 5766 con credenciales seguras de larga duración.
-- **`livekit`**: SFU de distribución multimedia con puertos WebRTC 50000-50100/UDP.
-- **`api`**: Servidor FastAPI (Uvicorn workers) conectado a Postgres, Redis y LiveKit.
+- **`api`**: Contenedor Python 3.12 non-root (`cciuser`) ejecutando `backend.server` en puerto `5050` con volumen persistente `cci_app_data:/data` y `HEALTHCHECK` activo.
+- **`livekit`**: SFU de distribución multimedia con puertos WebRTC `50000-50100/UDP` y claves inyectadas desde variables de entorno.
+- **`coturn`**: Servidor STUN/TURN RFC 5766 con `use-auth-secret` inyectado desde `${TURN_SECRET}`.
 - **`caddy`**: Proxy inverso de entrada con certificados TLS automáticos.
+- **Perfil opcional `enterprise-cluster`**: Servicios `postgres`, `redis` y `minio` disponibles mediante `docker compose --profile enterprise-cluster up -d`.
 
 ---
 

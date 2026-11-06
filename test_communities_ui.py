@@ -10,6 +10,7 @@ Cubre:
 """
 
 import os
+import tempfile
 import unittest
 import pygame
 
@@ -27,12 +28,19 @@ class TestCommunitiesUI(unittest.TestCase):
         pygame.display.set_mode((1280, 720))
 
     def setUp(self):
+        self.temp_dir = tempfile.TemporaryDirectory()
+        self.db_path = os.path.join(self.temp_dir.name, "test_ui.sqlite3")
         screen = pygame.display.get_surface()
         self.sm = StateMachine(screen)
-        self.hub_state = GroupsHubState(self.sm)
-        self.comm_state = CommunityViewState(self.sm)
+        self.hub_state = GroupsHubState(self.sm, db_path=self.db_path)
+        self.comm_state = CommunityViewState(self.sm, db_path=self.db_path)
         self.sm.register_state("GROUPS", self.hub_state)
         self.sm.register_state("COMMUNITY", self.comm_state)
+
+    def tearDown(self):
+        self.hub_state.bridge.repo.close()
+        self.comm_state.bridge.repo.close()
+        self.temp_dir.cleanup()
 
     def test_01_sidebar_entries_and_destination(self):
         """Verifica que GRUPOS esté en el sidebar y sidebar_destination resuelva a GROUPS."""

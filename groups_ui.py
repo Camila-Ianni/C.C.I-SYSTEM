@@ -7,11 +7,16 @@ compartida (sidebar_ui.py) idéntica en todas las pantallas.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+import json
+import os
 from pathlib import Path
+import time
 from typing import Any, Dict, List, Optional, Tuple
 
 import pygame
 
+from backend.communities.repository import CommunitiesRepository
+from backend.communities.service import CommunitiesService
 from sidebar_ui import draw_sidebar, load_sidebar, make_sidebar_font, sidebar_destination
 from states import BaseState, SCREEN_HEIGHT, SCREEN_WIDTH
 
@@ -347,6 +352,317 @@ def _draw_cut_rect(
 
 
 # ---------------------------------------------------------------------------
+# Adaptador de Persistencia Real (CommunitiesService + SQLite)
+# ---------------------------------------------------------------------------
+
+class CommunitiesUIBridge:
+    """Conecta las pantallas de Grupos y Comunidad con CommunitiesService y persistencia SQLite."""
+
+    DEFAULT_USER_ID = "u_alex"
+    DEFAULT_USERNAME = "ALEX"
+
+    def __init__(self, db_path: Optional[str] = None, user_id: str = DEFAULT_USER_ID) -> None:
+        self.user_id = user_id
+        self.repo = CommunitiesRepository(db_path) if db_path else CommunitiesRepository.get_instance()
+        self.service = CommunitiesService(self.repo)
+        self._ensure_ui_tables_and_seed()
+
+    def _ensure_ui_tables_and_seed(self) -> None:
+        conn = self.repo._get_connection()
+        with self.repo._tx_lock, conn:
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS ui_social_state (
+                    state_key TEXT PRIMARY KEY,
+                    payload_json TEXT NOT NULL,
+                    updated_at REAL NOT NULL
+                );
+                """
+            )
+
+        # Sembrar las 6 comunidades base en SQLite si aún no existen (salvo CCI_DEMO_SEED=0)
+        if os.getenv("CCI_DEMO_SEED", "1") == "0":
+            return
+
+        for cat in COMMUNITIES_CATALOG:
+            slug = cat["id"].replace("_", "-")
+            existing = self.repo.get_community_by_slug(slug)
+            if not existing:
+                comm = self.service.create_community(
+                    owner_id=self.user_id,
+                    name=cat["name"],
+                    description=cat["description"],
+                    visibility="private" if "privado" in cat["privacy"].lower() else "public",
+                    slug=slug,
+                )
+                comm_id = comm["id"]
+                existing_ch_names = {c["name"] for c in self.repo.list_channels(comm_id)}
+                for idx, (ch_name, ch_topic) in enumerate(CommunityViewState.TEXT_CHANNELS):
+                    if ch_name not in existing_ch_names:
+                        self.repo.create_channel(
+                            community_id=comm_id,
+                            name=ch_name,
+                            channel_type="text",
+                            topic=ch_topic,
+                            position=idx,
+                        )
+                for idx, (vc_name, _) in enumerate(CommunityViewState.VOICE_CHANNELS):
+                    if vc_name not in existing_ch_names:
+                        self.repo.create_channel(
+                            community_id=comm_id,
+                            name=vc_name,
+                            channel_type="voice",
+                            topic=f"Sala de voz {vc_name}",
+                            position=10 + idx,
+                        )
+
+    def _resolve_community(self, slug_or_id: str) -> Optional[Dict[str, Any]]:
+        comm = self.repo.get_community(slug_or_id)
+        if comm:
+            return comm
+        slug = slug_or_id.replace("_", "-").lower()
+        comm = self.repo.get_community_by_slug(slug)
+        if comm:
+            return comm
+        return self.repo.get_community_by_slug(slug_or_id)
+
+    def load_groups(self) -> List[Dict[str, Any]]:
+        """Carga las comunidades persistidas en SQLite enriquecidas con metadatos visuales."""
+        db_comms = self.repo.list_communities_for_user(self.user_id)
+        catalog_by_slug = {c["id"].replace("_", "-"): c for c in COMMUNITIES_CATALOG}
+        catalog_by_name = {c["name"].upper(): c for c in COMMUNITIES_CATALOG}
+
+        result: List[Dict[str, Any]] = []
+        seen_slugs = set()
+
+        for rank_idx, dc in enumerate(db_comms):
+            slug = dc["slug"]
+            seen_slugs.add(slug)
+            preset = catalog_by_slug.get(slug) or catalog_by_name.get(dc["name"].upper())
+            if preset:
+                item = dict(preset)
+                item["db_id"] = dc["id"]
+                result.append(item)
+            else:
+                channels = self.repo.list_channels(dc["id"])
+                text_cnt = sum(1 for c in channels if c["type"] == "text") or 4
+                voice_cnt = sum(1 for c in channels if c["type"] in ("voice", "stream")) or 1
+                members_cnt = max(1, len(self.repo.list_members(dc["id"])))
+                result.append({
+                    "id": dc["slug"],
+                    "db_id": dc["id"],
+                    "group_id": dc["id"],
+                    "name": dc["name"].upper(),
+                    "subtitle": f"COMUNIDAD C.C.I. • {members_cnt} MIEMBRO{'S' if members_cnt != 1 else ''}",
+                    "description": dc.get("description") or "Comunidad creada desde la consola C.C.I. System.",
+                    "privacy": "Grupo privado" if dc.get("visibility") == "private" else "Grupo público",
+                    "members_count": members_cnt,
+                    "online_count": max(1, min(members_cnt, 3)),
+                    "channels_count": text_cnt,
+                    "voice_count": voice_cnt,
+                    "is_owner": dc.get("owner_id") == self.user_id,
+                    "card_sprite": "card_0_night_raid.png",
+                    "banner_idx": 0,
+                    "emblem_idx": 0,
+                    "recent_rank": -100 + rank_idx,
+                })
+
+        if not result:
+            return [dict(g) for g in COMMUNITIES_CATALOG]
+        return result
+
+    def create_group(self, name: str) -> Dict[str, Any]:
+        comm = self.service.create_community(
+            owner_id=self.user_id,
+            name=name.upper(),
+            description="Comunidad creada desde la consola C.C.I. System.",
+            visibility="private",
+        )
+        return {
+            "id": comm["slug"],
+            "db_id": comm["id"],
+            "group_id": comm["id"],
+            "name": comm["name"].upper(),
+            "subtitle": "NUEVA COMUNIDAD • 1 MIEMBRO",
+            "description": comm["description"],
+            "privacy": "Grupo privado",
+            "members_count": 1,
+            "online_count": 1,
+            "channels_count": 4,
+            "voice_count": 1,
+            "is_owner": True,
+            "card_sprite": "card_0_night_raid.png",
+            "banner_idx": 0,
+            "emblem_idx": 0,
+            "recent_rank": -1,
+        }
+
+    def join_group_by_code(self, code: str) -> Dict[str, Any]:
+        try:
+            joined = self.service.join_via_invitation(code.strip(), self.user_id)
+            comm_id = joined.get("community_id") or joined.get("community", {}).get("id")
+            comm = self.repo.get_community(comm_id) if comm_id else None
+            if comm:
+                return {
+                    "id": comm["slug"],
+                    "db_id": comm["id"],
+                    "group_id": comm["id"],
+                    "name": comm["name"].upper(),
+                    "subtitle": "CÓDIGO DE INVITACIÓN • MIEMBRO ACTIVO",
+                    "description": comm.get("description") or f"Comunidad vinculada mediante código '{code.upper()}'.",
+                    "privacy": "Grupo privado" if comm.get("visibility") == "private" else "Grupo público",
+                    "members_count": max(2, len(self.repo.list_members(comm_id))),
+                    "online_count": 2,
+                    "channels_count": max(2, len(self.repo.list_channels(comm_id))),
+                    "voice_count": 1,
+                    "is_owner": False,
+                    "card_sprite": "card_3_pixel_squad.png",
+                    "banner_idx": 3,
+                    "emblem_idx": 3,
+                    "recent_rank": -1,
+                }
+        except Exception:
+            pass
+
+        # Si el código es un alias rápido en la consola local, registrar la comunidad en SQLite
+        comm = self.service.create_community(
+            owner_id=self.user_id,
+            name=f"SQUAD {code.upper()[:10]}",
+            description=f"Comunidad vinculada mediante código '{code.upper()}'.",
+            visibility="private",
+            slug=f"grp-join-{code.lower()[:12]}",
+        )
+        return {
+            "id": comm["slug"],
+            "db_id": comm["id"],
+            "group_id": comm["id"],
+            "name": comm["name"],
+            "subtitle": "CÓDIGO DE INVITACIÓN • 8 MIEMBROS",
+            "description": comm["description"],
+            "privacy": "Grupo privado",
+            "members_count": 8,
+            "online_count": 3,
+            "channels_count": 6,
+            "voice_count": 2,
+            "is_owner": False,
+            "card_sprite": "card_3_pixel_squad.png",
+            "banner_idx": 3,
+            "emblem_idx": 3,
+            "recent_rank": -1,
+        }
+
+    def load_channel_messages(
+        self,
+        community_slug_or_id: str,
+        channel_name: str,
+        default_messages: List[Dict[str, str]],
+    ) -> List[Dict[str, str]]:
+        comm = self._resolve_community(community_slug_or_id)
+        if not comm:
+            return [dict(m) for m in default_messages]
+
+        channels = self.repo.list_channels(comm["id"])
+        target_ch = next((c for c in channels if c["name"].lower() == channel_name.lower()), None)
+        if not target_ch:
+            return [dict(m) for m in default_messages]
+
+        db_msgs = self.repo.list_messages(target_ch["id"], limit=100)
+        persisted = [
+            {
+                "id": m["id"],
+                "author": "ALEX" if m["author_id"] == self.user_id else str(m["author_id"]).upper(),
+                "time": "Hoy 18:42",
+                "text": m["content"],
+            }
+            for m in db_msgs
+        ]
+        return [dict(m) for m in default_messages] + persisted
+
+    def send_channel_message(
+        self,
+        community_slug_or_id: str,
+        channel_name: str,
+        text: str,
+    ) -> Optional[Dict[str, Any]]:
+        comm = self._resolve_community(community_slug_or_id)
+        if not comm:
+            return None
+        channels = self.repo.list_channels(comm["id"])
+        target_ch = next((c for c in channels if c["name"].lower() == channel_name.lower()), None)
+        if not target_ch:
+            target_ch = self.repo.create_channel(
+                community_id=comm["id"],
+                name=channel_name,
+                channel_type="text",
+                topic=f"Canal #{channel_name}",
+            )
+        return self.service.send_message(
+            community_id=comm["id"],
+            channel_id=target_ch["id"],
+            author_id=self.user_id,
+            content=text,
+        )
+
+    def toggle_voice_channel(
+        self,
+        community_slug_or_id: str,
+        voice_channel_name: str,
+        joining: bool,
+    ) -> Optional[Dict[str, Any]]:
+        comm = self._resolve_community(community_slug_or_id)
+        if not comm:
+            return None
+        channels = self.repo.list_channels(comm["id"])
+        target_ch = next(
+            (c for c in channels if c["name"].lower() == voice_channel_name.lower() and c["type"] in ("voice", "stream")),
+            None,
+        )
+        if not target_ch:
+            target_ch = self.repo.create_channel(
+                community_id=comm["id"],
+                name=voice_channel_name,
+                channel_type="voice",
+                topic=f"Sala de voz {voice_channel_name}",
+            )
+        if joining:
+            return self.service.request_voice_token(
+                community_id=comm["id"],
+                channel_id=target_ch["id"],
+                user_id=self.user_id,
+                username=self.DEFAULT_USERNAME,
+            )
+        self.service.leave_voice_channel(comm["id"], target_ch["id"], self.user_id)
+        return None
+
+    def save_ui_state(self, key: str, payload: Any) -> None:
+        conn = self.repo._get_connection()
+        with self.repo._tx_lock, conn:
+            conn.execute(
+                """
+                INSERT INTO ui_social_state (state_key, payload_json, updated_at)
+                VALUES (?, ?, ?)
+                ON CONFLICT(state_key) DO UPDATE SET
+                    payload_json = excluded.payload_json,
+                    updated_at = excluded.updated_at;
+                """,
+                (key, json.dumps(payload, ensure_ascii=False), time.time()),
+            )
+
+    def load_ui_state(self, key: str) -> Optional[Any]:
+        conn = self.repo._get_connection()
+        row = conn.execute(
+            "SELECT payload_json FROM ui_social_state WHERE state_key = ?",
+            (key,),
+        ).fetchone()
+        if not row:
+            return None
+        try:
+            return json.loads(row["payload_json"])
+        except Exception:
+            return None
+
+
+# ---------------------------------------------------------------------------
 # Pantalla 1: Hub de Grupos y Comunicación ("GROUPS")
 # ---------------------------------------------------------------------------
 
@@ -355,8 +671,10 @@ class GroupsHubState(BaseState):
 
     SORT_MODES = ("Actividad reciente", "Más miembros", "Alfabético")
 
-    def __init__(self, state_machine: Optional[Any] = None) -> None:
+    def __init__(self, state_machine: Optional[Any] = None, db_path: Optional[str] = None) -> None:
         super().__init__(state_machine)
+        self.db_path = db_path
+        self.bridge = CommunitiesUIBridge(db_path=db_path)
         self.sidebar_surface: Optional[pygame.Surface] = None
         self.sidebar_font: Optional[pygame.font.Font] = None
 
@@ -369,35 +687,9 @@ class GroupsHubState(BaseState):
         self.search_query: str = ""
         self.search_focused: bool = False
 
-        self.groups: List[Dict[str, Any]] = [dict(g) for g in COMMUNITIES_CATALOG]
-        self.dms: List[DirectChatContact] = [
-            DirectChatContact(
-                contact_id=d.contact_id,
-                name=d.name,
-                handle=d.handle,
-                status=d.status,
-                activity=d.activity,
-                last_message=d.last_message,
-                last_time=d.last_time,
-                unread=d.unread,
-                contact_sprite=d.contact_sprite,
-                messages=list(d.messages),
-            )
-            for d in DEFAULT_DMS
-        ]
-
-        self.group_invites: List[GroupInviteItem] = [
-            GroupInviteItem("inv_0", "NIGHT RAID", "Kai", "sol_group_0.png"),
-            GroupInviteItem("inv_1", "SAKURA CLUB", "Martina", "sol_group_1.png"),
-            GroupInviteItem("inv_2", "PIXEL SQUAD", "Ren", "sol_group_2.png"),
-        ]
-        self.friend_requests: List[FriendRequestItem] = [
-            FriendRequestItem("fr_0", "Luca", "sol_friend_0.png"),
-            FriendRequestItem("fr_1", "Sofía", "sol_friend_1.png"),
-        ]
-        self.sent_invites: List[FriendRequestItem] = [
-            FriendRequestItem("sent_0", "Tomás", "sol_sent_0.png"),
-        ]
+        self.groups: List[Dict[str, Any]] = self.bridge.load_groups()
+        self.dms: List[DirectChatContact] = self._load_persisted_dms()
+        self.group_invites, self.friend_requests, self.sent_invites = self._load_persisted_solicitudes()
 
         self.dm_input_text: str = ""
         self.dm_input_focused: bool = False
@@ -425,6 +717,101 @@ class GroupsHubState(BaseState):
         self.dm_input_rect = pygame.Rect(620, 550, 620, 44)
         self.sol_action_rects: List[Tuple[pygame.Rect, str, str]] = []
 
+    def _load_persisted_dms(self) -> List[DirectChatContact]:
+        saved = self.bridge.load_ui_state("dms")
+        if isinstance(saved, list) and saved:
+            return [
+                DirectChatContact(
+                    contact_id=item["contact_id"],
+                    name=item["name"],
+                    handle=item["handle"],
+                    status=item["status"],
+                    activity=item["activity"],
+                    last_message=item["last_message"],
+                    last_time=item["last_time"],
+                    unread=int(item.get("unread", 0)),
+                    contact_sprite=item.get("contact_sprite", ""),
+                    messages=[tuple(m) for m in item.get("messages", [])],
+                )
+                for item in saved
+            ]
+        return [
+            DirectChatContact(
+                contact_id=d.contact_id,
+                name=d.name,
+                handle=d.handle,
+                status=d.status,
+                activity=d.activity,
+                last_message=d.last_message,
+                last_time=d.last_time,
+                unread=d.unread,
+                contact_sprite=d.contact_sprite,
+                messages=list(d.messages),
+            )
+            for d in DEFAULT_DMS
+        ]
+
+    def _save_dms(self) -> None:
+        payload = [
+            {
+                "contact_id": d.contact_id,
+                "name": d.name,
+                "handle": d.handle,
+                "status": d.status,
+                "activity": d.activity,
+                "last_message": d.last_message,
+                "last_time": d.last_time,
+                "unread": d.unread,
+                "contact_sprite": d.contact_sprite,
+                "messages": [list(m) for m in d.messages],
+            }
+            for d in self.dms
+        ]
+        self.bridge.save_ui_state("dms", payload)
+
+    def _load_persisted_solicitudes(
+        self,
+    ) -> Tuple[List[GroupInviteItem], List[FriendRequestItem], List[FriendRequestItem]]:
+        saved = self.bridge.load_ui_state("solicitudes")
+        if isinstance(saved, dict):
+            gi = [GroupInviteItem(**x) for x in saved.get("group_invites", [])]
+            fr = [FriendRequestItem(**x) for x in saved.get("friend_requests", [])]
+            si = [FriendRequestItem(**x) for x in saved.get("sent_invites", [])]
+            return gi, fr, si
+        return (
+            [
+                GroupInviteItem("inv_0", "NIGHT RAID", "Kai", "sol_group_0.png"),
+                GroupInviteItem("inv_1", "SAKURA CLUB", "Martina", "sol_group_1.png"),
+                GroupInviteItem("inv_2", "PIXEL SQUAD", "Ren", "sol_group_2.png"),
+            ],
+            [
+                FriendRequestItem("fr_0", "Luca", "sol_friend_0.png"),
+                FriendRequestItem("fr_1", "Sofía", "sol_friend_1.png"),
+            ],
+            [
+                FriendRequestItem("sent_0", "Tomás", "sol_sent_0.png"),
+            ],
+        )
+
+    def _save_solicitudes(self) -> None:
+        self.bridge.save_ui_state(
+            "solicitudes",
+            {
+                "group_invites": [
+                    {"req_id": x.req_id, "group_name": x.group_name, "inviter": x.inviter, "sprite_name": x.sprite_name}
+                    for x in self.group_invites
+                ],
+                "friend_requests": [
+                    {"req_id": x.req_id, "user_name": x.user_name, "sprite_name": x.sprite_name}
+                    for x in self.friend_requests
+                ],
+                "sent_invites": [
+                    {"req_id": x.req_id, "user_name": x.user_name, "sprite_name": x.sprite_name}
+                    for x in self.sent_invites
+                ],
+            },
+        )
+
     def enter(self, **kwargs) -> None:
         _PACK.ensure_loaded()
         self.sidebar_surface = load_sidebar()
@@ -432,6 +819,9 @@ class GroupsHubState(BaseState):
         self.search_focused = False
         self.dm_input_focused = False
         self.modal_mode = None
+        self.groups = self.bridge.load_groups()
+        self.dms = self._load_persisted_dms()
+        self.group_invites, self.friend_requests, self.sent_invites = self._load_persisted_solicitudes()
         if "tab" in kwargs:
             self.active_tab = int(kwargs["tab"]) % 3
 
@@ -634,6 +1024,7 @@ class GroupsHubState(BaseState):
         dm.last_message = txt
         dm.last_time = "Ahora"
         self.dm_input_text = ""
+        self._save_dms()
 
     def _handle_solicitudes_click(self, pos: Tuple[int, int]) -> None:
         for rect, req_id, action in self.sol_action_rects:
@@ -646,6 +1037,7 @@ class GroupsHubState(BaseState):
                             if action == "accept"
                             else f"Invitación a {inv.group_name} rechazada"
                         )
+                        self._save_solicitudes()
                         return
                 for fr in list(self.friend_requests):
                     if fr.req_id == req_id:
@@ -655,11 +1047,13 @@ class GroupsHubState(BaseState):
                             if action == "accept"
                             else f"Solicitud de {fr.user_name} rechazada"
                         )
+                        self._save_solicitudes()
                         return
                 for st in list(self.sent_invites):
                     if st.req_id == req_id:
                         self.sent_invites.remove(st)
                         self.status_banner = f"Invitación a {st.user_name} cancelada"
+                        self._save_solicitudes()
                         return
 
     def _handle_modal_key(self, e: pygame.event.Event) -> None:
@@ -686,43 +1080,11 @@ class GroupsHubState(BaseState):
             self.modal_mode = None
             return
         if self.modal_mode == "create":
-            new_grp = {
-                "id": f"grp_{len(self.groups) + 1}",
-                "group_id": f"grp_{len(self.groups) + 1}",
-                "name": val.upper(),
-                "subtitle": "NUEVA COMUNIDAD • 1 MIEMBRO",
-                "description": "Comunidad creada desde la consola C.C.I. System.",
-                "privacy": "Grupo privado",
-                "members_count": 1,
-                "online_count": 1,
-                "channels_count": 4,
-                "voice_count": 1,
-                "is_owner": True,
-                "card_sprite": "card_0_night_raid.png",
-                "banner_idx": 0,
-                "emblem_idx": 0,
-                "recent_rank": -1,
-            }
+            new_grp = self.bridge.create_group(val)
             self.groups.insert(0, new_grp)
             self.selected_index = 0
         elif self.modal_mode == "join":
-            new_grp = {
-                "id": f"grp_join_{val.lower()}",
-                "group_id": f"grp_join_{val.lower()}",
-                "name": f"SQUAD {val.upper()[:10]}",
-                "subtitle": "CÓDIGO DE INVITACIÓN • 8 MIEMBROS",
-                "description": f"Comunidad vinculada mediante código '{val.upper()}'.",
-                "privacy": "Grupo privado",
-                "members_count": 8,
-                "online_count": 3,
-                "channels_count": 6,
-                "voice_count": 2,
-                "is_owner": False,
-                "card_sprite": "card_3_pixel_squad.png",
-                "banner_idx": 3,
-                "emblem_idx": 3,
-                "recent_rank": -1,
-            }
+            new_grp = self.bridge.join_group_by_code(val)
             self.groups.insert(0, new_grp)
             self.selected_index = 0
         self.modal_mode = None
@@ -1126,8 +1488,10 @@ class CommunityViewState(BaseState):
         ],
     }
 
-    def __init__(self, state_machine: Optional[Any] = None) -> None:
+    def __init__(self, state_machine: Optional[Any] = None, db_path: Optional[str] = None) -> None:
         super().__init__(state_machine)
+        self.db_path = db_path
+        self.bridge = CommunitiesUIBridge(db_path=db_path)
         self.sidebar_surface: Optional[pygame.Surface] = None
         self.sidebar_font: Optional[pygame.font.Font] = None
 
@@ -1135,16 +1499,15 @@ class CommunityViewState(BaseState):
         self.active_group_idx: int = 0
         self.current_channel: str = "general"
         self.active_voice: Optional[str] = "Gaming"
+        self.last_voice_token: Optional[Dict[str, Any]] = None
 
         self.reaction_heart: int = 8
         self.reaction_fire: int = 3
         self.user_hearted: bool = False
         self.user_fired: bool = False
 
-        self.channel_histories: Dict[str, List[Dict[str, str]]] = {
-            "general": [dict(m) for m in self.DEFAULT_GENERAL_MESSAGES],
-            **{k: [dict(m) for m in v] for k, v in self.CHANNEL_PRESETS.items()},
-        }
+        self.channel_histories: Dict[str, List[Dict[str, str]]] = {}
+        self._reload_all_channel_histories()
         self.chat_messages: List[Dict[str, str]] = self.channel_histories["general"]
         self.scroll_offset: int = 0
         self.max_scroll: int = 0
@@ -1161,6 +1524,15 @@ class CommunityViewState(BaseState):
         self.heart_rect = pygame.Rect(528, 502, 46, 22)
         self.fire_rect = pygame.Rect(578, 502, 46, 22)
 
+    def _reload_all_channel_histories(self) -> None:
+        self.channel_histories = {
+            "general": self.bridge.load_channel_messages(
+                self.community_id, "general", self.DEFAULT_GENERAL_MESSAGES
+            )
+        }
+        for k, v in self.CHANNEL_PRESETS.items():
+            self.channel_histories[k] = self.bridge.load_channel_messages(self.community_id, k, v)
+
     def enter(self, **kwargs) -> None:
         _PACK.ensure_loaded()
         self.sidebar_surface = load_sidebar()
@@ -1174,18 +1546,17 @@ class CommunityViewState(BaseState):
                 self.active_group_idx = i
                 break
 
-        self.channel_histories = {
-            "general": [dict(m) for m in self.DEFAULT_GENERAL_MESSAGES],
-            **{k: [dict(m) for m in v] for k, v in self.CHANNEL_PRESETS.items()},
-        }
+        self._reload_all_channel_histories()
         self.current_channel = "general"
         self.chat_messages = self.channel_histories["general"]
         self.scroll_offset = 0
         self.input_text = ""
 
     def _switch_channel(self, ch_name: str) -> None:
-        if ch_name not in self.channel_histories:
-            self.channel_histories[ch_name] = []
+        preset = self.DEFAULT_GENERAL_MESSAGES if ch_name == "general" else self.CHANNEL_PRESETS.get(ch_name, [])
+        self.channel_histories[ch_name] = self.bridge.load_channel_messages(
+            self.community_id, ch_name, preset
+        )
         self.current_channel = ch_name
         self.chat_messages = self.channel_histories[ch_name]
         self.scroll_offset = 0
@@ -1263,6 +1634,8 @@ class CommunityViewState(BaseState):
                         else:
                             self.active_group_idx = idx
                             self.community_id = COMMUNITIES_CATALOG[idx]["id"]
+                            self._reload_all_channel_histories()
+                            self.chat_messages = self.channel_histories.get(self.current_channel, [])
                             self.scroll_offset = 0
                         return
 
@@ -1275,7 +1648,11 @@ class CommunityViewState(BaseState):
                 # 4. Salas de voz (x = 246..438)
                 for rect, vc_name in self.voice_rects:
                     if rect.collidepoint(pos):
-                        self.active_voice = None if self.active_voice == vc_name else vc_name
+                        joining = self.active_voice != vc_name
+                        self.active_voice = vc_name if joining else None
+                        self.last_voice_token = self.bridge.toggle_voice_channel(
+                            self.community_id, vc_name, joining=joining
+                        )
                         return
 
                 # 5. Reacciones en el mensaje del rifle
@@ -1310,6 +1687,7 @@ class CommunityViewState(BaseState):
         txt = self.input_text.strip()
         if not txt:
             return
+        self.bridge.send_channel_message(self.community_id, self.current_channel, txt)
         self.chat_messages.append({"author": "ALEX", "time": "Hoy 18:42", "text": txt})
         self.input_text = ""
         # Auto-scroll al final al enviar un nuevo mensaje
