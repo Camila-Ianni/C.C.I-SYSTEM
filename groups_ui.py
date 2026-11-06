@@ -406,23 +406,23 @@ class GroupsHubState(BaseState):
         self.modal_input: str = ""
         self.status_banner: str = ""
 
-        # Rects interactivos en 1280x720 (alineados a las 3 bases limpias)
+        # Rects interactivos en 1280x720 (alineados al píxel exacto de las 3 bases limpias)
         self.tab_rects = [
-            pygame.Rect(243, 145, 134, 34),  # MIS GRUPOS
-            pygame.Rect(386, 145, 152, 34),  # CHATS PRIVADOS
-            pygame.Rect(546, 145, 146, 34),  # SOLICITUDES
+            pygame.Rect(262, 134, 200, 42),  # MIS GRUPOS (x=264..459, y=135..174)
+            pygame.Rect(468, 134, 204, 42),  # CHATS PRIVADOS (x=470..669, y=135..174)
+            pygame.Rect(678, 134, 192, 42),  # SOLICITUDES (x=680..867, y=135..174)
         ]
-        self.search_rect = pygame.Rect(245, 198, 224, 29)
-        self.sort_rect = pygame.Rect(558, 198, 114, 29)
-        self.grid_btn_rect = pygame.Rect(682, 198, 28, 29)
-        self.list_btn_rect = pygame.Rect(712, 198, 28, 29)
-        self.create_btn_rect = pygame.Rect(243, 571, 142, 35)
-        self.join_btn_rect = pygame.Rect(395, 571, 149, 35)
-        self.enter_group_btn_rect = pygame.Rect(928, 527, 319, 35)
+        self.search_rect = pygame.Rect(256, 196, 286, 32)
+        self.sort_rect = pygame.Rect(656, 196, 136, 32)
+        self.grid_btn_rect = pygame.Rect(809, 196, 36, 32)
+        self.list_btn_rect = pygame.Rect(852, 196, 36, 32)
+        self.create_btn_rect = pygame.Rect(250, 570, 184, 36)
+        self.join_btn_rect = pygame.Rect(449, 570, 195, 36)
+        self.enter_group_btn_rect = pygame.Rect(930, 526, 320, 38)
 
         self.card_rects: List[Tuple[pygame.Rect, int]] = []
         self.dm_contact_rects: List[Tuple[pygame.Rect, int]] = []
-        self.dm_input_rect = pygame.Rect(610, 552, 644, 46)
+        self.dm_input_rect = pygame.Rect(620, 550, 620, 44)
         self.sol_action_rects: List[Tuple[pygame.Rect, str, str]] = []
 
     def enter(self, **kwargs) -> None:
@@ -801,13 +801,13 @@ class GroupsHubState(BaseState):
         default_ids = {g["id"] for g in COMMUNITIES_CATALOG}
 
         if self.view_mode == "grid":
-            col_x = [254, 574]
-            row_y = [244, 349, 454]
+            col_x = [262, 578]
+            row_y = [248, 353, 458]
             for i, grp in enumerate(groups[:6]):
                 c = i % 2
                 r = i // 2
                 x, y = col_x[c], row_y[r]
-                rect = pygame.Rect(x, y, 310, 98)
+                rect = pygame.Rect(x, y, 298, 92)
                 self.card_rects.append((rect, i))
 
                 sp = _PACK.sprites.get(grp["card_sprite"])
@@ -817,15 +817,15 @@ class GroupsHubState(BaseState):
                     _draw_cut_rect(surface, rect, (18, 20, 25), (90, 95, 108), cut=6, border_w=1)
 
                 if grp["id"] not in default_ids:
-                    pygame.draw.rect(surface, (16, 18, 22), pygame.Rect(x + 56, y + 54, 210, 36))
+                    pygame.draw.rect(surface, (16, 18, 22), pygame.Rect(x + 56, y + 50, 204, 34))
                     t_s = f_title.render(grp["name"], True, (242, 244, 248))
                     s_s = f_small.render(
                         f"{grp['members_count']} miembros • {grp['online_count']} en línea",
                         True,
                         (175, 180, 190),
                     )
-                    surface.blit(t_s, (x + 60, y + 55))
-                    surface.blit(s_s, (x + 60, y + 73))
+                    surface.blit(t_s, (x + 60, y + 51))
+                    surface.blit(s_s, (x + 60, y + 69))
 
                 if i == self.selected_index:
                     pts = [
@@ -841,8 +841,8 @@ class GroupsHubState(BaseState):
                     pygame.draw.polygon(surface, (245, 247, 252), pts, 2)
         else:
             for i, grp in enumerate(groups[:6]):
-                y = 246 + i * 50
-                rect = pygame.Rect(256, y, 626, 45)
+                y = 248 + i * 50
+                rect = pygame.Rect(262, y, 614, 44)
                 self.card_rects.append((rect, i))
                 sel = i == self.selected_index
                 _draw_cut_rect(
@@ -872,7 +872,7 @@ class GroupsHubState(BaseState):
             if sel_grp["id"] == "night_raid":
                 det_sp = _PACK.sprites.get("detail_night_raid.png")
                 if det_sp is not None:
-                    surface.blit(det_sp, (921, 185))
+                    surface.blit(det_sp, (926, 188))
             else:
                 ban = _PACK.sprites.get(f"banner_{sel_grp['banner_idx']}.png")
                 if ban is not None:
@@ -908,26 +908,26 @@ class GroupsHubState(BaseState):
         f_body = _PACK.fonts["body"]
         f_small = _PACK.fonts["small"]
 
-        # 1. Lista izquierda de contactos recortados (x=252..576, y=238..600)
+        # 1. Lista izquierda de contactos recortados con aire (x=259..569, y=242..598)
         self.dm_contact_rects.clear()
         self.selected_index = max(0, min(self.selected_index, len(self.dms) - 1))
 
-        cur_y = 238
+        cur_y = 242
         for i, dm in enumerate(self.dms):
             sp = _PACK.sprites.get(dm.contact_sprite)
-            h = sp.get_height() if sp is not None else 56
-            rect = pygame.Rect(252, cur_y, 324, h)
+            h = sp.get_height() if sp is not None else 52
+            rect = pygame.Rect(259, cur_y, 310, h)
             self.dm_contact_rects.append((rect, i))
 
             if sp is not None:
-                surface.blit(sp, (252, cur_y))
+                surface.blit(sp, (259, cur_y))
 
             if i == self.selected_index:
                 pygame.draw.rect(surface, (242, 244, 248), rect, 2, border_radius=5)
 
-            cur_y += h + 3
+            cur_y += h + 7
 
-        # 2. Panel derecho de conversación (x=606..1256, y=188..604)
+        # 2. Panel derecho de conversación con márgenes amplios (x=620..1240, y=194..596)
         active_dm = self.dms[self.selected_index]
 
         if active_dm.contact_id == "dm_tomas" and len(active_dm.messages) == 5:
@@ -935,27 +935,27 @@ class GroupsHubState(BaseState):
             msgs = _PACK.sprites.get("dm_messages_tomas.png")
             inp = _PACK.sprites.get("dm_input_bar.png")
             if hdr is not None:
-                surface.blit(hdr, (610, 190))
+                surface.blit(hdr, (620, 194))
             if msgs is not None:
-                surface.blit(msgs, (610, 246))
+                surface.blit(msgs, (620, 252))
             if inp is not None:
-                surface.blit(inp, (610, 552))
+                surface.blit(inp, (620, 550))
         else:
             hdr = _PACK.sprites.get("dm_header_tomas.png")
             if hdr is not None:
-                surface.blit(hdr, (610, 190))
-                pygame.draw.rect(surface, (14, 16, 20), pygame.Rect(666, 194, 280, 42))
+                surface.blit(hdr, (620, 194))
+                pygame.draw.rect(surface, (14, 16, 20), pygame.Rect(674, 198, 280, 40))
                 n_s = f_title.render(f"{active_dm.name}   {active_dm.handle}", True, (242, 244, 248))
                 s_s = f_small.render(f"● {active_dm.status} • {active_dm.activity}", True, (175, 185, 195))
-                surface.blit(n_s, (670, 197))
-                surface.blit(s_s, (670, 216))
+                surface.blit(n_s, (678, 200))
+                surface.blit(s_s, (678, 219))
 
-            msg_y = 252
+            msg_y = 256
             for sender, ts, text in active_dm.messages[-5:]:
                 is_me = sender.upper() == "ALEX"
-                bw = min(460, max(190, f_body.size(text)[0] + 36))
-                bx = 1236 - bw if is_me else 624
-                brect = pygame.Rect(bx, msg_y, bw, 48)
+                bw = min(450, max(190, f_body.size(text)[0] + 36))
+                bx = 1230 - bw if is_me else 630
+                brect = pygame.Rect(bx, msg_y, bw, 46)
                 _draw_cut_rect(
                     surface,
                     brect,
@@ -967,20 +967,20 @@ class GroupsHubState(BaseState):
                 meta = f_small.render(f"{sender}   {ts}", True, (165, 170, 182))
                 body = f_body.render(text, True, (242, 244, 248))
                 surface.blit(meta, (brect.x + 12, brect.y + 6))
-                surface.blit(body, (brect.x + 12, brect.y + 24))
+                surface.blit(body, (brect.x + 12, brect.y + 23))
                 msg_y += 56
 
             inp = _PACK.sprites.get("dm_input_bar.png")
             if inp is not None:
-                surface.blit(inp, (610, 552))
+                surface.blit(inp, (620, 550))
 
         if self.dm_input_focused or self.dm_input_text:
-            pygame.draw.rect(surface, (14, 16, 20), pygame.Rect(652, 560, 460, 30))
+            pygame.draw.rect(surface, (14, 16, 20), pygame.Rect(660, 558, 440, 28))
             if self.dm_input_focused:
                 pygame.draw.rect(surface, (238, 240, 248), self.dm_input_rect, 1, border_radius=5)
             txt = self.dm_input_text + ("|" if self.dm_input_focused else "")
             t_s = f_body.render(txt or f"Escribir mensaje a {active_dm.name}...", True, (240, 242, 248))
-            surface.blit(t_s, (658, 567))
+            surface.blit(t_s, (666, 564))
 
         # 3. Asistente inferior recortado de la hoja Photoroom
         ast = _PACK.sprites.get("dm_assistant_bar.png")
@@ -990,39 +990,39 @@ class GroupsHubState(BaseState):
     def _draw_tab_solicitudes(self, surface: pygame.Surface) -> None:
         self.sol_action_rects.clear()
 
-        # 1. Invitaciones a grupos en el contenedor izquierdo (x=256..788, y=246..584)
-        gy = 248
+        # 1. Invitaciones a grupos en el contenedor izquierdo con margen interno (x=265..777, y=252..576)
+        gy = 252
         for inv in self.group_invites:
             sp = _PACK.sprites.get(inv.sprite_name)
             if sp is not None:
-                surface.blit(sp, (256, gy))
-            acc_rect = pygame.Rect(256 + 335, gy + 58, 88, 34)
-            rej_rect = pygame.Rect(256 + 430, gy + 58, 92, 34)
+                surface.blit(sp, (265, gy))
+            acc_rect = pygame.Rect(265 + 324, gy + 54, 86, 32)
+            rej_rect = pygame.Rect(265 + 416, gy + 54, 90, 32)
             self.sol_action_rects.append((acc_rect, inv.req_id, "accept"))
             self.sol_action_rects.append((rej_rect, inv.req_id, "reject"))
-            gy += 110
+            gy += 108
 
-        # 2. Solicitudes de amistad en el contenedor superior derecho (x=822..1254, y=244..364)
-        fy = 246
+        # 2. Solicitudes de amistad en el contenedor superior derecho con margen (x=832..1244, y=248..362)
+        fy = 248
         for fr in self.friend_requests:
             sp = _PACK.sprites.get(fr.sprite_name)
             if sp is not None:
-                surface.blit(sp, (824, fy))
-            acc_rect = pygame.Rect(824 + 245, fy + 12, 84, 34)
-            rej_rect = pygame.Rect(824 + 334, fy + 12, 88, 34)
+                surface.blit(sp, (832, fy))
+            acc_rect = pygame.Rect(832 + 236, fy + 10, 82, 32)
+            rej_rect = pygame.Rect(832 + 322, fy + 10, 86, 32)
             self.sol_action_rects.append((acc_rect, fr.req_id, "accept"))
             self.sol_action_rects.append((rej_rect, fr.req_id, "reject"))
-            fy += 60
+            fy += 58
 
-        # 3. Invitaciones enviadas en el contenedor medio derecho (x=822..1254, y=442..508)
-        sy = 444
+        # 3. Invitaciones enviadas en el contenedor medio derecho con margen (x=832..1244, y=446..508)
+        sy = 446
         for st in self.sent_invites:
             sp = _PACK.sprites.get(st.sprite_name)
             if sp is not None:
-                surface.blit(sp, (824, sy))
-            can_rect = pygame.Rect(824 + 318, sy + 12, 102, 34)
+                surface.blit(sp, (832, sy))
+            can_rect = pygame.Rect(832 + 306, sy + 10, 98, 32)
             self.sol_action_rects.append((can_rect, st.req_id, "cancel"))
-            sy += 60
+            sy += 58
 
     def _draw_modal(self, surface: pygame.Surface) -> None:
         overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
@@ -1313,12 +1313,12 @@ class CommunityViewState(BaseState):
 
         if self.current_channel == "general" and not extra:
             msg_layout = [
-                ("nr_msg_0_alex.png", 464, 194),
-                ("nr_msg_1_mira.png", 464, 244),
-                ("nr_msg_2_kai.png", 464, 292),
-                ("nr_msg_3_alex.png", 464, 340),
-                ("nr_msg_4_mira_skin.png", 464, 384),
-                ("nr_msg_5_kai.png", 464, 526),
+                ("nr_msg_0_alex.png", 470, 196),
+                ("nr_msg_1_mira.png", 470, 246),
+                ("nr_msg_2_kai.png", 470, 294),
+                ("nr_msg_3_alex.png", 470, 342),
+                ("nr_msg_4_mira_skin.png", 470, 386),
+                ("nr_msg_5_kai.png", 470, 526),
             ]
             for sp_name, mx, my in msg_layout:
                 sp = _PACK.sprites.get(sp_name)
@@ -1334,34 +1334,34 @@ class CommunityViewState(BaseState):
                 pygame.draw.rect(canvas, (242, 244, 248), self.fire_rect, 1, border_radius=4)
                 canvas.blit(f_small_b.render(f"🔥 {self.reaction_fire}", True, (245, 247, 252)), (self.fire_rect.x + 10, self.fire_rect.y + 4))
         else:
-            cur_y = 194
+            cur_y = 196
             if self.current_channel == "general":
                 base_msgs = [
-                    ("nr_msg_2_kai.png", 48),
-                    ("nr_msg_3_alex.png", 42),
-                    ("nr_msg_4_mira_skin.png", 140),
-                    ("nr_msg_5_kai.png", 48),
+                    ("nr_msg_2_kai.png", 44),
+                    ("nr_msg_3_alex.png", 40),
+                    ("nr_msg_4_mira_skin.png", 134),
+                    ("nr_msg_5_kai.png", 46),
                 ]
                 for sp_name, mh in base_msgs[max(0, len(extra) - 1):]:
                     sp = _PACK.sprites.get(sp_name)
                     if sp is not None and cur_y + mh <= 515:
-                        canvas.blit(sp, (464, cur_y))
-                        cur_y += mh + 4
+                        canvas.blit(sp, (470, cur_y))
+                        cur_y += mh + 6
             else:
-                info_rect = pygame.Rect(468, cur_y, 540, 48)
+                info_rect = pygame.Rect(472, cur_y, 532, 48)
                 _draw_cut_rect(canvas, info_rect, (16, 18, 23), (80, 86, 100), cut=5, border_w=1)
-                canvas.blit(f_body_b.render(f"Bienvenido a #{self.current_channel}", True, (242, 244, 248)), (482, cur_y + 7))
-                canvas.blit(f_sub.render(dict(self.TEXT_CHANNELS).get(self.current_channel, ""), True, (175, 180, 192)), (482, cur_y + 26))
+                canvas.blit(f_body_b.render(f"Bienvenido a #{self.current_channel}", True, (242, 244, 248)), (486, cur_y + 7))
+                canvas.blit(f_sub.render(dict(self.TEXT_CHANNELS).get(self.current_channel, ""), True, (175, 180, 192)), (486, cur_y + 26))
                 cur_y += 58
 
             for msg in extra[-4:]:
                 if cur_y > 530:
                     break
-                m_rect = pygame.Rect(468, cur_y, 540, 44)
+                m_rect = pygame.Rect(472, cur_y, 532, 44)
                 _draw_cut_rect(canvas, m_rect, (20, 23, 29), (110, 116, 130), cut=5, border_w=1)
-                canvas.blit(f_body_b.render(msg["author"], True, (244, 246, 250)), (482, cur_y + 5))
-                canvas.blit(f_small.render(msg["time"], True, (155, 160, 172)), (532, cur_y + 7))
-                canvas.blit(f_body.render(msg["text"], True, (232, 235, 242)), (482, cur_y + 23))
+                canvas.blit(f_body_b.render(msg["author"], True, (244, 246, 250)), (486, cur_y + 5))
+                canvas.blit(f_small.render(msg["time"], True, (155, 160, 172)), (536, cur_y + 7))
+                canvas.blit(f_body.render(msg["text"], True, (232, 235, 242)), (486, cur_y + 23))
                 cur_y += 50
 
         # 5. Barra de entrada de texto inferior (y=578..619)
@@ -1372,13 +1372,13 @@ class CommunityViewState(BaseState):
             txt = self.input_text + ("|" if self.input_focused else "")
             canvas.blit(f_body.render(txt or f"Enviar un mensaje a #{self.current_channel}...", True, (242, 244, 248)), (508, 590))
 
-        # 6. Columna derecha de miembros recortada de la hoja Photoroom (x=1066..1267)
+        # 6. Columna derecha de miembros recortada de la hoja Photoroom con margen (x=1074..1258)
         mem_on = _PACK.sprites.get("nr_members_online.png")
         mem_aw = _PACK.sprites.get("nr_members_away.png")
         if mem_on is not None:
-            canvas.blit(mem_on, (1068, 190))
+            canvas.blit(mem_on, (1074, 194))
         if mem_aw is not None:
-            canvas.blit(mem_aw, (1068, 444))
+            canvas.blit(mem_aw, (1074, 446))
 
         # 7. Dibujar SIEMPRE la barra lateral compartida idéntica a todas las pantallas
         if self.sidebar_surface is not None and self.sidebar_font is not None:
