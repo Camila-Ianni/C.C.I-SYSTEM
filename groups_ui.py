@@ -1,1200 +1,1390 @@
-"""
-groups_ui.py - Pantallas modulares y funcionales de Grupos y Comunidades para C.C.I. SYSTEM.
+"""Pantallas modulares de Grupos y Comunidad para C.C.I. System.
 
-Construcción completa mediante recorte de assets, composición procedimental y elementos interactivos:
-1. GroupsHubState ('GROUPS'):
-   - Pestañas funcionales: 'MIS GRUPOS' (con 6 tarjetas modulares), 'CHATS PRIVADOS' y 'SOLICITUDES'.
-   - Tarjetas de comunidad renderizadas individualmente con banner, viñeta, marco biselado,
-     emblema recortado, tipografía nativa, contador de miembros/en línea y estado activo.
-   - Búsqueda en tiempo real, selector de ordenación y alternador de vista (cuadrícula/lista).
-   - Panel lateral derecho sincronizado dinámicamente con el grupo seleccionado y botón 'Entrar al grupo'.
-   - Barra lateral nativa con 'GRUPOS' seleccionado e interacción directa sin desalineaciones.
-   - Diálogo inferior de la asistente Cami con pistas de navegación.
-
-2. CommunityViewState ('COMMUNITY'):
-   - Selector lateral de comunidades con íconos circulares/redondeados e indicador activo blanco.
-   - Columna interactiva de canales categorizados (# general, off-topic, voz con conteo de usuarios).
-   - Canal de voz interactivo con estado de conexión en vivo y controles de audio.
-   - Chat en tiempo real con lista de mensajes desplazable, avatares pixel art, tarjeta de arma
-     y chips de reacciones interactivas (corazón, pulgar, chispas) con incremento al clic.
-   - Barra de entrada de texto interactiva con escritura en vivo, cursor parpadeante y botón enviar.
-   - Lista derecha de miembros por estado (En línea, Ausente, Desconectado) con avatares y actividades.
+Construidas con las 4 bases limpias vacías y los sprites recortados de las hojas
+transparentes Photoroom en 'Grupos assets ', manteniendo la barra lateral
+compartida (sidebar_ui.py) idéntica en todas las pantallas.
 """
 from __future__ import annotations
 
-import os
-import time
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 import pygame
 
-from sidebar_ui import (
-    LOGICAL_H,
-    LOGICAL_W,
-    SIDEBAR_W,
-    sidebar_destination,
-)
-from states import BaseState
+from sidebar_ui import draw_sidebar, load_sidebar, make_sidebar_font, sidebar_destination
+from states import BaseState, SCREEN_HEIGHT, SCREEN_WIDTH
 
-ROOT = Path(__file__).resolve().parent
 
-# Catálogo completo de comunidades con datos, banners y emblemas
-COMMUNITIES_CATALOG = [
+# ---------------------------------------------------------------------------
+# Catálogo de comunidades y modelos de datos interactivos
+# ---------------------------------------------------------------------------
+
+COMMUNITIES_CATALOG: List[Dict[str, Any]] = [
     {
         "id": "night_raid",
+        "group_id": "grp_night_raid",
         "name": "NIGHT RAID",
-        "badge": "👑",
-        "type": "Grupo privado",
-        "is_private": True,
+        "subtitle": "COMUNIDAD DE JUEGOS • 24 MIEMBROS",
         "description": "Comunidad enfocada en juegos competitivos, eventos y proyectos de C.C.I.",
-        "members": 24,
-        "online": 5,
+        "privacy": "Grupo privado",
+        "members_count": 24,
+        "online_count": 5,
         "channels_count": 12,
         "voice_count": 3,
-        "banner": "assets/communities/banner_night_raid.png",
-        "emblem": "assets/communities/emblem_wolf.png",
-        "channels": {
-            "info": ["anuncios", "reglas", "bienvenidas"],
-            "text": ["general", "off-topic", "clips-y-memes", "busqueda-de-equipo", "sugerencias"],
-            "voice": [
-                {"name": "Sala principal", "users": 5, "max": 16},
-                {"name": "Gaming", "users": 3, "max": 8},
-                {"name": "Rankeds", "users": 0, "max": 5},
-                {"name": "Streaming", "users": 1, "max": 4},
-            ],
-        },
+        "is_owner": True,
+        "card_sprite": "card_0_night_raid.png",
+        "banner_idx": 0,
+        "emblem_idx": 0,
+        "recent_rank": 0,
     },
     {
         "id": "sakura_club",
+        "group_id": "grp_sakura_club",
         "name": "SAKURA CLUB",
-        "badge": "🌸",
-        "type": "Grupo público",
-        "is_private": False,
-        "description": "Espacio chill de anime, música lofi, arte pixel y charlas nocturnas.",
-        "members": 18,
-        "online": 3,
+        "subtitle": "ARTE Y CULTURA • 18 MIEMBROS",
+        "description": "Espacio de ilustración pixel art, estética japonesa, música lo-fi y charlas.",
+        "privacy": "Grupo público",
+        "members_count": 18,
+        "online_count": 3,
         "channels_count": 8,
         "voice_count": 2,
-        "banner": "assets/communities/banner_sakura_club.png",
-        "emblem": "assets/communities/emblem_sakura.png",
-        "channels": {
-            "info": ["anuncios", "reglas"],
-            "text": ["general", "arte-y-dibujo", "musica-lofi"],
-            "voice": [
-                {"name": "Chill Room", "users": 2, "max": 10},
-                {"name": "Musica 24/7", "users": 1, "max": 15},
-            ],
-        },
+        "is_owner": False,
+        "card_sprite": "card_1_sakura_club.png",
+        "banner_idx": 1,
+        "emblem_idx": 1,
+        "recent_rank": 1,
     },
     {
         "id": "da_vinci_team",
+        "group_id": "grp_davinci_team",
         "name": "DA VINCI TEAM",
-        "badge": "⚙️",
-        "type": "Grupo privado",
-        "is_private": True,
-        "description": "Desarrolladores, modders y competidores oficiales de Da Vinci Fighters.",
-        "members": 12,
-        "online": 2,
+        "subtitle": "DESARROLLO C.C.I. • 12 MIEMBROS",
+        "description": "Equipo de desarrollo de videojuegos indie, motores gráficos y torneos.",
+        "privacy": "Grupo privado",
+        "members_count": 12,
+        "online_count": 2,
         "channels_count": 10,
-        "voice_count": 4,
-        "banner": "assets/communities/banner_da_vinci.png",
-        "emblem": "assets/communities/emblem_gear.png",
-        "channels": {
-            "info": ["actualizaciones", "reglas-del-torneo"],
-            "text": ["general", "frame-data", "estrategias", "bugs-y-feedback"],
-            "voice": [
-                {"name": "Practica Dojo", "users": 2, "max": 6},
-                {"name": "Arena 1v1", "users": 0, "max": 2},
-            ],
-        },
+        "voice_count": 2,
+        "is_owner": True,
+        "card_sprite": "card_2_davinci_team.png",
+        "banner_idx": 2,
+        "emblem_idx": 2,
+        "recent_rank": 2,
     },
     {
         "id": "pixel_squad",
+        "group_id": "grp_pixel_squad",
         "name": "PIXEL SQUAD",
-        "badge": "🎮",
-        "type": "Grupo público",
-        "is_private": False,
-        "description": "Comunidad retro gaming, speedruns y torneos de arcade clásicos.",
-        "members": 30,
-        "online": 9,
+        "subtitle": "ARCADE & RETRO • 30 MIEMBROS",
+        "description": "Comunidad de speedruns, retos semanales de arcade y récords cooperativos.",
+        "privacy": "Grupo público",
+        "members_count": 30,
+        "online_count": 9,
         "channels_count": 14,
-        "voice_count": 5,
-        "banner": "assets/communities/banner_pixel_squad.png",
-        "emblem": "assets/communities/emblem_gamepad.png",
-        "channels": {
-            "info": ["torneos", "records"],
-            "text": ["general", "speedruns", "high-scores", "capturas"],
-            "voice": [
-                {"name": "Arcade Room", "users": 4, "max": 12},
-                {"name": "Co-Op Squad", "users": 2, "max": 4},
-            ],
-        },
+        "voice_count": 4,
+        "is_owner": False,
+        "card_sprite": "card_3_pixel_squad.png",
+        "banner_idx": 3,
+        "emblem_idx": 3,
+        "recent_rank": 3,
     },
     {
         "id": "kpop_zone",
+        "group_id": "grp_kpop_zone",
         "name": "K-POP ZONE",
-        "badge": "🎵",
-        "type": "Grupo público",
-        "is_private": False,
-        "description": "Fanáticos del K-Pop, ritmos coreanos, streams y playlists compartidas.",
-        "members": 56,
-        "online": 14,
-        "channels_count": 9,
-        "voice_count": 3,
-        "banner": "assets/communities/banner_kpop.png",
-        "emblem": "assets/communities/emblem_music.png",
-        "channels": {
-            "info": ["novedades", "lanzamientos"],
-            "text": ["general", "recs-musicales", "mv-favoritos"],
-            "voice": [
-                {"name": "Listening Party", "users": 6, "max": 20},
-                {"name": "Karaoke", "users": 3, "max": 8},
-            ],
-        },
+        "subtitle": "MÚSICA Y RITMO • 56 MIEMBROS",
+        "description": "Eventos de juegos de ritmo, watch parties en vivo y listas colaborativas.",
+        "privacy": "Grupo público",
+        "members_count": 56,
+        "online_count": 14,
+        "channels_count": 16,
+        "voice_count": 5,
+        "is_owner": False,
+        "card_sprite": "card_4_kpop_zone.png",
+        "banner_idx": 4,
+        "emblem_idx": 4,
+        "recent_rank": 4,
     },
     {
         "id": "cosmos",
+        "group_id": "grp_cosmos",
         "name": "COSMOS",
-        "badge": "🪐",
-        "type": "Grupo público",
-        "is_private": False,
-        "description": "Exploración espacial, ciencia ficción, sci-fi games y astronomía.",
-        "members": 20,
-        "online": 4,
-        "channels_count": 11,
-        "voice_count": 4,
-        "banner": "assets/communities/banner_cosmos.png",
-        "emblem": "assets/communities/emblem_cosmos.png",
-        "channels": {
-            "info": ["noticias-espaciales"],
-            "text": ["general", "sci-fi-lore", "astrofotografia"],
-            "voice": [
-                {"name": "Estación Orbital", "users": 2, "max": 10},
-                {"name": "Cabina de Vuelo", "users": 1, "max": 4},
-            ],
-        },
+        "subtitle": "EXPLORACIÓN SCI-FI • 20 MIEMBROS",
+        "description": "Simuladores espaciales, lore sci-fi y misiones nocturnas de escuadrón.",
+        "privacy": "Grupo privado",
+        "members_count": 20,
+        "online_count": 4,
+        "channels_count": 9,
+        "voice_count": 2,
+        "is_owner": False,
+        "card_sprite": "card_5_cosmos.png",
+        "banner_idx": 5,
+        "emblem_idx": 5,
+        "recent_rank": 5,
     },
 ]
 
-# Lista de chats privados
-PRIVATE_CHATS_DATA = [
-    {"name": "MIRA", "avatar": "avatar_mira.png", "status": "En llamada Gaming", "status_dot": (60, 220, 100), "last_msg": "¡Yo me sumo! Estuve probando el nuevo mapa.", "time": "18:26"},
-    {"name": "KAI", "avatar": "avatar_guy_glasses.png", "status": "En línea", "status_dot": (60, 220, 100), "last_msg": "También me copo, armamos sala en la de Gaming?", "time": "18:27"},
-    {"name": "ALEX", "avatar": "avatar_alex.png", "badge": "👑", "status": "Jugando: Da Vinci Fighters", "status_dot": (60, 220, 100), "last_msg": "Dale, en 10 min la creo. 👌", "time": "18:28"},
-    {"name": "LUNA", "avatar": "avatar_girl_hoodie.png", "status": "Jugando: Minecraft", "status_dot": (60, 220, 100), "last_msg": "Subí los nuevos shaders al server.", "time": "17:40"},
-    {"name": "ZERO", "avatar": "avatar_guy_blonde.png", "status": "Transmitiendo 🔴", "status_dot": (180, 80, 240), "last_msg": "¡Miren el stream, nueva build!", "time": "16:15"},
+
+@dataclass
+class DirectChatContact:
+    contact_id: str
+    name: str
+    handle: str
+    status: str
+    activity: str
+    last_message: str
+    last_time: str
+    unread: int = 0
+    contact_sprite: str = ""
+    messages: List[Tuple[str, str, str]] = field(default_factory=list)
+
+
+@dataclass
+class GroupInviteItem:
+    req_id: str
+    group_name: str
+    inviter: str
+    sprite_name: str
+
+
+@dataclass
+class FriendRequestItem:
+    req_id: str
+    user_name: str
+    sprite_name: str
+
+
+DEFAULT_DMS: List[DirectChatContact] = [
+    DirectChatContact(
+        contact_id="dm_tomas",
+        name="Tomás",
+        handle="@tomas_dev",
+        status="En línea",
+        activity="Jugando: Da Vinci Fighters",
+        last_message="Yo llevo soporte, tranqui.",
+        last_time="22:18",
+        unread=0,
+        contact_sprite="dm_contact_0.png",
+        messages=[
+            ("Tomás", "22:14", "¿Entrás al torneo de esta noche en Night Raid?"),
+            ("ALEX", "22:15", "Sí, ya casi termino de configurar el control."),
+            ("Tomás", "22:16", "Joya, nos falta uno para completar el squad."),
+            ("ALEX", "22:17", "Ahí le aviso a Mira que estaba conectada."),
+            ("Tomás", "22:18", "Yo llevo soporte, tranqui."),
+        ],
+    ),
+    DirectChatContact(
+        contact_id="dm_martina",
+        name="Martina",
+        handle="@marti_px",
+        status="En línea",
+        activity="En Sakura Club",
+        last_message="Te pasé los nuevos sprites del menú.",
+        last_time="21:40",
+        unread=2,
+        contact_sprite="dm_contact_1.png",
+        messages=[
+            ("Martina", "21:38", "¡Hola Alex! ¿Pudiste ver los bocetos del club?"),
+            ("Martina", "21:40", "Te pasé los nuevos sprites del menú."),
+        ],
+    ),
+    DirectChatContact(
+        contact_id="dm_kai",
+        name="Kai",
+        handle="@kai_nr",
+        status="En línea",
+        activity="En sala de voz: Gaming",
+        last_message="Estamos en sala Gaming, sumate.",
+        last_time="20:55",
+        unread=0,
+        contact_sprite="dm_contact_2.png",
+        messages=[
+            ("Kai", "20:50", "¿Sale partida rápida antes del evento?"),
+            ("ALEX", "20:52", "Dame 5 minutos y entro."),
+            ("Kai", "20:55", "Estamos en sala Gaming, sumate."),
+        ],
+    ),
+    DirectChatContact(
+        contact_id="dm_luna",
+        name="Luna",
+        handle="@luna_craft",
+        status="En línea",
+        activity="Jugando: Minecraft",
+        last_message="Mirá cómo quedó la base del servidor.",
+        last_time="19:12",
+        unread=1,
+        contact_sprite="dm_contact_3.png",
+        messages=[
+            ("Luna", "19:12", "Mirá cómo quedó la base del servidor."),
+        ],
+    ),
+    DirectChatContact(
+        contact_id="dm_ren",
+        name="Ren",
+        handle="@ren_arcade",
+        status="Ausente",
+        activity="Ausente",
+        last_message="Mañana intento superar tu récord.",
+        last_time="Ayer",
+        unread=0,
+        contact_sprite="dm_contact_4.png",
+        messages=[
+            ("Ren", "Ayer", "Mañana intento superar tu récord."),
+        ],
+    ),
+    DirectChatContact(
+        contact_id="dm_sofia",
+        name="Sofía",
+        handle="@sofi_kpop",
+        status="Sin conexión",
+        activity="Desconectada",
+        last_message="¡Gracias por la invitación al grupo!",
+        last_time="Lun",
+        unread=0,
+        contact_sprite="dm_contact_5.png",
+        messages=[
+            ("Sofía", "Lun", "¡Gracias por la invitación al grupo!"),
+        ],
+    ),
 ]
 
-# Solicitudes pendientes
-INVITATIONS_DATA = [
-    {"type": "friend", "user": "KAI", "text": "KAI quiere ser tu amigo en C.C.I. SYSTEM", "time": "Hace 10 min"},
-    {"type": "community", "user": "LUNA", "community": "SAKURA CLUB", "text": "LUNA te invitó a unirte a SAKURA CLUB", "time": "Hace 1 hora"},
-]
+
+# ---------------------------------------------------------------------------
+# Caché de bases limpias y sprites Photoroom recortados
+# ---------------------------------------------------------------------------
+
+class GruposSpritePack:
+    """Carga las 4 bases limpias y todos los sprites transparentes de assets/grupos_sprites."""
+
+    def __init__(self) -> None:
+        self.loaded = False
+        self.sprites: Dict[str, pygame.Surface] = {}
+        self.bases: Dict[str, pygame.Surface] = {}
+        self.fonts: Dict[str, pygame.font.Font] = {}
+
+    def ensure_loaded(self) -> None:
+        if self.loaded:
+            return
+        if not pygame.font.get_init():
+            pygame.font.init()
+
+        for key, size, bold in [
+            ("title", 20, True),
+            ("subtitle", 13, False),
+            ("tab", 13, True),
+            ("card_title", 14, True),
+            ("card_sub", 12, False),
+            ("body", 13, False),
+            ("body_bold", 13, True),
+            ("small", 11, False),
+            ("small_bold", 11, True),
+        ]:
+            try:
+                self.fonts[key] = pygame.font.SysFont("Arial", size, bold=bold)
+            except Exception:
+                self.fonts[key] = pygame.font.Font(None, size + 2)
+
+        folder = Path(__file__).resolve().parent / "assets" / "grupos_sprites"
+        if folder.exists():
+            for png in folder.glob("*.png"):
+                try:
+                    surf = pygame.image.load(str(png))
+                    if png.name.startswith("base_"):
+                        surf = surf.convert() if pygame.display.get_surface() else surf
+                        self.bases[png.name] = surf
+                    else:
+                        surf = surf.convert_alpha() if pygame.display.get_surface() else surf
+                        self.sprites[png.name] = surf
+                except Exception as exc:
+                    print(f"[CCI] Error cargando sprite {png.name}: {exc}")
+
+        self.loaded = True
 
 
-def _safe_load_img(path: str, size: Optional[Tuple[int, int]] = None) -> pygame.Surface:
-    """Carga imagen de manera segura o crea superficie de respaldo si falta."""
-    p = ROOT / path
-    if p.exists():
-        try:
-            surf = pygame.image.load(str(p)).convert_alpha()
-            if size:
-                return pygame.transform.smoothscale(surf, size)
-            return surf
-        except Exception:
-            pass
-    fallback_w, fallback_h = size or (64, 64)
-    res = pygame.Surface((fallback_w, fallback_h), pygame.SRCALPHA)
-    res.fill((35, 40, 50, 220))
-    return res
+_PACK = GruposSpritePack()
 
 
-# =============================================================================
-# ESTADO 1: HUB DE GRUPOS Y COMUNIDADES ('GROUPS')
-# =============================================================================
+def _wrap_lines(text: str, font: pygame.font.Font, max_w: int) -> List[str]:
+    words = text.split()
+    if not words:
+        return [""]
+    lines: List[str] = []
+    cur = words[0]
+    for w in words[1:]:
+        cand = f"{cur} {w}"
+        if font.size(cand)[0] <= max_w:
+            cur = cand
+        else:
+            lines.append(cur)
+            cur = w
+    lines.append(cur)
+    return lines
+
+
+def _draw_cut_rect(
+    surf: pygame.Surface,
+    rect: pygame.Rect,
+    bg_color: Tuple[int, int, int],
+    border_color: Tuple[int, int, int],
+    cut: int = 7,
+    border_w: int = 1,
+) -> None:
+    x, y, w, h = rect.x, rect.y, rect.width, rect.height
+    pts = [
+        (x + cut, y),
+        (x + w - cut, y),
+        (x + w, y + cut),
+        (x + w, y + h - cut),
+        (x + w - cut, y + h),
+        (x + cut, y + h),
+        (x, y + h - cut),
+        (x, y + cut),
+    ]
+    pygame.draw.polygon(surf, bg_color, pts)
+    if border_w > 0:
+        pygame.draw.polygon(surf, border_color, pts, border_w)
+
+
+# ---------------------------------------------------------------------------
+# Pantalla 1: Hub de Grupos y Comunicación ("GROUPS")
+# ---------------------------------------------------------------------------
 
 class GroupsHubState(BaseState):
-    """Pantalla interactiva de gestión de comunidades, chats privados y solicitudes."""
+    """Pantalla principal de Grupos con las 3 pestañas reales (Mis Grupos, Chats Privados, Solicitudes)."""
 
-    def __init__(self, state_machine):
+    SORT_MODES = ("Actividad reciente", "Más miembros", "Alfabético")
+
+    def __init__(self, state_machine: Optional[Any] = None) -> None:
         super().__init__(state_machine)
-        self.canvas = pygame.Surface((LOGICAL_W, LOGICAL_H))
+        self.sidebar_surface: Optional[pygame.Surface] = None
+        self.sidebar_font: Optional[pygame.font.Font] = None
 
-        # Base del chasis limpia 1280x720
-        self.base_bg = _safe_load_img("assets/ui_sliced/hub_base_720.png", (LOGICAL_W, LOGICAL_H))
-        self.assistant_img = _safe_load_img("assets/ui_sliced/asst_portrait_main.png", (78, 78))
+        # 0 = MIS GRUPOS, 1 = CHATS PRIVADOS, 2 = SOLICITUDES
+        self.active_tab: int = 0
+        self.selected_index: int = 0
+        self.view_mode: str = "grid"  # "grid" | "list"
+        self.sort_idx: int = 0
 
-        # Precargar banners y emblemas
-        self.banners: Dict[str, pygame.Surface] = {}
-        self.emblems: Dict[str, pygame.Surface] = {}
-        for c in COMMUNITIES_CATALOG:
-            self.banners[c["id"]] = _safe_load_img(c["banner"], (640, 102))
-            self.emblems[c["id"]] = _safe_load_img(c["emblem"], (64, 64))
+        self.search_query: str = ""
+        self.search_focused: bool = False
 
-        # Precargar avatares
-        self.avatars: Dict[str, pygame.Surface] = {}
-        for fn in ["avatar_alex.png", "avatar_mira.png", "avatar_guy_glasses.png", "avatar_girl_hoodie.png", "avatar_guy_blonde.png"]:
-            self.avatars[fn] = _safe_load_img(f"assets/communities/{fn}", (48, 48))
+        self.groups: List[Dict[str, Any]] = [dict(g) for g in COMMUNITIES_CATALOG]
+        self.dms: List[DirectChatContact] = [
+            DirectChatContact(
+                contact_id=d.contact_id,
+                name=d.name,
+                handle=d.handle,
+                status=d.status,
+                activity=d.activity,
+                last_message=d.last_message,
+                last_time=d.last_time,
+                unread=d.unread,
+                contact_sprite=d.contact_sprite,
+                messages=list(d.messages),
+            )
+            for d in DEFAULT_DMS
+        ]
 
-        # Fuentes
-        self.font_header = pygame.font.SysFont("Arial", 18, bold=True)
-        self.font_title = pygame.font.SysFont("Arial", 14, bold=True)
-        self.font_bold = pygame.font.SysFont("Arial", 13, bold=True)
-        self.font_normal = pygame.font.SysFont("Arial", 13)
-        self.font_small = pygame.font.SysFont("Arial", 11)
-        self.font_dialog = pygame.font.SysFont("Arial", 12)
+        self.group_invites: List[GroupInviteItem] = [
+            GroupInviteItem("inv_0", "NIGHT RAID", "Kai", "sol_group_0.png"),
+            GroupInviteItem("inv_1", "SAKURA CLUB", "Martina", "sol_group_1.png"),
+            GroupInviteItem("inv_2", "PIXEL SQUAD", "Ren", "sol_group_2.png"),
+        ]
+        self.friend_requests: List[FriendRequestItem] = [
+            FriendRequestItem("fr_0", "Luca", "sol_friend_0.png"),
+            FriendRequestItem("fr_1", "Sofía", "sol_friend_1.png"),
+        ]
+        self.sent_invites: List[FriendRequestItem] = [
+            FriendRequestItem("sent_0", "Tomás", "sol_sent_0.png"),
+        ]
 
-        # Estado interno interactivo
-        self.selected_index = 0
-        self.active_tab = 0  # 0: MIS GRUPOS, 1: CHATS PRIVADOS, 2: SOLICITUDES
-        self.search_query = ""
-        self.search_active = False
-        self.sort_mode = 0  # 0: Actividad reciente, 1: Miembros, 2: Alfabético
-        self.sort_labels = ["Actividad reciente", "Más miembros", "Alfabético"]
-        self.view_mode = "grid"  # 'grid' o 'list'
-        self.anim_time = 0.0
+        self.dm_input_text: str = ""
+        self.dm_input_focused: bool = False
 
-        # Modal interactivo (crear grupo / unirse con código)
-        self.modal_active: Optional[str] = None
-        self.modal_input = ""
+        self.modal_mode: Optional[str] = None  # None | "create" | "join"
+        self.modal_input: str = ""
+        self.status_banner: str = ""
 
-        # Rectángulos interactivos
+        # Rects interactivos en 1280x720 (alineados a las 3 bases limpias)
         self.tab_rects = [
-            pygame.Rect(265, 195, 170, 36),   # MIS GRUPOS
-            pygame.Rect(445, 195, 170, 36),   # CHATS PRIVADOS
-            pygame.Rect(625, 195, 170, 36),   # SOLICITUDES
+            pygame.Rect(243, 145, 134, 34),  # MIS GRUPOS
+            pygame.Rect(386, 145, 152, 34),  # CHATS PRIVADOS
+            pygame.Rect(546, 145, 146, 34),  # SOLICITUDES
         ]
-        self.search_rect = pygame.Rect(268, 246, 240, 30)
-        self.sort_rect = pygame.Rect(520, 246, 200, 30)
-        self.btn_grid_rect = pygame.Rect(730, 246, 32, 30)
-        self.btn_list_rect = pygame.Rect(768, 246, 32, 30)
+        self.search_rect = pygame.Rect(245, 198, 224, 29)
+        self.sort_rect = pygame.Rect(558, 198, 114, 29)
+        self.grid_btn_rect = pygame.Rect(682, 198, 28, 29)
+        self.list_btn_rect = pygame.Rect(712, 198, 28, 29)
+        self.create_btn_rect = pygame.Rect(243, 571, 142, 35)
+        self.join_btn_rect = pygame.Rect(395, 571, 149, 35)
+        self.enter_group_btn_rect = pygame.Rect(928, 527, 319, 35)
 
-        # Cuadrícula de tarjetas de comunidades (2 columnas x 3 filas)
-        self.card_rects = [
-            pygame.Rect(268, 296, 295, 86),  # 0: Night Raid
-            pygame.Rect(578, 296, 295, 86),  # 1: Sakura Club
-            pygame.Rect(268, 394, 295, 86),  # 2: Da Vinci Team
-            pygame.Rect(578, 394, 295, 86),  # 3: Pixel Squad
-            pygame.Rect(268, 492, 295, 86),  # 4: K-Pop Zone
-            pygame.Rect(578, 492, 295, 86),  # 5: Cosmos
-        ]
+        self.card_rects: List[Tuple[pygame.Rect, int]] = []
+        self.dm_contact_rects: List[Tuple[pygame.Rect, int]] = []
+        self.dm_input_rect = pygame.Rect(610, 552, 644, 46)
+        self.sol_action_rects: List[Tuple[pygame.Rect, str, str]] = []
 
-        # Botones de acción inferiores
-        self.btn_crear_rect = pygame.Rect(268, 595, 160, 34)
-        self.btn_unirse_rect = pygame.Rect(440, 595, 175, 34)
+    def enter(self, **kwargs) -> None:
+        _PACK.ensure_loaded()
+        self.sidebar_surface = load_sidebar()
+        self.sidebar_font = make_sidebar_font()
+        self.search_focused = False
+        self.dm_input_focused = False
+        self.modal_mode = None
+        if "tab" in kwargs:
+            self.active_tab = int(kwargs["tab"]) % 3
 
-        # Botón entrar al grupo (panel derecho)
-        self.btn_entrar_rect = pygame.Rect(930, 532, 305, 40)
+    def _change_state(self, dest: str, **kwargs) -> None:
+        if self.state_machine is not None:
+            self.state_machine.change_state(dest, **kwargs)
 
-        # Opciones de barra lateral
-        self.sidebar_buttons = [
-            ("INICIO", "MENU", pygame.Rect(40, 125, 140, 36)),
-            ("JUEGOS", "LIBRARY", pygame.Rect(40, 170, 140, 36)),
-            ("GRUPOS", "GROUPS", pygame.Rect(40, 215, 140, 36)),
-            ("PERFIL", "PROFILE", pygame.Rect(40, 260, 140, 36)),
-            ("LOGROS", "ACHIEVEMENTS", pygame.Rect(40, 305, 140, 36)),
-            ("CONFIGURACIÓN", "SETTINGS", pygame.Rect(40, 350, 140, 36)),
-            ("APAGAR", "QUIT", pygame.Rect(40, 395, 140, 36)),
-        ]
-
-    def enter(self, **kwargs):
-        self.anim_time = 0.0
-        self.modal_active = None
-        self.modal_input = ""
-        idx = kwargs.get("community_index")
-        if idx is not None and 0 <= idx < len(COMMUNITIES_CATALOG):
-            self.selected_index = idx
-
-    def exit(self):
-        pass
-
-    def _play_beep(self, pitch=600):
-        try:
-            from states import MenuState
-            MenuState._play_beep_sound(pitch=pitch, duration_ms=45, volume=0.25)
-        except Exception:
-            pass
-
-    def _get_filtered_communities(self) -> List[Tuple[int, Dict[str, Any]]]:
-        items = list(enumerate(COMMUNITIES_CATALOG))
-        if self.search_query.strip():
-            q = self.search_query.strip().lower()
-            items = [(i, c) for i, c in items if q in c["name"].lower() or q in c["description"].lower()]
-
-        if self.sort_mode == 1:
-            items.sort(key=lambda x: x[1]["members"], reverse=True)
-        elif self.sort_mode == 2:
-            items.sort(key=lambda x: x[1]["name"])
+    def _filtered_groups(self) -> List[Dict[str, Any]]:
+        items = list(self.groups)
+        q = self.search_query.strip().lower()
+        if q:
+            items = [
+                g for g in items
+                if q in g["name"].lower() or q in g["description"].lower()
+            ]
+        mode = self.SORT_MODES[self.sort_idx]
+        if mode == "Más miembros":
+            items.sort(key=lambda g: g["members_count"], reverse=True)
+        elif mode == "Alfabético":
+            items.sort(key=lambda g: g["name"])
+        else:
+            items.sort(key=lambda g: g["recent_rank"])
         return items
 
-    def _open_selected_community(self):
-        self._play_beep(850)
-        comm = COMMUNITIES_CATALOG[self.selected_index]
-        self.state_machine.change_state("COMMUNITY", community_id=comm["id"])
+    def _open_selected_group(self) -> None:
+        groups = self._filtered_groups()
+        if not groups:
+            return
+        idx = max(0, min(self.selected_index, len(groups) - 1))
+        grp = groups[idx]
+        self._change_state("COMMUNITY", community_id=grp["id"])
 
-    def handle_events(self, events):
-        for event in events:
-            if event.type == pygame.QUIT:
-                pygame.event.post(pygame.event.Event(pygame.QUIT))
+    def handle_events(self, events: List[pygame.event.Event]) -> None:
+        for e in events:
+            if e.type == pygame.KEYDOWN:
+                if self.modal_mode is not None:
+                    self._handle_modal_key(e)
+                    continue
+                if self.search_focused:
+                    if e.key in (pygame.K_ESCAPE, pygame.K_RETURN):
+                        self.search_focused = False
+                    elif e.key == pygame.K_BACKSPACE:
+                        self.search_query = self.search_query[:-1]
+                        self.selected_index = 0
+                    elif e.unicode and e.unicode.isprintable() and len(self.search_query) < 26:
+                        self.search_query += e.unicode
+                        self.selected_index = 0
+                    continue
+                if self.dm_input_focused and self.active_tab == 1:
+                    if e.key == pygame.K_ESCAPE:
+                        self.dm_input_focused = False
+                    elif e.key == pygame.K_RETURN:
+                        self._send_dm_message()
+                    elif e.key == pygame.K_BACKSPACE:
+                        self.dm_input_text = self.dm_input_text[:-1]
+                    elif e.unicode and e.unicode.isprintable() and len(self.dm_input_text) < 75:
+                        self.dm_input_text += e.unicode
+                    continue
+
+                if e.key == pygame.K_ESCAPE:
+                    self._change_state("MENU")
+                elif e.key == pygame.K_TAB:
+                    self.active_tab = (self.active_tab + 1) % 3
+                    self.selected_index = 0
+                elif e.key in (pygame.K_1, pygame.K_2, pygame.K_3):
+                    self.active_tab = e.key - pygame.K_1
+                    self.selected_index = 0
+                elif self.active_tab == 0:
+                    groups = self._filtered_groups()
+                    count = len(groups)
+                    if count > 0:
+                        cols = 2 if self.view_mode == "grid" else 1
+                        if e.key in (pygame.K_DOWN, pygame.K_s):
+                            self.selected_index = min(count - 1, self.selected_index + cols)
+                        elif e.key in (pygame.K_UP, pygame.K_w):
+                            self.selected_index = max(0, self.selected_index - cols)
+                        elif e.key in (pygame.K_RIGHT, pygame.K_d):
+                            self.selected_index = min(count - 1, self.selected_index + 1)
+                        elif e.key in (pygame.K_LEFT, pygame.K_a):
+                            self.selected_index = max(0, self.selected_index - 1)
+                        elif e.key == pygame.K_RETURN:
+                            self._open_selected_group()
+                elif self.active_tab == 1:
+                    if e.key in (pygame.K_DOWN, pygame.K_s):
+                        self.selected_index = min(len(self.dms) - 1, self.selected_index + 1)
+                        self.dms[self.selected_index].unread = 0
+                    elif e.key in (pygame.K_UP, pygame.K_w):
+                        self.selected_index = max(0, self.selected_index - 1)
+                        self.dms[self.selected_index].unread = 0
+                    elif e.key == pygame.K_RETURN:
+                        self.dm_input_focused = True
+
+            elif e.type == pygame.MOUSEBUTTONDOWN and e.button == 1:
+                pos = self._to_logical_pos(e.pos)
+                if self.modal_mode is not None:
+                    self._handle_modal_click(pos)
+                    continue
+
+                # 1. Sidebar compartida (x < 228)
+                dest = sidebar_destination(pos, max_x=228)
+                if dest is not None:
+                    if dest == "QUIT":
+                        pygame.event.post(pygame.event.Event(pygame.QUIT))
+                    elif dest != "GROUPS":
+                        self._change_state(dest)
+                    continue
+
+                # 2. Pestañas superiores
+                hit_tab = False
+                for idx, rect in enumerate(self.tab_rects):
+                    if rect.collidepoint(pos):
+                        self.active_tab = idx
+                        self.selected_index = 0
+                        self.search_focused = False
+                        self.dm_input_focused = False
+                        hit_tab = True
+                        break
+                if hit_tab:
+                    continue
+
+                # 3. Interacciones según pestaña activa
+                if self.active_tab == 0:
+                    self._handle_mis_grupos_click(pos)
+                elif self.active_tab == 1:
+                    self._handle_chats_privados_click(pos)
+                elif self.active_tab == 2:
+                    self._handle_solicitudes_click(pos)
+
+    def _to_logical_pos(self, pos: Tuple[int, int]) -> Tuple[int, int]:
+        surf = pygame.display.get_surface()
+        if surf is None:
+            return pos
+        sw, sh = surf.get_size()
+        if (sw, sh) == (SCREEN_WIDTH, SCREEN_HEIGHT) or sw <= 0 or sh <= 0:
+            return pos
+        return int(pos[0] * SCREEN_WIDTH / sw), int(pos[1] * SCREEN_HEIGHT / sh)
+
+    def _handle_mis_grupos_click(self, pos: Tuple[int, int]) -> None:
+        if self.search_rect.collidepoint(pos):
+            self.search_focused = True
+            return
+        self.search_focused = False
+
+        if self.sort_rect.collidepoint(pos):
+            self.sort_idx = (self.sort_idx + 1) % len(self.SORT_MODES)
+            self.selected_index = 0
+            return
+
+        if self.grid_btn_rect.collidepoint(pos):
+            self.view_mode = "grid"
+            return
+
+        if self.list_btn_rect.collidepoint(pos):
+            self.view_mode = "list"
+            return
+
+        if self.create_btn_rect.collidepoint(pos):
+            self.modal_mode = "create"
+            self.modal_input = ""
+            return
+
+        if self.join_btn_rect.collidepoint(pos):
+            self.modal_mode = "join"
+            self.modal_input = ""
+            return
+
+        if self.enter_group_btn_rect.collidepoint(pos):
+            self._open_selected_group()
+            return
+
+        for rect, idx in self.card_rects:
+            if rect.collidepoint(pos):
+                if self.selected_index == idx:
+                    self._open_selected_group()
+                else:
+                    self.selected_index = idx
                 return
 
-            if event.type == pygame.KEYDOWN:
-                # Modal abierto
-                if self.modal_active:
-                    if event.key == pygame.K_ESCAPE:
-                        self.modal_active = None
-                        self.modal_input = ""
-                    elif event.key == pygame.K_RETURN:
-                        self._play_beep(800)
-                        self.modal_active = None
-                        self.modal_input = ""
-                    elif event.key == pygame.K_BACKSPACE:
-                        self.modal_input = self.modal_input[:-1]
-                    else:
-                        if event.unicode and len(self.modal_input) < 25:
-                            self.modal_input += event.unicode
-                    continue
+    def _handle_chats_privados_click(self, pos: Tuple[int, int]) -> None:
+        if self.dm_input_rect.collidepoint(pos):
+            self.dm_input_focused = True
+            if pos[0] >= self.dm_input_rect.right - 48 and self.dm_input_text.strip():
+                self._send_dm_message()
+            return
+        self.dm_input_focused = False
 
-                # Búsqueda activa
-                if self.search_active:
-                    if event.key == pygame.K_RETURN or event.key == pygame.K_ESCAPE:
-                        self.search_active = False
-                    elif event.key == pygame.K_BACKSPACE:
-                        self.search_query = self.search_query[:-1]
-                    else:
-                        if event.unicode and len(self.search_query) < 25:
-                            self.search_query += event.unicode
-                    continue
+        for rect, idx in self.dm_contact_rects:
+            if rect.collidepoint(pos):
+                self.selected_index = idx
+                self.dms[idx].unread = 0
+                return
 
-                if event.key == pygame.K_ESCAPE:
-                    self.state_machine.change_state("MENU")
-                    return
+    def _send_dm_message(self) -> None:
+        txt = self.dm_input_text.strip()
+        if not txt or not self.dms:
+            return
+        idx = max(0, min(self.selected_index, len(self.dms) - 1))
+        dm = self.dms[idx]
+        dm.messages.append(("ALEX", "Ahora", txt))
+        dm.last_message = txt
+        dm.last_time = "Ahora"
+        self.dm_input_text = ""
 
-                if event.key in (pygame.K_RETURN, pygame.K_KP_ENTER, pygame.K_SPACE):
-                    if self.active_tab == 0:
-                        self._open_selected_community()
-                    return
-
-                # Navegación por teclado en cuadrícula
-                if self.active_tab == 0:
-                    if event.key in (pygame.K_UP, pygame.K_w):
-                        if self.selected_index >= 2:
-                            self.selected_index -= 2
-                            self._play_beep(650)
-                    elif event.key in (pygame.K_DOWN, pygame.K_s):
-                        if self.selected_index <= 3:
-                            self.selected_index += 2
-                            self._play_beep(550)
-                    elif event.key in (pygame.K_LEFT, pygame.K_a):
-                        if self.selected_index % 2 == 1:
-                            self.selected_index -= 1
-                            self._play_beep(650)
-                    elif event.key in (pygame.K_RIGHT, pygame.K_d):
-                        if self.selected_index % 2 == 0 and self.selected_index + 1 < len(COMMUNITIES_CATALOG):
-                            self.selected_index += 1
-                            self._play_beep(550)
-
-                # Cambio rápido de pestaña con TAB
-                if event.key == pygame.K_TAB:
-                    self.active_tab = (self.active_tab + 1) % 3
-                    self._play_beep(700)
-
-            elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-                pos = self._screen_to_logical(event.pos)
-                if not pos:
-                    continue
-
-                # Clic dentro de modal si está activo
-                if self.modal_active:
-                    modal_rect = pygame.Rect(400, 240, 480, 200)
-                    if not modal_rect.collidepoint(pos):
-                        self.modal_active = None
-                        self.modal_input = ""
-                    return
-
-                # Clic en opciones de la barra lateral izquierda
-                if pos[0] < 185:
-                    for _label, dest, rect in self.sidebar_buttons:
-                        if rect.collidepoint(pos):
-                            if dest == "QUIT":
-                                pygame.event.post(pygame.event.Event(pygame.QUIT))
-                            elif dest != "GROUPS":
-                                self._play_beep(700)
-                                self.state_machine.change_state(dest)
-                            return
-
-                # Clic en Pestañas
-                for i, r in enumerate(self.tab_rects):
-                    if r.collidepoint(pos):
-                        self.active_tab = i
-                        self._play_beep(700)
+    def _handle_solicitudes_click(self, pos: Tuple[int, int]) -> None:
+        for rect, req_id, action in self.sol_action_rects:
+            if rect.collidepoint(pos):
+                for inv in list(self.group_invites):
+                    if inv.req_id == req_id:
+                        self.group_invites.remove(inv)
+                        self.status_banner = (
+                            f"Te uniste a {inv.group_name}"
+                            if action == "accept"
+                            else f"Invitación a {inv.group_name} rechazada"
+                        )
+                        return
+                for fr in list(self.friend_requests):
+                    if fr.req_id == req_id:
+                        self.friend_requests.remove(fr)
+                        self.status_banner = (
+                            f"Ahora sos amigo de {fr.user_name}"
+                            if action == "accept"
+                            else f"Solicitud de {fr.user_name} rechazada"
+                        )
+                        return
+                for st in list(self.sent_invites):
+                    if st.req_id == req_id:
+                        self.sent_invites.remove(st)
+                        self.status_banner = f"Invitación a {st.user_name} cancelada"
                         return
 
-                # Clic en Búsqueda
-                if self.search_rect.collidepoint(pos):
-                    self.search_active = True
-                    return
-                else:
-                    self.search_active = False
-
-                # Clic en Ordenación
-                if self.sort_rect.collidepoint(pos):
-                    self.sort_mode = (self.sort_mode + 1) % len(self.sort_labels)
-                    self._play_beep(600)
-                    return
-
-                # Clic en alternador de vista
-                if self.btn_grid_rect.collidepoint(pos):
-                    self.view_mode = "grid"
-                    self._play_beep(600)
-                    return
-                if self.btn_list_rect.collidepoint(pos):
-                    self.view_mode = "list"
-                    self._play_beep(600)
-                    return
-
-                # Clic en tarjetas si estamos en pestaña 0
-                if self.active_tab == 0:
-                    filtered = self._get_filtered_communities()
-                    for idx, (real_idx, _c) in enumerate(filtered):
-                        if idx < len(self.card_rects) and self.card_rects[idx].collidepoint(pos):
-                            if self.selected_index == real_idx:
-                                self._open_selected_community()
-                            else:
-                                self.selected_index = real_idx
-                                self._play_beep(600)
-                            return
-
-                    # Clic en botón "Entrar al grupo" del panel derecho
-                    if self.btn_entrar_rect.collidepoint(pos):
-                        self._open_selected_community()
-                        return
-
-                # Clic en botones inferiores
-                if self.btn_crear_rect.collidepoint(pos):
-                    self.modal_active = "CREAR GRUPO"
-                    self.modal_input = ""
-                    self._play_beep(750)
-                    return
-                if self.btn_unirse_rect.collidepoint(pos):
-                    self.modal_active = "UNIRSE CON CÓDIGO"
-                    self.modal_input = ""
-                    self._play_beep(750)
-                    return
-
-    def update(self, dt: float):
-        self.anim_time += dt
-
-    def _screen_to_logical(self, screen_pos: tuple[int, int]) -> Optional[tuple[int, int]]:
-        screen = pygame.display.get_surface()
-        if not screen:
-            return screen_pos
-        sw, sh = screen.get_size()
-        scale = min(sw / LOGICAL_W, sh / LOGICAL_H)
-        offset_x = (sw - LOGICAL_W * scale) / 2
-        offset_y = (sh - LOGICAL_H * scale) / 2
-        x = (screen_pos[0] - offset_x) / scale
-        y = (screen_pos[1] - offset_y) / scale
-        if 0 <= x <= LOGICAL_W and 0 <= y <= LOGICAL_H:
-            return int(x), int(y)
-        return None
-
-    def draw(self, screen: pygame.Surface):
-        # 1. Dibujar chasis de base
-        self.canvas.blit(self.base_bg, (0, 0))
-
-        # 2. Resaltar pestaña activa de barra lateral 'GRUPOS'
-        pill_rect = pygame.Rect(40, 215, 140, 36)
-        pygame.draw.rect(self.canvas, (24, 27, 34), pill_rect, border_radius=6)
-        pygame.draw.rect(self.canvas, (255, 255, 255), pygame.Rect(40, 218, 5, 30), border_radius=3)
-        txt_grp = self.font_bold.render("GRUPOS", True, (255, 255, 255))
-        self.canvas.blit(txt_grp, (58, 224))
-
-        # 3. Limpiar zonas dinámicas para renderizado modular y sin solapamiento
-        # Zona pestañas
-        pygame.draw.rect(self.canvas, (11, 13, 17), pygame.Rect(260, 190, 560, 45))
-        # Zona cuadrícula / lista
-        pygame.draw.rect(self.canvas, (11, 13, 17), pygame.Rect(260, 290, 630, 298))
-        # Zona panel lateral derecho
-        pygame.draw.rect(self.canvas, (11, 13, 17), pygame.Rect(915, 215, 335, 365))
-        # Zona texto diálogo asistente inferior
-        pygame.draw.rect(self.canvas, (14, 16, 21), pygame.Rect(210, 635, 540, 55))
-
-        # 4. Renderizar Pestañas Superiores
-        tabs = [("MIS GRUPOS", "6"), ("CHATS PRIVADOS", "5"), ("SOLICITUDES", "2")]
-        for i, (t_name, badge) in enumerate(tabs):
-            r = self.tab_rects[i]
-            is_active = (self.active_tab == i)
-            bg_col = (28, 32, 42) if is_active else (18, 20, 26)
-            border_col = (110, 120, 145) if is_active else (40, 44, 55)
-            pygame.draw.rect(self.canvas, bg_col, r, border_radius=6)
-            pygame.draw.rect(self.canvas, border_col, r, width=1, border_radius=6)
-
-            txt_col = (255, 255, 255) if is_active else (160, 165, 178)
-            label_surf = self.font_bold.render(t_name, True, txt_col)
-            self.canvas.blit(label_surf, (r.x + 16, r.y + 9))
-
-            # Badge pill
-            badge_rect = pygame.Rect(r.right - 34, r.y + 8, 22, 18)
-            b_bg = (55, 65, 85) if is_active else (30, 34, 44)
-            pygame.draw.rect(self.canvas, b_bg, badge_rect, border_radius=4)
-            b_txt = self.font_small.render(badge, True, (240, 240, 245))
-            self.canvas.blit(b_txt, b_txt.get_rect(center=badge_rect.center))
-
-        # 5. Barra de búsqueda y ordenación
-        # Input búsqueda
-        pygame.draw.rect(self.canvas, (16, 18, 24), self.search_rect, border_radius=5)
-        b_border = (120, 135, 165) if self.search_active else (45, 50, 62)
-        pygame.draw.rect(self.canvas, b_border, self.search_rect, width=1, border_radius=5)
-        cur_q = self.search_query + ("|" if int(self.anim_time * 2) % 2 == 0 and self.search_active else "")
-        q_show = cur_q if cur_q else "🔍 Buscar grupo o conversación..."
-        q_col = (240, 240, 245) if cur_q else (120, 125, 135)
-        self.canvas.blit(self.font_small.render(q_show, True, q_col), (self.search_rect.x + 10, self.search_rect.y + 7))
-
-        # Selector ordenación
-        pygame.draw.rect(self.canvas, (18, 20, 26), self.sort_rect, border_radius=5)
-        pygame.draw.rect(self.canvas, (45, 50, 62), self.sort_rect, width=1, border_radius=5)
-        sort_txt = f"ORDENAR: {self.sort_labels[self.sort_mode]} ▾"
-        self.canvas.blit(self.font_small.render(sort_txt, True, (190, 195, 205)), (self.sort_rect.x + 10, self.sort_rect.y + 7))
-
-        # Botones vista cuadrícula / lista
-        for btn_r, is_sel, icon_t in [(self.btn_grid_rect, self.view_mode == "grid", "::"), (self.btn_list_rect, self.view_mode == "list", "≡")]:
-            bg_c = (35, 42, 55) if is_sel else (18, 20, 26)
-            pygame.draw.rect(self.canvas, bg_c, btn_r, border_radius=4)
-            pygame.draw.rect(self.canvas, (65, 75, 95) if is_sel else (40, 44, 55), btn_r, width=1, border_radius=4)
-            self.canvas.blit(self.font_bold.render(icon_t, True, (240, 240, 245) if is_sel else (140, 145, 155)), (btn_r.x + 8, btn_r.y + 5))
-
-        # 6. Renderizado de Contenido según Pestaña Activa
-        if self.active_tab == 0:
-            # PESTAÑA: MIS GRUPOS
-            filtered = self._get_filtered_communities()
-            for idx, (real_idx, comm) in enumerate(filtered):
-                if idx >= len(self.card_rects):
-                    break
-                r = self.card_rects[idx]
-                is_selected = (self.selected_index == real_idx)
-
-                # Superficie de tarjeta modular
-                card_surf = pygame.Surface((r.width, r.height), pygame.SRCALPHA)
-
-                # Banner con viñeta
-                b_surf = self.banners.get(comm["id"])
-                if b_surf:
-                    scaled_b = pygame.transform.smoothscale(b_surf, (r.width, r.height))
-                    card_surf.blit(scaled_b, (0, 0))
-
-                vignette = pygame.Surface((r.width, r.height), pygame.SRCALPHA)
-                vignette.fill((8, 10, 14, 150))
-                card_surf.blit(vignette, (0, 0))
-
-                # Marco biselado y resaltado activo
-                border_color = (255, 255, 255) if is_selected else (60, 68, 80)
-                border_width = 2 if is_selected else 1
-                pygame.draw.rect(card_surf, border_color, card_surf.get_rect(), width=border_width, border_radius=8)
-
-                # Emblema en caja redondeada
-                e_surf = self.emblems.get(comm["id"])
-                e_box = pygame.Rect(8, 16, 54, 54)
-                pygame.draw.rect(card_surf, (16, 20, 26, 230), e_box, border_radius=6)
-                pygame.draw.rect(card_surf, (80, 90, 105), e_box, width=1, border_radius=6)
-                if e_surf:
-                    card_surf.blit(pygame.transform.smoothscale(e_surf, (46, 46)), (12, 20))
-
-                # Nombre y badge
-                title_txt = f"{comm['name']} {comm['badge']}"
-                card_surf.blit(self.font_title.render(title_txt, True, (255, 255, 255)), (70, 22))
-
-                # Estadísticas
-                sub_txt = f"{comm['members']} miembros • {comm['online']} en línea"
-                card_surf.blit(self.font_small.render(sub_txt, True, (185, 190, 200)), (70, 48))
-
-                # Botón tres puntos
-                card_surf.blit(self.font_title.render("⋮", True, (160, 165, 175)), (r.width - 20, 32))
-
-                self.canvas.blit(card_surf, r.topleft)
-
-            # Renderizado del Panel Derecho de Detalle
-            sel_comm = COMMUNITIES_CATALOG[self.selected_index]
-            panel_r = pygame.Rect(915, 218, 335, 362)
-            pygame.draw.rect(self.canvas, (14, 16, 22), panel_r, border_radius=10)
-            pygame.draw.rect(self.canvas, (50, 58, 72), panel_r, width=1, border_radius=10)
-
-            # Banner superior
-            b_det = self.banners.get(sel_comm["id"])
-            if b_det:
-                scaled_det = pygame.transform.smoothscale(b_det, (315, 80))
-                self.canvas.blit(scaled_det, (925, 228))
-
-            # Emblema, título y privacidad
-            e_det = self.emblems.get(sel_comm["id"])
-            if e_det:
-                self.canvas.blit(pygame.transform.smoothscale(e_det, (42, 42)), (930, 318))
-            self.canvas.blit(self.font_title.render(f"{sel_comm['name']} {sel_comm['badge']}", True, (255, 255, 255)), (980, 320))
-            badge_str = f"🔒 {sel_comm['type']}" if sel_comm['is_private'] else f"🌐 {sel_comm['type']}"
-            self.canvas.blit(self.font_small.render(badge_str, True, (155, 160, 172)), (980, 342))
-
-            # Descripción
-            lines = self._wrap_text(sel_comm["description"], self.font_small, 305)
-            for li, l_str in enumerate(lines[:3]):
-                self.canvas.blit(self.font_small.render(l_str, True, (190, 195, 205)), (930, 375 + li * 16))
-
-            # Métricas
-            stats_y = 432
-            for s_name, s_val in [
-                ("👤 Miembros", str(sel_comm["members"])),
-                ("🟢 En línea", str(sel_comm["online"])),
-                ("# Canales", str(sel_comm["channels_count"])),
-                ("🔊 Salas de voz", str(sel_comm["voice_count"])),
-            ]:
-                self.canvas.blit(self.font_small.render(s_name, True, (150, 155, 165)), (932, stats_y))
-                self.canvas.blit(self.font_bold.render(s_val, True, (245, 245, 250)), (1205, stats_y))
-                stats_y += 21
-
-            # Botón interactivo "Entrar al grupo >"
-            pygame.draw.rect(self.canvas, (32, 38, 50), self.btn_entrar_rect, border_radius=8)
-            pygame.draw.rect(self.canvas, (230, 235, 245), self.btn_entrar_rect, width=1, border_radius=8)
-            btn_txt = self.font_bold.render("💬  Entrar al grupo  >", True, (255, 255, 255))
-            self.canvas.blit(btn_txt, btn_txt.get_rect(center=self.btn_entrar_rect.center))
-
-        elif self.active_tab == 1:
-            # PESTAÑA: CHATS PRIVADOS (DMs)
-            for di, dm in enumerate(PRIVATE_CHATS_DATA):
-                dm_r = pygame.Rect(268, 296 + di * 56, 605, 50)
-                pygame.draw.rect(self.canvas, (18, 21, 28), dm_r, border_radius=8)
-                pygame.draw.rect(self.canvas, (45, 52, 65), dm_r, width=1, border_radius=8)
-
-                av = self.avatars.get(dm["avatar"])
-                if av:
-                    self.canvas.blit(pygame.transform.smoothscale(av, (38, 38)), (dm_r.x + 8, dm_r.y + 6))
-
-                # Dot de estado
-                pygame.draw.circle(self.canvas, dm["status_dot"], (dm_r.x + 42, dm_r.y + 40), 5)
-
-                name_txt = dm["name"] + (" " + dm.get("badge", "") if "badge" in dm else "")
-                self.canvas.blit(self.font_title.render(name_txt, True, (255, 255, 255)), (dm_r.x + 55, dm_r.y + 8))
-                self.canvas.blit(self.font_small.render(dm["status"], True, (150, 155, 165)), (dm_r.x + 55, dm_r.y + 28))
-                self.canvas.blit(self.font_normal.render(f'"{dm["last_msg"]}"', True, (200, 205, 215)), (dm_r.x + 220, dm_r.y + 16))
-                self.canvas.blit(self.font_small.render(dm["time"], True, (130, 135, 145)), (dm_r.right - 55, dm_r.y + 16))
-
-            # Panel derecho en DMs
-            panel_r = pygame.Rect(915, 218, 335, 362)
-            pygame.draw.rect(self.canvas, (14, 16, 22), panel_r, border_radius=10)
-            pygame.draw.rect(self.canvas, (50, 58, 72), panel_r, width=1, border_radius=10)
-            self.canvas.blit(self.font_header.render("CHATS DIRECTOS", True, (255, 255, 255)), (935, 235))
-            self.canvas.blit(self.font_small.render("Conversa de forma privada con tus contactos.", True, (160, 165, 175)), (935, 265))
-
-        elif self.active_tab == 2:
-            # PESTAÑA: SOLICITUDES
-            for si, inv in enumerate(INVITATIONS_DATA):
-                inv_r = pygame.Rect(268, 296 + si * 70, 605, 62)
-                pygame.draw.rect(self.canvas, (18, 21, 28), inv_r, border_radius=8)
-                pygame.draw.rect(self.canvas, (45, 52, 65), inv_r, width=1, border_radius=8)
-
-                icon = "👤" if inv["type"] == "friend" else "🏰"
-                self.canvas.blit(self.font_header.render(icon, True, (255, 255, 255)), (inv_r.x + 12, inv_r.y + 16))
-                self.canvas.blit(self.font_bold.render(inv["text"], True, (240, 240, 250)), (inv_r.x + 48, inv_r.y + 12))
-                self.canvas.blit(self.font_small.render(inv["time"], True, (140, 145, 155)), (inv_r.x + 48, inv_r.y + 36))
-
-                # Botones Aceptar / Rechazar
-                btn_ok = pygame.Rect(inv_r.right - 170, inv_r.y + 15, 75, 30)
-                btn_no = pygame.Rect(inv_r.right - 85, inv_r.y + 15, 75, 30)
-                pygame.draw.rect(self.canvas, (35, 95, 50), btn_ok, border_radius=5)
-                pygame.draw.rect(self.canvas, (90, 35, 35), btn_no, border_radius=5)
-                self.canvas.blit(self.font_small.render("Aceptar", True, (255, 255, 255)), (btn_ok.x + 16, btn_ok.y + 7))
-                self.canvas.blit(self.font_small.render("Rechazar", True, (255, 255, 255)), (btn_no.x + 14, btn_no.y + 7))
-
-        # 7. Diálogo de la Asistente Cami (inferior)
-        dialog_texts = [
-            "Gestiona tus grupos, chats privados y nuevas comunidades.",
-            "Mensajería privada cifrada en tiempo real con amigos de C.C.I.",
-            "Revisa tus invitaciones a comunidades y solicitudes de amistad.",
-        ]
-        self.canvas.blit(self.font_dialog.render(dialog_texts[self.active_tab], True, (240, 242, 248)), (215, 650))
-
-        # 8. Modal Interactivo si está activo
-        if self.modal_active:
-            overlay = pygame.Surface((LOGICAL_W, LOGICAL_H), pygame.SRCALPHA)
-            overlay.fill((0, 0, 0, 190))
-            self.canvas.blit(overlay, (0, 0))
-
-            m_box = pygame.Rect(400, 240, 480, 200)
-            pygame.draw.rect(self.canvas, (20, 24, 32), m_box, border_radius=10)
-            pygame.draw.rect(self.canvas, (200, 210, 230), m_box, width=2, border_radius=10)
-
-            self.canvas.blit(self.font_header.render(self.modal_active, True, (255, 255, 255)), (m_box.x + 25, m_box.y + 20))
-            self.canvas.blit(self.font_normal.render("Introduce el nombre o código de acceso:", True, (170, 175, 185)), (m_box.x + 25, m_box.y + 55))
-
-            in_box = pygame.Rect(m_box.x + 25, m_box.y + 90, 430, 36)
-            pygame.draw.rect(self.canvas, (10, 12, 16), in_box, border_radius=5)
-            pygame.draw.rect(self.canvas, (80, 90, 110), in_box, width=1, border_radius=5)
-
-            inp_str = self.modal_input + ("|" if int(self.anim_time * 2) % 2 == 0 else "")
-            self.canvas.blit(self.font_bold.render(inp_str, True, (255, 255, 255)), (in_box.x + 12, in_box.y + 9))
-
-            self.canvas.blit(self.font_small.render("Presiona ENTER para confirmar o ESC para cancelar", True, (130, 135, 145)), (m_box.x + 25, m_box.y + 150))
-
-        # Escalar al tamaño de pantalla del usuario
-        sw, sh = screen.get_size()
-        scale = min(sw / LOGICAL_W, sh / LOGICAL_H)
-        dw, dh = int(LOGICAL_W * scale), int(LOGICAL_H * scale)
-        scaled_canvas = pygame.transform.smoothscale(self.canvas, (dw, dh))
-        screen.fill((0, 0, 0))
-        screen.blit(scaled_canvas, ((sw - dw) // 2, (sh - dh) // 2))
-
-    def _wrap_text(self, text: str, font: pygame.font.Font, max_width: int) -> List[str]:
-        words = text.split(" ")
-        lines = []
-        current = ""
-        for w in words:
-            test = current + (" " if current else "") + w
-            if font.size(test)[0] <= max_width:
-                current = test
-            else:
-                if current:
-                    lines.append(current)
-                current = w
-        if current:
-            lines.append(current)
-        return lines
-
-
-# =============================================================================
-# ESTADO 2: VISTA INTERNA DEL GRUPO / COMUNIDAD ('COMMUNITY')
-# =============================================================================
-
-class CommunityViewState(BaseState):
-    """Pantalla interactiva dentro de una comunidad: canales, chat en tiempo real y miembros."""
-
-    def __init__(self, state_machine):
-        super().__init__(state_machine)
-        self.canvas = pygame.Surface((LOGICAL_W, LOGICAL_H))
-
-        # Base del chasis limpia 1280x720
-        self.base_bg = _safe_load_img("assets/ui_sliced/nr_base_720.png", (LOGICAL_W, LOGICAL_H))
-        self.weapon_card = _safe_load_img("assets/ui_sliced/card_weapon.png", (280, 155))
-
-        # Precargar emblemas
-        self.emblems: Dict[str, pygame.Surface] = {}
-        for c in COMMUNITIES_CATALOG:
-            self.emblems[c["id"]] = _safe_load_img(c["emblem"], (40, 40))
-
-        # Precargar avatares
-        self.avatars: Dict[str, pygame.Surface] = {}
-        for fn in ["avatar_alex.png", "avatar_mira.png", "avatar_guy_glasses.png", "avatar_girl_hoodie.png", "avatar_guy_blonde.png"]:
-            self.avatars[fn] = _safe_load_img(f"assets/communities/{fn}", (42, 42))
-
-        # Fuentes
-        self.font_header = pygame.font.SysFont("Arial", 16, bold=True)
-        self.font_cat = pygame.font.SysFont("Arial", 11, bold=True)
-        self.font_ch = pygame.font.SysFont("Arial", 13)
-        self.font_ch_bold = pygame.font.SysFont("Arial", 13, bold=True)
-        self.font_author = pygame.font.SysFont("Arial", 13, bold=True)
-        self.font_time = pygame.font.SysFont("Arial", 11)
-        self.font_chat = pygame.font.SysFont("Arial", 13)
-        self.font_small = pygame.font.SysFont("Arial", 11)
-
-        # Estado del grupo activo
-        self.community_id = "night_raid"
-        self.current_channel = "general"
-        self.connected_voice: Optional[str] = None
-        self.anim_time = 0.0
-
-        # Historial de chat por canal
-        self.channel_chats: Dict[str, List[Dict[str, Any]]] = {
-            "general": [
-                {"author": "ALEX", "badge": "👑", "avatar": "avatar_alex.png", "color": (245, 200, 70), "time": "Hoy 18:24", "text": "¿Alguien para unas partidas esta noche? 🎮"},
-                {"author": "MIRA", "badge": "", "avatar": "avatar_mira.png", "color": (210, 170, 240), "time": "Hoy 18:26", "text": "¡Yo me sumo! Estuve probando el nuevo mapa."},
-                {"author": "KAI", "badge": "", "avatar": "avatar_guy_glasses.png", "color": (120, 185, 255), "time": "Hoy 18:27", "text": "También me copo, armamos sala en la de Gaming?"},
-                {"author": "ALEX", "badge": "👑", "avatar": "avatar_alex.png", "color": (245, 200, 70), "time": "Hoy 18:28", "text": "Dale, en 10 min la creo. 👌"},
-                {"author": "MIRA", "badge": "", "avatar": "avatar_mira.png", "color": (210, 170, 240), "time": "Hoy 18:35", "text": "Les dejo el skin que conseguí hoy 👀", "has_weapon": True},
-                {"author": "KAI", "badge": "", "avatar": "avatar_guy_glasses.png", "color": (120, 185, 255), "time": "Hoy 18:40", "text": "Está increíble 🔥"},
-            ],
-            "off-topic": [
-                {"author": "LUNA", "badge": "", "avatar": "avatar_girl_hoodie.png", "color": (160, 220, 160), "time": "Hoy 15:10", "text": "¿Vieron el nuevo tráiler de anime retro?"},
-                {"author": "ALEX", "badge": "👑", "avatar": "avatar_alex.png", "color": (245, 200, 70), "time": "Hoy 15:14", "text": "Sí, la animación en pixel art quedó tremenda."},
-            ],
-            "clips-y-memes": [
-                {"author": "ZERO", "badge": "", "avatar": "avatar_guy_blonde.png", "color": (255, 140, 140), "time": "Hoy 14:02", "text": "Clip del combo de 99 hits en Da Vinci Fighters!"},
-            ],
-        }
-
-        # Reacciones interactivas para la tarjeta de arma
-        self.weapon_reactions = {"❤️": 8, "👍": 3, "✨": 1}
-
-        # Desplazamiento de chat
-        self.scroll_y = 0
-
-        # Entrada de texto interactiva
-        self.input_text = ""
-        self.input_rect = pygame.Rect(495, 622, 480, 36)
-        self.btn_send_rect = pygame.Rect(1005, 622, 34, 36)
-
-        # Selector lateral de comunidades (columna estrecha x: 180 a 230)
-        self.server_switch_rects = [
-            (pygame.Rect(185, 145 + i * 52, 44, 44), comm["id"])
-            for i, comm in enumerate(COMMUNITIES_CATALOG)
-        ]
-        self.btn_back_hub = pygame.Rect(185, 96, 44, 42)
-
-        # Botones de barra lateral izquierda principal
-        self.sidebar_buttons = [
-            ("INICIO", "MENU", pygame.Rect(40, 125, 140, 36)),
-            ("JUEGOS", "LIBRARY", pygame.Rect(40, 170, 140, 36)),
-            ("GRUPOS", "GROUPS", pygame.Rect(40, 215, 140, 36)),
-            ("PERFIL", "PROFILE", pygame.Rect(40, 260, 140, 36)),
-            ("LOGROS", "ACHIEVEMENTS", pygame.Rect(40, 305, 140, 36)),
-            ("CONFIGURACIÓN", "SETTINGS", pygame.Rect(40, 350, 140, 36)),
-            ("APAGAR", "QUIT", pygame.Rect(40, 395, 140, 36)),
-        ]
-
-    @property
-    def chat_messages(self) -> List[Dict[str, Any]]:
-        return self.channel_chats.get(self.current_channel, [])
-
-    def enter(self, **kwargs):
-        self.anim_time = 0.0
-        self.scroll_y = 0
-        cid = kwargs.get("community_id")
-        if cid:
-            self.community_id = cid
-
-    def exit(self):
+    def _handle_modal_key(self, e: pygame.event.Event) -> None:
+        if e.key == pygame.K_ESCAPE:
+            self.modal_mode = None
+        elif e.key == pygame.K_RETURN:
+            self._confirm_modal()
+        elif e.key == pygame.K_BACKSPACE:
+            self.modal_input = self.modal_input[:-1]
+        elif e.unicode and e.unicode.isprintable() and len(self.modal_input) < 26:
+            self.modal_input += e.unicode
+
+    def _handle_modal_click(self, pos: Tuple[int, int]) -> None:
+        confirm_rect = pygame.Rect(520, 410, 115, 34)
+        cancel_rect = pygame.Rect(645, 410, 115, 34)
+        if confirm_rect.collidepoint(pos):
+            self._confirm_modal()
+        elif cancel_rect.collidepoint(pos):
+            self.modal_mode = None
+
+    def _confirm_modal(self) -> None:
+        val = self.modal_input.strip()
+        if not val:
+            self.modal_mode = None
+            return
+        if self.modal_mode == "create":
+            new_grp = {
+                "id": f"grp_{len(self.groups) + 1}",
+                "group_id": f"grp_{len(self.groups) + 1}",
+                "name": val.upper(),
+                "subtitle": "NUEVA COMUNIDAD • 1 MIEMBRO",
+                "description": "Comunidad creada desde la consola C.C.I. System.",
+                "privacy": "Grupo privado",
+                "members_count": 1,
+                "online_count": 1,
+                "channels_count": 4,
+                "voice_count": 1,
+                "is_owner": True,
+                "card_sprite": "card_0_night_raid.png",
+                "banner_idx": 0,
+                "emblem_idx": 0,
+                "recent_rank": -1,
+            }
+            self.groups.insert(0, new_grp)
+            self.selected_index = 0
+        elif self.modal_mode == "join":
+            new_grp = {
+                "id": f"grp_join_{val.lower()}",
+                "group_id": f"grp_join_{val.lower()}",
+                "name": f"SQUAD {val.upper()[:10]}",
+                "subtitle": "CÓDIGO DE INVITACIÓN • 8 MIEMBROS",
+                "description": f"Comunidad vinculada mediante código '{val.upper()}'.",
+                "privacy": "Grupo privado",
+                "members_count": 8,
+                "online_count": 3,
+                "channels_count": 6,
+                "voice_count": 2,
+                "is_owner": False,
+                "card_sprite": "card_3_pixel_squad.png",
+                "banner_idx": 3,
+                "emblem_idx": 3,
+                "recent_rank": -1,
+            }
+            self.groups.insert(0, new_grp)
+            self.selected_index = 0
+        self.modal_mode = None
+
+    def update(self, dt: float) -> None:
         pass
 
-    def _play_beep(self, pitch=600):
-        try:
-            from states import MenuState
-            MenuState._play_beep_sound(pitch=pitch, duration_ms=45, volume=0.25)
-        except Exception:
-            pass
+    # -----------------------------------------------------------------------
+    # Renderizado por pestaña usando las Bases Limpias + Sprites Photoroom
+    # -----------------------------------------------------------------------
 
-    def _send_message(self):
+    def draw(self, screen: pygame.Surface) -> None:
+        _PACK.ensure_loaded()
+        canvas = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
+
+        # 1. Seleccionar la base limpia correspondiente a la pestaña activa
+        base_key = (
+            "base_mis_grupos.png"
+            if self.active_tab == 0
+            else ("base_chats_privados.png" if self.active_tab == 1 else "base_solicitudes.png")
+        )
+        base_surf = _PACK.bases.get(base_key)
+        if base_surf is not None:
+            canvas.blit(base_surf, (0, 0))
+        else:
+            canvas.fill((8, 9, 12))
+
+        # 2. Dibujar los elementos recortados sobre los contenedores vacíos de la base
+        if self.active_tab == 0:
+            self._draw_tab_mis_grupos(canvas)
+        elif self.active_tab == 1:
+            self._draw_tab_chats_privados(canvas)
+        else:
+            self._draw_tab_solicitudes(canvas)
+
+        # 3. Dibujar SIEMPRE la barra lateral compartida idéntica a todas las pantallas
+        if self.sidebar_surface is not None and self.sidebar_font is not None:
+            draw_sidebar(canvas, self.sidebar_surface, "groups", self.sidebar_font)
+
+        # 4. Modal si está activo
+        if self.modal_mode is not None:
+            self._draw_modal(canvas)
+
+        if screen.get_size() != (SCREEN_WIDTH, SCREEN_HEIGHT):
+            pygame.transform.smoothscale(canvas, screen.get_size(), screen)
+        else:
+            screen.blit(canvas, (0, 0))
+
+    def _draw_tab_mis_grupos(self, surface: pygame.Surface) -> None:
+        f_sub = _PACK.fonts["card_sub"]
+        f_title = _PACK.fonts["card_title"]
+        f_body = _PACK.fonts["body"]
+        f_small = _PACK.fonts["small"]
+        f_small_b = _PACK.fonts["small_bold"]
+
+        # Si el usuario buscó texto o cambió el orden, actualizar la barra de búsqueda/orden
+        if self.search_focused or self.search_query:
+            pygame.draw.rect(surface, (14, 16, 20), pygame.Rect(268, 202, 196, 21))
+            if self.search_focused:
+                pygame.draw.rect(surface, (235, 238, 245), self.search_rect, 1, border_radius=4)
+            q_txt = self.search_query + ("|" if self.search_focused else "")
+            s_surf = f_sub.render(q_txt or "Buscar grupo...", True, (238, 240, 246))
+            surface.blit(s_surf, (270, 205))
+
+        if self.sort_idx != 0:
+            pygame.draw.rect(surface, (14, 16, 20), pygame.Rect(562, 202, 106, 21))
+            m_surf = f_small.render(f"{self.SORT_MODES[self.sort_idx]} v", True, (220, 224, 232))
+            surface.blit(m_surf, (565, 206))
+
+        # Grilla de 6 tarjetas recortadas dentro del contenedor central vacío (x=250..891, y=240..560)
+        groups = self._filtered_groups()
+        self.card_rects.clear()
+        if groups:
+            self.selected_index = max(0, min(self.selected_index, len(groups) - 1))
+
+        default_ids = {g["id"] for g in COMMUNITIES_CATALOG}
+
+        if self.view_mode == "grid":
+            col_x = [254, 574]
+            row_y = [244, 349, 454]
+            for i, grp in enumerate(groups[:6]):
+                c = i % 2
+                r = i // 2
+                x, y = col_x[c], row_y[r]
+                rect = pygame.Rect(x, y, 310, 98)
+                self.card_rects.append((rect, i))
+
+                sp = _PACK.sprites.get(grp["card_sprite"])
+                if sp is not None:
+                    surface.blit(sp, (x, y))
+                else:
+                    _draw_cut_rect(surface, rect, (18, 20, 25), (90, 95, 108), cut=6, border_w=1)
+
+                if grp["id"] not in default_ids:
+                    pygame.draw.rect(surface, (16, 18, 22), pygame.Rect(x + 56, y + 54, 210, 36))
+                    t_s = f_title.render(grp["name"], True, (242, 244, 248))
+                    s_s = f_small.render(
+                        f"{grp['members_count']} miembros • {grp['online_count']} en línea",
+                        True,
+                        (175, 180, 190),
+                    )
+                    surface.blit(t_s, (x + 60, y + 55))
+                    surface.blit(s_s, (x + 60, y + 73))
+
+                if i == self.selected_index:
+                    pts = [
+                        (rect.x + 6, rect.y),
+                        (rect.right - 6, rect.y),
+                        (rect.right, rect.y + 6),
+                        (rect.right, rect.bottom - 6),
+                        (rect.right - 6, rect.bottom),
+                        (rect.x + 6, rect.bottom),
+                        (rect.x, rect.bottom - 6),
+                        (rect.x, rect.y + 6),
+                    ]
+                    pygame.draw.polygon(surface, (245, 247, 252), pts, 2)
+        else:
+            for i, grp in enumerate(groups[:6]):
+                y = 246 + i * 50
+                rect = pygame.Rect(256, y, 626, 45)
+                self.card_rects.append((rect, i))
+                sel = i == self.selected_index
+                _draw_cut_rect(
+                    surface,
+                    rect,
+                    (22, 25, 31) if sel else (14, 16, 20),
+                    (242, 244, 248) if sel else (75, 80, 92),
+                    cut=5,
+                    border_w=2 if sel else 1,
+                )
+                emb = _PACK.sprites.get(f"emblem_{grp['emblem_idx']}.png")
+                if emb is not None:
+                    emb_sm = pygame.transform.smoothscale(emb, (34, 34))
+                    surface.blit(emb_sm, (rect.x + 8, rect.y + 5))
+                t_s = f_title.render(grp["name"], True, (244, 246, 250))
+                m_s = f_sub.render(
+                    f"{grp['members_count']} miembros • {grp['online_count']} en línea   ({grp['privacy']})",
+                    True,
+                    (175, 180, 190),
+                )
+                surface.blit(t_s, (rect.x + 52, rect.y + 6))
+                surface.blit(m_s, (rect.x + 52, rect.y + 24))
+
+        # Panel derecho de detalle sobre la base limpia (x=913..1262, y=188..588)
+        if groups:
+            sel_grp = groups[self.selected_index]
+            if sel_grp["id"] == "night_raid":
+                det_sp = _PACK.sprites.get("detail_night_raid.png")
+                if det_sp is not None:
+                    surface.blit(det_sp, (921, 185))
+            else:
+                ban = _PACK.sprites.get(f"banner_{sel_grp['banner_idx']}.png")
+                if ban is not None:
+                    surface.blit(ban, (925, 188))
+                emb = _PACK.sprites.get(f"emblem_{sel_grp['emblem_idx']}.png")
+                if emb is not None:
+                    surface.blit(emb, (928, 252))
+
+                n_s = _PACK.fonts["title"].render(sel_grp["name"], True, (245, 247, 252))
+                surface.blit(n_s, (996, 264))
+                p_s = f_sub.render(f"🔒 {sel_grp['privacy']}", True, (175, 180, 190))
+                surface.blit(p_s, (996, 288))
+
+                lines = _wrap_lines(sel_grp["description"], f_sub, 316)
+                for li, line in enumerate(lines[:2]):
+                    l_s = f_sub.render(line, True, (205, 210, 220))
+                    surface.blit(l_s, (928, 326 + li * 18))
+
+                stats = [
+                    ("Miembros", str(sel_grp["members_count"]), 384),
+                    ("En línea", str(sel_grp["online_count"]), 416),
+                    ("# Canales", str(sel_grp["channels_count"]), 449),
+                    ("Salas de voz", str(sel_grp["voice_count"]), 482),
+                ]
+                for lbl, val, sy in stats:
+                    ls = f_body.render(lbl, True, (205, 210, 220))
+                    vs = f_small_b.render(val, True, (244, 246, 250))
+                    surface.blit(ls, (946, sy))
+                    surface.blit(vs, (1244 - vs.get_width(), sy))
+
+    def _draw_tab_chats_privados(self, surface: pygame.Surface) -> None:
+        f_title = _PACK.fonts["card_title"]
+        f_body = _PACK.fonts["body"]
+        f_small = _PACK.fonts["small"]
+
+        # 1. Lista izquierda de contactos recortados (x=252..576, y=238..600)
+        self.dm_contact_rects.clear()
+        self.selected_index = max(0, min(self.selected_index, len(self.dms) - 1))
+
+        cur_y = 238
+        for i, dm in enumerate(self.dms):
+            sp = _PACK.sprites.get(dm.contact_sprite)
+            h = sp.get_height() if sp is not None else 56
+            rect = pygame.Rect(252, cur_y, 324, h)
+            self.dm_contact_rects.append((rect, i))
+
+            if sp is not None:
+                surface.blit(sp, (252, cur_y))
+
+            if i == self.selected_index:
+                pygame.draw.rect(surface, (242, 244, 248), rect, 2, border_radius=5)
+
+            cur_y += h + 3
+
+        # 2. Panel derecho de conversación (x=606..1256, y=188..604)
+        active_dm = self.dms[self.selected_index]
+
+        if active_dm.contact_id == "dm_tomas" and len(active_dm.messages) == 5:
+            hdr = _PACK.sprites.get("dm_header_tomas.png")
+            msgs = _PACK.sprites.get("dm_messages_tomas.png")
+            inp = _PACK.sprites.get("dm_input_bar.png")
+            if hdr is not None:
+                surface.blit(hdr, (610, 190))
+            if msgs is not None:
+                surface.blit(msgs, (610, 246))
+            if inp is not None:
+                surface.blit(inp, (610, 552))
+        else:
+            hdr = _PACK.sprites.get("dm_header_tomas.png")
+            if hdr is not None:
+                surface.blit(hdr, (610, 190))
+                pygame.draw.rect(surface, (14, 16, 20), pygame.Rect(666, 194, 280, 42))
+                n_s = f_title.render(f"{active_dm.name}   {active_dm.handle}", True, (242, 244, 248))
+                s_s = f_small.render(f"● {active_dm.status} • {active_dm.activity}", True, (175, 185, 195))
+                surface.blit(n_s, (670, 197))
+                surface.blit(s_s, (670, 216))
+
+            msg_y = 252
+            for sender, ts, text in active_dm.messages[-5:]:
+                is_me = sender.upper() == "ALEX"
+                bw = min(460, max(190, f_body.size(text)[0] + 36))
+                bx = 1236 - bw if is_me else 624
+                brect = pygame.Rect(bx, msg_y, bw, 48)
+                _draw_cut_rect(
+                    surface,
+                    brect,
+                    (28, 31, 38) if is_me else (18, 20, 25),
+                    (150, 156, 170) if is_me else (80, 85, 98),
+                    cut=6,
+                    border_w=1,
+                )
+                meta = f_small.render(f"{sender}   {ts}", True, (165, 170, 182))
+                body = f_body.render(text, True, (242, 244, 248))
+                surface.blit(meta, (brect.x + 12, brect.y + 6))
+                surface.blit(body, (brect.x + 12, brect.y + 24))
+                msg_y += 56
+
+            inp = _PACK.sprites.get("dm_input_bar.png")
+            if inp is not None:
+                surface.blit(inp, (610, 552))
+
+        if self.dm_input_focused or self.dm_input_text:
+            pygame.draw.rect(surface, (14, 16, 20), pygame.Rect(652, 560, 460, 30))
+            if self.dm_input_focused:
+                pygame.draw.rect(surface, (238, 240, 248), self.dm_input_rect, 1, border_radius=5)
+            txt = self.dm_input_text + ("|" if self.dm_input_focused else "")
+            t_s = f_body.render(txt or f"Escribir mensaje a {active_dm.name}...", True, (240, 242, 248))
+            surface.blit(t_s, (658, 567))
+
+        # 3. Asistente inferior recortado de la hoja Photoroom
+        ast = _PACK.sprites.get("dm_assistant_bar.png")
+        if ast is not None:
+            surface.blit(ast, (38, 636))
+
+    def _draw_tab_solicitudes(self, surface: pygame.Surface) -> None:
+        self.sol_action_rects.clear()
+
+        # 1. Invitaciones a grupos en el contenedor izquierdo (x=256..788, y=246..584)
+        gy = 248
+        for inv in self.group_invites:
+            sp = _PACK.sprites.get(inv.sprite_name)
+            if sp is not None:
+                surface.blit(sp, (256, gy))
+            acc_rect = pygame.Rect(256 + 335, gy + 58, 88, 34)
+            rej_rect = pygame.Rect(256 + 430, gy + 58, 92, 34)
+            self.sol_action_rects.append((acc_rect, inv.req_id, "accept"))
+            self.sol_action_rects.append((rej_rect, inv.req_id, "reject"))
+            gy += 110
+
+        # 2. Solicitudes de amistad en el contenedor superior derecho (x=822..1254, y=244..364)
+        fy = 246
+        for fr in self.friend_requests:
+            sp = _PACK.sprites.get(fr.sprite_name)
+            if sp is not None:
+                surface.blit(sp, (824, fy))
+            acc_rect = pygame.Rect(824 + 245, fy + 12, 84, 34)
+            rej_rect = pygame.Rect(824 + 334, fy + 12, 88, 34)
+            self.sol_action_rects.append((acc_rect, fr.req_id, "accept"))
+            self.sol_action_rects.append((rej_rect, fr.req_id, "reject"))
+            fy += 60
+
+        # 3. Invitaciones enviadas en el contenedor medio derecho (x=822..1254, y=442..508)
+        sy = 444
+        for st in self.sent_invites:
+            sp = _PACK.sprites.get(st.sprite_name)
+            if sp is not None:
+                surface.blit(sp, (824, sy))
+            can_rect = pygame.Rect(824 + 318, sy + 12, 102, 34)
+            self.sol_action_rects.append((can_rect, st.req_id, "cancel"))
+            sy += 60
+
+    def _draw_modal(self, surface: pygame.Surface) -> None:
+        overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
+        overlay.fill((0, 0, 0, 175))
+        surface.blit(overlay, (0, 0))
+
+        box = pygame.Rect(440, 260, 400, 200)
+        _draw_cut_rect(surface, box, (15, 17, 22), (240, 242, 248), cut=10, border_w=2)
+
+        f_title = _PACK.fonts["title"]
+        f_body = _PACK.fonts["body"]
+        f_sub = _PACK.fonts["card_sub"]
+
+        header = "CREAR NUEVO GRUPO" if self.modal_mode == "create" else "UNIRSE CON CÓDIGO"
+        prompt = "Nombre de la comunidad:" if self.modal_mode == "create" else "Código de invitación:"
+
+        surface.blit(f_title.render(header, True, (244, 246, 250)), (box.x + 24, box.y + 22))
+        surface.blit(f_sub.render(prompt, True, (185, 190, 200)), (box.x + 24, box.y + 62))
+
+        inp = pygame.Rect(box.x + 24, box.y + 90, 352, 36)
+        _draw_cut_rect(surface, inp, (10, 12, 15), (220, 224, 232), cut=5, border_w=1)
+        surface.blit(f_body.render(self.modal_input + "|", True, (244, 246, 250)), (inp.x + 12, inp.y + 9))
+
+        ok_btn = pygame.Rect(520, 410, 115, 34)
+        no_btn = pygame.Rect(645, 410, 115, 34)
+        _draw_cut_rect(surface, ok_btn, (238, 240, 246), (255, 255, 255), cut=5, border_w=1)
+        _draw_cut_rect(surface, no_btn, (22, 25, 32), (130, 135, 148), cut=5, border_w=1)
+
+        surface.blit(_PACK.fonts["tab"].render("Confirmar", True, (12, 14, 18)), (ok_btn.x + 22, ok_btn.y + 9))
+        surface.blit(_PACK.fonts["tab"].render("Cancelar", True, (220, 224, 232)), (no_btn.x + 26, no_btn.y + 9))
+
+
+# ---------------------------------------------------------------------------
+# Pantalla 2: Vista Interna de Comunidad ("COMMUNITY" - Night Raid)
+# ---------------------------------------------------------------------------
+
+class CommunityViewState(BaseState):
+    """Vista interna de servidor/comunidad (Night Raid) construida sobre la Base Limpia 4 + Sprites Photoroom."""
+
+    TEXT_CHANNELS = [
+        ("anuncios", "Información y comunicados oficiales."),
+        ("reglas", "Normas de convivencia de la comunidad."),
+        ("bienvenidas", "Nuevos miembros que se unen al servidor."),
+        ("general", "Conversación general de la comunidad."),
+        ("off-topic", "Charlas libres, música y otros temas."),
+        ("clips-y-memes", "Capturas, jugadas destacadas y humor."),
+        ("busqueda-de-equipo", "Coordinación de squads y partidas competitivas."),
+        ("sugerencias", "Ideas y mejoras para la comunidad."),
+    ]
+
+    VOICE_CHANNELS = [
+        ("Sala principal", "5/16"),
+        ("Gaming", "3/8"),
+        ("Rankeds", "0/5"),
+        ("Streaming", "1/4"),
+    ]
+
+    DEFAULT_GENERAL_MESSAGES: List[Dict[str, str]] = [
+        {"author": "ALEX", "time": "Hoy 18:24", "text": "¿Alguien para unas partidas esta noche? 🎮"},
+        {"author": "MIRA", "time": "Hoy 18:26", "text": "¡Yo me sumo! Estuve probando el nuevo mapa."},
+        {"author": "KAI", "time": "Hoy 18:27", "text": "También me copo, ¿armamos sala en la de Gaming?"},
+        {"author": "ALEX", "time": "Hoy 18:28", "text": "Dale, en 10 min la creo. 👌"},
+        {"author": "MIRA", "time": "Hoy 18:35", "text": "Les dejo el skin que conseguí hoy 👀"},
+        {"author": "KAI", "time": "Hoy 18:40", "text": "Está increíble 🔥"},
+    ]
+
+    def __init__(self, state_machine: Optional[Any] = None) -> None:
+        super().__init__(state_machine)
+        self.sidebar_surface: Optional[pygame.Surface] = None
+        self.sidebar_font: Optional[pygame.font.Font] = None
+
+        self.community_id: str = "night_raid"
+        self.active_group_idx: int = 0
+        self.current_channel: str = "general"
+        self.active_voice: Optional[str] = "Gaming"
+
+        self.reaction_heart: int = 8
+        self.reaction_fire: int = 3
+        self.user_hearted: bool = False
+        self.user_fired: bool = False
+
+        self.chat_messages: List[Dict[str, str]] = [dict(m) for m in self.DEFAULT_GENERAL_MESSAGES]
+        self.input_text: str = ""
+        self.input_focused: bool = False
+
+        # Rects interactivos sobre la Base Limpia 4 (1280x720)
+        self.server_icon_rects: List[Tuple[pygame.Rect, int]] = []
+        self.channel_rects: List[Tuple[pygame.Rect, str]] = []
+        self.voice_rects: List[Tuple[pygame.Rect, str]] = []
+        self.input_rect = pygame.Rect(500, 580, 535, 36)
+        self.heart_rect = pygame.Rect(528, 502, 46, 22)
+        self.fire_rect = pygame.Rect(578, 502, 46, 22)
+
+    def enter(self, **kwargs) -> None:
+        _PACK.ensure_loaded()
+        self.sidebar_surface = load_sidebar()
+        self.sidebar_font = make_sidebar_font()
+        self.input_focused = False
+
+        if "community_id" in kwargs and kwargs["community_id"]:
+            self.community_id = str(kwargs["community_id"])
+        for i, g in enumerate(COMMUNITIES_CATALOG):
+            if g["id"] == self.community_id or g["group_id"] == self.community_id:
+                self.active_group_idx = i
+                break
+
+        self.current_channel = "general"
+        self.chat_messages = [dict(m) for m in self.DEFAULT_GENERAL_MESSAGES]
+        self.input_text = ""
+
+    def _change_state(self, dest: str, **kwargs) -> None:
+        if self.state_machine is not None:
+            self.state_machine.change_state(dest, **kwargs)
+
+    def handle_events(self, events: List[pygame.event.Event]) -> None:
+        for e in events:
+            if e.type == pygame.KEYDOWN:
+                if e.key == pygame.K_RETURN and self.input_text.strip():
+                    self._send_message()
+                    continue
+
+                if self.input_focused:
+                    if e.key == pygame.K_ESCAPE:
+                        self.input_focused = False
+                    elif e.key == pygame.K_RETURN:
+                        self._send_message()
+                    elif e.key == pygame.K_BACKSPACE:
+                        self.input_text = self.input_text[:-1]
+                    elif e.unicode and e.unicode.isprintable() and len(self.input_text) < 72:
+                        self.input_text += e.unicode
+                    continue
+
+                if e.key == pygame.K_ESCAPE:
+                    self._change_state("GROUPS")
+                elif e.key in (pygame.K_DOWN, pygame.K_s):
+                    names = [c[0] for c in self.TEXT_CHANNELS]
+                    idx = names.index(self.current_channel) if self.current_channel in names else 3
+                    self.current_channel = names[(idx + 1) % len(names)]
+                elif e.key in (pygame.K_UP, pygame.K_w):
+                    names = [c[0] for c in self.TEXT_CHANNELS]
+                    idx = names.index(self.current_channel) if self.current_channel in names else 3
+                    self.current_channel = names[(idx - 1) % len(names)]
+                elif e.key == pygame.K_RETURN:
+                    self.input_focused = True
+
+            elif e.type == pygame.MOUSEBUTTONDOWN and e.button == 1:
+                pos = self._to_logical_pos(e.pos)
+
+                # 1. Sidebar compartida (x < 170)
+                dest = sidebar_destination(pos, max_x=170)
+                if dest is not None:
+                    if dest == "QUIT":
+                        pygame.event.post(pygame.event.Event(pygame.QUIT))
+                    else:
+                        self._change_state(dest)
+                    continue
+
+                # 2. Columna de iconos de comunidades (x = 175..235)
+                for rect, idx in self.server_icon_rects:
+                    if rect.collidepoint(pos):
+                        if idx == -1:
+                            self._change_state("GROUPS")
+                        else:
+                            self.active_group_idx = idx
+                            self.community_id = COMMUNITIES_CATALOG[idx]["id"]
+                        return
+
+                # 3. Canales de texto (x = 245..440)
+                for rect, ch_name in self.channel_rects:
+                    if rect.collidepoint(pos):
+                        self.current_channel = ch_name
+                        return
+
+                # 4. Salas de voz
+                for rect, vc_name in self.voice_rects:
+                    if rect.collidepoint(pos):
+                        self.active_voice = None if self.active_voice == vc_name else vc_name
+                        return
+
+                # 5. Reacciones en el mensaje del rifle
+                if self.current_channel == "general":
+                    if self.heart_rect.collidepoint(pos):
+                        self.user_hearted = not self.user_hearted
+                        self.reaction_heart += 1 if self.user_hearted else -1
+                        return
+                    if self.fire_rect.collidepoint(pos):
+                        self.user_fired = not self.user_fired
+                        self.reaction_fire += 1 if self.user_fired else -1
+                        return
+
+                # 6. Barra de entrada de mensaje
+                if self.input_rect.collidepoint(pos):
+                    self.input_focused = True
+                    if pos[0] >= self.input_rect.right - 36 and self.input_text.strip():
+                        self._send_message()
+                    return
+                self.input_focused = False
+
+    def _to_logical_pos(self, pos: Tuple[int, int]) -> Tuple[int, int]:
+        surf = pygame.display.get_surface()
+        if surf is None:
+            return pos
+        sw, sh = surf.get_size()
+        if (sw, sh) == (SCREEN_WIDTH, SCREEN_HEIGHT) or sw <= 0 or sh <= 0:
+            return pos
+        return int(pos[0] * SCREEN_WIDTH / sw), int(pos[1] * SCREEN_HEIGHT / sh)
+
+    def _send_message(self) -> None:
         txt = self.input_text.strip()
         if not txt:
             return
+        self.chat_messages.append({"author": "ALEX", "time": "Hoy 18:42", "text": txt})
         self.input_text = ""
-        msgs = self.channel_chats.setdefault(self.current_channel, [])
-        msgs.append({
-            "author": "ALEX",
-            "badge": "👑",
-            "avatar": "avatar_alex.png",
-            "color": (245, 200, 70),
-            "time": time.strftime("Hoy %H:%M"),
-            "text": txt,
-        })
-        self._play_beep(800)
 
-    def handle_events(self, events):
-        for event in events:
-            if event.type == pygame.QUIT:
-                pygame.event.post(pygame.event.Event(pygame.QUIT))
-                return
+    def update(self, dt: float) -> None:
+        pass
 
-            if event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_ESCAPE:
-                    self.state_machine.change_state("GROUPS")
-                    return
+    def draw(self, screen: pygame.Surface) -> None:
+        _PACK.ensure_loaded()
+        canvas = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
 
-                if event.key in (pygame.K_RETURN, pygame.K_KP_ENTER):
-                    self._send_message()
-                    return
+        # 1. Pintar la Base Limpia 4 ("Panel de Comunidad Night Raid.png")
+        base_surf = _PACK.bases.get("base_community.png")
+        if base_surf is not None:
+            canvas.blit(base_surf, (0, 0))
+        else:
+            canvas.fill((8, 9, 12))
 
-                if event.key == pygame.K_BACKSPACE:
-                    self.input_text = self.input_text[:-1]
-                else:
-                    if event.unicode and len(self.input_text) < 140:
-                        self.input_text += event.unicode
+        f_title = _PACK.fonts["title"]
+        f_sub = _PACK.fonts["card_sub"]
+        f_body = _PACK.fonts["body"]
+        f_body_b = _PACK.fonts["body_bold"]
+        f_small = _PACK.fonts["small"]
+        f_small_b = _PACK.fonts["small_bold"]
 
-            elif event.type == pygame.MOUSEWHEEL:
-                self.scroll_y = max(0, self.scroll_y - event.y * 25)
+        grp = COMMUNITIES_CATALOG[self.active_group_idx % len(COMMUNITIES_CATALOG)]
 
-            elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-                pos = self._screen_to_logical(event.pos)
-                if not pos:
-                    continue
-
-                # Clic en barra lateral izquierda principal
-                if pos[0] < 180:
-                    for _label, dest, rect in self.sidebar_buttons:
-                        if rect.collidepoint(pos):
-                            if dest == "QUIT":
-                                pygame.event.post(pygame.event.Event(pygame.QUIT))
-                            else:
-                                self._play_beep(700)
-                                self.state_machine.change_state(dest)
-                            return
-
-                # Clic en botón volver al Hub
-                if self.btn_back_hub.collidepoint(pos):
-                    self.state_machine.change_state("GROUPS")
-                    return
-
-                # Clic en selector de comunidad (columna 1)
-                for r, cid in self.server_switch_rects:
-                    if r.collidepoint(pos):
-                        self.community_id = cid
-                        self.current_channel = "general"
-                        self._play_beep(650)
-                        return
-
-                # Clic en canales de texto
-                ch_y = 265
-                for ch in ["general", "off-topic", "clips-y-memes", "busqueda-de-equipo", "sugerencias"]:
-                    r_ch = pygame.Rect(250, ch_y, 185, 26)
-                    if r_ch.collidepoint(pos):
-                        self.current_channel = ch
-                        self._play_beep(600)
-                        return
-                    ch_y += 30
-
-                # Clic en canales de voz
-                v_y = 445
-                for v_info in [
-                    {"name": "Sala principal"},
-                    {"name": "Gaming"},
-                    {"name": "Rankeds"},
-                    {"name": "Streaming"},
-                ]:
-                    r_v = pygame.Rect(250, v_y, 185, 26)
-                    if r_v.collidepoint(pos):
-                        v_name = v_info["name"]
-                        if self.connected_voice == v_name:
-                            self.connected_voice = None
-                        else:
-                            self.connected_voice = v_name
-                        self._play_beep(750)
-                        return
-                    v_y += 30
-
-                # Clic en chips de reacciones del arma
-                # Rectángulos de reacciones dentro del chat (si estamos en general)
-                if self.current_channel == "general":
-                    rx = 525
-                    for emo in ["❤️", "👍", "✨"]:
-                        r_chip = pygame.Rect(rx, 475, 46, 24)
-                        if r_chip.collidepoint(pos):
-                            self.weapon_reactions[emo] += 1
-                            self._play_beep(850)
-                            return
-                        rx += 52
-
-                # Clic en botón enviar
-                if self.btn_send_rect.collidepoint(pos):
-                    self._send_message()
-                    return
-
-    def update(self, dt: float):
-        self.anim_time += dt
-
-    def _screen_to_logical(self, screen_pos: tuple[int, int]) -> Optional[tuple[int, int]]:
-        screen = pygame.display.get_surface()
-        if not screen:
-            return screen_pos
-        sw, sh = screen.get_size()
-        scale = min(sw / LOGICAL_W, sh / LOGICAL_H)
-        offset_x = (sw - LOGICAL_W * scale) / 2
-        offset_y = (sh - LOGICAL_H * scale) / 2
-        x = (screen_pos[0] - offset_x) / scale
-        y = (screen_pos[1] - offset_y) / scale
-        if 0 <= x <= LOGICAL_W and 0 <= y <= LOGICAL_H:
-            return int(x), int(y)
-        return None
-
-    def draw(self, screen: pygame.Surface):
-        # 1. Dibujar chasis de base
-        self.canvas.blit(self.base_bg, (0, 0))
-
-        # 2. Resaltar pestaña activa de barra lateral 'GRUPOS'
-        pill_rect = pygame.Rect(40, 215, 140, 36)
-        pygame.draw.rect(self.canvas, (24, 27, 34), pill_rect, border_radius=6)
-        pygame.draw.rect(self.canvas, (255, 255, 255), pygame.Rect(40, 218, 5, 30), border_radius=3)
-        txt_grp = self.font_header.render("GRUPOS", True, (255, 255, 255))
-        self.canvas.blit(txt_grp, (58, 224))
-
-        # 3. Limpiar zonas dinámicas para que todos los elementos sean reales
-        # Selector de comunidad
-        pygame.draw.rect(self.canvas, (11, 13, 17), pygame.Rect(180, 95, 55, 530))
-        # Columna de canales
-        pygame.draw.rect(self.canvas, (14, 16, 21), pygame.Rect(240, 95, 205, 530))
-        # Columna central de chat
-        pygame.draw.rect(self.canvas, (12, 14, 18), pygame.Rect(450, 95, 595, 575))
-        # Columna derecha de miembros
-        pygame.draw.rect(self.canvas, (14, 16, 21), pygame.Rect(1050, 95, 220, 530))
-        # Diálogo inferior asistente
-        pygame.draw.rect(self.canvas, (14, 16, 21), pygame.Rect(210, 635, 540, 55))
-
-        # 4. Renderizar Selector de Comunidades (Columna 1)
-        # Botón volver al Hub (arriba)
-        pygame.draw.rect(self.canvas, (26, 30, 38), self.btn_back_hub, border_radius=8)
-        self.canvas.blit(self.font_header.render("🧭", True, (220, 230, 245)), (self.btn_back_hub.x + 12, self.btn_back_hub.y + 10))
-
-        for r, cid in self.server_switch_rects:
-            is_active = (self.community_id == cid)
-            bg_c = (35, 42, 55) if is_active else (20, 24, 30)
-            pygame.draw.rect(self.canvas, bg_c, r, border_radius=10)
-            if is_active:
-                pygame.draw.rect(self.canvas, (255, 255, 255), r, width=2, border_radius=10)
-                # Indicador blanco vertical a la izquierda
-                pygame.draw.rect(self.canvas, (255, 255, 255), pygame.Rect(r.x - 4, r.y + 6, 4, 32), border_radius=2)
-
-            e_icon = self.emblems.get(cid)
-            if e_icon:
-                self.canvas.blit(pygame.transform.smoothscale(e_icon, (32, 32)), (r.x + 6, r.y + 6))
-
-        # 5. Renderizar Columna de Canales (Columna 2)
-        # Cabecera del grupo activo
-        cur_comm = next((c for c in COMMUNITIES_CATALOG if c["id"] == self.community_id), COMMUNITIES_CATALOG[0])
-        pygame.draw.rect(self.canvas, (18, 21, 28), pygame.Rect(242, 98, 201, 56), border_radius=6)
-        e_head = self.emblems.get(cur_comm["id"])
-        if e_head:
-            self.canvas.blit(pygame.transform.smoothscale(e_head, (36, 36)), (248, 108))
-        self.canvas.blit(self.font_header.render(f"{cur_comm['name']} {cur_comm['badge']}", True, (255, 255, 255)), (292, 108))
-        self.canvas.blit(self.font_small.render(f"{cur_comm['members']} MIEMBROS", True, (150, 155, 165)), (292, 130))
-
-        # Categoría: INFORMACIÓN
-        self.canvas.blit(self.font_cat.render("▾ INFORMACIÓN", True, (130, 135, 145)), (250, 166))
-        for ii, info_ch in enumerate(["📢  anuncios", "#  reglas", "⭐  bienvenidas"]):
-            self.canvas.blit(self.font_ch.render(info_ch, True, (170, 175, 185)), (255, 188 + ii * 24))
-
-        # Categoría: CHATS DE TEXTO
-        self.canvas.blit(self.font_cat.render("▾ CHATS DE TEXTO", True, (130, 135, 145)), (250, 270))
-        ch_y = 290
-        for ch_key in ["general", "off-topic", "clips-y-memes", "busqueda-de-equipo", "sugerencias"]:
-            is_cur = (self.current_channel == ch_key)
-            r_ch = pygame.Rect(248, ch_y, 188, 26)
-            if is_cur:
-                pygame.draw.rect(self.canvas, (32, 38, 52), r_ch, border_radius=6)
-                pygame.draw.rect(self.canvas, (90, 105, 130), r_ch, width=1, border_radius=6)
-            col = (255, 255, 255) if is_cur else (160, 165, 175)
-            font_use = self.font_ch_bold if is_cur else self.font_ch
-            self.canvas.blit(font_use.render(f"#  {ch_key}", True, col), (256, ch_y + 4))
-            ch_y += 28
-
-        # Categoría: SALAS DE VOZ
-        self.canvas.blit(self.font_cat.render("▾ SALAS DE VOZ", True, (130, 135, 145)), (250, 442))
-        v_y = 462
-        for v_name, count_str in [("Sala principal", "5/16"), ("Gaming", "3/8"), ("Rankeds", "0/5"), ("Streaming", "1/4")]:
-            is_conn = (self.connected_voice == v_name)
-            r_v = pygame.Rect(248, v_y, 188, 26)
-            if is_conn:
-                pygame.draw.rect(self.canvas, (24, 48, 32), r_v, border_radius=6)
-                pygame.draw.rect(self.canvas, (60, 200, 100), r_v, width=1, border_radius=6)
-            col_v = (120, 255, 150) if is_conn else (160, 165, 175)
-            self.canvas.blit(self.font_ch.render(f"🔊  {v_name}", True, col_v), (256, v_y + 4))
-            self.canvas.blit(self.font_small.render(count_str, True, (120, 125, 135)), (395, v_y + 6))
-            v_y += 28
-
-        # Indicador de voz activa
-        if self.connected_voice:
-            box_v = pygame.Rect(246, 580, 192, 34)
-            pygame.draw.rect(self.canvas, (18, 36, 24), box_v, border_radius=6)
-            pygame.draw.rect(self.canvas, (40, 190, 80), box_v, width=1, border_radius=6)
-            self.canvas.blit(self.font_small.render(f"🟢 En voz: {self.connected_voice}", True, (200, 255, 210)), (254, 588))
-
-        # 6. Renderizar Columna Central de Chat (Columna 3)
-        # Cabecera de canal
-        header_rect = pygame.Rect(450, 95, 595, 46)
-        pygame.draw.rect(self.canvas, (16, 18, 24), header_rect)
-        pygame.draw.rect(self.canvas, (45, 50, 62), header_rect, width=1)
-        self.canvas.blit(self.font_header.render(f"# {self.current_channel}", True, (255, 255, 255)), (465, 108))
-        self.canvas.blit(self.font_small.render("Conversación en tiempo real de la comunidad.", True, (150, 155, 165)), (560, 112))
-
-        # Lista de mensajes del canal
-        messages = self.channel_chats.get(self.current_channel, [])
-        msg_y = 150 - self.scroll_y
-        for m in messages:
-            if msg_y > 590:
-                break
-            if msg_y + 50 >= 140:
-                # Avatar
-                av_surf = self.avatars.get(m["avatar"])
-                if av_surf:
-                    self.canvas.blit(pygame.transform.smoothscale(av_surf, (36, 36)), (465, msg_y))
-
-                # Autor y hora
-                author_txt = f"{m['author']} {m.get('badge', '')}"
-                self.canvas.blit(self.font_author.render(author_txt, True, m.get("color", (255, 255, 255))), (510, msg_y))
-                self.canvas.blit(self.font_time.render(m["time"], True, (130, 135, 145)), (600, msg_y + 2))
-
-                # Texto del mensaje
-                self.canvas.blit(self.font_chat.render(m["text"], True, (235, 240, 250)), (510, msg_y + 20))
-
-                # Si incluye tarjeta de arma
-                if m.get("has_weapon"):
-                    self.canvas.blit(self.weapon_card, (510, msg_y + 44))
-                    # Chips de reacciones interactivas
-                    rx = 525
-                    for emo, count in self.weapon_reactions.items():
-                        r_chip = pygame.Rect(rx, msg_y + 208, 46, 24)
-                        pygame.draw.rect(self.canvas, (28, 34, 46), r_chip, border_radius=4)
-                        pygame.draw.rect(self.canvas, (75, 85, 105), r_chip, width=1, border_radius=4)
-                        self.canvas.blit(self.font_small.render(f"{emo} {count}", True, (240, 240, 250)), (rx + 6, msg_y + 212))
-                        rx += 52
-                    msg_y += 240
-                else:
-                    msg_y += 48
-            else:
-                msg_y += 48
-
-        # Barra de entrada inferior de chat
-        input_bg = pygame.Rect(460, 618, 575, 42)
-        pygame.draw.rect(self.canvas, (20, 23, 30), input_bg, border_radius=8)
-        pygame.draw.rect(self.canvas, (65, 75, 95), input_bg, width=1, border_radius=8)
-
-        # Botón adjuntar '+'
-        pygame.draw.rect(self.canvas, (32, 38, 50), pygame.Rect(468, 624, 28, 28), border_radius=5)
-        self.canvas.blit(self.font_header.render("+", True, (220, 225, 235)), (476, 626))
-
-        # Texto de input
-        cur_in = self.input_text + ("|" if int(self.anim_time * 2) % 2 == 0 else "")
-        show_str = cur_in if cur_in else f"Enviar un mensaje a #{self.current_channel}..."
-        show_col = (255, 255, 255) if cur_in else (130, 135, 145)
-        self.canvas.blit(self.font_chat.render(show_str, True, show_col), (510, 628))
-
-        # Botón Enviar '>'
-        pygame.draw.rect(self.canvas, (45, 55, 75), self.btn_send_rect, border_radius=6)
-        self.canvas.blit(self.font_header.render(">", True, (255, 255, 255)), (self.btn_send_rect.x + 10, self.btn_send_rect.y + 6))
-
-        # 7. Renderizar Columna Derecha de Miembros (Columna 4)
-        m_y = 108
-        self.canvas.blit(self.font_cat.render("▾ EN LÍNEA — 5", True, (130, 135, 145)), (1060, m_y))
-        m_y += 24
-        online_members = [
-            ("ALEX 👑", "avatar_alex.png", "Jugando: Da Vinci Fighters", (60, 220, 100)),
-            ("MIRA", "avatar_mira.png", "En llamada Gaming", (60, 220, 100)),
-            ("KAI", "avatar_guy_glasses.png", "En línea", (60, 220, 100)),
-            ("LUNA", "avatar_girl_hoodie.png", "Jugando: Minecraft", (60, 220, 100)),
-            ("ZERO", "avatar_guy_blonde.png", "Transmitiendo 🔴", (180, 80, 240)),
+        # 2. Registrar los rects interactivos de la columna de servidores (x=180..232)
+        self.server_icon_rects = [
+            (pygame.Rect(184, 108, 44, 42), -1),
+            (pygame.Rect(180, 160, 52, 54), 0),
+            (pygame.Rect(180, 222, 52, 52), 1),
+            (pygame.Rect(180, 282, 52, 52), 2),
+            (pygame.Rect(180, 342, 52, 52), 3),
+            (pygame.Rect(180, 402, 52, 52), 4),
+            (pygame.Rect(180, 462, 52, 52), 5),
         ]
-        for name, av_fn, act, dot_c in online_members:
-            av_s = self.avatars.get(av_fn)
-            if av_s:
-                self.canvas.blit(pygame.transform.smoothscale(av_s, (30, 30)), (1062, m_y))
-            pygame.draw.circle(self.canvas, dot_c, (1090, m_y + 26), 4)
-            self.canvas.blit(self.font_ch_bold.render(name, True, (245, 245, 250)), (1100, m_y))
-            self.canvas.blit(self.font_small.render(act, True, (140, 145, 155)), (1100, m_y + 16))
-            m_y += 38
 
-        m_y += 10
-        self.canvas.blit(self.font_cat.render("▾ AUSENTE — 2", True, (130, 135, 145)), (1060, m_y))
-        m_y += 24
-        for name, act in [("REN", "Ausente"), ("SORA", "AFK")]:
-            pygame.draw.circle(self.canvas, (220, 180, 60), (1070, m_y + 10), 4)
-            self.canvas.blit(self.font_ch.render(name, True, (180, 185, 195)), (1085, m_y))
-            self.canvas.blit(self.font_small.render(act, True, (130, 135, 145)), (1085, m_y + 16))
-            m_y += 34
+        if self.active_group_idx != 0:
+            r_sel = self.server_icon_rects[self.active_group_idx + 1][0]
+            pygame.draw.rect(canvas, (242, 244, 248), r_sel, 2, border_radius=6)
+            pygame.draw.rect(canvas, (12, 14, 18), pygame.Rect(278, 90, 360, 46))
+            emb = _PACK.sprites.get(f"emblem_{grp['emblem_idx']}.png")
+            if emb is not None:
+                canvas.blit(pygame.transform.smoothscale(emb, (42, 42)), (222, 92))
+            canvas.blit(f_title.render(grp["name"], True, (245, 247, 252)), (280, 92))
+            canvas.blit(f_sub.render(grp["subtitle"], True, (180, 185, 196)), (280, 116))
 
-        m_y += 10
-        self.canvas.blit(self.font_cat.render("▾ SIN CONEXIÓN — 17", True, (130, 135, 145)), (1060, m_y))
+        # 3. Registrar rects de canales de texto y salas de voz
+        self.channel_rects = [
+            (pygame.Rect(246, 198, 192, 22), "anuncios"),
+            (pygame.Rect(246, 221, 192, 22), "reglas"),
+            (pygame.Rect(246, 244, 192, 22), "bienvenidas"),
+            (pygame.Rect(246, 297, 192, 26), "general"),
+            (pygame.Rect(246, 326, 192, 22), "off-topic"),
+            (pygame.Rect(246, 350, 192, 22), "clips-y-memes"),
+            (pygame.Rect(246, 374, 192, 22), "busqueda-de-equipo"),
+            (pygame.Rect(246, 398, 192, 22), "sugerencias"),
+        ]
+        self.voice_rects = [
+            (pygame.Rect(246, 462, 192, 22), "Sala principal"),
+            (pygame.Rect(246, 486, 192, 22), "Gaming"),
+            (pygame.Rect(246, 510, 192, 22), "Rankeds"),
+            (pygame.Rect(246, 534, 192, 22), "Streaming"),
+        ]
 
-        # 8. Diálogo Asistente inferior
-        self.canvas.blit(self.font_small.render(f"Estás en {cur_comm['name']}. Conversa, juega y coordina con la comunidad.", True, (240, 242, 248)), (215, 650))
+        if self.current_channel != "general":
+            for rect, ch_name in self.channel_rects:
+                if ch_name == self.current_channel:
+                    pygame.draw.rect(canvas, (242, 244, 248), rect, 1, border_radius=4)
+            pygame.draw.rect(canvas, (14, 16, 20), pygame.Rect(462, 150, 380, 28))
+            ch_desc = dict(self.TEXT_CHANNELS).get(self.current_channel, "")
+            canvas.blit(f_body_b.render(f"#  {self.current_channel}", True, (245, 247, 252)), (466, 155))
+            canvas.blit(f_small.render(ch_desc, True, (175, 180, 192)), (590, 158))
 
-        # Escalar al tamaño de la pantalla
-        sw, sh = screen.get_size()
-        scale = min(sw / LOGICAL_W, sh / LOGICAL_H)
-        dw, dh = int(LOGICAL_W * scale), int(LOGICAL_H * scale)
-        scaled_canvas = pygame.transform.smoothscale(self.canvas, (dw, dh))
-        screen.fill((0, 0, 0))
-        screen.blit(scaled_canvas, ((sw - dw) // 2, (sh - dh) // 2))
+        # 4. Área central de mensajes (x=456..1040, y=186..574)
+        extra = self.chat_messages[len(self.DEFAULT_GENERAL_MESSAGES):]
+
+        if self.current_channel == "general" and not extra:
+            msg_layout = [
+                ("nr_msg_0_alex.png", 464, 194),
+                ("nr_msg_1_mira.png", 464, 244),
+                ("nr_msg_2_kai.png", 464, 292),
+                ("nr_msg_3_alex.png", 464, 340),
+                ("nr_msg_4_mira_skin.png", 464, 384),
+                ("nr_msg_5_kai.png", 464, 526),
+            ]
+            for sp_name, mx, my in msg_layout:
+                sp = _PACK.sprites.get(sp_name)
+                if sp is not None:
+                    canvas.blit(sp, (mx, my))
+
+            if self.user_hearted:
+                pygame.draw.rect(canvas, (36, 40, 50), self.heart_rect, border_radius=4)
+                pygame.draw.rect(canvas, (242, 244, 248), self.heart_rect, 1, border_radius=4)
+                canvas.blit(f_small_b.render(f"♥ {self.reaction_heart}", True, (245, 247, 252)), (self.heart_rect.x + 10, self.heart_rect.y + 4))
+            if self.user_fired:
+                pygame.draw.rect(canvas, (36, 40, 50), self.fire_rect, border_radius=4)
+                pygame.draw.rect(canvas, (242, 244, 248), self.fire_rect, 1, border_radius=4)
+                canvas.blit(f_small_b.render(f"🔥 {self.reaction_fire}", True, (245, 247, 252)), (self.fire_rect.x + 10, self.fire_rect.y + 4))
+        else:
+            cur_y = 194
+            if self.current_channel == "general":
+                base_msgs = [
+                    ("nr_msg_2_kai.png", 48),
+                    ("nr_msg_3_alex.png", 42),
+                    ("nr_msg_4_mira_skin.png", 140),
+                    ("nr_msg_5_kai.png", 48),
+                ]
+                for sp_name, mh in base_msgs[max(0, len(extra) - 1):]:
+                    sp = _PACK.sprites.get(sp_name)
+                    if sp is not None and cur_y + mh <= 515:
+                        canvas.blit(sp, (464, cur_y))
+                        cur_y += mh + 4
+            else:
+                info_rect = pygame.Rect(468, cur_y, 540, 48)
+                _draw_cut_rect(canvas, info_rect, (16, 18, 23), (80, 86, 100), cut=5, border_w=1)
+                canvas.blit(f_body_b.render(f"Bienvenido a #{self.current_channel}", True, (242, 244, 248)), (482, cur_y + 7))
+                canvas.blit(f_sub.render(dict(self.TEXT_CHANNELS).get(self.current_channel, ""), True, (175, 180, 192)), (482, cur_y + 26))
+                cur_y += 58
+
+            for msg in extra[-4:]:
+                if cur_y > 530:
+                    break
+                m_rect = pygame.Rect(468, cur_y, 540, 44)
+                _draw_cut_rect(canvas, m_rect, (20, 23, 29), (110, 116, 130), cut=5, border_w=1)
+                canvas.blit(f_body_b.render(msg["author"], True, (244, 246, 250)), (482, cur_y + 5))
+                canvas.blit(f_small.render(msg["time"], True, (155, 160, 172)), (532, cur_y + 7))
+                canvas.blit(f_body.render(msg["text"], True, (232, 235, 242)), (482, cur_y + 23))
+                cur_y += 50
+
+        # 5. Barra de entrada de texto inferior (y=578..619)
+        if self.input_focused or self.input_text:
+            pygame.draw.rect(canvas, (14, 16, 20), pygame.Rect(504, 586, 370, 24))
+            if self.input_focused:
+                pygame.draw.rect(canvas, (240, 242, 248), pygame.Rect(460, 579, 578, 38), 1, border_radius=5)
+            txt = self.input_text + ("|" if self.input_focused else "")
+            canvas.blit(f_body.render(txt or f"Enviar un mensaje a #{self.current_channel}...", True, (242, 244, 248)), (508, 590))
+
+        # 6. Columna derecha de miembros recortada de la hoja Photoroom (x=1066..1267)
+        mem_on = _PACK.sprites.get("nr_members_online.png")
+        mem_aw = _PACK.sprites.get("nr_members_away.png")
+        if mem_on is not None:
+            canvas.blit(mem_on, (1068, 190))
+        if mem_aw is not None:
+            canvas.blit(mem_aw, (1068, 444))
+
+        # 7. Dibujar SIEMPRE la barra lateral compartida idéntica a todas las pantallas
+        if self.sidebar_surface is not None and self.sidebar_font is not None:
+            draw_sidebar(canvas, self.sidebar_surface, "community", self.sidebar_font)
+
+        if screen.get_size() != (SCREEN_WIDTH, SCREEN_HEIGHT):
+            pygame.transform.smoothscale(canvas, screen.get_size(), screen)
+        else:
+            screen.blit(canvas, (0, 0))
