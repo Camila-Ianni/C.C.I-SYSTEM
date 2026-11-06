@@ -1047,6 +1047,148 @@ def get_user_friends(user_id: str, db_path: Optional[Path] = None) -> List[Dict[
         return [dict(f) for f in cursor.fetchall()]
 
 
+def cancel_friendship_request(requester_id: str, addressee_id: str, db_path: Optional[Path] = None) -> bool:
+    """Cancela o elimina una solicitud de amistad pendiente."""
+    with get_db(db_path) as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            DELETE FROM friendships
+            WHERE requester_id = ? AND addressee_id = ? AND status = 'pending'
+        """, (requester_id, addressee_id))
+        return cursor.rowcount > 0
+
+
+def get_pending_friend_requests(user_id: str, db_path: Optional[Path] = None) -> Dict[str, List[Dict[str, Any]]]:
+    """Obtiene solicitudes entrantes y salientes pendientes para un usuario."""
+    with get_db(db_path) as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM friendships WHERE addressee_id = ? AND status = 'pending'", (user_id,))
+        incoming = [dict(r) for r in cursor.fetchall()]
+        cursor.execute("SELECT * FROM friendships WHERE requester_id = ? AND status = 'pending'", (user_id,))
+        outgoing = [dict(r) for r in cursor.fetchall()]
+        return {"incoming": incoming, "outgoing": outgoing}
+
+
+def create_group_entry(
+    group_id: str,
+    name: str,
+    owner_id: str,
+    avatar: Optional[str] = None,
+    visibility: str = "private",
+    db_path: Optional[Path] = None
+) -> Optional[Dict[str, Any]]:
+    """Crea un grupo y registra al creador como miembro con rol 'owner'."""
+    now_iso = datetime.now().isoformat(timespec="seconds")
+    with get_db(db_path) as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT INTO groups (id, name, owner_id, avatar, visibility, created_at)
+            VALUES (?, ?, ?, ?, ?, ?)
+        """, (group_id, name, owner_id, avatar, visibility, now_iso))
+
+        cursor.execute("""
+            INSERT INTO group_members (group_id, user_id, role, status, joined_at)
+            VALUES (?, ?, 'owner', 'active', ?)
+        """, (group_id, owner_id, now_iso))
+
+    return get_group_detail(group_id, db_path=db_path)
+
+
+def get_group_detail(group_id: str, db_path: Optional[Path] = None) -> Optional[Dict[str, Any]]:
+    """Obtiene información del grupo junto con su lista de miembros."""
+    with get_db(db_path) as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM groups WHERE id = ?", (group_id,))
+        row = cursor.fetchone()
+        if not row:
+            return None
+        grp = dict(row)
+
+        cursor.execute("SELECT * FROM group_members WHERE group_id = ? ORDER BY joined_at ASC", (group_id,))
+        grp["members"] = [dict(m) for m in cursor.fetchall()]
+        return grp
+
+
+def get_user_groups(user_id: str, db_path: Optional[Path] = None) -> List[Dict[str, Any]]:
+    """Obtiene todos los grupos a los que pertenece un usuario."""
+    with get_db(db_path) as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT g.*, gm.role, gm.status AS member_status, gm.joined_at
+            FROM groups g
+            INNER JOIN group_members gm ON g.id = gm.group_id
+            WHERE gm.user_id = ? AND gm.status != 'banned'
+            ORDER BY gm.joined_at DESC
+        """, (user_id,))
+        return [dict(g) for g in cursor.fetchall()]
+
+
+def add_group_member_entry(
+    group_id: str,
+    user_id: str,
+    role: str = "member",
+    db_path: Optional[Path] = None
+) -> bool:
+    """Agrega un nuevo miembro al grupo."""
+    now_iso = datetime.now().isoformat(timespec="seconds")
+    with get_db(db_path) as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT OR REPLACE INTO group_members (group_id, user_id, role, status, joined_at)
+            VALUES (?, ?, ?, 'active', ?)
+        """, (group_id, user_id, role, now_iso))
+        return True
+
+
+def remove_group_member_entry(group_id: str, user_id: str, db_path: Optional[Path] = None) -> bool:
+    """Elimina a un miembro del grupo."""
+    with get_db(db_path) as conn:
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM group_members WHERE group_id = ? AND user_id = ?", (group_id, user_id))
+        return cursor.rowcount > 0
+
+
+def update_group_member_role_entry(group_id: str, user_id: str, new_role: str, db_path: Optional[Path] = None) -> bool:
+    """Actualiza el rol de un miembro ('admin', 'member')."""
+    with get_db(db_path) as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            UPDATE group_members
+            SET role = ?
+            WHERE group_id = ? AND user_id = ?
+        """, (new_role, group_id, user_id))
+        return cursor.rowcount > 0
+
+
+def update_group_member_status_entry(group_id: str, user_id: str, new_status: str, db_path: Optional[Path] = None) -> bool:
+    """Actualiza el estado de un miembro ('active', 'muted', 'banned')."""
+    with get_db(db_path) as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            UPDATE group_members
+            SET status = ?
+            WHERE group_id = ? AND user_id = ?
+        """, (new_status, group_id, user_id))
+        return cursor.rowcount > 0
+
+
+def transfer_group_ownership_entry(group_id: str, new_owner_id: str, db_path: Optional[Path] = None) -> bool:
+    """Transfiere la propiedad del grupo a otro miembro."""
+    with get_db(db_path) as conn:
+        cursor = conn.cursor()
+        # Verificar que el nuevo dueño sea miembro
+        cursor.execute("SELECT id FROM group_members WHERE group_id = ? AND user_id = ?", (group_id, new_owner_id))
+        if not cursor.fetchone():
+            return False
+
+        # Actualizar dueño en groups
+        cursor.execute("UPDATE groups SET owner_id = ? WHERE id = ?", (new_owner_id, group_id))
+        # Actualizar rol en group_members a 'owner'
+        cursor.execute("UPDATE group_members SET role = 'owner' WHERE group_id = ? AND user_id = ?", (group_id, new_owner_id))
+        return True
+
+
+
 def save_gameplay_recording_entry(
     recording_id: str,
     owner_id: str,
