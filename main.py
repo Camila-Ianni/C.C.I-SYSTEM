@@ -107,6 +107,9 @@ def main():
 
     state_machine.register_state("MENU", MenuState(state_machine, on_game_launch=record_game_launch))
     state_machine.register_state("LIBRARY", CCIConsoleState(state_machine, "library", user_data, apply_display))
+    from groups_ui import GroupsHubState, CommunityViewState
+    state_machine.register_state("GROUPS", GroupsHubState(state_machine))
+    state_machine.register_state("COMMUNITY", CommunityViewState(state_machine))
     state_machine.register_state("PROFILE", CCIConsoleState(state_machine, "profile", user_data, apply_display))
     state_machine.register_state("ACHIEVEMENTS", CCIConsoleState(state_machine, "achievements", user_data, apply_display))
     state_machine.register_state("SETTINGS", CCIConsoleState(state_machine, "settings", user_data, apply_display))

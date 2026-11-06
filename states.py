@@ -652,6 +652,9 @@ class MenuState(BaseState):
                 if event.key == pygame.K_F4:
                     self.state_machine.change_state("LIBRARY")
                     return
+                if event.key == pygame.K_F5:
+                    self.state_machine.change_state("GROUPS")
+                    return
                 if event.key == pygame.K_F6:
                     self.state_machine.change_state("PROFILE")
                     return
@@ -1813,7 +1816,7 @@ class StateMachine:
             from audio_bgm import BGMManager
             if state_name in ("BOOT", "INTRO_AVATAR", "PLAYING"):
                 BGMManager.get_instance().fadeout(500)
-            elif state_name in ("MENU", "LIBRARY", "PROFILE", "ACHIEVEMENTS", "SETTINGS", "USER_SELECT"):
+            elif state_name in ("MENU", "LIBRARY", "GROUPS", "COMMUNITY", "PROFILE", "ACHIEVEMENTS", "SETTINGS", "USER_SELECT"):
                 vol = 0.8
                 try:
                     from cci_users import UserManager

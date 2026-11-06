@@ -8,13 +8,14 @@ import pygame
 
 LOGICAL_W, LOGICAL_H = 1280, 720
 SIDEBAR_W, SIDEBAR_H = 260, 580
-NAV_ROW_TOP = 120
-NAV_ROW_STEP = 44
-NAV_ROW_HEIGHT = 37
+NAV_ROW_TOP = 122
+NAV_ROW_STEP = 45
+NAV_ROW_HEIGHT = 36
 
 ENTRIES = (
     ("INICIO", "home", "MENU"),
     ("JUEGOS", "library", "LIBRARY"),
+    ("GRUPOS", "groups", "GROUPS"),
     ("PERFIL", "profile", "PROFILE"),
     ("LOGROS", "achievements", "ACHIEVEMENTS"),
     ("CONFIGURACIÓN", "settings", "SETTINGS"),
@@ -72,7 +73,7 @@ def draw_sidebar(target: pygame.Surface, base: pygame.Surface, active_page: str,
 
     # El asset base muestra LOGROS activo; se limpia el área de opciones para
     # renderizar el estado activo correcto de cada pantalla.
-    pygame.draw.rect(target, (8, 9, 11), pygame.Rect(42, 117, 196, 288))
+    pygame.draw.rect(target, (8, 9, 11), pygame.Rect(42, 117, 196, 325))
     for index, (label, page, _destination) in enumerate(ENTRIES):
         top = NAV_ROW_TOP + index * NAV_ROW_STEP
         active = active_page == page
