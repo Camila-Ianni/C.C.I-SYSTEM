@@ -600,3 +600,114 @@ class CommunitiesService:
                 entry["status"] = "offline"
             result[uid] = entry
         return result
+
+    # =========================================================================
+    # CANALES DE VOZ Y EMISIÓN DE TOKENS LIVEKIT
+    # =========================================================================
+
+    def request_voice_token(
+        self,
+        community_id: str,
+        channel_id: str,
+        user_id: str,
+        username: str = "User",
+    ) -> Dict[str, Any]:
+        """Verifica autorización de acceso a canal de voz y emite credencial token JWT LiveKit."""
+        from backend.communities.livekit_token import LiveKitTokenGenerator
+
+        ch = self.repo.get_channel(channel_id)
+        if not ch or ch["community_id"] != community_id:
+            raise LookupError("Canal no encontrado en esta comunidad")
+        if ch["type"] not in ("voice", "stream"):
+            raise ValueError("El canal seleccionado no es de tipo voz ni streaming")
+
+        if not self.has_permission(community_id, user_id, "voice.connect", channel_id=channel_id):
+            raise PermissionError("Acceso denegado: se requiere permiso voice.connect")
+
+        # Comprobar límite de participantes activos
+        max_p = ch.get("max_participants", 0)
+        if max_p > 0:
+            current_count = self.repo.count_active_voice_sessions(channel_id)
+            if current_count >= max_p:
+                raise ValueError("La sala de voz ha alcanzado su límite de participantes")
+
+        # Comprobar permiso de transmisión de micrófono
+        can_speak = self.has_permission(community_id, user_id, "voice.speak", channel_id=channel_id)
+
+        room_name = f"comm_{community_id[:8]}_chan_{channel_id[:8]}"
+        generator = LiveKitTokenGenerator()
+        cred = generator.create_access_token(
+            identity=user_id,
+            name=username,
+            room_name=room_name,
+            can_publish=can_speak,
+            can_subscribe=True,
+            can_publish_data=True,
+            valid_for_seconds=600,
+        )
+
+        # Registrar sesión de voz activa en base de datos
+        self.repo.create_voice_session(
+            channel_id=channel_id,
+            user_id=user_id,
+            room_name=room_name,
+            participant_id=user_id,
+        )
+
+        return cred
+
+    def leave_voice_channel(self, community_id: str, channel_id: str, user_id: str) -> bool:
+        """Registra la salida formal del canal de voz liberando el slot."""
+        return self.repo.end_voice_session(channel_id, user_id)
+
+    def list_voice_participants(
+        self,
+        community_id: str,
+        channel_id: str,
+        requester_id: str,
+    ) -> List[Dict[str, Any]]:
+        """Lista participantes activos en la sala de voz."""
+        ch = self.repo.get_channel(channel_id)
+        if not ch or ch["community_id"] != community_id:
+            raise LookupError("Canal no encontrado")
+
+        if not self.has_permission(community_id, requester_id, "voice.connect", channel_id=channel_id):
+            raise PermissionError("Se requiere permiso voice.connect")
+
+        return self.repo.list_active_voice_sessions(channel_id)
+
+    def moderate_voice_participant(
+        self,
+        community_id: str,
+        channel_id: str,
+        requester_id: str,
+        target_user_id: str,
+        action: str,
+    ) -> bool:
+        """Modera a un participante en la sala (silenciar o desconectar) respetando jerarquías."""
+        comm = self.repo.get_community(community_id)
+        if not comm:
+            raise LookupError("Comunidad no encontrada")
+        if target_user_id == comm["owner_id"]:
+            raise PermissionError("No es posible moderar al propietario de la comunidad")
+
+        if action == "mute":
+            if not self.has_permission(community_id, requester_id, "voice.mute_members", channel_id=channel_id):
+                raise PermissionError("Se requiere permiso voice.mute_members")
+            req_pos = self.get_user_highest_role_position(community_id, requester_id)
+            target_pos = self.get_user_highest_role_position(community_id, target_user_id)
+            if req_pos >= target_pos and comm["owner_id"] != requester_id:
+                raise PermissionError("Jerarquía insuficiente para moderar a este miembro")
+            return self.repo.update_voice_session_mute(channel_id, target_user_id, True)
+
+        elif action == "disconnect":
+            if not self.has_permission(community_id, requester_id, "voice.move_members", channel_id=channel_id):
+                raise PermissionError("Se requiere permiso voice.move_members")
+            req_pos = self.get_user_highest_role_position(community_id, requester_id)
+            target_pos = self.get_user_highest_role_position(community_id, target_user_id)
+            if req_pos >= target_pos and comm["owner_id"] != requester_id:
+                raise PermissionError("Jerarquía insuficiente para desconectar a este miembro")
+            return self.repo.end_voice_session(channel_id, target_user_id)
+
+        else:
+            raise ValueError(f"Acción de moderación no reconocida: {action}")

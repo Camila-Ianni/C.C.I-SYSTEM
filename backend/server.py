@@ -990,6 +990,58 @@ def on_community_presence_update(data: Dict[str, Any]):
         emit("community:error", {"error": str(e)})
 
 
+@socketio.on("community:voice:join")
+@require_socket_auth
+def on_community_voice_join(data: Dict[str, Any]):
+    """Notifica incorporación de un participante a la sala de voz en tiempo real."""
+    channel_id = data.get("channel_id")
+    user_id = data.get("user_id")
+    if not channel_id or not user_id:
+        emit("community:error", {"error": "channel_id requerido"})
+        return
+
+    room_name = f"comm_voice_{channel_id}"
+    join_room(room_name)
+    emit("voice.participant_joined", {"channel_id": channel_id, "user_id": user_id}, to=room_name)
+
+
+@socketio.on("community:voice:leave")
+@require_socket_auth
+def on_community_voice_leave(data: Dict[str, Any]):
+    channel_id = data.get("channel_id")
+    user_id = data.get("user_id")
+    if channel_id and user_id:
+        room_name = f"comm_voice_{channel_id}"
+        leave_room(room_name)
+        emit("voice.participant_left", {"channel_id": channel_id, "user_id": user_id}, to=room_name)
+
+
+@socketio.on("community:voice:mute")
+@require_socket_auth
+def on_community_voice_mute(data: Dict[str, Any]):
+    channel_id = data.get("channel_id")
+    user_id = data.get("user_id")
+    is_muted = bool(data.get("is_muted", True))
+    if channel_id and user_id:
+        room_name = f"comm_voice_{channel_id}"
+        emit("voice.mute_state_changed", {"channel_id": channel_id, "user_id": user_id, "is_muted": is_muted}, to=room_name)
+
+
+@socketio.on("community:voice:speakers")
+@require_socket_auth
+def on_community_voice_speakers(data: Dict[str, Any]):
+    channel_id = data.get("channel_id")
+    user_id = data.get("user_id")
+    audio_level = float(data.get("audio_level", 0.0))
+    is_speaking = bool(data.get("is_speaking", False))
+    if channel_id and user_id:
+        room_name = f"comm_voice_{channel_id}"
+        emit("voice.active_speakers", {
+            "channel_id": channel_id,
+            "speakers": [{"user_id": user_id, "audio_level": audio_level, "is_speaking": is_speaking}]
+        }, to=room_name)
+
+
 
 # ==============================================================================
 # EVENTOS WEBSOCKET: MULTIJUGADOR ONLINE (CON AUTORIZACIÓN CENTRALIZADA)

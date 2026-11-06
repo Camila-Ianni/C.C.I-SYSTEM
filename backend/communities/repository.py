@@ -197,6 +197,19 @@ class CommunitiesRepository:
                 custom_status TEXT,
                 last_seen REAL NOT NULL
             );
+
+            CREATE TABLE IF NOT EXISTS voice_sessions (
+                id TEXT PRIMARY KEY,
+                channel_id TEXT NOT NULL REFERENCES channels(id) ON DELETE CASCADE,
+                user_id TEXT NOT NULL,
+                livekit_room_name TEXT NOT NULL,
+                livekit_participant_id TEXT NOT NULL,
+                is_muted INTEGER NOT NULL DEFAULT 0,
+                is_deafened INTEGER NOT NULL DEFAULT 0,
+                is_screen_sharing INTEGER NOT NULL DEFAULT 0,
+                joined_at REAL NOT NULL,
+                left_at REAL NULL
+            );
             """)
 
             # Sembrar catálogo canónico de permisos
@@ -819,3 +832,89 @@ class CommunitiesRepository:
             if uid not in result:
                 result[uid] = {"user_id": uid, "status": "offline", "custom_status": None, "last_seen": 0.0}
         return result
+
+    # =========================================================================
+    # SESIONES DE VOZ (LIVEKIT SFU)
+    # =========================================================================
+
+    def create_voice_session(
+        self,
+        channel_id: str,
+        user_id: str,
+        room_name: str,
+        participant_id: str,
+    ) -> Dict[str, Any]:
+        session_id = str(uuid.uuid4())
+        now = time.time()
+        conn = self._get_connection()
+        with conn:
+            # Finalizar cualquier sesión previa activa del usuario en este canal
+            conn.execute(
+                "UPDATE voice_sessions SET left_at = ? WHERE channel_id = ? AND user_id = ? AND left_at IS NULL",
+                (now, channel_id, user_id)
+            )
+            conn.execute(
+                """
+                INSERT INTO voice_sessions (id, channel_id, user_id, livekit_room_name, livekit_participant_id, joined_at)
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (session_id, channel_id, user_id, room_name, participant_id, now)
+            )
+        return {
+            "session_id": session_id,
+            "channel_id": channel_id,
+            "user_id": user_id,
+            "livekit_room_name": room_name,
+            "livekit_participant_id": participant_id,
+            "is_muted": False,
+            "is_deafened": False,
+            "is_screen_sharing": False,
+            "joined_at": now,
+            "left_at": None,
+        }
+
+    def end_voice_session(self, channel_id: str, user_id: str) -> bool:
+        now = time.time()
+        conn = self._get_connection()
+        with conn:
+            cur = conn.execute(
+                "UPDATE voice_sessions SET left_at = ? WHERE channel_id = ? AND user_id = ? AND left_at IS NULL",
+                (now, channel_id, user_id)
+            )
+            return cur.rowcount > 0
+
+    def update_voice_session_mute(self, channel_id: str, user_id: str, is_muted: bool) -> bool:
+        conn = self._get_connection()
+        with conn:
+            cur = conn.execute(
+                "UPDATE voice_sessions SET is_muted = ? WHERE channel_id = ? AND user_id = ? AND left_at IS NULL",
+                (int(is_muted), channel_id, user_id)
+            )
+            return cur.rowcount > 0
+
+    def list_active_voice_sessions(self, channel_id: str) -> List[Dict[str, Any]]:
+        conn = self._get_connection()
+        rows = conn.execute(
+            """
+            SELECT * FROM voice_sessions
+            WHERE channel_id = ? AND left_at IS NULL
+            ORDER BY joined_at ASC
+            """,
+            (channel_id,)
+        ).fetchall()
+        result = []
+        for r in rows:
+            d = dict(r)
+            d["is_muted"] = bool(d["is_muted"])
+            d["is_deafened"] = bool(d["is_deafened"])
+            d["is_screen_sharing"] = bool(d["is_screen_sharing"])
+            result.append(d)
+        return result
+
+    def count_active_voice_sessions(self, channel_id: str) -> int:
+        conn = self._get_connection()
+        row = conn.execute(
+            "SELECT COUNT(*) FROM voice_sessions WHERE channel_id = ? AND left_at IS NULL",
+            (channel_id,)
+        ).fetchone()
+        return row[0] if row else 0

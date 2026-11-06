@@ -458,3 +458,95 @@ def set_presence_route():
     except ValueError as e:
         return jsonify({"error": str(e)}), 400
 
+
+# =============================================================================
+# RUTAS DE CANALES DE VOZ (LIVEKIT SFU)
+# =============================================================================
+
+@communities_bp.route("/channels/<channel_id>/voice-token", methods=["POST"])
+@require_auth
+def request_voice_token_route(channel_id: str):
+    user_id = g.current_user["user_id"]
+    username = g.current_user.get("username", "User")
+
+    ch = get_service().repo.get_channel(channel_id)
+    if not ch:
+        return jsonify({"error": "Canal no encontrado"}), 404
+
+    try:
+        cred = get_service().request_voice_token(
+            community_id=ch["community_id"],
+            channel_id=channel_id,
+            user_id=user_id,
+            username=username,
+        )
+        return jsonify(cred), 200
+    except PermissionError as e:
+        return jsonify({"error": str(e)}), 403
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 422
+    except LookupError as e:
+        return jsonify({"error": str(e)}), 404
+
+
+@communities_bp.route("/channels/<channel_id>/voice-leave", methods=["POST"])
+@require_auth
+def leave_voice_route(channel_id: str):
+    user_id = g.current_user["user_id"]
+    ch = get_service().repo.get_channel(channel_id)
+    if not ch:
+        return jsonify({"error": "Canal no encontrado"}), 404
+
+    get_service().leave_voice_channel(ch["community_id"], channel_id, user_id)
+    return jsonify({"status": "left", "channel_id": channel_id}), 200
+
+
+@communities_bp.route("/channels/<channel_id>/voice-participants", methods=["GET"])
+@require_auth
+def list_voice_participants_route(channel_id: str):
+    user_id = g.current_user["user_id"]
+    ch = get_service().repo.get_channel(channel_id)
+    if not ch:
+        return jsonify({"error": "Canal no encontrado"}), 404
+
+    try:
+        participants = get_service().list_voice_participants(ch["community_id"], channel_id, user_id)
+        return jsonify({"participants": participants}), 200
+    except PermissionError as e:
+        return jsonify({"error": str(e)}), 403
+    except LookupError as e:
+        return jsonify({"error": str(e)}), 404
+
+
+@communities_bp.route("/channels/<channel_id>/voice-moderate", methods=["POST"])
+@require_auth
+def moderate_voice_route(channel_id: str):
+    user_id = g.current_user["user_id"]
+    data = request.get_json() or {}
+    target_user_id = data.get("target_user_id")
+    action = data.get("action", "mute")
+
+    if not target_user_id:
+        return jsonify({"error": "target_user_id requerido"}), 400
+
+    ch = get_service().repo.get_channel(channel_id)
+    if not ch:
+        return jsonify({"error": "Canal no encontrado"}), 404
+
+    try:
+        get_service().moderate_voice_participant(
+            community_id=ch["community_id"],
+            channel_id=channel_id,
+            requester_id=user_id,
+            target_user_id=target_user_id,
+            action=action,
+        )
+        return jsonify({"status": "moderated", "action": action, "target_user_id": target_user_id}), 200
+    except PermissionError as e:
+        return jsonify({"error": str(e)}), 403
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    except LookupError as e:
+        return jsonify({"error": str(e)}), 404
+
+
