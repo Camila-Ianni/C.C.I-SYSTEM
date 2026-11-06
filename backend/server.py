@@ -1122,6 +1122,23 @@ def on_community_stream_stop(data: Dict[str, Any]):
         emit("stream.ended", {"channel_id": channel_id, "user_id": user_id}, to=room_name)
 
 
+@socketio.on("community:moderation:action")
+@require_socket_auth
+def on_community_moderation_action(data: Dict[str, Any]):
+    """Notifica en tiempo real una acción de moderación a los miembros de la comunidad."""
+    community_id = data.get("community_id")
+    action = data.get("action")
+    target_user_id = data.get("target_user_id")
+    reason = data.get("reason", "")
+    if community_id and target_user_id and action:
+        emit("moderation.action_taken", {
+            "community_id": community_id,
+            "action": action,
+            "target_user_id": target_user_id,
+            "reason": reason,
+        }, broadcast=True)
+
+
 
 # ==============================================================================
 # EVENTOS WEBSOCKET: MULTIJUGADOR ONLINE (CON AUTORIZACIÓN CENTRALIZADA)

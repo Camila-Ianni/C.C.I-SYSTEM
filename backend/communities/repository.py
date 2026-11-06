@@ -278,6 +278,41 @@ class CommunitiesRepository:
                 started_at REAL NOT NULL,
                 ended_at REAL NULL
             );
+
+            CREATE TABLE IF NOT EXISTS moderation_actions (
+                id TEXT PRIMARY KEY,
+                community_id TEXT NOT NULL REFERENCES communities(id) ON DELETE CASCADE,
+                actor_id TEXT NOT NULL,
+                target_id TEXT NOT NULL,
+                action TEXT NOT NULL,
+                reason TEXT NULL,
+                expires_at REAL NULL,
+                created_at REAL NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS reports (
+                id TEXT PRIMARY KEY,
+                community_id TEXT NOT NULL REFERENCES communities(id) ON DELETE CASCADE,
+                reporter_id TEXT NOT NULL,
+                target_type TEXT NOT NULL,
+                target_id TEXT NOT NULL,
+                reason TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'open',
+                resolution_notes TEXT NULL,
+                resolved_by TEXT NULL,
+                created_at REAL NOT NULL,
+                resolved_at REAL NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS audit_log (
+                id TEXT PRIMARY KEY,
+                community_id TEXT NOT NULL REFERENCES communities(id) ON DELETE CASCADE,
+                actor_id TEXT NOT NULL,
+                action_type TEXT NOT NULL,
+                target_id TEXT NULL,
+                details_json TEXT NULL,
+                created_at REAL NOT NULL
+            );
             """)
 
             # Sembrar catálogo canónico de permisos
@@ -1411,3 +1446,218 @@ class CommunitiesRepository:
                 (channel_id, user_id)
             )
             return cur.rowcount
+
+    # =========================================================================
+    # MODERACIÓN, REPORTES Y AUDITORÍA
+    # =========================================================================
+
+    def create_moderation_action(
+        self,
+        action_id: str,
+        community_id: str,
+        actor_id: str,
+        target_id: str,
+        action: str,
+        reason: Optional[str] = None,
+        expires_at: Optional[float] = None,
+    ) -> Dict[str, Any]:
+        conn = self._get_connection()
+        now = time.time()
+        with conn:
+            conn.execute(
+                """
+                INSERT INTO moderation_actions (
+                    id, community_id, actor_id, target_id, action, reason, expires_at, created_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (action_id, community_id, actor_id, target_id, action, reason, expires_at, now)
+            )
+        return {
+            "id": action_id,
+            "community_id": community_id,
+            "actor_id": actor_id,
+            "target_id": target_id,
+            "action": action,
+            "reason": reason,
+            "expires_at": expires_at,
+            "created_at": now,
+        }
+
+    def list_moderation_actions(
+        self,
+        community_id: str,
+        target_id: Optional[str] = None,
+        action: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
+        conn = self._get_connection()
+        query = "SELECT * FROM moderation_actions WHERE community_id = ?"
+        params: List[Any] = [community_id]
+        if target_id:
+            query += " AND target_id = ?"
+            params.append(target_id)
+        if action:
+            query += " AND action = ?"
+            params.append(action)
+        query += " ORDER BY created_at DESC"
+        rows = conn.execute(query, tuple(params)).fetchall()
+        return [dict(r) for r in rows]
+
+    def is_user_banned(self, community_id: str, user_id: str) -> bool:
+        """Verifica si el usuario tiene una sanción de ban activa no revocada y vigente."""
+        conn = self._get_connection()
+        now = time.time()
+        # Buscar la acción más reciente entre 'ban' y 'unban'
+        row = conn.execute(
+            """
+            SELECT action, expires_at FROM moderation_actions
+            WHERE community_id = ? AND target_id = ? AND action IN ('ban', 'unban')
+            ORDER BY created_at DESC LIMIT 1
+            """,
+            (community_id, user_id)
+        ).fetchone()
+        if not row:
+            return False
+        if row["action"] == "unban":
+            return False
+        # Si es 'ban', verificar si expiró
+        exp = row["expires_at"]
+        if exp is not None and exp < now:
+            return False
+        return True
+
+    def is_user_muted(self, community_id: str, user_id: str) -> bool:
+        """Verifica si el usuario tiene una sanción de mute activa no revocada y vigente."""
+        conn = self._get_connection()
+        now = time.time()
+        row = conn.execute(
+            """
+            SELECT action, expires_at FROM moderation_actions
+            WHERE community_id = ? AND target_id = ? AND action IN ('mute', 'unmute')
+            ORDER BY created_at DESC LIMIT 1
+            """,
+            (community_id, user_id)
+        ).fetchone()
+        if not row:
+            return False
+        if row["action"] == "unmute":
+            return False
+        exp = row["expires_at"]
+        if exp is not None and exp < now:
+            return False
+        return True
+
+    def create_report(
+        self,
+        report_id: str,
+        community_id: str,
+        reporter_id: str,
+        target_type: str,
+        target_id: str,
+        reason: str,
+    ) -> Dict[str, Any]:
+        conn = self._get_connection()
+        now = time.time()
+        with conn:
+            conn.execute(
+                """
+                INSERT INTO reports (
+                    id, community_id, reporter_id, target_type, target_id,
+                    reason, status, created_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, 'open', ?)
+                """,
+                (report_id, community_id, reporter_id, target_type, target_id, reason, now)
+            )
+        return self.get_report(report_id)
+
+    def get_report(self, report_id: str) -> Optional[Dict[str, Any]]:
+        conn = self._get_connection()
+        row = conn.execute(
+            "SELECT * FROM reports WHERE id = ?",
+            (report_id,)
+        ).fetchone()
+        return dict(row) if row else None
+
+    def list_reports(
+        self,
+        community_id: str,
+        status: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
+        conn = self._get_connection()
+        query = "SELECT * FROM reports WHERE community_id = ?"
+        params: List[Any] = [community_id]
+        if status:
+            query += " AND status = ?"
+            params.append(status)
+        query += " ORDER BY created_at DESC"
+        rows = conn.execute(query, tuple(params)).fetchall()
+        return [dict(r) for r in rows]
+
+    def resolve_report(
+        self,
+        report_id: str,
+        resolver_id: str,
+        status: str = "resolved",
+        resolution_notes: Optional[str] = None,
+    ) -> Optional[Dict[str, Any]]:
+        conn = self._get_connection()
+        now = time.time()
+        with conn:
+            conn.execute(
+                """
+                UPDATE reports
+                SET status = ?, resolved_by = ?, resolution_notes = ?, resolved_at = ?
+                WHERE id = ?
+                """,
+                (status, resolver_id, resolution_notes, now, report_id)
+            )
+        return self.get_report(report_id)
+
+    def create_audit_entry(
+        self,
+        entry_id: str,
+        community_id: str,
+        actor_id: str,
+        action_type: str,
+        target_id: Optional[str] = None,
+        details_json: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        conn = self._get_connection()
+        now = time.time()
+        with conn:
+            conn.execute(
+                """
+                INSERT INTO audit_log (
+                    id, community_id, actor_id, action_type, target_id, details_json, created_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (entry_id, community_id, actor_id, action_type, target_id, details_json, now)
+            )
+        return {
+            "id": entry_id,
+            "community_id": community_id,
+            "actor_id": actor_id,
+            "action_type": action_type,
+            "target_id": target_id,
+            "details_json": details_json,
+            "created_at": now,
+        }
+
+    def list_audit_entries(
+        self,
+        community_id: str,
+        action_type: Optional[str] = None,
+        limit: int = 100,
+    ) -> List[Dict[str, Any]]:
+        conn = self._get_connection()
+        query = "SELECT * FROM audit_log WHERE community_id = ?"
+        params: List[Any] = [community_id]
+        if action_type:
+            query += " AND action_type = ?"
+            params.append(action_type)
+        query += " ORDER BY created_at DESC LIMIT ?"
+        params.append(limit)
+        rows = conn.execute(query, tuple(params)).fetchall()
+        return [dict(r) for r in rows]

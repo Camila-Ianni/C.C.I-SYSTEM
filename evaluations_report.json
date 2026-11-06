@@ -1,18 +1,18 @@
 {
-  "timestamp": "2026-11-06T10:16:35.727270",
-  "git_commit_sha": "e0f33917b16c8c70e02b52328e7fc37b7f664936",
+  "timestamp": "2026-11-06T10:24:30.549898",
+  "git_commit_sha": "8886c410422b9324f3795a17f19efcaffd5419f7",
   "git_branch": "feature/communities-phase0-design",
   "python_interpreter": "/Users/cami/Desktop/C.C.I SYSTEM/.venv/bin/python",
   "python_version": "3.14.5 (main, May 10 2026, 10:21:34) [Clang 21.0.0 (clang-2100.0.123.102)]",
   "platform": "macOS-26.6.2-arm64-arm-64bit-Mach-O",
-  "suites_expected": 18,
-  "suites_executed": 18,
+  "suites_expected": 19,
+  "suites_executed": 19,
   "missing_suites": 0,
-  "total_run": 155,
-  "total_passed": 155,
+  "total_run": 165,
+  "total_passed": 165,
   "total_failed": 0,
   "total_errors": 0,
-  "total_time_seconds": 17.74,
+  "total_time_seconds": 18.75,
   "suites": [
     {
       "suite": "test_phase2.py",
@@ -21,7 +21,7 @@
       "passed": 9,
       "failures": 0,
       "errors": 0,
-      "elapsed": 0.397,
+      "elapsed": 0.378,
       "success": true
     },
     {
@@ -31,7 +31,7 @@
       "passed": 7,
       "failures": 0,
       "errors": 0,
-      "elapsed": 0.107,
+      "elapsed": 0.109,
       "success": true
     },
     {
@@ -41,7 +41,7 @@
       "passed": 9,
       "failures": 0,
       "errors": 0,
-      "elapsed": 1.001,
+      "elapsed": 0.992,
       "success": true
     },
     {
@@ -51,7 +51,7 @@
       "passed": 11,
       "failures": 0,
       "errors": 0,
-      "elapsed": 1.324,
+      "elapsed": 1.353,
       "success": true
     },
     {
@@ -61,7 +61,7 @@
       "passed": 8,
       "failures": 0,
       "errors": 0,
-      "elapsed": 1.107,
+      "elapsed": 1.115,
       "success": true
     },
     {
@@ -71,7 +71,7 @@
       "passed": 8,
       "failures": 0,
       "errors": 0,
-      "elapsed": 1.065,
+      "elapsed": 1.064,
       "success": true
     },
     {
@@ -81,7 +81,7 @@
       "passed": 6,
       "failures": 0,
       "errors": 0,
-      "elapsed": 0.912,
+      "elapsed": 0.918,
       "success": true
     },
     {
@@ -91,7 +91,7 @@
       "passed": 4,
       "failures": 0,
       "errors": 0,
-      "elapsed": 1.984,
+      "elapsed": 2.023,
       "success": true
     },
     {
@@ -101,7 +101,7 @@
       "passed": 8,
       "failures": 0,
       "errors": 0,
-      "elapsed": 0.548,
+      "elapsed": 0.539,
       "success": true
     },
     {
@@ -111,7 +111,7 @@
       "passed": 7,
       "failures": 0,
       "errors": 0,
-      "elapsed": 0.513,
+      "elapsed": 0.521,
       "success": true
     },
     {
@@ -121,7 +121,7 @@
       "passed": 8,
       "failures": 0,
       "errors": 0,
-      "elapsed": 1.517,
+      "elapsed": 1.54,
       "success": true
     },
     {
@@ -131,7 +131,7 @@
       "passed": 12,
       "failures": 0,
       "errors": 0,
-      "elapsed": 1.763,
+      "elapsed": 1.784,
       "success": true
     },
     {
@@ -141,7 +141,7 @@
       "passed": 8,
       "failures": 0,
       "errors": 0,
-      "elapsed": 2.415,
+      "elapsed": 2.476,
       "success": true
     },
     {
@@ -151,7 +151,7 @@
       "passed": 10,
       "failures": 0,
       "errors": 0,
-      "elapsed": 0.534,
+      "elapsed": 0.59,
       "success": true
     },
     {
@@ -161,7 +161,7 @@
       "passed": 10,
       "failures": 0,
       "errors": 0,
-      "elapsed": 0.539,
+      "elapsed": 0.574,
       "success": true
     },
     {
@@ -171,7 +171,7 @@
       "passed": 10,
       "failures": 0,
       "errors": 0,
-      "elapsed": 0.779,
+      "elapsed": 0.825,
       "success": true
     },
     {
@@ -181,7 +181,7 @@
       "passed": 10,
       "failures": 0,
       "errors": 0,
-      "elapsed": 0.628,
+      "elapsed": 0.642,
       "success": true
     },
     {
@@ -191,7 +191,17 @@
       "passed": 10,
       "failures": 0,
       "errors": 0,
-      "elapsed": 0.607,
+      "elapsed": 0.627,
+      "success": true
+    },
+    {
+      "suite": "test_communities_phase6.py",
+      "returncode": 0,
+      "tests_run": 10,
+      "passed": 10,
+      "failures": 0,
+      "errors": 0,
+      "elapsed": 0.678,
       "success": true
     }
   ]

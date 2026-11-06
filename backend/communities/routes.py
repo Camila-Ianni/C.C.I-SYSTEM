@@ -134,6 +134,25 @@ def accept_invitation_route(code_str: str):
     try:
         res = get_service().join_via_invitation(code_str, user_id)
         return jsonify(res), 200
+    except PermissionError as e:
+        return jsonify({"error": str(e)}), 403
+    except LookupError as e:
+        return jsonify({"error": str(e)}), 404
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+
+
+@communities_bp.route("/invitations/join", methods=["POST"])
+@require_auth
+def join_invitation_route():
+    user_id = g.current_user["user_id"]
+    data = request.get_json() or {}
+    code_str = data.get("code", "")
+    try:
+        res = get_service().join_via_invitation(code_str, user_id)
+        return jsonify(res), 200
+    except PermissionError as e:
+        return jsonify({"error": str(e)}), 403
     except LookupError as e:
         return jsonify({"error": str(e)}), 404
     except ValueError as e:
@@ -1024,6 +1043,287 @@ def list_active_streams_route():
             community_id=community_id,
         )
         return jsonify({"streams": streams}), 200
+    except PermissionError as e:
+        return jsonify({"error": str(e)}), 403
+
+
+# =============================================================================
+# MODERACIÓN, SANCIONES JERÁRQUICAS, REPORTES Y AUDITORÍA
+# =============================================================================
+
+@communities_bp.route("/communities/<community_id>/moderation/warn", methods=["POST"])
+@require_auth
+def warn_member_route(community_id: str):
+    user_id = g.current_user["user_id"]
+    data = request.get_json() or {}
+    target_user_id = data.get("target_user_id")
+    reason = data.get("reason", "Advertencia de moderación")
+
+    if not target_user_id:
+        return jsonify({"error": "target_user_id requerido"}), 400
+
+    try:
+        action = get_service().warn_member(
+            community_id=community_id,
+            actor_id=user_id,
+            target_user_id=target_user_id,
+            reason=reason,
+        )
+        return jsonify(action), 201
+    except PermissionError as e:
+        return jsonify({"error": str(e)}), 403
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    except LookupError as e:
+        return jsonify({"error": str(e)}), 404
+
+
+@communities_bp.route("/communities/<community_id>/moderation/mute", methods=["POST"])
+@require_auth
+def mute_member_route(community_id: str):
+    user_id = g.current_user["user_id"]
+    data = request.get_json() or {}
+    target_user_id = data.get("target_user_id")
+    duration_minutes = data.get("duration_minutes")
+    if duration_minutes is not None:
+        duration_minutes = int(duration_minutes)
+    reason = data.get("reason")
+
+    if not target_user_id:
+        return jsonify({"error": "target_user_id requerido"}), 400
+
+    try:
+        action = get_service().mute_member(
+            community_id=community_id,
+            actor_id=user_id,
+            target_user_id=target_user_id,
+            duration_minutes=duration_minutes,
+            reason=reason,
+        )
+        return jsonify(action), 201
+    except PermissionError as e:
+        return jsonify({"error": str(e)}), 403
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    except LookupError as e:
+        return jsonify({"error": str(e)}), 404
+
+
+@communities_bp.route("/communities/<community_id>/moderation/unmute", methods=["POST"])
+@require_auth
+def unmute_member_route(community_id: str):
+    user_id = g.current_user["user_id"]
+    data = request.get_json() or {}
+    target_user_id = data.get("target_user_id")
+    reason = data.get("reason")
+
+    if not target_user_id:
+        return jsonify({"error": "target_user_id requerido"}), 400
+
+    try:
+        action = get_service().unmute_member(
+            community_id=community_id,
+            actor_id=user_id,
+            target_user_id=target_user_id,
+            reason=reason,
+        )
+        return jsonify(action), 200
+    except PermissionError as e:
+        return jsonify({"error": str(e)}), 403
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    except LookupError as e:
+        return jsonify({"error": str(e)}), 404
+
+
+@communities_bp.route("/communities/<community_id>/moderation/kick", methods=["POST"])
+@require_auth
+def moderation_kick_member_route(community_id: str):
+    user_id = g.current_user["user_id"]
+    data = request.get_json() or {}
+    target_user_id = data.get("target_user_id")
+    reason = data.get("reason")
+
+    if not target_user_id:
+        return jsonify({"error": "target_user_id requerido"}), 400
+
+    try:
+        success = get_service().kick_member_with_audit(
+            community_id=community_id,
+            actor_id=user_id,
+            target_user_id=target_user_id,
+            reason=reason,
+        )
+        return jsonify({"kicked": success, "target_user_id": target_user_id}), 200
+    except PermissionError as e:
+        return jsonify({"error": str(e)}), 403
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    except LookupError as e:
+        return jsonify({"error": str(e)}), 404
+
+
+@communities_bp.route("/communities/<community_id>/moderation/ban", methods=["POST"])
+@require_auth
+def ban_member_route(community_id: str):
+    user_id = g.current_user["user_id"]
+    data = request.get_json() or {}
+    target_user_id = data.get("target_user_id")
+    duration_hours = data.get("duration_hours")
+    if duration_hours is not None:
+        duration_hours = int(duration_hours)
+    reason = data.get("reason")
+
+    if not target_user_id:
+        return jsonify({"error": "target_user_id requerido"}), 400
+
+    try:
+        action = get_service().ban_member(
+            community_id=community_id,
+            actor_id=user_id,
+            target_user_id=target_user_id,
+            duration_hours=duration_hours,
+            reason=reason,
+        )
+        return jsonify(action), 201
+    except PermissionError as e:
+        return jsonify({"error": str(e)}), 403
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    except LookupError as e:
+        return jsonify({"error": str(e)}), 404
+
+
+@communities_bp.route("/communities/<community_id>/moderation/unban", methods=["POST"])
+@require_auth
+def unban_member_route(community_id: str):
+    user_id = g.current_user["user_id"]
+    data = request.get_json() or {}
+    target_user_id = data.get("target_user_id")
+    reason = data.get("reason")
+
+    if not target_user_id:
+        return jsonify({"error": "target_user_id requerido"}), 400
+
+    try:
+        action = get_service().unban_member(
+            community_id=community_id,
+            actor_id=user_id,
+            target_user_id=target_user_id,
+            reason=reason,
+        )
+        return jsonify(action), 200
+    except PermissionError as e:
+        return jsonify({"error": str(e)}), 403
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    except LookupError as e:
+        return jsonify({"error": str(e)}), 404
+
+
+@communities_bp.route("/communities/<community_id>/moderation/actions", methods=["GET"])
+@require_auth
+def list_moderation_actions_route(community_id: str):
+    user_id = g.current_user["user_id"]
+    target_id = request.args.get("target_id")
+    action = request.args.get("action")
+
+    try:
+        actions = get_service().list_moderation_actions(
+            community_id=community_id,
+            actor_id=user_id,
+            target_id=target_id,
+            action=action,
+        )
+        return jsonify({"actions": actions}), 200
+    except PermissionError as e:
+        return jsonify({"error": str(e)}), 403
+
+
+@communities_bp.route("/communities/<community_id>/reports", methods=["POST"])
+@require_auth
+def create_report_route(community_id: str):
+    user_id = g.current_user["user_id"]
+    data = request.get_json() or {}
+    target_type = data.get("target_type", "user")
+    target_id = data.get("target_id")
+    reason = data.get("reason", "")
+
+    if not target_id:
+        return jsonify({"error": "target_id requerido"}), 400
+
+    try:
+        report = get_service().create_report(
+            community_id=community_id,
+            reporter_id=user_id,
+            target_type=target_type,
+            target_id=target_id,
+            reason=reason,
+        )
+        return jsonify(report), 201
+    except PermissionError as e:
+        return jsonify({"error": str(e)}), 403
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    except LookupError as e:
+        return jsonify({"error": str(e)}), 404
+
+
+@communities_bp.route("/communities/<community_id>/reports", methods=["GET"])
+@require_auth
+def list_reports_route(community_id: str):
+    user_id = g.current_user["user_id"]
+    status = request.args.get("status")
+
+    try:
+        reports = get_service().list_reports(
+            community_id=community_id,
+            actor_id=user_id,
+            status=status,
+        )
+        return jsonify({"reports": reports}), 200
+    except PermissionError as e:
+        return jsonify({"error": str(e)}), 403
+
+
+@communities_bp.route("/communities/<community_id>/reports/<report_id>", methods=["PATCH"])
+@require_auth
+def resolve_report_route(community_id: str, report_id: str):
+    user_id = g.current_user["user_id"]
+    data = request.get_json() or {}
+    status = data.get("status", "resolved")
+    resolution_notes = data.get("resolution_notes")
+
+    try:
+        updated = get_service().resolve_report(
+            community_id=community_id,
+            actor_id=user_id,
+            report_id=report_id,
+            status=status,
+            resolution_notes=resolution_notes,
+        )
+        return jsonify(updated), 200
+    except PermissionError as e:
+        return jsonify({"error": str(e)}), 403
+    except LookupError as e:
+        return jsonify({"error": str(e)}), 404
+
+
+@communities_bp.route("/communities/<community_id>/audit-log", methods=["GET"])
+@require_auth
+def list_audit_log_route(community_id: str):
+    user_id = g.current_user["user_id"]
+    action_type = request.args.get("action_type")
+    limit = int(request.args.get("limit", 100))
+
+    try:
+        entries = get_service().list_audit_log(
+            community_id=community_id,
+            actor_id=user_id,
+            action_type=action_type,
+            limit=limit,
+        )
+        return jsonify({"entries": entries}), 200
     except PermissionError as e:
         return jsonify({"error": str(e)}), 403
 

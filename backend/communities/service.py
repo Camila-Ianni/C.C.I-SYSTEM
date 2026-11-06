@@ -319,6 +319,10 @@ class CommunitiesService:
         if not comm:
             raise LookupError("Comunidad asociada no existe")
 
+        # Comprobar si el usuario está baneado
+        if self.repo.is_user_banned(comm["id"], user_id):
+            raise PermissionError("El usuario tiene una sanción de ban activa en esta comunidad")
+
         # Comprobar límite de miembros
         current_members = len(self.repo.list_members(comm["id"]))
         if current_members >= comm["max_members"]:
@@ -510,6 +514,9 @@ class CommunitiesService:
 
         if not self.has_permission(community_id, author_id, "messages.send", channel_id=channel_id):
             raise PermissionError("Acceso denegado: se requiere permiso messages.send")
+
+        if self.repo.is_user_muted(community_id, author_id):
+            raise PermissionError("El usuario se encuentra silenciado en esta comunidad")
 
         if reply_to_id:
             parent = self.repo.get_message(reply_to_id)
@@ -1210,3 +1217,356 @@ class CommunitiesService:
             raise PermissionError("No tienes permiso para ver esta comunidad")
 
         return self.repo.list_active_streams(community_id=community_id)
+
+    # =========================================================================
+    # MODERACIÓN, SANCIONES JERÁRQUICAS, REPORTES Y AUDITORÍA
+    # =========================================================================
+
+    def _check_moderation_hierarchy(
+        self,
+        community_id: str,
+        actor_id: str,
+        target_user_id: str,
+    ) -> None:
+        """Verifica que el actor tenga jerarquía superior a la del usuario objetivo."""
+        comm = self.repo.get_community(community_id)
+        if not comm:
+            raise LookupError("Comunidad no encontrada")
+
+        if target_user_id == comm["owner_id"]:
+            raise PermissionError("No es posible moderar al propietario de la comunidad")
+
+        if actor_id != comm["owner_id"]:
+            req_pos = self.get_user_highest_role_position(community_id, actor_id)
+            target_pos = self.get_user_highest_role_position(community_id, target_user_id)
+            if req_pos >= target_pos:
+                raise PermissionError("Jerarquía insuficiente para sancionar a este miembro")
+
+    def warn_member(
+        self,
+        community_id: str,
+        actor_id: str,
+        target_user_id: str,
+        reason: str,
+    ) -> Dict[str, Any]:
+        """Emite una advertencia formal con motivo a un miembro de la comunidad."""
+        can_mod = (
+            self.has_permission(community_id, actor_id, "community.manage")
+            or self.has_permission(community_id, actor_id, "community.members.kick")
+        )
+        if not can_mod:
+            raise PermissionError("Se requiere permiso de moderación para advertir miembros")
+
+        self._check_moderation_hierarchy(community_id, actor_id, target_user_id)
+        action_id = str(uuid.uuid4())
+        action = self.repo.create_moderation_action(
+            action_id=action_id,
+            community_id=community_id,
+            actor_id=actor_id,
+            target_id=target_user_id,
+            action="warn",
+            reason=reason.strip() if reason else "Advertencia de moderación",
+        )
+        self.repo.create_audit_entry(
+            entry_id=str(uuid.uuid4()),
+            community_id=community_id,
+            actor_id=actor_id,
+            action_type="member.warn",
+            target_id=target_user_id,
+            details_json=f'{{"reason": "{reason}"}}',
+        )
+        return action
+
+    def mute_member(
+        self,
+        community_id: str,
+        actor_id: str,
+        target_user_id: str,
+        duration_minutes: Optional[int] = None,
+        reason: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Silencia temporal o permanentemente a un miembro en chat y voz."""
+        can_mod = (
+            self.has_permission(community_id, actor_id, "voice.mute_members")
+            or self.has_permission(community_id, actor_id, "community.manage")
+        )
+        if not can_mod:
+            raise PermissionError("Se requiere permiso voice.mute_members para silenciar miembros")
+
+        self._check_moderation_hierarchy(community_id, actor_id, target_user_id)
+        expires_at = time.time() + (duration_minutes * 60) if duration_minutes else None
+
+        action_id = str(uuid.uuid4())
+        action = self.repo.create_moderation_action(
+            action_id=action_id,
+            community_id=community_id,
+            actor_id=actor_id,
+            target_id=target_user_id,
+            action="mute",
+            reason=reason,
+            expires_at=expires_at,
+        )
+        self.repo.create_audit_entry(
+            entry_id=str(uuid.uuid4()),
+            community_id=community_id,
+            actor_id=actor_id,
+            action_type="member.mute",
+            target_id=target_user_id,
+            details_json=f'{{"duration_minutes": {duration_minutes}, "reason": "{reason}"}}',
+        )
+        return action
+
+    def unmute_member(
+        self,
+        community_id: str,
+        actor_id: str,
+        target_user_id: str,
+        reason: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Revoca el silenciamiento de un miembro."""
+        can_mod = (
+            self.has_permission(community_id, actor_id, "voice.mute_members")
+            or self.has_permission(community_id, actor_id, "community.manage")
+        )
+        if not can_mod:
+            raise PermissionError("Se requiere permiso voice.mute_members para reactivar miembros")
+
+        self._check_moderation_hierarchy(community_id, actor_id, target_user_id)
+        action_id = str(uuid.uuid4())
+        action = self.repo.create_moderation_action(
+            action_id=action_id,
+            community_id=community_id,
+            actor_id=actor_id,
+            target_id=target_user_id,
+            action="unmute",
+            reason=reason,
+        )
+        self.repo.create_audit_entry(
+            entry_id=str(uuid.uuid4()),
+            community_id=community_id,
+            actor_id=actor_id,
+            action_type="member.unmute",
+            target_id=target_user_id,
+            details_json=f'{{"reason": "{reason}"}}',
+        )
+        return action
+
+    def kick_member_with_audit(
+        self,
+        community_id: str,
+        actor_id: str,
+        target_user_id: str,
+        reason: Optional[str] = None,
+    ) -> bool:
+        """Expulsa a un miembro registrando la acción en moderación y log de auditoría."""
+        if not self.has_permission(community_id, actor_id, "community.members.kick"):
+            raise PermissionError("Se requiere permiso community.members.kick")
+
+        self._check_moderation_hierarchy(community_id, actor_id, target_user_id)
+        self.repo.remove_member(community_id, target_user_id)
+
+        action_id = str(uuid.uuid4())
+        self.repo.create_moderation_action(
+            action_id=action_id,
+            community_id=community_id,
+            actor_id=actor_id,
+            target_id=target_user_id,
+            action="kick",
+            reason=reason,
+        )
+        self.repo.create_audit_entry(
+            entry_id=str(uuid.uuid4()),
+            community_id=community_id,
+            actor_id=actor_id,
+            action_type="member.kick",
+            target_id=target_user_id,
+            details_json=f'{{"reason": "{reason}"}}',
+        )
+        return True
+
+    def ban_member(
+        self,
+        community_id: str,
+        actor_id: str,
+        target_user_id: str,
+        duration_hours: Optional[int] = None,
+        reason: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Banea permanente o temporalmente a un usuario impidiendo su reingreso."""
+        if not self.has_permission(community_id, actor_id, "community.members.ban"):
+            raise PermissionError("Se requiere permiso community.members.ban")
+
+        self._check_moderation_hierarchy(community_id, actor_id, target_user_id)
+        expires_at = time.time() + (duration_hours * 3600) if duration_hours else None
+
+        # Remover membresía si aún es miembro
+        self.repo.remove_member(community_id, target_user_id)
+
+        action_id = str(uuid.uuid4())
+        action = self.repo.create_moderation_action(
+            action_id=action_id,
+            community_id=community_id,
+            actor_id=actor_id,
+            target_id=target_user_id,
+            action="ban",
+            reason=reason,
+            expires_at=expires_at,
+        )
+        self.repo.create_audit_entry(
+            entry_id=str(uuid.uuid4()),
+            community_id=community_id,
+            actor_id=actor_id,
+            action_type="member.ban",
+            target_id=target_user_id,
+            details_json=f'{{"duration_hours": {duration_hours}, "reason": "{reason}"}}',
+        )
+        return action
+
+    def unban_member(
+        self,
+        community_id: str,
+        actor_id: str,
+        target_user_id: str,
+        reason: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Revoca la sanción de ban de un usuario."""
+        if not self.has_permission(community_id, actor_id, "community.members.ban"):
+            raise PermissionError("Se requiere permiso community.members.ban")
+
+        action_id = str(uuid.uuid4())
+        action = self.repo.create_moderation_action(
+            action_id=action_id,
+            community_id=community_id,
+            actor_id=actor_id,
+            target_id=target_user_id,
+            action="unban",
+            reason=reason,
+        )
+        self.repo.create_audit_entry(
+            entry_id=str(uuid.uuid4()),
+            community_id=community_id,
+            actor_id=actor_id,
+            action_type="member.unban",
+            target_id=target_user_id,
+            details_json=f'{{"reason": "{reason}"}}',
+        )
+        return action
+
+    def list_moderation_actions(
+        self,
+        community_id: str,
+        actor_id: str,
+        target_id: Optional[str] = None,
+        action: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
+        """Lista el historial de sanciones aplicadas en la comunidad."""
+        can_view = (
+            self.has_permission(community_id, actor_id, "community.manage")
+            or self.has_permission(community_id, actor_id, "community.members.kick")
+            or self.has_permission(community_id, actor_id, "community.members.ban")
+        )
+        if not can_view:
+            raise PermissionError("Se requieren permisos de moderación para ver el historial de sanciones")
+
+        return self.repo.list_moderation_actions(
+            community_id=community_id,
+            target_id=target_id,
+            action=action,
+        )
+
+    def create_report(
+        self,
+        community_id: str,
+        reporter_id: str,
+        target_type: str,
+        target_id: str,
+        reason: str,
+    ) -> Dict[str, Any]:
+        """Crea un reporte de usuario o mensaje abusivo."""
+        if not self.has_permission(community_id, reporter_id, "community.view"):
+            raise PermissionError("Se requiere acceso a la comunidad para emitir reportes")
+
+        if target_type not in ("user", "message"):
+            raise ValueError("target_type debe ser 'user' o 'message'")
+
+        if not reason or not reason.strip():
+            raise ValueError("El motivo del reporte no puede estar vacío")
+
+        report_id = str(uuid.uuid4())
+        return self.repo.create_report(
+            report_id=report_id,
+            community_id=community_id,
+            reporter_id=reporter_id,
+            target_type=target_type,
+            target_id=target_id,
+            reason=reason.strip(),
+        )
+
+    def list_reports(
+        self,
+        community_id: str,
+        actor_id: str,
+        status: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
+        """Lista los reportes de la comunidad (solo moderadores)."""
+        can_view = (
+            self.has_permission(community_id, actor_id, "community.manage")
+            or self.has_permission(community_id, actor_id, "community.members.kick")
+        )
+        if not can_view:
+            raise PermissionError("Se requieren permisos de moderación para consultar reportes")
+
+        return self.repo.list_reports(community_id=community_id, status=status)
+
+    def resolve_report(
+        self,
+        community_id: str,
+        actor_id: str,
+        report_id: str,
+        status: str = "resolved",
+        resolution_notes: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Marca un reporte como resuelto o descartado."""
+        can_mod = (
+            self.has_permission(community_id, actor_id, "community.manage")
+            or self.has_permission(community_id, actor_id, "community.members.kick")
+        )
+        if not can_mod:
+            raise PermissionError("Se requieren permisos de moderación para resolver reportes")
+
+        report = self.repo.get_report(report_id)
+        if not report or report["community_id"] != community_id:
+            raise LookupError("Reporte no encontrado")
+
+        updated = self.repo.resolve_report(
+            report_id=report_id,
+            resolver_id=actor_id,
+            status=status,
+            resolution_notes=resolution_notes,
+        )
+        self.repo.create_audit_entry(
+            entry_id=str(uuid.uuid4()),
+            community_id=community_id,
+            actor_id=actor_id,
+            action_type="report.resolve",
+            target_id=report_id,
+            details_json=f'{{"status": "{status}", "notes": "{resolution_notes}"}}',
+        )
+        return updated or report
+
+    def list_audit_log(
+        self,
+        community_id: str,
+        actor_id: str,
+        action_type: Optional[str] = None,
+        limit: int = 100,
+    ) -> List[Dict[str, Any]]:
+        """Consulta el log inmutable de auditoría de la comunidad."""
+        if not self.has_permission(community_id, actor_id, "community.manage"):
+            raise PermissionError("Se requiere permiso community.manage para consultar el log de auditoría")
+
+        return self.repo.list_audit_entries(
+            community_id=community_id,
+            action_type=action_type,
+            limit=limit,
+        )
