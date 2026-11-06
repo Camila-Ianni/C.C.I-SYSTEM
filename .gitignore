@@ -38,6 +38,7 @@ METAL SLUG/tests copy/
 .agents/
 .claude/
 .cci-user-data/
+storage/
 .work/
 outputs/
 web/static/downloads/*.zip

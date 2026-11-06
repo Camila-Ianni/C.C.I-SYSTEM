@@ -5,9 +5,10 @@ Expone endpoints bajo /api/v1/communities e invitaciones protegidos con autentic
 """
 from __future__ import annotations
 
+import base64
 from flask import Blueprint, g, jsonify, request
 from backend.auth import require_auth
-from backend.communities.service import CommunitiesService
+from backend.communities.service import CommunitiesService, SoundCooldownError
 
 communities_bp = Blueprint("communities", __name__)
 
@@ -542,6 +543,287 @@ def moderate_voice_route(channel_id: str):
             action=action,
         )
         return jsonify({"status": "moderated", "action": action, "target_user_id": target_user_id}), 200
+    except PermissionError as e:
+        return jsonify({"error": str(e)}), 403
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    except LookupError as e:
+        return jsonify({"error": str(e)}), 404
+
+
+# =============================================================================
+# SOUND DECK (SOUNDBOARD)
+# =============================================================================
+
+@communities_bp.route("/sounds/categories", methods=["POST"])
+@require_auth
+def create_sound_category_route():
+    user_id = g.current_user["user_id"]
+    is_admin = g.current_user.get("is_admin", False)
+    data = request.get_json() or {}
+
+    scope_type = data.get("scope_type", "user")
+    name = data.get("name", "").strip()
+    scope_id = data.get("scope_id")
+    position = int(data.get("position", 0))
+
+    try:
+        cat = get_service().create_sound_category(
+            actor_id=user_id,
+            scope_type=scope_type,
+            name=name,
+            scope_id=scope_id,
+            position=position,
+            is_admin=is_admin,
+        )
+        return jsonify(cat), 201
+    except PermissionError as e:
+        return jsonify({"error": str(e)}), 403
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    except LookupError as e:
+        return jsonify({"error": str(e)}), 404
+
+
+@communities_bp.route("/sounds/categories", methods=["GET"])
+@require_auth
+def list_sound_categories_route():
+    user_id = g.current_user["user_id"]
+    scope_type = request.args.get("scope_type")
+    scope_id = request.args.get("scope_id")
+
+    cats = get_service().list_sound_categories(
+        actor_id=user_id,
+        scope_type=scope_type,
+        scope_id=scope_id,
+    )
+    return jsonify({"categories": cats}), 200
+
+
+@communities_bp.route("/sounds", methods=["POST"])
+@require_auth
+def upload_sound_route():
+    user_id = g.current_user["user_id"]
+    is_admin = g.current_user.get("is_admin", False)
+
+    file_bytes = None
+    title = ""
+    owner_type = "user"
+    owner_id = None
+    category_id = None
+    volume_scale = 1.0
+    cooldown_seconds = 5
+    declared_duration = None
+
+    if request.is_json:
+        data = request.get_json() or {}
+        title = data.get("title", "")
+        owner_type = data.get("owner_type", "user")
+        owner_id = data.get("owner_id")
+        category_id = data.get("category_id")
+        volume_scale = float(data.get("volume_scale", 1.0))
+        cooldown_seconds = int(data.get("cooldown_seconds", 5))
+        if "duration" in data:
+            declared_duration = float(data["duration"])
+        b64 = data.get("file_base64", "")
+        if b64:
+            try:
+                file_bytes = base64.b64decode(b64)
+            except Exception:
+                return jsonify({"error": "Codificación Base64 inválida"}), 400
+    else:
+        # Multipart form upload
+        title = request.form.get("title", "")
+        owner_type = request.form.get("owner_type", "user")
+        owner_id = request.form.get("owner_id")
+        category_id = request.form.get("category_id")
+        volume_scale = float(request.form.get("volume_scale", 1.0))
+        cooldown_seconds = int(request.form.get("cooldown_seconds", 5))
+        if "duration" in request.form:
+            declared_duration = float(request.form["duration"])
+
+        if "file" in request.files:
+            uploaded_file = request.files["file"]
+            file_bytes = uploaded_file.read()
+
+    if not file_bytes:
+        return jsonify({"error": "No se proporcionó archivo de audio"}), 400
+
+    if len(file_bytes) > 5 * 1024 * 1024:
+        return jsonify({"error": "El archivo excede el tamaño máximo permitido de 5 MB"}), 413
+
+    try:
+        sound = get_service().upload_sound(
+            actor_id=user_id,
+            owner_type=owner_type,
+            title=title,
+            file_bytes=file_bytes,
+            owner_id=owner_id,
+            category_id=category_id,
+            volume_scale=volume_scale,
+            cooldown_seconds=cooldown_seconds,
+            declared_duration=declared_duration,
+            is_admin=is_admin,
+        )
+        return jsonify(sound), 201
+    except PermissionError as e:
+        return jsonify({"error": str(e)}), 403
+    except ValueError as e:
+        msg = str(e)
+        if "5 MB" in msg or "FILE_TOO_LARGE" in msg:
+            return jsonify({"error": msg}), 413
+        return jsonify({"error": msg}), 400
+    except LookupError as e:
+        return jsonify({"error": str(e)}), 404
+
+
+@communities_bp.route("/sounds", methods=["GET"])
+@require_auth
+def list_sounds_route():
+    user_id = g.current_user["user_id"]
+    owner_type = request.args.get("owner_type")
+    owner_id = request.args.get("owner_id")
+    category_id = request.args.get("category_id")
+    search = request.args.get("search")
+
+    sounds = get_service().list_sounds(
+        actor_id=user_id,
+        owner_type=owner_type,
+        owner_id=owner_id,
+        category_id=category_id,
+        search=search,
+    )
+    return jsonify({"sounds": sounds}), 200
+
+
+@communities_bp.route("/communities/<community_id>/sounds", methods=["GET"])
+@require_auth
+def list_community_sounds_route(community_id: str):
+    user_id = g.current_user["user_id"]
+    search = request.args.get("search")
+
+    try:
+        sounds = get_service().list_sounds(
+            actor_id=user_id,
+            community_id=community_id,
+            search=search,
+        )
+        return jsonify({"sounds": sounds}), 200
+    except PermissionError as e:
+        return jsonify({"error": str(e)}), 403
+    except LookupError as e:
+        return jsonify({"error": str(e)}), 404
+
+
+@communities_bp.route("/sounds/<sound_id>", methods=["GET"])
+@require_auth
+def get_sound_route(sound_id: str):
+    user_id = g.current_user["user_id"]
+    try:
+        sound = get_service().get_sound(actor_id=user_id, sound_id=sound_id)
+        return jsonify(sound), 200
+    except PermissionError as e:
+        return jsonify({"error": str(e)}), 403
+    except LookupError as e:
+        return jsonify({"error": str(e)}), 404
+
+
+@communities_bp.route("/sounds/<sound_id>", methods=["PATCH"])
+@require_auth
+def update_sound_route(sound_id: str):
+    user_id = g.current_user["user_id"]
+    is_admin = g.current_user.get("is_admin", False)
+    data = request.get_json() or {}
+
+    try:
+        updated = get_service().update_sound(
+            actor_id=user_id,
+            sound_id=sound_id,
+            title=data.get("title"),
+            category_id=data.get("category_id"),
+            volume_scale=data.get("volume_scale"),
+            cooldown_seconds=data.get("cooldown_seconds"),
+            is_admin=is_admin,
+        )
+        return jsonify(updated), 200
+    except PermissionError as e:
+        return jsonify({"error": str(e)}), 403
+    except LookupError as e:
+        return jsonify({"error": str(e)}), 404
+
+
+@communities_bp.route("/sounds/<sound_id>", methods=["DELETE"])
+@require_auth
+def delete_sound_route(sound_id: str):
+    user_id = g.current_user["user_id"]
+    is_admin = g.current_user.get("is_admin", False)
+
+    try:
+        success = get_service().delete_sound(
+            actor_id=user_id,
+            sound_id=sound_id,
+            is_admin=is_admin,
+        )
+        return jsonify({"deleted": success}), 200
+    except PermissionError as e:
+        return jsonify({"error": str(e)}), 403
+    except LookupError as e:
+        return jsonify({"error": str(e)}), 404
+
+
+@communities_bp.route("/sounds/<sound_id>/favorite", methods=["POST"])
+@require_auth
+def favorite_sound_route(sound_id: str):
+    user_id = g.current_user["user_id"]
+    data = request.get_json() or {}
+    is_favorite = bool(data.get("is_favorite", True))
+    hotkey = data.get("hotkey")
+
+    try:
+        success = get_service().toggle_favorite_sound(
+            actor_id=user_id,
+            sound_id=sound_id,
+            is_favorite=is_favorite,
+            hotkey=hotkey,
+        )
+        return jsonify({"status": "updated", "is_favorite": is_favorite, "hotkey": hotkey}), 200
+    except LookupError as e:
+        return jsonify({"error": str(e)}), 404
+
+
+@communities_bp.route("/sounds/favorites", methods=["GET"])
+@require_auth
+def list_favorites_route():
+    user_id = g.current_user["user_id"]
+    favorites = get_service().list_favorite_sounds(user_id)
+    return jsonify({"favorites": favorites}), 200
+
+
+@communities_bp.route("/sounds/<sound_id>/play-authorize", methods=["POST"])
+@require_auth
+def authorize_sound_play_route(sound_id: str):
+    user_id = g.current_user["user_id"]
+    data = request.get_json() or {}
+    channel_id = data.get("channel_id")
+
+    if not channel_id:
+        return jsonify({"error": "channel_id requerido"}), 400
+
+    try:
+        result = get_service().authorize_sound_play(
+            actor_id=user_id,
+            sound_id=sound_id,
+            channel_id=channel_id,
+        )
+        return jsonify(result), 200
+    except SoundCooldownError as e:
+        resp = jsonify({
+            "error": "SOUND_COOLDOWN",
+            "message": str(e),
+            "retry_after": e.retry_after,
+        })
+        resp.headers["Retry-After"] = str(int(e.retry_after) + 1)
+        return resp, 429
     except PermissionError as e:
         return jsonify({"error": str(e)}), 403
     except ValueError as e:

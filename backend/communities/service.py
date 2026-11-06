@@ -10,8 +10,22 @@ Implementa las reglas de producto de la Fase 1:
 from __future__ import annotations
 
 import re
+import time
+import uuid
 from typing import Any, Dict, List, Optional, Tuple
 from backend.communities.repository import CommunitiesRepository
+from backend.communities.sound_validator import (
+    validate_mp3_payload,
+    save_sound_file,
+    SoundValidationError,
+)
+
+
+class SoundCooldownError(Exception):
+    def __init__(self, message: str, retry_after: float):
+        super().__init__(message)
+        self.message = message
+        self.retry_after = retry_after
 
 
 class CommunitiesService:
@@ -711,3 +725,318 @@ class CommunitiesService:
 
         else:
             raise ValueError(f"Acción de moderación no reconocida: {action}")
+
+    # =========================================================================
+    # SOUND DECK (SOUNDBOARD)
+    # =========================================================================
+
+    def create_sound_category(
+        self,
+        actor_id: str,
+        scope_type: str,
+        name: str,
+        scope_id: Optional[str] = None,
+        position: int = 0,
+        is_admin: bool = False,
+    ) -> Dict[str, Any]:
+        """Crea una categoría para organizar sonidos en un scope determinado."""
+        if scope_type not in ("global", "user", "community"):
+            raise ValueError(f"Tipo de scope inválido: {scope_type}")
+
+        if not name or not name.strip():
+            raise ValueError("El nombre de categoría no puede estar vacío")
+
+        if scope_type == "global":
+            if not is_admin and actor_id not in ("admin", "system"):
+                raise PermissionError("Solo administradores pueden crear categorías globales")
+            scope_id = None
+        elif scope_type == "user":
+            scope_id = actor_id
+        elif scope_type == "community":
+            if not scope_id:
+                raise ValueError("Se requiere scope_id (ID de comunidad)")
+            comm = self.repo.get_community(scope_id)
+            if not comm:
+                raise LookupError("Comunidad no encontrada")
+            if not self.has_permission(scope_id, actor_id, "soundboard.manage"):
+                raise PermissionError("Se requiere permiso soundboard.manage")
+
+        category_id = str(uuid.uuid4())
+        return self.repo.create_sound_category(
+            category_id=category_id,
+            scope_type=scope_type,
+            scope_id=scope_id,
+            name=name.strip(),
+            position=position,
+        )
+
+    def list_sound_categories(
+        self,
+        actor_id: str,
+        scope_type: Optional[str] = None,
+        scope_id: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
+        """Lista categorías accesibles para el usuario."""
+        return self.repo.list_sound_categories(scope_type=scope_type, scope_id=scope_id)
+
+    def upload_sound(
+        self,
+        actor_id: str,
+        owner_type: str,
+        title: str,
+        file_bytes: bytes,
+        owner_id: Optional[str] = None,
+        category_id: Optional[str] = None,
+        volume_scale: float = 1.0,
+        cooldown_seconds: int = 5,
+        declared_duration: Optional[float] = None,
+        is_admin: bool = False,
+        storage_dir: str = "storage/sounds",
+    ) -> Dict[str, Any]:
+        """Sube y valida un archivo MP3 asociándolo al scope correspondiente."""
+        if owner_type not in ("global", "user", "community"):
+            raise ValueError(f"Tipo de propietario no reconocido: {owner_type}")
+
+        if not title or not title.strip():
+            raise ValueError("El título del sonido no puede estar vacío")
+
+        # 1. Comprobar permisos según scope
+        if owner_type == "global":
+            if not is_admin and actor_id not in ("admin", "system"):
+                raise PermissionError("Solo administradores pueden subir sonidos globales")
+            owner_id = None
+
+        elif owner_type == "user":
+            owner_id = actor_id
+            # Comprobar cuota de sonidos personales (máximo 50)
+            user_count = self.repo.count_user_sounds(actor_id)
+            if user_count >= 50:
+                raise ValueError("Límite de sonidos personales alcanzado (máximo 50)")
+
+        elif owner_type == "community":
+            if not owner_id:
+                raise ValueError("Se requiere owner_id (ID de comunidad)")
+            comm = self.repo.get_community(owner_id)
+            if not comm:
+                raise LookupError("Comunidad no encontrada")
+            if not self.has_permission(owner_id, actor_id, "soundboard.manage"):
+                raise PermissionError("Se requiere permiso soundboard.manage para subir sonidos al grupo")
+
+        # 2. Validar payload de audio MP3
+        try:
+            _, duration, checksum = validate_mp3_payload(
+                file_bytes=file_bytes,
+                declared_duration=declared_duration,
+            )
+        except SoundValidationError as e:
+            raise ValueError(f"Validación de audio falló [{e.code}]: {e.message}")
+
+        # 3. Guardar archivo en almacenamiento
+        sound_id = str(uuid.uuid4())
+        storage_key = save_sound_file(storage_dir, sound_id, file_bytes)
+
+        # 4. Registrar en repositorio
+        return self.repo.create_sound_asset(
+            sound_id=sound_id,
+            category_id=category_id,
+            owner_type=owner_type,
+            owner_id=owner_id,
+            uploader_id=actor_id,
+            storage_key=storage_key,
+            title=title.strip(),
+            duration_seconds=duration,
+            file_size_bytes=len(file_bytes),
+            format_str="mp3",
+            volume_scale=max(0.0, min(2.0, float(volume_scale))),
+            cooldown_seconds=max(1, int(cooldown_seconds)),
+            checksum_sha256=checksum,
+        )
+
+    def list_sounds(
+        self,
+        actor_id: str,
+        owner_type: Optional[str] = None,
+        owner_id: Optional[str] = None,
+        category_id: Optional[str] = None,
+        search: Optional[str] = None,
+        community_id: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
+        """Lista sonidos según filtros de biblioteca o para una comunidad en particular."""
+        if community_id:
+            comm = self.repo.get_community(community_id)
+            if not comm:
+                raise LookupError("Comunidad no encontrada")
+            # Verificar permiso básico de lectura de comunidad
+            if not self.has_permission(community_id, actor_id, "community.view"):
+                raise PermissionError("No tienes permiso para ver los sonidos de esta comunidad")
+            return self.repo.list_sounds_for_community(
+                community_id=community_id,
+                user_id=actor_id,
+                search=search,
+            )
+
+        return self.repo.list_sound_assets(
+            owner_type=owner_type,
+            owner_id=owner_id,
+            category_id=category_id,
+            search=search,
+        )
+
+    def get_sound(self, actor_id: str, sound_id: str) -> Dict[str, Any]:
+        """Obtiene un sonido validando acceso."""
+        sound = self.repo.get_sound_asset(sound_id)
+        if not sound:
+            raise LookupError("Sonido no encontrado")
+
+        if sound["owner_type"] == "community":
+            if not self.has_permission(sound["owner_id"], actor_id, "community.view"):
+                raise PermissionError("No tienes acceso al sonido de esta comunidad")
+
+        return sound
+
+    def update_sound(
+        self,
+        actor_id: str,
+        sound_id: str,
+        title: Optional[str] = None,
+        category_id: Optional[str] = None,
+        volume_scale: Optional[float] = None,
+        cooldown_seconds: Optional[int] = None,
+        is_admin: bool = False,
+    ) -> Dict[str, Any]:
+        """Edita metadatos de un sonido si el usuario tiene privilegios."""
+        sound = self.repo.get_sound_asset(sound_id)
+        if not sound:
+            raise LookupError("Sonido no encontrado")
+
+        if sound["owner_type"] == "global":
+            if not is_admin and actor_id not in ("admin", "system"):
+                raise PermissionError("Solo administradores pueden editar sonidos globales")
+        elif sound["owner_type"] == "user":
+            if sound["uploader_id"] != actor_id and not is_admin:
+                raise PermissionError("No puedes editar el sonido de otro usuario")
+        elif sound["owner_type"] == "community":
+            can_manage = self.has_permission(sound["owner_id"], actor_id, "soundboard.manage")
+            is_uploader = sound["uploader_id"] == actor_id
+            if not can_manage and not is_uploader and not is_admin:
+                raise PermissionError("Se requiere permiso soundboard.manage para editar este sonido")
+
+        updated = self.repo.update_sound_asset(
+            sound_id=sound_id,
+            title=title.strip() if title else None,
+            category_id=category_id,
+            volume_scale=max(0.0, min(2.0, float(volume_scale))) if volume_scale is not None else None,
+            cooldown_seconds=max(1, int(cooldown_seconds)) if cooldown_seconds is not None else None,
+        )
+        return updated or sound
+
+    def delete_sound(self, actor_id: str, sound_id: str, is_admin: bool = False) -> bool:
+        """Elimina un sonido mediante soft delete comprobando permisos."""
+        sound = self.repo.get_sound_asset(sound_id)
+        if not sound:
+            raise LookupError("Sonido no encontrado")
+
+        if sound["owner_type"] == "global":
+            if not is_admin and actor_id not in ("admin", "system"):
+                raise PermissionError("Solo administradores pueden eliminar sonidos globales")
+        elif sound["owner_type"] == "user":
+            if sound["uploader_id"] != actor_id and not is_admin:
+                raise PermissionError("No puedes eliminar el sonido de otro usuario")
+        elif sound["owner_type"] == "community":
+            can_manage = self.has_permission(sound["owner_id"], actor_id, "soundboard.manage")
+            is_uploader = sound["uploader_id"] == actor_id
+            if not can_manage and not is_uploader and not is_admin:
+                raise PermissionError("Se requiere permiso soundboard.manage para eliminar este sonido")
+
+        return self.repo.delete_sound_asset(sound_id)
+
+    def toggle_favorite_sound(
+        self,
+        actor_id: str,
+        sound_id: str,
+        is_favorite: bool = True,
+        hotkey: Optional[str] = None,
+    ) -> bool:
+        """Marca o desmarca un sonido como favorito y asigna una tecla rápida opcional."""
+        sound = self.repo.get_sound_asset(sound_id)
+        if not sound:
+            raise LookupError("Sonido no encontrado")
+        return self.repo.set_sound_favorite(
+            user_id=actor_id,
+            sound_id=sound_id,
+            is_favorite=is_favorite,
+            hotkey=hotkey,
+        )
+
+    def list_favorite_sounds(self, actor_id: str) -> List[Dict[str, Any]]:
+        """Lista los sonidos favoritos del usuario con sus teclas rápidas."""
+        return self.repo.list_sound_favorites(actor_id)
+
+    def authorize_sound_play(
+        self,
+        actor_id: str,
+        sound_id: str,
+        channel_id: str,
+    ) -> Dict[str, Any]:
+        """
+        Autoriza la reproducción de un sonido en una sala de voz.
+        Valida:
+        1. Existencia del sonido y del canal.
+        2. Canal debe ser de tipo 'voice'.
+        3. Permiso 'soundboard.play' en la comunidad/canal.
+        4. Acceso al sonido (global, personal propio o de la misma comunidad).
+        5. Cooldown anti-spam (HTTP 429 si se repite antes de vencer).
+        """
+        sound = self.repo.get_sound_asset(sound_id)
+        if not sound:
+            raise LookupError("Sonido no encontrado")
+
+        chan = self.repo.get_channel(channel_id)
+        if not chan:
+            raise LookupError("Canal de voz no encontrado")
+
+        if chan.get("type") != "voice":
+            raise ValueError("El canal especificado no es una sala de voz")
+
+        community_id = chan["community_id"]
+
+        # Comprobar pertenencia del sonido
+        if sound["owner_type"] == "community":
+            if sound["owner_id"] != community_id:
+                raise PermissionError("Este sonido pertenece a otra comunidad y no puede reproducirse aquí")
+        elif sound["owner_type"] == "user":
+            if sound["owner_id"] != actor_id:
+                raise PermissionError("No puedes reproducir sonidos personales de otro usuario")
+
+        # Comprobar permiso soundboard.play en el canal
+        if not self.has_permission(community_id, actor_id, "soundboard.play", channel_id=channel_id):
+            raise PermissionError("Se requiere permiso soundboard.play para reproducir sonidos")
+
+        # Comprobar cooldown anti-spam
+        cooldown_sec = sound.get("cooldown_seconds", 5)
+        last_played = self.repo.get_last_sound_play(sound_id, user_id=actor_id)
+        now = time.time()
+        if last_played is not None:
+            elapsed = now - last_played
+            if elapsed < cooldown_sec:
+                retry_after = round(cooldown_sec - elapsed, 2)
+                raise SoundCooldownError(
+                    f"Sonido en enfriamiento. Espera {retry_after}s antes de volver a reproducirlo",
+                    retry_after=retry_after,
+                )
+
+        # Registrar reproducción
+        play_id = str(uuid.uuid4())
+        self.repo.record_sound_play(play_id, sound_id, actor_id, channel_id)
+
+        return {
+            "authorized": True,
+            "sound_id": sound_id,
+            "title": sound["title"],
+            "channel_id": channel_id,
+            "community_id": community_id,
+            "storage_key": sound["storage_key"],
+            "duration_seconds": sound["duration_seconds"],
+            "volume_scale": sound["volume_scale"],
+            "cooldown_seconds": cooldown_sec,
+        }

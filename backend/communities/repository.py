@@ -210,6 +210,57 @@ class CommunitiesRepository:
                 joined_at REAL NOT NULL,
                 left_at REAL NULL
             );
+
+            CREATE TABLE IF NOT EXISTS sound_categories (
+                id TEXT PRIMARY KEY,
+                scope_type TEXT NOT NULL,
+                scope_id TEXT NULL,
+                name TEXT NOT NULL,
+                position INTEGER NOT NULL DEFAULT 0,
+                created_at REAL NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS sound_assets (
+                id TEXT PRIMARY KEY,
+                category_id TEXT REFERENCES sound_categories(id) ON DELETE SET NULL,
+                owner_type TEXT NOT NULL,
+                owner_id TEXT NULL,
+                uploader_id TEXT NOT NULL,
+                storage_key TEXT NOT NULL,
+                title TEXT NOT NULL,
+                duration_seconds REAL NOT NULL DEFAULT 0.0,
+                file_size_bytes INTEGER NOT NULL,
+                format TEXT NOT NULL DEFAULT 'mp3',
+                volume_scale REAL NOT NULL DEFAULT 1.0,
+                cooldown_seconds INTEGER NOT NULL DEFAULT 5,
+                checksum_sha256 TEXT NOT NULL,
+                created_at REAL NOT NULL,
+                deleted_at REAL NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS sound_permissions (
+                sound_asset_id TEXT NOT NULL REFERENCES sound_assets(id) ON DELETE CASCADE,
+                role_id TEXT NOT NULL REFERENCES roles(id) ON DELETE CASCADE,
+                can_play INTEGER NOT NULL DEFAULT 1,
+                can_manage INTEGER NOT NULL DEFAULT 0,
+                PRIMARY KEY (sound_asset_id, role_id)
+            );
+
+            CREATE TABLE IF NOT EXISTS user_sound_favorites (
+                user_id TEXT NOT NULL,
+                sound_id TEXT NOT NULL REFERENCES sound_assets(id) ON DELETE CASCADE,
+                hotkey TEXT NULL,
+                created_at REAL NOT NULL,
+                PRIMARY KEY (user_id, sound_id)
+            );
+
+            CREATE TABLE IF NOT EXISTS sound_play_events (
+                id TEXT PRIMARY KEY,
+                sound_id TEXT NOT NULL REFERENCES sound_assets(id) ON DELETE CASCADE,
+                user_id TEXT NOT NULL,
+                channel_id TEXT NOT NULL,
+                played_at REAL NOT NULL
+            );
             """)
 
             # Sembrar catálogo canónico de permisos
@@ -918,3 +969,287 @@ class CommunitiesRepository:
             (channel_id,)
         ).fetchone()
         return row[0] if row else 0
+
+    # =========================================================================
+    # SOUND DECK (CATEGORÍAS, SONIDOS, FAVORITOS, COOLDOWNS)
+    # =========================================================================
+
+    def create_sound_category(
+        self,
+        category_id: str,
+        scope_type: str,
+        scope_id: Optional[str],
+        name: str,
+        position: int = 0
+    ) -> Dict[str, Any]:
+        conn = self._get_connection()
+        now = time.time()
+        with conn:
+            conn.execute(
+                """
+                INSERT INTO sound_categories (id, scope_type, scope_id, name, position, created_at)
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (category_id, scope_type, scope_id, name, position, now)
+            )
+        return {
+            "id": category_id,
+            "scope_type": scope_type,
+            "scope_id": scope_id,
+            "name": name,
+            "position": position,
+            "created_at": now
+        }
+
+    def get_sound_category(self, category_id: str) -> Optional[Dict[str, Any]]:
+        conn = self._get_connection()
+        row = conn.execute(
+            "SELECT * FROM sound_categories WHERE id = ?",
+            (category_id,)
+        ).fetchone()
+        return dict(row) if row else None
+
+    def list_sound_categories(
+        self,
+        scope_type: Optional[str] = None,
+        scope_id: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
+        conn = self._get_connection()
+        query = "SELECT * FROM sound_categories WHERE 1=1"
+        params: List[Any] = []
+        if scope_type is not None:
+            query += " AND scope_type = ?"
+            params.append(scope_type)
+        if scope_id is not None:
+            query += " AND scope_id = ?"
+            params.append(scope_id)
+        query += " ORDER BY position ASC, name ASC"
+        rows = conn.execute(query, tuple(params)).fetchall()
+        return [dict(r) for r in rows]
+
+    def create_sound_asset(
+        self,
+        sound_id: str,
+        category_id: Optional[str],
+        owner_type: str,
+        owner_id: Optional[str],
+        uploader_id: str,
+        storage_key: str,
+        title: str,
+        duration_seconds: float,
+        file_size_bytes: int,
+        format_str: str,
+        volume_scale: float,
+        cooldown_seconds: int,
+        checksum_sha256: str
+    ) -> Dict[str, Any]:
+        conn = self._get_connection()
+        now = time.time()
+        with conn:
+            conn.execute(
+                """
+                INSERT INTO sound_assets (
+                    id, category_id, owner_type, owner_id, uploader_id,
+                    storage_key, title, duration_seconds, file_size_bytes,
+                    format, volume_scale, cooldown_seconds, checksum_sha256,
+                    created_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    sound_id, category_id, owner_type, owner_id, uploader_id,
+                    storage_key, title, duration_seconds, file_size_bytes,
+                    format_str, volume_scale, cooldown_seconds, checksum_sha256,
+                    now
+                )
+            )
+        return self.get_sound_asset(sound_id)
+
+    def get_sound_asset(self, sound_id: str) -> Optional[Dict[str, Any]]:
+        conn = self._get_connection()
+        row = conn.execute(
+            "SELECT * FROM sound_assets WHERE id = ? AND deleted_at IS NULL",
+            (sound_id,)
+        ).fetchone()
+        return dict(row) if row else None
+
+    def count_user_sounds(self, user_id: str) -> int:
+        conn = self._get_connection()
+        row = conn.execute(
+            "SELECT COUNT(*) FROM sound_assets WHERE owner_type = 'user' AND owner_id = ? AND deleted_at IS NULL",
+            (user_id,)
+        ).fetchone()
+        return row[0] if row else 0
+
+    def list_sound_assets(
+        self,
+        owner_type: Optional[str] = None,
+        owner_id: Optional[str] = None,
+        category_id: Optional[str] = None,
+        search: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
+        conn = self._get_connection()
+        query = "SELECT * FROM sound_assets WHERE deleted_at IS NULL"
+        params: List[Any] = []
+        if owner_type is not None:
+            query += " AND owner_type = ?"
+            params.append(owner_type)
+        if owner_id is not None:
+            query += " AND owner_id = ?"
+            params.append(owner_id)
+        if category_id is not None:
+            query += " AND category_id = ?"
+            params.append(category_id)
+        if search:
+            query += " AND title LIKE ?"
+            params.append(f"%{search}%")
+        query += " ORDER BY created_at DESC"
+        rows = conn.execute(query, tuple(params)).fetchall()
+        return [dict(r) for r in rows]
+
+    def list_sounds_for_community(
+        self,
+        community_id: str,
+        user_id: Optional[str] = None,
+        search: Optional[str] = None
+    ) -> List[Dict[str, Any]]:
+        conn = self._get_connection()
+        # Union: community sounds + global sounds + user's personal sounds
+        query = """
+            SELECT * FROM sound_assets
+            WHERE deleted_at IS NULL
+              AND (
+                  (owner_type = 'community' AND owner_id = ?)
+                  OR (owner_type = 'global')
+                  OR (? IS NOT NULL AND owner_type = 'user' AND owner_id = ?)
+              )
+        """
+        params: List[Any] = [community_id, user_id, user_id]
+        if search:
+            query += " AND title LIKE ?"
+            params.append(f"%{search}%")
+        query += " ORDER BY owner_type ASC, title ASC"
+        rows = conn.execute(query, tuple(params)).fetchall()
+        return [dict(r) for r in rows]
+
+    def update_sound_asset(
+        self,
+        sound_id: str,
+        title: Optional[str] = None,
+        category_id: Optional[str] = None,
+        volume_scale: Optional[float] = None,
+        cooldown_seconds: Optional[int] = None
+    ) -> Optional[Dict[str, Any]]:
+        conn = self._get_connection()
+        updates = []
+        params = []
+        if title is not None:
+            updates.append("title = ?")
+            params.append(title)
+        if category_id is not None:
+            updates.append("category_id = ?")
+            params.append(category_id)
+        if volume_scale is not None:
+            updates.append("volume_scale = ?")
+            params.append(volume_scale)
+        if cooldown_seconds is not None:
+            updates.append("cooldown_seconds = ?")
+            params.append(cooldown_seconds)
+        if not updates:
+            return self.get_sound_asset(sound_id)
+        params.append(sound_id)
+        with conn:
+            conn.execute(
+                f"UPDATE sound_assets SET {', '.join(updates)} WHERE id = ? AND deleted_at IS NULL",
+                tuple(params)
+            )
+        return self.get_sound_asset(sound_id)
+
+    def delete_sound_asset(self, sound_id: str) -> bool:
+        conn = self._get_connection()
+        now = time.time()
+        with conn:
+            cur = conn.execute(
+                "UPDATE sound_assets SET deleted_at = ? WHERE id = ? AND deleted_at IS NULL",
+                (now, sound_id)
+            )
+            return cur.rowcount > 0
+
+    def set_sound_favorite(
+        self,
+        user_id: str,
+        sound_id: str,
+        is_favorite: bool = True,
+        hotkey: Optional[str] = None
+    ) -> bool:
+        conn = self._get_connection()
+        now = time.time()
+        with conn:
+            if is_favorite:
+                conn.execute(
+                    """
+                    INSERT INTO user_sound_favorites (user_id, sound_id, hotkey, created_at)
+                    VALUES (?, ?, ?, ?)
+                    ON CONFLICT(user_id, sound_id) DO UPDATE SET hotkey = excluded.hotkey
+                    """,
+                    (user_id, sound_id, hotkey, now)
+                )
+            else:
+                conn.execute(
+                    "DELETE FROM user_sound_favorites WHERE user_id = ? AND sound_id = ?",
+                    (user_id, sound_id)
+                )
+        return True
+
+    def get_sound_favorite(self, user_id: str, sound_id: str) -> Optional[Dict[str, Any]]:
+        conn = self._get_connection()
+        row = conn.execute(
+            "SELECT * FROM user_sound_favorites WHERE user_id = ? AND sound_id = ?",
+            (user_id, sound_id)
+        ).fetchone()
+        return dict(row) if row else None
+
+    def list_sound_favorites(self, user_id: str) -> List[Dict[str, Any]]:
+        conn = self._get_connection()
+        rows = conn.execute(
+            """
+            SELECT f.sound_id, f.hotkey, f.created_at, s.title, s.owner_type, s.owner_id, s.duration_seconds, s.volume_scale
+            FROM user_sound_favorites f
+            JOIN sound_assets s ON f.sound_id = s.id
+            WHERE f.user_id = ? AND s.deleted_at IS NULL
+            ORDER BY f.created_at DESC
+            """,
+            (user_id,)
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+    def record_sound_play(self, play_id: str, sound_id: str, user_id: str, channel_id: str) -> float:
+        conn = self._get_connection()
+        now = time.time()
+        with conn:
+            conn.execute(
+                """
+                INSERT INTO sound_play_events (id, sound_id, user_id, channel_id, played_at)
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                (play_id, sound_id, user_id, channel_id, now)
+            )
+        return now
+
+    def get_last_sound_play(
+        self,
+        sound_id: str,
+        user_id: Optional[str] = None,
+        channel_id: Optional[str] = None
+    ) -> Optional[float]:
+        conn = self._get_connection()
+        query = "SELECT MAX(played_at) FROM sound_play_events WHERE sound_id = ?"
+        params: List[Any] = [sound_id]
+        if user_id:
+            query += " AND user_id = ?"
+            params.append(user_id)
+        if channel_id:
+            query += " AND channel_id = ?"
+            params.append(channel_id)
+        row = conn.execute(query, tuple(params)).fetchone()
+        return row[0] if (row and row[0] is not None) else None

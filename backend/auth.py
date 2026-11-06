@@ -39,13 +39,14 @@ def _base64url_decode(data: str) -> bytes:
         return b""
 
 
-def create_access_token(user_id: str, username: str, expires_in_seconds: int = 86400) -> str:
+def create_access_token(user_id: str, username: str, expires_in_seconds: int = 86400, is_admin: bool = False) -> str:
     """Genera un token seguro firmado con HMAC-SHA256."""
     now = time.time()
     header = {"alg": "HS256", "typ": "JWT"}
     payload = {
         "user_id": str(user_id),
         "username": str(username),
+        "is_admin": bool(is_admin),
         "iat": now,
         "exp": now + expires_in_seconds,
     }
@@ -178,6 +179,7 @@ def require_auth(fn: Callable) -> Callable:
         g.current_user = {
             "user_id": str(payload["user_id"]),
             "username": str(payload["username"]),
+            "is_admin": bool(payload.get("is_admin", False)),
         }
         return fn(*args, **kwargs)
 

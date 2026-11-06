@@ -1042,6 +1042,40 @@ def on_community_voice_speakers(data: Dict[str, Any]):
         }, to=room_name)
 
 
+@socketio.on("community:sound:play")
+@require_socket_auth
+def on_community_sound_play(data: Dict[str, Any]):
+    """Notifica reproducción sincronizada de sonido en la sala de voz."""
+    channel_id = data.get("channel_id")
+    sound_id = data.get("sound_id")
+    user_id = data.get("user_id")
+    title = data.get("title", "")
+    volume_scale = float(data.get("volume_scale", 1.0))
+    if channel_id and sound_id:
+        room_name = f"comm_voice_{channel_id}"
+        emit("sound.played", {
+            "channel_id": channel_id,
+            "sound_id": sound_id,
+            "user_id": user_id,
+            "title": title,
+            "volume_scale": volume_scale,
+        }, to=room_name)
+
+
+@socketio.on("community:sound:stop")
+@require_socket_auth
+def on_community_sound_stop(data: Dict[str, Any]):
+    """Notifica detención de sonido en la sala de voz."""
+    channel_id = data.get("channel_id")
+    sound_id = data.get("sound_id")
+    if channel_id and sound_id:
+        room_name = f"comm_voice_{channel_id}"
+        emit("sound.stopped", {
+            "channel_id": channel_id,
+            "sound_id": sound_id,
+        }, to=room_name)
+
+
 
 # ==============================================================================
 # EVENTOS WEBSOCKET: MULTIJUGADOR ONLINE (CON AUTORIZACIÓN CENTRALIZADA)
