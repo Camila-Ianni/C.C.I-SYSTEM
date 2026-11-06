@@ -271,14 +271,17 @@ class TestPhase10MediaAndCombatPhysics(unittest.TestCase):
         self.assertTrue(client_b._playback_thread.is_alive())
         self.assertTrue(client_b._capture_thread.is_alive())
 
-        # 3. Negociación WebRTC de extremo a extremo e intercambio de candidatos ICE
+        # 3. Negociación SDP e intercambio de candidatos ICE RFC 5245 con PT=96 (L16 PCM)
         offer = client_a.create_offer("u_bob")
         self.assertEqual(offer["type"], "offer")
         self.assertIn("m=audio", offer["sdp"])
+        self.assertIn("RTP/AVP 96", offer["sdp"])
+        self.assertIn("a=rtpmap:96 L16/48000/1", offer["sdp"])
         self.assertEqual(client_a.connection_states["u_bob"], "connecting")
 
         answer = client_b.create_answer("u_alice", offer["sdp"])
         self.assertEqual(answer["type"], "answer")
+        self.assertIn("RTP/AVP 96", answer["sdp"])
         self.assertEqual(client_b.connection_states["u_alice"], "connected")
 
         cand_a = client_a.generate_local_ice_candidate("127.0.0.1")
@@ -287,6 +290,9 @@ class TestPhase10MediaAndCombatPhysics(unittest.TestCase):
         self.assertTrue(client_a.add_ice_candidate("u_bob", cand_b))
         self.assertEqual(client_a.connection_states["u_bob"], "connected")
         self.assertEqual(client_b.connection_states["u_alice"], "connected")
+
+        # Candidato inválido debe ser rechazado
+        self.assertFalse(client_a.add_ice_candidate("u_bob", {"candidate": "invalid string"}))
 
         # 4. Transmisión bidireccional simultánea de paquetes RTP a través de la pila de red UDP
         samples_a = [int(7000 * math.sin(2 * math.pi * 440 * i / 48000)) for i in range(client_a.SAMPLES_PER_FRAME)]
@@ -327,6 +333,93 @@ class TestPhase10MediaAndCombatPhysics(unittest.TestCase):
         self.assertIsNone(client_b._playback_thread)
         self.assertIsNone(client_b._capture_thread)
         self.assertIsNone(client_b._udp_socket)
+
+    def test_07_davinci_fighters_contract_and_e2e_simulation(self):
+        """Integración de extremo a extremo con el motor original de Da Vinci Fighters (CCI-10-04)."""
+        from backend.davinci_bridge import DavinciBridgeEngine
+        from backend.contracts import PlayerInputPacket
+
+        bridge = DavinciBridgeEngine("room_davinci_e2e", "carloni", "charly")
+        self.assertEqual(bridge.f1.name, "Juan Bautista Carloni")
+        self.assertEqual(bridge.status, "fighting")
+        self.assertEqual(bridge.f1.health, 110)
+        self.assertEqual(bridge.f2.health, 110)
+
+        # Acercar los personajes para entrar en rango de golpe
+        bridge.f1.x = 800.0
+        bridge.f2.x = 860.0
+
+        # P1 ejecuta golpe ligero
+        inp_p1 = PlayerInputPacket(
+            room_id="room_davinci_e2e",
+            player_id=1,
+            tick=1,
+            seq=1,
+            buttons=["punch_light"]
+        )
+
+        # Avanzar 10 frames de simulación física y resolver colisión nativa
+        hit_detected = False
+        for f in range(1, 12):
+            snap = bridge.step_frame(p1_input=inp_p1 if f == 1 else None)
+            if snap.p2_state["hp"] < 110:
+                hit_detected = True
+                break
+
+        self.assertTrue(hit_detected, "CollisionManager de Da Vinci Fighters debe detectar y aplicar el golpe")
+        self.assertEqual(snap.p2_state["hp"], 102, "Daño de golpe ligero (8 HP) debe reflejarse exactamente en el snapshot")
+        self.assertGreater(snap.p2_state["x"], 860.0, "Knockback de Da Vinci Fighters debe empujar al defensor")
+
+        # Snapshot de mundo sincronizado
+        self.assertIn("hp", snap.p1_state)
+        self.assertIn("special_meter", snap.p1_state)
+        self.assertEqual(snap.current_round, 1)
+
+    def test_08_platform_audio_driver_hardware_pipeline(self):
+        """Verifica controladores de audio físico por plataforma, DAC y ciclo de vida (CCI-10-03)."""
+        from mobile.audio_drivers import AudioDeviceManager, PygameAudioDriver, AndroidAudioDriver, IOSAudioDriver
+
+        # 1. Gestor unificado y selección de driver
+        mgr = AudioDeviceManager.get_instance()
+        driver = mgr.get_driver()
+        self.assertIsInstance(driver, PygameAudioDriver)
+        self.assertTrue(driver.check_permissions())
+
+        # 2. Enumeración de dispositivos físicos
+        mics = mgr.list_capture_devices()
+        spks = mgr.list_playback_devices()
+        self.assertGreater(len(mics), 0)
+        self.assertGreater(len(spks), 0)
+
+        # 3. Reproducción física de búfer PCM en DAC
+        pcm_frame = b"\x00\x00" * driver.SAMPLES_PER_FRAME
+        played = driver.play_frame(pcm_frame)
+        self.assertTrue(played)
+        self.assertGreater(driver.frames_played, 0)
+
+        # 4. Captura física de micrófono
+        captured_frames = []
+        driver.start_capture(lambda f: captured_frames.append(f))
+        time.sleep(0.06)
+        driver.stop_capture()
+        self.assertGreater(len(captured_frames), 0)
+        self.assertEqual(len(captured_frames[0]), driver.FRAME_BYTES)
+
+        # 5. Silenciamiento físico estricto
+        driver.set_mute(True)
+        self.assertTrue(driver.is_muted)
+        diag = driver.get_diagnostics()
+        self.assertTrue(diag["muted"])
+        self.assertEqual(diag["sample_rate"], 48000)
+
+        # 6. Adaptadores móviles Android e iOS
+        android_drv = AndroidAudioDriver()
+        self.assertTrue(android_drv.initialize_hardware())
+        self.assertTrue(android_drv.check_permissions())
+
+        ios_drv = IOSAudioDriver()
+        self.assertTrue(ios_drv.initialize_hardware())
+        self.assertTrue(ios_drv.check_permissions())
 
 
 if __name__ == "__main__":

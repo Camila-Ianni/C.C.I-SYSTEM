@@ -387,6 +387,61 @@ class TestPhase10SecurityAndAuthorization(unittest.TestCase):
         self.assertEqual(r_pub_ok.status_code, 200)
         self.assertEqual(r_pub_ok.get_json()["room"]["room_id"], room_id_pub)
 
+    def test_12_concurrent_socketio_sessions_and_token_expiration(self):
+        """Clientes Socket.IO concurrentes, aislamiento entre sesiones y rechazo de tokens expirados (CCI-10-06)."""
+        # 1. Rechazo de token expirado en handshake
+        token_expired = create_access_token("u_expired", "ExpiredUser", expires_in_seconds=-60)
+        client_expired = socketio.test_client(app, auth={"token": token_expired})
+        self.assertFalse(client_expired.is_connected(), "Handshake Socket.IO debe rechazar tokens con expiración vencida")
+
+        # 2. Conexión simultánea de dos clientes legítimos
+        token_alice = create_access_token("u_alice_multi", "AliceMulti")
+        token_bob = create_access_token("u_bob_multi", "BobMulti")
+        client_a = socketio.test_client(app, auth={"token": token_alice})
+        client_b = socketio.test_client(app, auth={"token": token_bob})
+
+        self.assertTrue(client_a.is_connected(), "Cliente A debe autenticarse exitosamente")
+        self.assertTrue(client_b.is_connected(), "Cliente B debe autenticarse concurrentemente")
+
+        # 3. Intercambio de mensajes en grupo compartido
+        grp = self.friends_svc.create_group("Sala Concurrente", "u_alice_multi")["group"]
+        grp_id = grp["id"]
+        self.friends_svc.invite_member(grp_id, "u_alice_multi", "u_bob_multi")
+
+        client_a.emit("chat:send", {
+            "group_id": grp_id,
+            "body": "Hola Bob desde sesión A",
+        })
+
+        msgs = cci_database.get_paged_messages_entry(grp_id)
+        self.assertEqual(len(msgs), 1)
+        self.assertEqual(msgs[0]["sender_id"], "u_alice_multi")
+        self.assertEqual(msgs[0]["body"], "Hola Bob desde sesión A")
+
+        # 4. Intruso en sesión separada (Eve) intenta inyectar datos al grupo sin ser miembro
+        token_eve = create_access_token("u_eve_intruder", "EveIntruder")
+        client_eve = socketio.test_client(app, auth={"token": token_eve})
+        self.assertTrue(client_eve.is_connected())
+
+        client_eve.emit("chat:send", {
+            "group_id": grp_id,
+            "body": "Ataque de inyección cruzada",
+        })
+
+        rec = client_eve.get_received()
+        errs = [ev for ev in rec if ev["name"] == "chat:error"]
+        self.assertTrue(len(errs) >= 1)
+        self.assertIn("no eres miembro", errs[0]["args"][0]["error"].lower())
+
+        # El grupo sigue teniendo solo 1 mensaje de Alice
+        msgs_after = cci_database.get_paged_messages_entry(grp_id)
+        self.assertEqual(len(msgs_after), 1)
+
+        # 5. Desconexión ordenada de clientes
+        client_a.disconnect()
+        client_b.disconnect()
+        client_eve.disconnect()
+
 
 if __name__ == "__main__":
     unittest.main()

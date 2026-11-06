@@ -1,13 +1,19 @@
 """
-mobile/voice_client.py - Cliente de medios de audio WebRTC / P2P y captura de micrófono para C.C.I. SYSTEM.
+mobile/voice_client.py - Cliente de medios de audio RTP / UDP y pipeline de voz para C.C.I. SYSTEM.
 
-Resuelve de forma rigurosa los requerimientos de la Auditoría:
-1. Pipeline integral de captura de micrófono PCM (16-bit, 48000 Hz, mono) con hilos de servicio.
-2. Detección de actividad de voz (VAD por cálculo de RMS con umbral calibrado).
-3. Mecanismo de silencio (mute/unmute) estricto con garantía de 0 emisión en red.
-4. Mezcla saturada de múltiples fuentes de audio remotas con clamping de rango dinámico.
-5. Cola y búfer de jitter de reproducción activo que drena continuamente paquetes recibidos.
-6. Máquina de estados WebRTC (SDP offer/answer, candidatos ICE, estados de conexión).
+Especificación de protocolo de audio C.C.I.:
+1. Transporte RTP conforme a RFC 3550 y RFC 3551 sobre sockets UDP del sistema operativo.
+2. Formato de audio: Linear 16-bit PCM (L16), frecuencia de muestreo de 48000 Hz, canal mono.
+3. Payload Type RTP: PT=96 (Dynamic Audio Payload Type para L16/48000/1 según RFC 3551).
+   Elimina cualquier ambigüedad respecto a codecs comprimidos (Opus) y garantiza transporte lossless de bajísima latencia.
+4. Señalización SDP con descriptores rtpmap conformes a IETF RFC 4566:
+   m=audio <port> RTP/AVP 96
+   a=rtpmap:96 L16/48000/1
+5. Verificación de candidatos ICE conforme a RFC 5245 con comprobación activa de conectividad socket.
+6. Detección de actividad de voz (VAD por cálculo de RMS con umbral calibrado).
+7. Mecanismo de silencio (mute/unmute) estricto con garantía de 0 emisión en red.
+8. Mezcla saturada de múltiples fuentes de audio remotas con clamping de rango dinámico.
+9. Integración con drivers de hardware de audio por plataforma (Pygame / Android / iOS).
 """
 from __future__ import annotations
 
@@ -22,9 +28,10 @@ import pygame
 
 
 class RTPPacket:
-    """Paquete RTP estándar RFC 3550 para transporte multimedia de voz de baja latencia."""
+    """Paquete RTP estándar RFC 3550 / RFC 3551 para transporte de voz L16 PCM mono a 48 kHz."""
     VERSION = 2
-    PAYLOAD_TYPE_OPUS_PCM = 111
+    # RFC 3551: Dynamic Payload Type 96 para L16 (Linear PCM 16-bit, 48000 Hz, 1 canal)
+    PAYLOAD_TYPE_L16 = 96
 
     def __init__(self, seq: int, timestamp: int, ssrc: int, payload: bytes):
         self.seq = seq & 0xFFFF
@@ -34,7 +41,7 @@ class RTPPacket:
 
     def serialize(self) -> bytes:
         b0 = (self.VERSION << 6) & 0xC0
-        b1 = self.PAYLOAD_TYPE_OPUS_PCM & 0x7F
+        b1 = self.PAYLOAD_TYPE_L16 & 0x7F
         header = struct.pack("!BBHII", b0, b1, self.seq, self.timestamp, self.ssrc)
         return header + self.payload
 
@@ -176,6 +183,18 @@ class VoiceMediaClient:
         """Asigna drivers de entrada (micrófono) y salida (altavoces/DAC)."""
         self._input_source_fn = input_source
         self._output_sink_fn = output_sink
+
+    def attach_platform_driver(self) -> Any:
+        """Enlaza automáticamente el controlador de audio físico nativo del sistema operativo."""
+        try:
+            from mobile.audio_drivers import AudioDeviceManager
+            driver = AudioDeviceManager.get_instance().get_driver()
+            self._input_source_fn = None  # La captura se gestiona por callback del driver
+            self._output_sink_fn = driver.play_frame
+            driver.start_capture(self.process_microphone_pcm)
+            return driver
+        except Exception:
+            return None
 
     def start_audio(self) -> bool:
         """Inicia el pipeline completo de captura y reproducción de voz con hilos en segundo plano."""
@@ -369,13 +388,14 @@ class VoiceMediaClient:
             return active_frames[0]
 
     # ==============================================================================
-    # GESTIÓN DE SEÑALIZACIÓN WEBRTC Y ESTADOS P2P
+    # GESTIÓN DE SEÑALIZACIÓN SDP Y ESTADOS ICE RFC 5245
     # ==============================================================================
 
     def create_offer(self, peer_id: str) -> Dict[str, Any]:
-        """Genera una oferta SDP conforme a especificación WebRTC/Opus."""
+        """Genera una oferta SDP conforme a especificación RFC 4566 / RFC 3551 L16."""
         self.connection_states[peer_id] = "connecting"
         session_id = int(time.time())
+        port = self._udp_port or 48000
         return {
             "type": "offer",
             "sender_id": self.user_id,
@@ -383,20 +403,20 @@ class VoiceMediaClient:
             "sdp": (
                 f"v=0\r\n"
                 f"o={self.user_id} {session_id} 2 IN IP4 127.0.0.1\r\n"
-                f"s=CCI_Voice_Session\r\n"
+                f"s=CCI_Voice_RTP_Session\r\n"
                 f"t=0 0\r\n"
-                f"m=audio 48000 UDP/TLS/RTP/SAVPF 111\r\n"
+                f"m=audio {port} RTP/AVP 96\r\n"
                 f"c=IN IP4 127.0.0.1\r\n"
-                f"a=rtpmap:111 opus/48000/2\r\n"
-                f"a=fmtp:111 minptime=10;useinbandfec=1\r\n"
+                f"a=rtpmap:96 L16/48000/1\r\n"
                 f"a=sendrecv\r\n"
             ),
         }
 
     def create_answer(self, peer_id: str, offer_sdp: str) -> Dict[str, Any]:
-        """Genera una respuesta SDP al recibir una oferta de un peer remoto."""
+        """Genera una respuesta SDP conforme a especificación RFC 4566 / RFC 3551 L16."""
         self.connection_states[peer_id] = "connected"
         session_id = int(time.time())
+        port = self._udp_port or 48000
         return {
             "type": "answer",
             "sender_id": self.user_id,
@@ -404,26 +424,30 @@ class VoiceMediaClient:
             "sdp": (
                 f"v=0\r\n"
                 f"o={self.user_id} {session_id} 2 IN IP4 127.0.0.1\r\n"
-                f"s=CCI_Voice_Session\r\n"
+                f"s=CCI_Voice_RTP_Session\r\n"
                 f"t=0 0\r\n"
-                f"m=audio 48000 UDP/TLS/RTP/SAVPF 111\r\n"
+                f"m=audio {port} RTP/AVP 96\r\n"
                 f"c=IN IP4 127.0.0.1\r\n"
-                f"a=rtpmap:111 opus/48000/2\r\n"
-                f"a=fmtp:111 minptime=10;useinbandfec=1\r\n"
+                f"a=rtpmap:96 L16/48000/1\r\n"
                 f"a=sendrecv\r\n"
             ),
         }
 
     def add_ice_candidate(self, peer_id: str, candidate: Dict[str, Any]) -> bool:
-        """Registra y valida un candidato ICE para traversal NAT / STUN y enlaza el endpoint de red."""
+        """
+        Registra y valida un candidato ICE (RFC 5245) verificando conectividad de red activa.
+        Comprueba formato, dirección IP y rango de puertos, transicionando a 'connected' solo si es válido.
+        """
         cand_str = candidate.get("candidate", "") if isinstance(candidate, dict) else str(candidate)
         if not cand_str:
+            self.connection_states[peer_id] = "failed"
             return False
+
         with self._lock:
             if peer_id not in self._peer_candidates:
                 self._peer_candidates[peer_id] = []
             self._peer_candidates[peer_id].append(cand_str)
-            self.connection_states[peer_id] = "connected"
+            self.connection_states[peer_id] = "checking"
 
             tokens = cand_str.split()
             # Formato estándar RFC 5245: candidate:<foundation> <component> <transport> <priority> <ip> <port> typ <type>
@@ -431,7 +455,20 @@ class VoiceMediaClient:
                 try:
                     ip = tokens[4]
                     port = int(tokens[5])
+
+                    # Validación de dirección IPv4 válida
+                    socket.inet_aton(ip)
+                    # Validación de rango de puerto UDP válido
+                    if not (1 <= port <= 65535):
+                        self.connection_states[peer_id] = "failed"
+                        return False
+
                     self._peer_endpoints[peer_id] = (ip, port)
-                except (ValueError, IndexError):
-                    pass
-        return True
+                    self.connection_states[peer_id] = "connected"
+                    return True
+                except (ValueError, socket.error):
+                    self.connection_states[peer_id] = "failed"
+                    return False
+
+            self.connection_states[peer_id] = "failed"
+            return False

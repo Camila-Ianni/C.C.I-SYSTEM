@@ -1,0 +1,38 @@
+{
+  "platform": "iOS",
+  "bundle_identifier": "org.ccisystem.arcade",
+  "display_name": "C.C.I. SYSTEM",
+  "version": "2.1.0",
+  "build_number": "2.1.0",
+  "commit_sha": "c9f4596d2b4b7aa9d4dabe053eb246d756bc83b5",
+  "generated_at": "2026-11-06T12:17:46Z",
+  "target_ios": "15.0",
+  "supported_devices": [
+    "iPhone",
+    "iPad"
+  ],
+  "screen_orientation": [
+    "UIInterfaceOrientationLandscapeLeft",
+    "UIInterfaceOrientationLandscapeRight"
+  ],
+  "entitlements": {
+    "NSMicrophoneUsageDescription": "C.C.I. SYSTEM requiere acceso al micr\u00f3fono para llamadas de voz WebRTC y chat durante partidas multijugador.",
+    "UIBackgroundModes": [
+      "audio"
+    ]
+  },
+  "expected_artifact": "build/outputs/ipa/release/ccisystem-2.1.0.ipa",
+  "sha256_digests": {
+    "buildozer.spec": "6076c1f17f9e089a11caeace27f46cac644361326b87c19d37c47e1a3e0f8041",
+    "ios/Info.plist": "e9ee756300044f9de6c52d467a13b7aac9b7821aafa824d2977fe31257e8996c",
+    "ios/Entitlements.plist": "5261c4072f1672698bfb4147fa0b4afdb5643d3cb32dbe912f92758c9a5efc13",
+    "mobile/mobile_adapter.py": "0280ed7f5c5ed99762614f1bffb0b286168cbb78c6adf0fff25e1a75d3485a5c",
+    "mobile/ios_adapter.py": "82a8230912d43ff02c51b12211c281555b233cb96ff80dd67f8a69ab18f069ff",
+    "mobile/touch_controls.py": "5a4fe7e43eb4befe7c5376714dc49871851336361ad04d4c845ca457ca53b700",
+    "mobile/voice_client.py": "864f42b95d4ab5c39357fb681c79ce807036abb07367eaf84d69d1fffcc8720a",
+    "mobile/audio_drivers.py": "e07fdbe2c14fba1926e8f56603338428dd4ac44436cd54f6a6feeae9f1ae2635",
+    "backend/davinci_bridge.py": "0adbc21981f14cf865ef5257fc8488e185990200ea6b3142ee71041a2a6d1c62"
+  },
+  "reproducible_build_command": "xcodebuild -workspace ios/CCI_System.xcworkspace -scheme ccisystem -configuration Release -archivePath build/outputs/ipa/ccisystem.xcarchive archive",
+  "reproducible_install_command": "xcrun simctl install booted build/outputs/ipa/release/ccisystem-2.1.0.app"
+}
