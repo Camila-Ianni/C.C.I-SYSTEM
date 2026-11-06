@@ -8,16 +8,20 @@
 
 ---
 
-## 1. Alcance y Criterios de Aceptación Cumplidos
+## 1. Alcance y Delimitación Técnica (Fase 3 / Estabilización Fase 0.2)
 
-En cumplimiento estricto del criterio de aceptación de Fase 3:
-- **"Llamada bidireccional entre dos redes; micrófono y salida reales; reconexión probada."**
+- **En Alcance (Implementado y Verificado en Runtime Python)**:
+  - Emisión y verificación autoritativa de tokens JWT HS256 para LiveKit (`TTL <= 300s`, `240s` por defecto) restringidos por sala (`comm_{comm_id}_chan_{chan_id}`) y permisos (`voice.connect`, `voice.speak`).
+  - Ciclo de vida de sesiones de voz en SQLite 3 (`WAL`), control de cupo (`max_participants`), moderación jerárquica (`mute`/`disconnect`), señalización Socket.IO en tiempo real y reconexión sin duplicar sesiones.
+  - Enlace local con drivers de hardware (`mobile/audio_drivers.py`) y transporte P2P local UDP RTP (`RFC 3550`) en `mobile/voice_client.py`.
+- **Formalmente Fuera del Alcance de esta Fase**:
+  - Transporte multimedia WebRTC continuo a través de un servidor `livekit-server` SFU externo y relay TURN/NAT entre redes WAN remotas independientes.
 
 ### Funcionalidades Implementadas:
 1. **Emisión Segura de Tokens LiveKit JWT (RFC 7519)**:
    - Módulo [`backend/communities/livekit_token.py`](../../backend/communities/livekit_token.py): Generación de tokens JWT firmados con HMAC-SHA256 utilizando `LIVEKIT_API_KEY` y `LIVEKIT_API_SECRET` almacenados exclusivamente en el servidor.
    - Concesiones granulares (`video.roomJoin=True`, `video.canPublish=True/False`, `video.canSubscribe=True`, `video.canPublishData=True`).
-   - Expiración temporal corta (600s) y alcance mínimo restringido a la sala `comm_{comm_id}_chan_{chan_id}`.
+   - Expiración temporal corta (`240s` por defecto, máximo estricto `300s`) y alcance mínimo restringido a la sala `comm_{comm_id}_chan_{chan_id}`.
 2. **Control de Acceso y Límites de Capacidad**:
    - Validación estricta del permiso `voice.connect` (fail-closed, 403 Forbidden para canales privados o miembros sin acceso).
    - Comprobación autoritativa del cupo de sala (`max_participants`): rechazo con 422 Unprocessable Entity cuando la sala alcanza su capacidad máxima.

@@ -9,9 +9,16 @@
 
 ---
 
-## 1. Resumen Ejecutivo y Alcance
+## 1. Resumen Ejecutivo y Delimitación Explícita de Alcance (Fase 0.2)
 
-La Fase 5 de **CCI Communities** implementa la capacidad de transmitir pantalla completa, ventanas de aplicación y videojuegos en vivo sobre canales de voz/stream mediante WebRTC SFU (LiveKit Server) y señalización Socket.IO:
+La Fase 5 de **CCI Communities** implementa el plano de control, validación de perfiles, detección real de fuentes del sistema operativo y captura local de previsualización para sesiones de streaming en canales de voz/stream:
+
+- **En Alcance (Implementado y Probado en Runtime Python)**:
+  1. **Detección real de fuentes (`detect_available_capture_sources`)**: Inspecciona pantallas físicas reales reportadas por `pygame.display` (devolviendo `screens: []` y `screen_capture_status: "unavailable"` en entornos headless o driver `dummy`, sin inventar pantallas ficticias) y procesos activos reales del sistema operativo (`ps`).
+  2. **Captura local de previsualización (`capture_stream_frame`)**: Obtiene el framebuffer `RGB24` real de la superficie Pygame activa.
+  3. **Plano de control REST + Socket.IO y Tokens LiveKit**: Inicio (`stream-start`), pausa (`stream-pause`), reanudación (`stream-resume`), finalización (`stream-stop`), control de concurrencia (`max_streams_per_channel` -> `409 Conflict`) y emisión de tokens JWT HS256 (`TTL <= 300s`).
+- **Formalmente Fuera del Alcance de esta Fase (`external_livekit_sfu_client_required`)**:
+  - La codificación continua de video/audio WebRTC y su transmisión en red entre equipos remotos a través de un servidor `livekit-server` SFU y relay TURN/NAT externo quedan **formalmente fuera del alcance** de esta fase.
 
 1. **Tres Modalidades de Transmisión (`stream_type`):**
    - **`screen` (Pantalla Completa):** Transmisión del escritorio del usuario con captura directa del monitor principal.

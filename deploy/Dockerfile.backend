@@ -1,6 +1,7 @@
 # deploy/Dockerfile.backend
 # Imagen de producción endurecida (non-root) para el backend unificado C.C.I. SYSTEM & Communities
-FROM python:3.12-slim AS runtime
+# Alineada con el runtime Python 3.14 certificado por la suite automatizada (compatible con Python 3.12+)
+FROM python:3.14-slim AS runtime
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \

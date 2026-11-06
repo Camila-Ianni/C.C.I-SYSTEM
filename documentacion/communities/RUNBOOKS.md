@@ -1,8 +1,9 @@
 # C.C.I. SYSTEM — CCI COMMUNITIES
-# RUNBOOKS DE OPERACIÓN, ESCALABILIDAD Y RECUPERACIÓN ANTE DESASTRES (SRE)
-**Versión:** 1.0  
+# RUNBOOKS DE OPERACIÓN, MANTENIMIENTO SQLITE WAL Y RECUPERACIÓN ANTE DESASTRES (SRE)
+**Versión:** 1.2 (Fase 0.2 — Estabilización Pre-Merge)  
 **Fecha:** 06/11/2026  
-**Área:** Infraestructura, Confiabilidad y Operaciones (SRE / DevOps)
+**Área:** Infraestructura, Confiabilidad y Operaciones (SRE / DevOps)  
+**Motor de Persistencia Activo:** SQLite 3 en modo `WAL` (`/data/cci_communities.sqlite3`)
 
 ---
 
@@ -10,9 +11,9 @@
 
 | ID | Incidente / Escenario | Severidad | RTO | RPO |
 |---|---|---|---|---|
-| **RB-01** | Caída o Degradación del SFU LiveKit | P1 (Crítico) | < 2 min | 0 s |
-| **RB-02** | Saturación / Desconexión de Memoria en Redis | P2 (Alto) | < 3 min | < 5 s |
-| **RB-03** | Mantenimiento, VACUUM y Backup de PostgreSQL | P3 (Medio) | N/A (Online) | < 1 hr |
+| **RB-01** | Caída o Degradación del SFU LiveKit / Señalización | P1 (Crítico) | < 2 min | 0 s |
+| **RB-02** | Contención de Locks o Crecimiento de Archivo WAL en SQLite 3 | P2 (Alto) | < 2 min | 0 s |
+| **RB-03** | Mantenimiento, VACUUM, Integridad y Online Backup de SQLite 3 | P3 (Medio) | N/A (Online) | < 15 min |
 | **RB-04** | Mitigación de Spam o Abuso en Soundboard | P3 (Medio) | Inmediato | 0 s |
 | **RB-05** | Plan de Contingencia y Recuperación ante Desastres (DRP) | P1 (Crítico) | < 15 min | < 15 min |
 
@@ -20,108 +21,101 @@
 
 ## 2. PROCEDIMIENTOS DETALLADOS
 
-### RB-01: Caída o Degradación del SFU LiveKit
+### RB-01: Caída o Degradación del SFU LiveKit / Señalización
 #### Síntomas
-- Clientes reportan error `VOICE_CONNECTION_FAILED` o desconexión abrupta en canales de audio y transmisiones de pantalla.
-- Endpoint `/api/v1/communities/health` reporta estado degradado o timeouts al contactar el SFU.
-- Alerta Prometheus: `livekit_active_rooms` cae a 0 o `livekit_packet_loss_ratio > 0.05`.
+- Clientes reportan error `VOICE_CONNECTION_FAILED` al intentar usar un token emitido por `POST /api/v1/channels/{id}/voice-token`.
+- Endpoint `GET /api/v1/communities/health` reporta estado degradado o errores de red.
 
 #### Pasos de Resolución
-1. **Comprobar estado del contenedor LiveKit:**
+1. **Comprobar estado del contenedor LiveKit y API:**
    ```bash
-   docker ps -a | grep livekit
-   docker logs --tail 100 cci_livekit
+   docker ps -a | grep cci_communities
+   docker logs --tail 100 cci_communities_livekit
+   docker logs --tail 100 cci_communities_api
    ```
 2. **Reinicio controlado del servicio SFU:**
    ```bash
-   docker restart cci_livekit
+   docker restart cci_communities_livekit
    ```
-3. **Verificación de puertos y TURN/STUN:**
-   - Validar que CoTURN esté respondiendo en UDP 3478 y 5349:
-     ```bash
-     nc -zvu 127.0.0.1 3478
-     ```
-4. **Reconexión de clientes:**
-   - Los clientes del frontend de C.C.I. ejecutan un algoritmo de backoff exponencial automático (1s, 2s, 4s, máx 10s).
-   - Validar en `/api/v1/communities/metrics` que `communities_voice_joins_total` reanude su incremento regular.
+3. **Verificación de puertos STUN/TURN (puerto 3478 UDP/TCP; TURNS 5349 deshabilitado con `no-tls`):**
+   ```bash
+   nc -zvu 127.0.0.1 3478
+   nc -zv 127.0.0.1 3478
+   ```
+4. **Verificación de métricas y sesiones activas:**
+   - Consultar `http://127.0.0.1:5050/api/v1/communities/metrics` y verificar `communities_voice_sessions_active`.
 
 ---
 
-### RB-02: Saturación o Desconexión de Redis
+### RB-02: Contención de Locks o Crecimiento de Archivo WAL en SQLite 3
 #### Síntomas
-- Errores de caché, fallas en la emisión de eventos Socket.IO o advertencias de presencia congelada.
-- Alerta Prometheus: `redis_memory_used_bytes > 90% maxmemory`.
+- Incremento del contador `communities_db_errors_total` en `GET /api/v1/communities/metrics`.
+- El archivo `/data/cci_communities.sqlite3-wal` supera los 100 MB sin truncarse automáticamente.
 
 #### Pasos de Resolución
-1. **Inspección de memoria y políticas de desalojo:**
+1. **Inspeccionar tamaño del archivo principal y archivos `-wal` / `-shm`:**
    ```bash
-   redis-cli -a $REDIS_PASSWORD INFO memory
+   ls -lh /data/cci_communities.sqlite3*
    ```
-2. **Confirmar directiva `volatile-lru` o `allkeys-lru`:**
+2. **Ejecutar checkpoint y truncado en caliente del archivo WAL:**
    ```bash
-   redis-cli -a $REDIS_PASSWORD CONFIG GET maxmemory-policy
+   sqlite3 /data/cci_communities.sqlite3 "PRAGMA busy_timeout=10000; PRAGMA wal_checkpoint(TRUNCATE);"
    ```
-   Si está en `noeviction`, reconfigurar de inmediato:
+3. **Verificar integridad física del archivo SQLite:**
    ```bash
-   redis-cli -a $REDIS_PASSWORD CONFIG SET maxmemory-policy allkeys-lru
+   sqlite3 /data/cci_communities.sqlite3 "PRAGMA integrity_check;"
    ```
-3. **Purgado de claves huérfanas de presencia:**
-   ```bash
-   redis-cli -a $REDIS_PASSWORD EVAL "for _,k in ipairs(redis.call('keys','presence:ephemeral:*')) do redis.call('del',k) end" 0
-   ```
-4. **Reinicio de la conexión del backend:**
-   - El backend reconecta automáticamente con pool de conexiones tolerante a caídas.
 
 ---
 
-### RB-03: Mantenimiento, VACUUM y Backup de PostgreSQL
+### RB-03: Mantenimiento, VACUUM, Integridad y Online Backup de SQLite 3
 #### Mantenimiento Preventivo Online
-- Ejecución semanal programada sin bloqueo de lecturas/escrituras:
+- Optimización del planificador de consultas e índices de SQLite sin detener el servicio:
   ```bash
-  psql -U cci_admin -d cci_communities -c "VACUUM ANALYZE channels, channel_messages, community_members;"
-  ```
-- Detección de índices inflados:
-  ```bash
-  psql -U cci_admin -d cci_communities -c "REINDEX TABLE CONCURRENTLY channel_messages;"
+  sqlite3 /data/cci_communities.sqlite3 "PRAGMA optimize; ANALYZE;"
   ```
 
-#### Respaldo Lógico Diario (pg_dump)
+#### Respaldo Consistente en Caliente (SQLite Online Backup API)
+El comando `.backup` de SQLite copia páginas de forma segura en modo `WAL` sin bloquear las lecturas ni detener el contenedor `api`:
 ```bash
-pg_dump -U cci_admin -d cci_communities -Fc -Z 6 -f /backups/cci_communities_$(date +%Y%m%d_%H%M%S).dump
+mkdir -p /data/backups
+sqlite3 /data/cci_communities.sqlite3 ".backup '/data/backups/cci_communities_$(date +%Y%m%d_%H%M%S).sqlite3'"
 ```
 
-#### Restauración
+#### Restauración desde Respaldo Local
 ```bash
-pg_restore -U cci_admin -d cci_communities -c -v /backups/cci_communities_target.dump
+docker stop cci_communities_api
+cp /data/backups/cci_communities_target.sqlite3 /data/cci_communities.sqlite3
+rm -f /data/cci_communities.sqlite3-wal /data/cci_communities.sqlite3-shm
+docker start cci_communities_api
 ```
 
 ---
 
 ### RB-04: Mitigación de Spam o Abuso en Soundboard
 #### Síntomas
-- Usuarios quejándose de reproducción excesiva de sonidos o picos de tráfico en canales de voz.
-- HTTP 429 (`SOUND_COOLDOWN`) en `/sounds/<id>/play-authorize`.
+- Usuarios reportan reproducción excesiva de sonidos en salas de voz.
+- Respuestas HTTP 429 (`SOUND_COOLDOWN`) frecuentes en `/api/v1/sounds/<id>/play-authorize`.
 
 #### Acciones Operativas
 1. **Comprobar límites configurados:**
-   - La API expone formalmente en `GET /api/v1/communities/system/limits` un cooldown de 5 segundos por usuario.
-2. **Silenciar o mutear permisos de Soundboard a nivel de rol o canal:**
-   - Revocar permiso `USE_SOUNDBOARD` (bit 10) en el canal afectado mediante anulación (`overrides`).
-   - Muteo temporal del actor ofensivo mediante endpoint de moderación:
-     `POST /api/v1/communities/<id>/moderation/mute` con `target_user_id` y `duration_minutes`.
+   - La API expone en `GET /api/v1/communities/system/limits` un cooldown estricto de 5 segundos por sonido y límite de 15.0 segundos por pista MP3.
+2. **Revocar permiso o silenciar al infractor:**
+   - Denegar el permiso `soundboard.play` en el canal afectado mediante `PUT /api/v1/channels/<id>/overrides`.
+   - Aplicar silenciamiento temporal mediante `POST /api/v1/communities/<id>/moderation/mute`.
 
 ---
 
 ### RB-05: Plan de Contingencia y Recuperación ante Desastres (DRP)
 #### Escenario de Pérdida Total del Nodo
-1. Levantar nuevo nodo base (Ubuntu LTS / macOS Server).
-2. Clonar repositorio y levantar stack Docker Compose:
+1. Aprovisionar nuevo host con Docker y Docker Compose.
+2. Clonar el repositorio, configurar `deploy/.env` con secretos reales (`openssl rand -hex 32`) y restaurar el archivo `cci_communities.sqlite3` en el volumen `cci_app_data:/data`.
+3. Levantar el stack:
    ```bash
-   docker compose -f docker-compose.communities.yml up -d
+   docker compose -f deploy/docker-compose.communities.yml up -d
    ```
-3. Restaurar último backup de base de datos desde almacenamiento S3/MinIO.
-4. Ejecutar suite de pruebas de salud:
+4. Ejecutar verificación de salud en el puerto canónico `5050`:
    ```bash
-   curl -s http://127.0.0.1:5000/api/v1/communities/health | jq .
+   curl -s http://127.0.0.1:5050/api/v1/communities/health
    ```
-5. Confirmar que `status == "healthy"` y `database == "connected"`.
+5. Confirmar que la respuesta HTTP sea `200 OK` con `"status": "healthy"` y `"database": "connected"`.

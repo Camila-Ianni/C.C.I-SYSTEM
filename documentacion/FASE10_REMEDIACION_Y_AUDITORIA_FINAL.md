@@ -1,9 +1,10 @@
-# C.C.I. SYSTEM — FASE 10: REMEDIACIÓN INTEGRAL Y CERTIFICACIÓN TÉCNICA
+# C.C.I. SYSTEM — CERTIFICACIÓN DE REMEDIACIÓN FASE 10 Y CONSOLIDACIÓN COMMUNITIES
 
 **Fecha:** 2026-11-06  
-**Versión del Sistema:** v2.1.0  
-**Rama:** `feature/evolution-phase10-remediation`  
-**Estado de Auditoría:** APROBADO (100% de hallazgos solventados, 0 omisiones, 0 regresiones)  
+**Versión del Sistema:** v2.1.0 + CCI Communities  
+**Rama Activa Unificada:** `feature/communities-phase0-design` (incluye historial completo de `feature/evolution-phase10-remediation`)  
+**Estado de Auditoría:** APROBADO (22 suites ejecutadas, 191/191 pruebas aprobadas, 0 fallidas, 0 errores)  
+**Certificación Pre-Merge de Communities:** Véase [`documentacion/communities/CERTIFICACION_PREMERGE_COMMUNITIES.md`](file:///Users/cami/Desktop/C.C.I%20SYSTEM/documentacion/communities/CERTIFICACION_PREMERGE_COMMUNITIES.md)  
 
 ---
 
@@ -69,8 +70,19 @@ El ejecutor [`run_all_evaluations.py`](../run_all_evaluations.py) valida de form
 12. `test_phase10_security.py`: 12 pruebas (Emisión de token con credenciales, rechazo 401 REST global, rechazo handshake socket sin token, anti-spoofing, rechazo unión llamada ajena [P0], rechazo cierre llamada por terceros [P0], lectura salas privadas [P1], sesiones Socket.IO concurrentes y expiración de tokens [CCI-10-06]).
 13. `test_phase10_media_and_physics.py`: 8 pruebas (PCM VAD, colisiones Rect, 60 Hz sin paquetes, decodificación OpenCV distribuida, ciclo de vida ticker, audio bidireccional multi-cliente WebRTC mesh [P1/CCI-10-01/02], integración Da Vinci Fighters E2E [CCI-10-04], controladores de audio físico de hardware [CCI-10-03]).
 
-**Total de Pruebas Ejecutadas:** 105  
-**Tasa de Éxito:** 100% (105 aprobadas, 0 fallidas, 0 errores)  
+**Suites de CCI Communities y Auditoría Pre-Merge (`feature/communities-phase0-design`):**
+14. `test_communities_phase1.py`: 10 pruebas (Comunidades, roles, miembros, canales e invitaciones).
+15. `test_communities_phase2.py`: 10 pruebas (Chat en tiempo real, historial paginado, presencia e invisibilidad).
+16. `test_communities_phase3.py`: 10 pruebas (Salas de voz, tokens LiveKit JWT <= 300s, moderación y reconexión).
+17. `test_communities_phase4.py`: 10 pruebas (Sound Deck MP3, validación de tramas MPEG Layer III y cooldown).
+18. `test_communities_phase5.py`: 10 pruebas (Plano de control de streaming, límites por canal y detección real de fuentes).
+19. `test_communities_phase6.py`: 10 pruebas (Moderación jerárquica, reportes y bitácora inmutable de auditoría).
+20. `test_communities_phase7.py`: 10 pruebas (Métricas `process_local`, healthcheck real y benchmark multihilo).
+21. `test_communities_ui.py`: 6 pruebas (Pantallas Pygame `GroupsHubState` y `CommunityViewState`).
+22. `test_communities_merge_audit.py`: 10 pruebas (Persistencia SQLite WAL tras reinicio, concurrencia multihilo, manifiestos Docker/Caddy/LiveKit/coturn `no-tls`, validación fail-fast de secretos en producción, matriz de permisos y aislamiento de canales, persistencia UI Pygame en SQLite, decodificación real MP3, métricas y prueba TCP en vivo HTTP `200 OK` + WebSocket `101 Switching Protocols`).
+
+**Total de Pruebas Ejecutadas:** 191 (en 22 suites)  
+**Tasa de Éxito:** 100% (191 aprobadas, 0 fallidas, 0 errores)  
 **Suites Ausentes:** 0  
 **Trazabilidad CI:** Reporte estructurado emitido en `evaluations_report.json` con Commit SHA vinculado.
 
@@ -78,16 +90,16 @@ El ejecutor [`run_all_evaluations.py`](../run_all_evaluations.py) valida de form
 
 ## 4. Instrucciones para la Integración
 
-Para sincronizar los cambios de Fase 10 en GitHub:
+Para sincronizar la rama unificada en GitHub:
 
 ```bash
-git checkout feature/evolution-phase10-remediation
-git push --set-upstream origin feature/evolution-phase10-remediation
+git checkout feature/communities-phase0-design
+git push origin feature/communities-phase0-design
 ```
 
 Para integrar en la rama principal `main`:
 ```bash
 git checkout main
-git merge feature/evolution-phase10-remediation
+git merge feature/communities-phase0-design
 git push origin main
 ```

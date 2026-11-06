@@ -19,7 +19,7 @@ El subsistema **CCI Communities** amplía **C.C.I. SYSTEM** para transformarlo e
    - Capa de presentación visual integrada en la consola nativa Pygame 1280x720 (`groups_ui.py`, `sidebar_ui.py`) con estética pixel-art retrofuturista de C.C.I.
    - Núcleo de lógica de negocio y autorización unificado en Python (`Flask` + `Flask-SocketIO` en `backend/server.py` + `backend/communities/`).
    - Transporte multimedia en tiempo real de baja latencia (LiveKit Server SFU + `coturn` para STUN/TURN externo, con emisión local autoritativa de tokens JWT HS256).
-   - Persistencia relacional transaccional en **SQLite 3 con `WAL`** (`PRAGMA journal_mode=WAL`, `PRAGMA foreign_keys=ON`, `PRAGMA busy_timeout=10000`) como **único motor activo y soportado en esta entrega** (`.cci-user-data/cci_communities.sqlite3` en escritorio / `/data/cci_communities.sqlite3` en Docker). El archivo `schema_postgres.sql` se conserva únicamente como artefacto de diseño para una fase futura no integrada en el runtime actual.
+   - Persistencia relacional transaccional en **SQLite 3 con `WAL`** (`PRAGMA journal_mode=WAL`, `PRAGMA foreign_keys=ON`, `PRAGMA busy_timeout=10000`) como **único motor activo, documentado y soportado en esta entrega** (`.cci-user-data/cci_communities.sqlite3` en escritorio / `/data/cci_communities.sqlite3` en Docker), especificado en [`documentacion/communities/schema_sqlite.sql`](file:///Users/cami/Desktop/C.C.I%20SYSTEM/documentacion/communities/schema_sqlite.sql).
 3. **Preservación absoluta del launcher y consola PC**: El motor de juegos de consola (1280x720, 60 FPS, 19 títulos en Pygame) permanece inalterado y soberano. La interfaz de comunidades convive como estados nativos desacoplados (`GROUPS`, `COMMUNITY`).
 4. **Seguridad fail-closed**: El backend C.C.I. es la única autoridad de identidad, pertenencia y roles. Los tokens de LiveKit se emiten con permisos mínimos y expiración corta (`<= 300` segundos / `< 5` minutos, por defecto `240` segundos).
 
@@ -126,9 +126,9 @@ sequenceDiagram
 
 ---
 
-## 4. Modelo de Datos Relacional (SQLite 3 WAL Activo / Referencia Futura PostgreSQL)
+## 4. Modelo de Datos Relacional (SQLite 3 WAL Canónico)
 
-El esquema relacional activo se inicializa y migra automáticamente en **SQLite 3 (`WAL`)** dentro de [`backend/communities/repository.py`](file:///Users/cami/Desktop/C.C.I%20SYSTEM/backend/communities/repository.py). Adicionalmente, [`documentacion/communities/schema_postgres.sql`](file:///Users/cami/Desktop/C.C.I%20SYSTEM/documentacion/communities/schema_postgres.sql) se conserva como especificación de referencia para una fase futura de migración horizontal a PostgreSQL 16 (no integrada en el runtime actual).
+El esquema relacional activo se inicializa automáticamente en **SQLite 3 (`WAL`)** dentro de [`backend/communities/repository.py`](file:///Users/cami/Desktop/C.C.I%20SYSTEM/backend/communities/repository.py) y su DDL físico canónico está documentado en [`documentacion/communities/schema_sqlite.sql`](file:///Users/cami/Desktop/C.C.I%20SYSTEM/documentacion/communities/schema_sqlite.sql).
 
 ### Entidades principales:
 1. **`users`**: Cuentas con UUID, hash de contraseña argon2/bcrypt, estado de presencia (`online`, `idle`, `dnd`, `offline`, `invisible`) y avatar.
@@ -252,10 +252,10 @@ Formato estándar del payload:
 | Componente | Estado en Código (`feature/communities-phase0-design`) | Alcance y Notas Operativas |
 | :--- | :--- | :--- |
 | **Backend API & Realtime** | **Implementado** (`Flask` + `Flask-SocketIO` en `backend/server.py` y `backend/communities/routes.py`) | Unificado en el mismo servidor del sistema C.C.I. (`puerto 5050` en `Dockerfile.backend`, `docker-compose.communities.yml` y `Caddyfile`). |
-| **Persistencia Relacional** | **Implementado (Único motor activo)** (`SQLite 3 WAL` en `backend/communities/repository.py`) | Persistencia en disco (`.cci-user-data/cci_communities.sqlite3` / `/data/cci_communities.sqlite3`), `PRAGMA foreign_keys=ON`, `WAL`, `busy_timeout=10000` y `RLock` multihilo. PostgreSQL (`schema_postgres.sql`), Redis y MinIO NO están integrados en runtime y quedan documentados como fase futura. |
+| **Persistencia Relacional** | **Implementado (Único motor activo)** (`SQLite 3 WAL` en `backend/communities/repository.py` y `schema_sqlite.sql`) | Persistencia en disco (`.cci-user-data/cci_communities.sqlite3` / `/data/cci_communities.sqlite3`), `PRAGMA foreign_keys=ON`, `WAL`, `busy_timeout=10000` y `RLock` multihilo. |
 | **Interfaz Gráfica (UI)** | **Implementado** (`Pygame` nativo en `groups_ui.py` y `sidebar_ui.py`) | Integrada directamente en el bucle de estados de `main.py` (1280x720, 60 FPS) conectada a `CommunitiesService` con persistencia real en SQLite (`CommunitiesUIBridge`). |
-| **Tokens y Señalización de Voz (LiveKit)** | **Implementado** (`backend/communities/livekit_token.py`) + **SFU Externo** (`deploy/livekit.yaml`) | El backend emite y valida tokens JWT HS256 con TTL `<= 300s` (240s por defecto). El transporte de audio/video WebRTC requiere los contenedores externos `livekit` (`rtc.ccisystem.org`) y `coturn` (`turn.ccisystem.org`). |
-| **Streaming y Captura (`stream_adapter.py`)** | **Alcance Parcial (Detección + Preview Local)** (`backend/communities/stream_adapter.py`) | Separa explícitamente: (1) detección real de fuentes (sin inventar pantallas falsas en modo headless/`dummy` ni forzar `python_active=True`), (2) captura de preview local de la superficie Pygame activa, y (3) publicación multimedia WebRTC externa (`external_livekit_sfu_client_required`). |
+| **Tokens y Señalización de Voz (LiveKit)** | **Plano de Control Implementado** (`backend/communities/livekit_token.py`) / **Transporte SFU Externo Fuera del Alcance** | El backend emite y valida tokens JWT HS256 con TTL `<= 300s` (240s por defecto) y señalización Socket.IO. El transporte de medios WebRTC sobre red WAN/NAT/SFU externo queda **formalmente fuera del alcance** del runtime Python de esta fase. |
+| **Streaming y Captura (`stream_adapter.py`)** | **Alcance Parcial (Detección + Preview Local + Señalización)** (`backend/communities/stream_adapter.py`) | Separa explícitamente: (1) detección real de fuentes del SO (`ps` / `pygame.display`), (2) captura de preview local RGB24 de la superficie Pygame activa, y (3) publicación multimedia WebRTC entre equipos remotos marcada **formalmente fuera del alcance** de esta fase (`external_livekit_sfu_client_required`). |
 | **Sound Deck (Validador MP3)** | **Implementado** (`backend/communities/sound_validator.py`) | Decodifica cabeceras de tramas MPEG reales (MPEG 1/2/2.5 Layer III y cabeceras VBR Xing/Info) para calcular duración real (`<= 15.0s`), bitrate, sample rate y canales sin confiar en `declared_duration`. |
 | **Métricas y Salud** | **Implementado** (`backend/communities/metrics.py`) | Contadores e histogramas por proceso (`scope: process_local`, no persistentes entre reinicios) expuestos en formato Prometheus y JSON junto con sonda real de base de datos en `/api/v1/communities/health`. |
 
@@ -269,14 +269,14 @@ Formato estándar del payload:
 - **Decisión**: Implementar `GroupsHubState` y `CommunityViewState` en `groups_ui.py` dentro del motor de estados de `main.py`, respaldados por `CommunitiesService` y SQLite.
 - **Consecuencias**: Transiciones instantáneas desde la barra lateral (`sidebar_ui.py`) y persistencia real de mensajes, grupos e invitaciones.
 
-### ADR-003: LiveKit Server (SFU) Autohospedado sobre WebRTC
+### ADR-003: Plano de Control LiveKit JWT y Delimitación de Transporte WebRTC Externo
 - **Contexto**: Las llamadas grupales WebRTC en topología Mesh saturan la CPU del cliente a partir de 4 participantes.
-- **Decisión**: Desplegar LiveKit Server (`rtc.ccisystem.org`) como SFU autohospedado en contenedor Docker junto con `coturn` (`turn.ccisystem.org`) para STUN/TURN.
-- **Consecuencias**: Tokens JWT de corta duración (`240s`, máximo `300s`) firmados por el backend C.C.I.
+- **Decisión**: Implementar en esta fase el plano de control completo en Python (`backend/communities/livekit_token.py`, `routes.py`, `events.py`): emisión/verificación de tokens JWT HS256 (`TTL <= 300s`, `240s` por defecto), gestión de sesiones en SQLite y señalización Socket.IO, junto con los manifiestos de infraestructura para `livekit` (`rtc.ccisystem.org`) y `coturn` (`turn.ccisystem.org` en `3478/UDP+TCP` con `use-auth-secret` y `no-tls`).
+- **Delimitación Formal de Alcance**: El transporte continuo de medios WebRTC sobre un servidor LiveKit SFU externo y el relay TURN/TLS (`5349`) entre redes WAN quedan **formalmente fuera del alcance** del runtime Python en esta fase.
 
-### ADR-004 (Actualizado Fase 0.2): SQLite 3 (WAL) como Único Motor Activo y Soportado
-- **Contexto**: Para eliminar inconsistencias entre el código real (`sqlite3`) y servicios externos no integrados, se define un único motor oficial para esta entrega.
-- **Decisión**: **SQLite 3 en modo `WAL`** (`PRAGMA journal_mode=WAL`, `PRAGMA foreign_keys=ON`, `PRAGMA busy_timeout=10000`, `PRAGMA synchronous=NORMAL`) es el **único motor de base de datos activo y soportado** en esta entrega (`backend/communities/repository.py`). PostgreSQL (`schema_postgres.sql`), Redis y MinIO quedan fuera del runtime actual y documentados como referencia para una fase futura.
+### ADR-004 (Actualizado Fase 0.2): SQLite 3 (WAL) como Único Motor Activo, Documentado y Soportado
+- **Contexto**: Para eliminar cualquier divergencia entre documentación y runtime, se unifica el motor relacional en toda la arquitectura y documentación del proyecto.
+- **Decisión**: **SQLite 3 en modo `WAL`** (`PRAGMA journal_mode=WAL`, `PRAGMA foreign_keys=ON`, `PRAGMA busy_timeout=10000`, `PRAGMA synchronous=NORMAL`) es el **único motor de base de datos activo y soportado** en esta entrega ([`backend/communities/repository.py`](file:///Users/cami/Desktop/C.C.I%20SYSTEM/backend/communities/repository.py) y [`documentacion/communities/schema_sqlite.sql`](file:///Users/cami/Desktop/C.C.I%20SYSTEM/documentacion/communities/schema_sqlite.sql)).
 - **Límites operativos, concurrencia y procedimiento de backup de SQLite 3**:
   - **Modelo de concurrencia**: Lecturas concurrentes no bloqueantes gracias a `WAL` y escrituras serializadas de forma segura entre hilos mediante `threading.RLock()` de instancia + `PRAGMA busy_timeout=10000` (10 s). Diseñado para despliegues de nodo único (hasta ~100–250 usuarios concurrentes activos y decenas de escrituras por segundo).
   - **Límite arquitectónico**: No soporta múltiples réplicas de escritura distribuidas sobre sistemas de archivos de red (NFS/SMB); el volumen `cci_app_data:/data` debe residir en disco local POSIX del host.
@@ -291,11 +291,11 @@ Configurado en [`deploy/docker-compose.communities.yml`](file:///Users/cami/Desk
 - **Dominios canónicos unificados**:
   - `api.ccisystem.org`: API REST (`/api/*`) y WebSockets (`/socket.io/*`, `/ws/*`) -> `api:5050`.
   - `rtc.ccisystem.org`: Señalización WebRTC LiveKit -> `livekit:7880`.
-  - `turn.ccisystem.org`: Relay STUN/TURN RFC 5766 -> `coturn` (`3478/TCP+UDP`, `5349/TCP`, `49152-49252/UDP`).
+  - `turn.ccisystem.org`: Relay STUN/TURN RFC 5766 -> `coturn` (`3478/TCP+UDP`, `49152-49200/UDP`, con `no-tls`/`no-dtls` explícito por defecto).
 - **Servicios activos en `docker-compose.communities.yml`**:
-  - **`api`**: Contenedor Python 3.12 non-root (`cciuser`) ejecutando `backend.server` en puerto `5050` con SQLite 3 WAL en `cci_app_data:/data/cci_communities.sqlite3` y `HEALTHCHECK` activo.
+  - **`api`**: Contenedor Python 3.14 non-root (`cciuser`) ejecutando `backend.server` en puerto `5050` con SQLite 3 WAL en `cci_app_data:/data/cci_communities.sqlite3` y `HEALTHCHECK` activo.
   - **`livekit`**: SFU de distribución multimedia con puertos `7880/TCP`, `7881/TCP` y `50000-50100/UDP`, y claves inyectadas desde variables de entorno.
-  - **`coturn`**: Servidor STUN/TURN RFC 5766 con `use-auth-secret` inyectado desde `${TURN_SECRET}` (validado en producción con longitud mínima de 32 caracteres).
+  - **`coturn`**: Servidor STUN/TURN RFC 5766 en `3478/UDP+TCP` con `use-auth-secret` inyectado desde `${TURN_SECRET}` (validado en producción con longitud mínima de 32 caracteres) y `no-tls`/`no-dtls` hasta aprovisionar certificados X.509 dedicados.
   - **`caddy`**: Proxy inverso de entrada con certificados TLS automáticos y cabeceras `Connection`/`Upgrade` para WebSockets hacia `api:5050` y `livekit:7880`.
 
 ---
@@ -304,17 +304,17 @@ Configurado en [`deploy/docker-compose.communities.yml`](file:///Users/cami/Desk
 
 Para cumplir rigurosamente las directivas de auditoría técnica:
 1. **Consola Desktop PC Soberana**: Los 19 juegos nativos y el menú clásico Pygame (1280x720, 60 FPS) se mantienen íntegros y ejecutables de forma independiente.
-2. **Preservación del módulo de voz existente**: [`mobile/voice_client.py`](file:///Users/cami/Desktop/C.C.I%20SYSTEM/mobile/voice_client.py) permanece intacto para partidas P2P locales / móviles. La integración de LiveKit se realiza en un módulo separado (`communities/media_livekit.py`) sin modificar la lógica previa.
-3. **Control de versiones**: Todo el trabajo se estructura en commits pequeños en la rama `feature/communities-phase0-design`, manteniendo la suite previa de 105 pruebas unitarias siempre en estado 100% aprobado.
+2. **Preservación del módulo de voz existente**: [`mobile/voice_client.py`](file:///Users/cami/Desktop/C.C.I%20SYSTEM/mobile/voice_client.py) permanece intacto para partidas P2P locales / móviles sobre sockets UDP RTP (`RFC 3550`).
+3. **Control de versiones**: Todo el trabajo se estructura en la rama `feature/communities-phase0-design` (incluyendo la base evolutiva Fases 1–10 y el módulo Communities Fases 0–7), manteniendo las 22 suites de pruebas automatizadas en estado 100% aprobado.
 
 ---
 
 ## 11. Criterios de Aceptación para Concluir Fase 0
 
-- [x] Modelo ER de PostgreSQL normalizado con DDL SQL ejecutable ([`schema_postgres.sql`](file:///Users/cami/Desktop/C.C.I%20SYSTEM/documentacion/communities/schema_postgres.sql)).
+- [x] Modelo ER relacional de SQLite 3 (modo `WAL`) con DDL SQL ejecutable ([`schema_sqlite.sql`](file:///Users/cami/Desktop/C.C.I%20SYSTEM/documentacion/communities/schema_sqlite.sql)).
 - [x] Matriz jerárquica de permisos y algoritmo de resolución formalizado.
 - [x] Contratos OpenAPI 3.1 y catálogo de eventos WebSocket detallados.
-- [x] Registros de decisiones de arquitectura (ADR-001 a ADR-006).
-- [x] Manifiesto Docker Compose completo y reproducible ([`docker-compose.communities.yml`](file:///Users/cami/Desktop/C.C.I%20SYSTEM/deploy/docker-compose.communities.yml)).
-- [x] Registro explícito de decisiones de producto provisionales.
-- [x] Cero regresiones en la suite de 105 pruebas de la consola C.C.I.
+- [x] Registros de decisiones de arquitectura (ADR-001 a ADR-004) alineados con el runtime real.
+- [x] Manifiesto Docker Compose validado con `docker compose config` ([`docker-compose.communities.yml`](file:///Users/cami/Desktop/C.C.I%20SYSTEM/deploy/docker-compose.communities.yml)).
+- [x] Delimitación explícita de alcance entre plano de control / captura local (en alcance) y transporte WebRTC SFU externo (fuera del alcance de esta fase).
+- [x] Cero regresiones en las 22 suites automatizadas del ecosistema C.C.I. SYSTEM.

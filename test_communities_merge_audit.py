@@ -214,8 +214,18 @@ class TestCommunitiesMergeAudit(unittest.TestCase):
         self.assertNotIn("secretkey1234567890abcdef", lk_text)
 
         self.assertIn("use-auth-secret", coturn_text)
+        self.assertIn("no-tls", coturn_text)
+        self.assertIn("no-dtls", coturn_text)
+        self.assertNotIn("tls-listening-port=5349", coturn_text)
+        self.assertNotIn("tls_port: 5349", lk_text)
         self.assertNotIn("lt-cred-mech", coturn_text)
         self.assertNotIn("cci_turn_static_secret_2026", coturn_text)
+
+        # [P1 SQLite único] Esquema físico canónico en schema_sqlite.sql y ausencia de schema_postgres.sql
+        schema_sqlite = ROOT_DIR / "documentacion" / "communities" / "schema_sqlite.sql"
+        schema_pg = ROOT_DIR / "documentacion" / "communities" / "schema_postgres.sql"
+        self.assertTrue(schema_sqlite.exists(), "Falta documentacion/communities/schema_sqlite.sql")
+        self.assertFalse(schema_pg.exists(), "schema_postgres.sql no debe existir para evitar ambigüedad con SQLite")
 
     # =========================================================================
     # 3.2 y 3.3 SECRETOS, AUTENTICACIÓN Y TOKENS LIVEKIT (P1)
@@ -543,6 +553,142 @@ class TestCommunitiesMergeAudit(unittest.TestCase):
             self.assertEqual(sm.current_state_name, state_name)
             sm.update(0.016)
             sm.draw(screen)
+
+    def test_10_live_tcp_http_200_websocket_101_and_docker_compose_config(self):
+        """[P1 Despliegue Reproducible] Valida docker compose config, servidor TCP en vivo (HTTP 200, WS 101) y persistencia tras reinicio."""
+        import json
+        import socket
+        import subprocess
+        import threading
+        import urllib.request
+        from werkzeug.serving import make_server
+        from backend.server import socketio
+
+        # 1. Validar sintaxis e interpolación de deploy/docker-compose.communities.yml con docker compose config
+        if shutil.which("docker"):
+            env_compose = {
+                **os.environ,
+                "CCI_SECRET_KEY": "a9f8e7d6c5b4a3f2e1d0c9b8a7f6e5d4c3b2a1f0e9d8c7b6a5f4e3d2c1b0a9f8",
+                "LIVEKIT_API_KEY": "APx9K7mQ2vL8nR4pT6wY1zB3",
+                "LIVEKIT_API_SECRET": "9f8e7d6c5b4a3f2e1d0c9b8a7f6e5d4c3b2a1f0e9d8c7b6a5f4e3d2c1b0a9f8e",
+                "TURN_SECRET": "7e6d5c4b3a2f1e0d9c8b7a6f5e4d3c2b1a0f9e8d7c6b5a4f3e2d1c0b9a8f7e6d",
+            }
+            proc = subprocess.run(
+                ["docker", "compose", "-f", str(ROOT_DIR / "deploy" / "docker-compose.communities.yml"), "config"],
+                capture_output=True,
+                text=True,
+                env=env_compose,
+                timeout=15,
+                check=False,
+            )
+            self.assertEqual(proc.returncode, 0, f"docker compose config falló: {proc.stderr}")
+            self.assertIn("cci_communities_api", proc.stdout)
+            self.assertIn("cci_communities_livekit", proc.stdout)
+            self.assertIn("cci_communities_coturn", proc.stdout)
+            self.assertIn("cci_communities_caddy", proc.stdout)
+            self.assertIn("5050", proc.stdout)
+
+        # 2. Levantar servidor HTTP/WebSocket real en puerto TCP local sobre SQLite WAL
+        server = make_server("127.0.0.1", 0, app, threaded=True)
+        port = server.server_port
+        srv_thread = threading.Thread(target=server.serve_forever, daemon=True)
+        srv_thread.start()
+
+        try:
+            base_url = f"http://127.0.0.1:{port}"
+            # 2a. Healthcheck real por red TCP -> HTTP 200 OK
+            req_health = urllib.request.Request(f"{base_url}/api/v1/communities/health")
+            with urllib.request.urlopen(req_health, timeout=5) as resp:
+                self.assertEqual(resp.status, 200)
+                body_health = json.loads(resp.read().decode("utf-8"))
+                self.assertEqual(body_health["status"], "healthy")
+                self.assertEqual(body_health["database"], "connected")
+
+            # 2b. Crear comunidad y mensaje por HTTP TCP real -> HTTP 201 Created
+            req_comm = urllib.request.Request(
+                f"{base_url}/api/v1/communities",
+                data=json.dumps({"name": "TCP Live Guild", "visibility": "public"}).encode("utf-8"),
+                headers={
+                    "Authorization": f"Bearer {self.token_alice}",
+                    "Content-Type": "application/json",
+                },
+                method="POST",
+            )
+            with urllib.request.urlopen(req_comm, timeout=5) as resp_comm:
+                self.assertEqual(resp_comm.status, 201)
+                comm_data = json.loads(resp_comm.read().decode("utf-8"))["community"]
+                comm_id = comm_data["id"]
+
+            req_ch = urllib.request.Request(
+                f"{base_url}/api/v1/communities/{comm_id}/channels",
+                headers={"Authorization": f"Bearer {self.token_alice}"},
+            )
+            with urllib.request.urlopen(req_ch, timeout=5) as resp_ch:
+                channels = json.loads(resp_ch.read().decode("utf-8"))["channels"]
+                text_ch_id = [c["id"] for c in channels if c["type"] == "text"][0]
+
+            req_msg = urllib.request.Request(
+                f"{base_url}/api/v1/channels/{text_ch_id}/messages",
+                data=json.dumps({"content": "Persistencia TCP + SQLite WAL verificada"}).encode("utf-8"),
+                headers={
+                    "Authorization": f"Bearer {self.token_alice}",
+                    "Content-Type": "application/json",
+                },
+                method="POST",
+            )
+            with urllib.request.urlopen(req_msg, timeout=5) as resp_msg:
+                self.assertEqual(resp_msg.status, 201)
+
+            # 2c. Handshake WebSocket (RFC 6455 Upgrade 101 Switching Protocols) sobre socket TCP real
+            ws_sock = socket.create_connection(("127.0.0.1", port), timeout=5)
+            try:
+                upgrade_req = (
+                    f"GET /socket.io/?EIO=4&transport=websocket&token={self.token_alice} HTTP/1.1\r\n"
+                    f"Host: 127.0.0.1:{port}\r\n"
+                    "Upgrade: websocket\r\n"
+                    "Connection: Upgrade\r\n"
+                    "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n"
+                    "Sec-WebSocket-Version: 13\r\n\r\n"
+                )
+                ws_sock.sendall(upgrade_req.encode("ascii"))
+                raw_resp = ws_sock.recv(4096).decode("latin1", errors="ignore")
+                first_line = raw_resp.splitlines()[0] if raw_resp else ""
+                # Con simple-websocket instalado responde HTTP/1.1 101 Switching Protocols
+                self.assertIn("101", first_line, f"Se esperaba HTTP 101 Switching Protocols, recibido: {raw_resp}")
+                self.assertIn("Upgrade: websocket", raw_resp)
+            finally:
+                ws_sock.close()
+
+            # 2d. También verificar cliente Socket.IO autenticado y eventos en vivo
+            sio_client = socketio.test_client(app, auth={"token": self.token_alice})
+            self.assertTrue(sio_client.is_connected())
+            sio_client.disconnect()
+        finally:
+            server.shutdown()
+            server.server_close()
+
+        # 3. Reiniciar completamente repositorio y servidor TCP sobre el mismo archivo SQLite WAL y comprobar persistencia
+        self.repo.close()
+        reopened_repo = CommunitiesRepository.reset_instance(self.db_path)
+        CommunitiesService._instance = CommunitiesService(reopened_repo)
+
+        server2 = make_server("127.0.0.1", 0, app, threaded=True)
+        port2 = server2.server_port
+        srv_thread2 = threading.Thread(target=server2.serve_forever, daemon=True)
+        srv_thread2.start()
+        try:
+            req_hist = urllib.request.Request(
+                f"http://127.0.0.1:{port2}/api/v1/channels/{text_ch_id}/messages",
+                headers={"Authorization": f"Bearer {self.token_alice}"},
+            )
+            with urllib.request.urlopen(req_hist, timeout=5) as resp_hist:
+                self.assertEqual(resp_hist.status, 200)
+                msgs = json.loads(resp_hist.read().decode("utf-8"))["messages"]
+                self.assertEqual(len(msgs), 1)
+                self.assertEqual(msgs[0]["content"], "Persistencia TCP + SQLite WAL verificada")
+        finally:
+            server2.shutdown()
+            server2.server_close()
 
 
 if __name__ == "__main__":

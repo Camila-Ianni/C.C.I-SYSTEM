@@ -40,9 +40,9 @@ sequenceDiagram
     autonumber
     actor Mod as Moderador
     participant Client as Cliente Desktop
-    participant API as Backend FastAPI / Flask
+    participant API as Backend Flask (:5050)
     participant Repo as CommunitiesRepository
-    participant DB as PostgreSQL / SQLite
+    participant DB as SQLite 3 (WAL)
     participant WSS as Socket.IO Broker
 
     Mod->>Client: Aplica sanción (ej. Ban 24h a Troll)

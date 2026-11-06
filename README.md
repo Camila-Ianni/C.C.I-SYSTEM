@@ -7,15 +7,15 @@
 [![Android Support](https://img.shields.io/badge/Android-APK%20(Buildozer)-brightgreen?style=for-the-badge&logo=android&logoColor=white)](#-soporte-móvil-android--ios)
 [![iOS Support](https://img.shields.io/badge/iOS-IPA%20(Xcode%20Blueprint)-lightgrey?style=for-the-badge&logo=apple&logoColor=black)](#-soporte-móvil-android--ios)
 
-![Python Version](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12%20%7C%203.14-blue)
+![Python Version](https://img.shields.io/badge/python-3.12%20%7C%203.14-blue)
 ![Pygame-CE](https://img.shields.io/badge/pygame--ce-2.5%2B-brightgreen)
-![Tests](https://img.shields.io/badge/tests-61%2F61%20evolution%20passed%20(100%25)-success)
-![Database](https://img.shields.io/badge/database-SQLite%20Schema%20v2%20(WAL%20Mode)-orange)
+![Tests](https://img.shields.io/badge/tests-191%2F191%20suites%20passed%20(100%25)-success)
+![Database](https://img.shields.io/badge/database-SQLite%203%20(WAL%20Mode)-orange)
 ![Multiplayer](https://img.shields.io/badge/multiplayer-60%20Hz%20Authoritative-purple)
-![Voice Chat](https://img.shields.io/badge/voice-WebRTC%20P2P%20Opus-cyan)
+![Voice Chat](https://img.shields.io/badge/voice-LiveKit%20JWT%20%2B%20UDP%20RTP-cyan)
 ![Recorder](https://img.shields.io/badge/recorder-MP4%20Async%20Worker-red)
 
-**C.C.I. SYSTEM** es una plataforma arcade integral y emulador multiplataforma desarrollado **100% en Python** con **Pygame-CE (Community Edition)** y orquestación web nativa en **Flask + Flask-SocketIO**. Unifica **19 clásicos arcade** bajo un entorno retrofuturista Cyberpunk / PS5 de ventana única (`1280x720`, 60 FPS), multijugador online autoritativo a 60 Hz, chat y llamadas de voz WebRTC en tiempo real, grabador de gameplay en segundo plano, máquina de estados determinista, persistencia dual (JSON + SQLite v2) y adaptación móvil táctil para Android e iOS.
+**C.C.I. SYSTEM** es una plataforma arcade integral y emulador multiplataforma desarrollado **100% en Python** con **Pygame-CE (Community Edition)** y orquestación web/tiempo real en **Flask + Flask-SocketIO** (`puerto 5050`). Unifica **19 clásicos arcade** bajo un entorno retrofuturista Cyberpunk / PS5 de ventana única (`1280x720`, 60 FPS), módulo de **Comunidades (`CCI Communities`: grupos, canales, chat en tiempo real, Sound Deck MP3, plano de control de voz/streaming y moderación jerárquica)**, multijugador online autoritativo a 60 Hz, grabador de gameplay en segundo plano, máquina de estados determinista, persistencia relacional en **SQLite 3 (modo WAL)** y adaptación móvil táctil para Android e iOS.
 
 🌐 **Sitio Web Oficial en Producción:** [https://c-c-i-system.onrender.com](https://c-c-i-system.onrender.com)
 
@@ -122,9 +122,13 @@ python run_web.py
 ```text
 C.C.I-SYSTEM/
 ├── main.py                     # Entry point de la consola virtual en Pygame-CE (60 FPS)
-├── emulator.py                 # Launcher y verificador integral multiplataforma
-├── run_web.py                  # Servidor de producción Flask de la landing page y API
-├── run_tests.py                # Test Runner unificado automatizado (16/16 tests passing)
+├── groups_ui.py                # Pantallas nativas de Grupos y Comunidades conectadas a SQLite WAL
+├── sidebar_ui.py               # Barra lateral global de navegación (Inicio, Juegos, Grupos, Perfil...)
+├── run_all_evaluations.py      # Runner unificado de certificación (22 suites / 191 tests passing)
+├── backend/
+│   ├── server.py               # Servidor unificado Flask + Flask-SocketIO (puerto 5050)
+│   └── communities/            # Subsistema CCI Communities (SQLite 3 WAL, RBAC, LiveKit JWT, MP3, Stream)
+├── deploy/                     # Manifiestos Docker Compose, Dockerfile.backend, Caddyfile, LiveKit y coturn
 ├── catalog_data.py             # Metadatos del catálogo oficial de 19 juegos (100% Python)
 ├── cci_database.py             # Capa de persistencia SQLite relacional (WAL mode, foreign keys)
 ├── cci_sync.py                 # Cliente de sincronización en segundo plano (Daemon Thread)
