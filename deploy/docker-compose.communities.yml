@@ -33,7 +33,7 @@ services:
     volumes:
       - cci_app_data:/data
     ports:
-      - "127.0.0.1:5050:5050"
+      - "127.0.0.1:${API_HOST_PORT:-15050}:5050"
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request, sys; r = urllib.request.urlopen('http://127.0.0.1:5050/api/v1/communities/health', timeout=4); sys.exit(0 if r.status == 200 else 1)"]
       interval: 15s

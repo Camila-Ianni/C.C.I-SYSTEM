@@ -722,6 +722,7 @@ class TestCommunitiesMergeAudit(unittest.TestCase):
             "CADDY_HTTPS_PORT": "8443",
         }
 
+        need_compose_up = False
         ps_check = subprocess.run(
             ["docker", "inspect", "--format", "{{.State.Running}}", "cci_communities_caddy"],
             capture_output=True,
@@ -729,6 +730,15 @@ class TestCommunitiesMergeAudit(unittest.TestCase):
             check=False,
         )
         if ps_check.returncode != 0 or ps_check.stdout.strip() != "true":
+            need_compose_up = True
+        else:
+            try:
+                with socket.create_connection(("127.0.0.1", 8443), timeout=1):
+                    pass
+            except OSError:
+                need_compose_up = True
+
+        if need_compose_up:
             subprocess.run(
                 ["docker", "compose", "-f", str(ROOT_DIR / "deploy" / "docker-compose.communities.yml"), "up", "-d", "--build"],
                 env=env_docker,
