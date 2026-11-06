@@ -94,9 +94,63 @@ class AuthoritativeSyncEngine:
 
         # Comprobar KO
         if self.p1.hp <= 0 or self.p2.hp <= 0 or self.timer <= 0:
-            self.status = "round_ended"
+            if self.status != "match_over":
+                self.status = "round_ended"
+                if self.p1.hp > self.p2.hp:
+                    self.p1_wins += 1
+                elif self.p2.hp > self.p1.hp:
+                    self.p2_wins += 1
+
+                if self.p1_wins >= 2 or self.p2_wins >= 2:
+                    self.status = "match_over"
 
         return self.get_snapshot()
+
+    def start_next_round(self) -> None:
+        """Reinicia el estado para el siguiente round manteniendo el puntaje global."""
+        if self.status == "match_over":
+            return
+        self.current_round += 1
+        self.p1.x = 800.0
+        self.p1.y = 550.0
+        self.p1.hp = 100
+        self.p1.state = "idle"
+        self.p1.facing_right = True
+
+        self.p2.x = 1300.0
+        self.p2.y = 550.0
+        self.p2.hp = 100
+        self.p2.state = "idle"
+        self.p2.facing_right = False
+
+        self.timer = 99.0
+        self.status = "fighting"
+
+    def handle_forfeit(self, quitter_slot: int) -> WorldSnapshotPacket:
+        """Declara victoria por abandono para el rival."""
+        if quitter_slot == 1:
+            self.p2_wins = 2
+            self.p1.hp = 0
+        else:
+            self.p1_wins = 2
+            self.p2.hp = 0
+        self.status = "match_over"
+        return self.get_snapshot()
+
+    def get_winner_slot(self) -> Optional[int]:
+        if self.status == "match_over":
+            if self.p1_wins > self.p2_wins:
+                return 1
+            elif self.p2_wins > self.p1_wins:
+                return 2
+        return None
+
+    def get_full_world_sync(self) -> Dict[str, Any]:
+        """Empaqueta el estado íntegro para recuperación de desconexión."""
+        snap = self.get_snapshot()
+        data = snap.to_dict()
+        data["full_recovery"] = True
+        return data
 
     def get_snapshot(self) -> WorldSnapshotPacket:
         return WorldSnapshotPacket(

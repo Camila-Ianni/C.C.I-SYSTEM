@@ -1335,3 +1335,79 @@ def record_message_report_entry(
         return True
 
 
+# ==============================================================================
+# HELPER FUNCTIONS: FASE 4 MULTIJUGADOR ONLINE Y REGISTRO DE PARTIDAS
+# ==============================================================================
+
+def get_room_by_invite_code_entry(invite_code: str, db_path: Optional[Path] = None) -> Optional[Dict[str, Any]]:
+    """Busca una sala de juego por su código de invitación alfanumérico."""
+    with get_db(db_path) as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM game_rooms WHERE invite_code = ?", (invite_code.strip().upper(),))
+        row = cursor.fetchone()
+        if not row:
+            return None
+        room = dict(row)
+        cursor.execute("SELECT * FROM game_room_members WHERE room_id = ? ORDER BY player_slot ASC", (room["id"],))
+        room["members"] = [dict(m) for m in cursor.fetchall()]
+        return room
+
+
+def record_match_result_entry(
+    match_id: str,
+    room_id: str,
+    game_id: str,
+    started_at: str,
+    ended_at: str,
+    result_metadata: Dict[str, Any],
+    db_path: Optional[Path] = None
+) -> bool:
+    """Registra el resultado validado de una partida en la tabla matches."""
+    meta_json = json.dumps(result_metadata)
+    with get_db(db_path) as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT INTO matches (id, room_id, game_id, started_at, ended_at, result_metadata)
+            VALUES (?, ?, ?, ?, ?, ?)
+        """, (match_id, room_id, game_id, started_at, ended_at, meta_json))
+        return True
+
+
+def get_match_history_entries(
+    game_id: Optional[str] = None,
+    limit: int = 20,
+    db_path: Optional[Path] = None
+) -> List[Dict[str, Any]]:
+    """Consulta el historial de partidas recientes con sus metadatos deserializados."""
+    with get_db(db_path) as conn:
+        cursor = conn.cursor()
+        if game_id:
+            cursor.execute("""
+                SELECT m.*, g.title AS game_title
+                FROM matches m
+                LEFT JOIN games g ON m.game_id = g.id
+                WHERE m.game_id = ?
+                ORDER BY m.started_at DESC
+                LIMIT ?
+            """, (game_id, limit))
+        else:
+            cursor.execute("""
+                SELECT m.*, g.title AS game_title
+                FROM matches m
+                LEFT JOIN games g ON m.game_id = g.id
+                ORDER BY m.started_at DESC
+                LIMIT ?
+            """, (limit,))
+
+        results = []
+        for row in cursor.fetchall():
+            m = dict(row)
+            try:
+                m["result_metadata"] = json.loads(m["result_metadata"]) if m["result_metadata"] else {}
+            except Exception:
+                m["result_metadata"] = {}
+            results.append(m)
+        return results
+
+
+

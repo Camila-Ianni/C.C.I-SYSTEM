@@ -256,6 +256,72 @@ def report_chat_message(message_id):
     return jsonify(res), status_code
 
 
+# ==============================================================================
+# ENDPOINTS REST: MULTIJUGADOR ONLINE Y PARTIDAS (FASE 4)
+# ==============================================================================
+
+@app.route("/api/v1/multiplayer/rooms/create", methods=["POST"])
+def create_multiplayer_room():
+    data = request.get_json() or {}
+    game_id = data.get("game_id", "davinci")
+    host_id = data.get("host_id")
+    username = data.get("username", host_id)
+    visibility = data.get("visibility", "public")
+    if not host_id:
+        return jsonify({"success": False, "error": "host_id requerido"}), 400
+
+    room = room_mgr.create_room(
+        game_id=game_id,
+        host_id=host_id,
+        host_name=username,
+        visibility=visibility
+    )
+    return jsonify({"success": True, "room": room.to_dict()})
+
+
+@app.route("/api/v1/multiplayer/rooms/join", methods=["POST"])
+def join_multiplayer_room():
+    data = request.get_json() or {}
+    room_id = data.get("room_id", "")
+    invite_code = data.get("invite_code")
+    user_id = data.get("user_id")
+    username = data.get("username", user_id)
+    if not user_id:
+        return jsonify({"success": False, "error": "user_id requerido"}), 400
+
+    room = room_mgr.join_room(
+        room_id=room_id,
+        user_id=user_id,
+        username=username,
+        invite_code=invite_code
+    )
+    if not room:
+        return jsonify({"success": False, "error": "No fue posible unirse a la sala o código inválido"}), 400
+
+    return jsonify({"success": True, "room": room.to_dict()})
+
+
+@app.route("/api/v1/multiplayer/rooms/<room_id>", methods=["GET"])
+def get_multiplayer_room(room_id):
+    room = room_mgr.get_room(room_id)
+    if not room:
+        # Fallback a SQLite
+        db_room = cci_database.get_game_room(room_id)
+        if not db_room:
+            return jsonify({"success": False, "error": "Sala no encontrada"}), 404
+        return jsonify({"success": True, "room": db_room})
+    return jsonify({"success": True, "room": room.to_dict()})
+
+
+@app.route("/api/v1/multiplayer/matches/history", methods=["GET"])
+def get_matches_history():
+    game_id = request.args.get("game_id")
+    limit = int(request.args.get("limit", 20))
+    matches = cci_database.get_match_history_entries(game_id=game_id, limit=limit)
+    return jsonify({"success": True, "matches": matches})
+
+
+
 
 
 # ==============================================================================
@@ -360,6 +426,89 @@ def on_chat_typing(data: Dict[str, Any]):
     if group_id and user_id:
         emit("chat:typing", {"user_id": user_id, "typing": data.get("typing", True)}, to=group_id, include_self=False)
 
+
+
+# ==============================================================================
+# EVENTOS WEBSOCKET: MULTIJUGADOR ONLINE (FASE 4)
+# ==============================================================================
+
+@socketio.on("game:start")
+def on_game_start(data: Dict[str, Any]):
+    room_id = data.get("room_id", "")
+    room = room_mgr.get_room(room_id)
+    if not room or not room.both_ready:
+        emit("game:error", {"message": "Ambos jugadores deben estar listos para iniciar"})
+        return
+
+    room.status = RoomStatus.PLAYING
+    sync_engine = AuthoritativeSyncEngine(room_id)
+    sync_engines[room_id] = sync_engine
+
+    initial_snap = sync_engine.get_snapshot().to_dict()
+    emit("game:start", {"room_id": room_id, "snapshot": initial_snap}, to=room_id)
+
+
+@socketio.on(SocketEvents.GAME_INPUT)
+def on_game_input(data: Dict[str, Any]):
+    room_id = data.get("room_id", "")
+    engine = sync_engines.get(room_id)
+    if not engine:
+        return
+
+    from backend.contracts import PlayerInputPacket
+    packet = PlayerInputPacket(
+        room_id=room_id,
+        player_id=int(data.get("player_id", 1)),
+        tick=int(data.get("tick", 0)),
+        seq=int(data.get("seq", 0)),
+        dpad=data.get("dpad", "idle"),
+        buttons=data.get("buttons", []),
+        timestamp_ms=float(data.get("timestamp_ms", 0.0)),
+    )
+    engine.push_input(packet)
+    snapshot = engine.step(1.0 / 60.0)
+
+    # Si la partida terminó, persistir en matches
+    if snapshot.status == "match_over":
+        winner = engine.get_winner_slot()
+        import secrets, datetime
+        match_id = f"mat_{secrets.token_hex(4)}"
+        now_iso = datetime.datetime.now().isoformat(timespec="seconds")
+        cci_database.record_match_result_entry(
+            match_id=match_id,
+            room_id=room_id,
+            game_id="davinci",
+            started_at=now_iso,
+            ended_at=now_iso,
+            result_metadata={
+                "winner_slot": winner,
+                "p1_wins": engine.p1_wins,
+                "p2_wins": engine.p2_wins,
+                "final_round": engine.current_round,
+            }
+        )
+
+    emit(SocketEvents.GAME_SNAPSHOT, snapshot.to_dict(), to=room_id)
+
+
+@socketio.on(SocketEvents.GAME_PAUSE)
+def on_game_pause(data: Dict[str, Any]):
+    room_id = data.get("room_id", "")
+    room = room_mgr.get_room(room_id)
+    if room:
+        room.status = RoomStatus.PAUSED
+        emit(SocketEvents.GAME_PAUSE, {"room_id": room_id, "paused_by": data.get("user_id")}, to=room_id)
+
+
+@socketio.on(SocketEvents.GAME_RESUME)
+def on_game_resume(data: Dict[str, Any]):
+    room_id = data.get("room_id", "")
+    room = room_mgr.get_room(room_id)
+    engine = sync_engines.get(room_id)
+    if room and engine:
+        room.status = RoomStatus.PLAYING
+        full_sync = engine.get_full_world_sync()
+        emit(SocketEvents.GAME_RESUME, {"room_id": room_id, "snapshot": full_sync}, to=room_id)
 
 
 # ==============================================================================

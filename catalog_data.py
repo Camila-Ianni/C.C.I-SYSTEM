@@ -9,18 +9,27 @@ CATEGORIES: list[str] = [
     "TODOS", "ACCIÓN", "PLATAFORMAS", "PUZZLE", "SHOOTER", "RPG", "ARCADE"
 ]
 
+def get_multiplayer_capabilities(game_id: str) -> dict[str, bool]:
+    """Retorna las modalidades soportadas por el juego (single, local, online)."""
+    if game_id == "davinci":
+        return {"single": True, "local": True, "online": True}
+    elif game_id in ("metalslug", "space_invaders", "pacman", "bubblebobble", "donkeykong"):
+        return {"single": True, "local": True, "online": False}
+    else:
+        return {"single": True, "local": False, "online": False}
+
 CATALOG: list[dict] = [
     {
         "id": "davinci", "title": "DA VINCI FIGHTERS", "subtitle": "Combate arcade 1v1.",
         "developer": "C.C.I. System", "year": "2026", "genre": "Acción / Lucha",
         "players": "1–2", "tags": "ACCIÓN  ·  ARCADE", "categories": {"ACCIÓN", "ARCADE"},
-        "game_key": "davinci", "slot": 0,
+        "game_key": "davinci", "slot": 0, "multiplayer": get_multiplayer_capabilities("davinci"),
     },
     {
         "id": "asteroids", "title": "ASTEROIDS", "subtitle": "Sobrevive al campo de asteroides.",
         "developer": "Atari", "year": "1979", "genre": "Arcade / Shooter",
         "players": "1", "tags": "ARCADE  ·  SHOOTER", "categories": {"ARCADE", "SHOOTER"},
-        "game_key": "asteroids", "slot": 1,
+        "game_key": "asteroids", "slot": 1, "multiplayer": get_multiplayer_capabilities("asteroids"),
     },
     {
         "id": "mario", "title": "SUPER MARIO BROS", "subtitle": "Aventura clásica de plataformas.",
