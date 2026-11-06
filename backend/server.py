@@ -843,6 +843,153 @@ def on_chat_typing(data: Dict[str, Any]):
         emit("chat:typing", {"user_id": user_id, "typing": data.get("typing", True)}, to=group_id, include_self=False)
 
 
+# ==============================================================================
+# EVENTOS WEBSOCKET: CCI COMMUNITIES (CHAT Y PRESENCIA EN TIEMPO REAL)
+# ==============================================================================
+
+@socketio.on("community:channel:join")
+@require_socket_auth
+def on_community_channel_join(data: Dict[str, Any]):
+    """Incorpora al usuario autenticado a la sala Socket.IO del canal de texto."""
+    from backend.communities.service import CommunitiesService
+    user_id = data.get("user_id")
+    channel_id = data.get("channel_id")
+    if not channel_id or not user_id:
+        emit("community:error", {"error": "channel_id requerido"})
+        return
+
+    comm_svc = CommunitiesService.get_instance()
+    ch = comm_svc.repo.get_channel(channel_id)
+    if not ch:
+        emit("community:error", {"error": "Canal no encontrado"})
+        return
+
+    if not comm_svc.has_permission(ch["community_id"], user_id, "messages.read", channel_id=channel_id):
+        emit("community:error", {"error": "Acceso denegado: se requiere permiso messages.read"})
+        return
+
+    room_name = f"comm_chan_{channel_id}"
+    join_room(room_name)
+    emit("community:channel:joined", {"channel_id": channel_id, "user_id": user_id})
+
+
+@socketio.on("community:channel:leave")
+@require_socket_auth
+def on_community_channel_leave(data: Dict[str, Any]):
+    channel_id = data.get("channel_id")
+    if channel_id:
+        leave_room(f"comm_chan_{channel_id}")
+
+
+@socketio.on("community:message:send")
+@require_socket_auth
+def on_community_message_send(data: Dict[str, Any]):
+    """Envío en tiempo real de mensaje a canal con distribución broadcast."""
+    from backend.communities.service import CommunitiesService
+    author_id = data.get("user_id")
+    channel_id = data.get("channel_id")
+    content = data.get("content", "")
+    reply_to_id = data.get("reply_to_id")
+
+    comm_svc = CommunitiesService.get_instance()
+    ch = comm_svc.repo.get_channel(channel_id)
+    if not ch:
+        emit("community:error", {"error": "Canal no encontrado"})
+        return
+
+    try:
+        msg = comm_svc.send_message(
+            community_id=ch["community_id"],
+            channel_id=channel_id,
+            author_id=author_id,
+            content=content,
+            reply_to_id=reply_to_id,
+        )
+        emit("message:created", msg, to=f"comm_chan_{channel_id}")
+    except Exception as e:
+        emit("community:error", {"error": str(e)})
+
+
+@socketio.on("community:message:edit")
+@require_socket_auth
+def on_community_message_edit(data: Dict[str, Any]):
+    from backend.communities.service import CommunitiesService
+    requester_id = data.get("user_id")
+    channel_id = data.get("channel_id")
+    message_id = data.get("message_id")
+    content = data.get("content", "")
+
+    comm_svc = CommunitiesService.get_instance()
+    ch = comm_svc.repo.get_channel(channel_id)
+    if not ch:
+        emit("community:error", {"error": "Canal no encontrado"})
+        return
+
+    try:
+        updated = comm_svc.edit_message(
+            community_id=ch["community_id"],
+            channel_id=channel_id,
+            message_id=message_id,
+            requester_id=requester_id,
+            new_content=content,
+        )
+        emit("message:updated", updated, to=f"comm_chan_{channel_id}")
+    except Exception as e:
+        emit("community:error", {"error": str(e)})
+
+
+@socketio.on("community:message:delete")
+@require_socket_auth
+def on_community_message_delete(data: Dict[str, Any]):
+    from backend.communities.service import CommunitiesService
+    requester_id = data.get("user_id")
+    channel_id = data.get("channel_id")
+    message_id = data.get("message_id")
+
+    comm_svc = CommunitiesService.get_instance()
+    ch = comm_svc.repo.get_channel(channel_id)
+    if not ch:
+        emit("community:error", {"error": "Canal no encontrado"})
+        return
+
+    try:
+        comm_svc.delete_message(
+            community_id=ch["community_id"],
+            channel_id=channel_id,
+            message_id=message_id,
+            requester_id=requester_id,
+        )
+        emit("message:deleted", {"channel_id": channel_id, "message_id": message_id}, to=f"comm_chan_{channel_id}")
+    except Exception as e:
+        emit("community:error", {"error": str(e)})
+
+
+@socketio.on("community:typing")
+@require_socket_auth
+def on_community_typing(data: Dict[str, Any]):
+    user_id = data.get("user_id")
+    channel_id = data.get("channel_id")
+    typing = bool(data.get("typing", True))
+    if channel_id and user_id:
+        emit("typing:started", {"user_id": user_id, "channel_id": channel_id, "typing": typing}, to=f"comm_chan_{channel_id}", include_self=False)
+
+
+@socketio.on("community:presence:update")
+@require_socket_auth
+def on_community_presence_update(data: Dict[str, Any]):
+    from backend.communities.service import CommunitiesService
+    user_id = data.get("user_id")
+    status = data.get("status", "online")
+    custom_status = data.get("custom_status")
+
+    comm_svc = CommunitiesService.get_instance()
+    try:
+        p = comm_svc.set_user_presence(user_id=user_id, status=status, custom_status=custom_status)
+        emit("presence:updated", p, broadcast=True, include_self=False)
+    except Exception as e:
+        emit("community:error", {"error": str(e)})
+
+
 
 # ==============================================================================
 # EVENTOS WEBSOCKET: MULTIJUGADOR ONLINE (CON AUTORIZACIÓN CENTRALIZADA)

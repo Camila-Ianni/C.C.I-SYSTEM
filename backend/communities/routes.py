@@ -314,3 +314,147 @@ def set_channel_override_route(community_id: str, channel_id: str):
         return jsonify({"error": str(e)}), 403
     except LookupError as e:
         return jsonify({"error": str(e)}), 404
+
+
+# =============================================================================
+# RUTAS DE MENSAJERÍA E HISTORIAL
+# =============================================================================
+
+@communities_bp.route("/channels/<channel_id>/messages", methods=["GET"])
+@require_auth
+def get_channel_messages_route(channel_id: str):
+    user_id = g.current_user["user_id"]
+    limit = int(request.args.get("limit", 50))
+    before_id = request.args.get("before_id")
+
+    ch = get_service().repo.get_channel(channel_id)
+    if not ch:
+        return jsonify({"error": "Canal no encontrado"}), 404
+
+    try:
+        msgs = get_service().list_channel_messages(
+            community_id=ch["community_id"],
+            channel_id=channel_id,
+            requester_id=user_id,
+            limit=limit,
+            before_id=before_id,
+        )
+        return jsonify({"messages": msgs}), 200
+    except PermissionError as e:
+        return jsonify({"error": str(e)}), 403
+    except LookupError as e:
+        return jsonify({"error": str(e)}), 404
+
+
+@communities_bp.route("/channels/<channel_id>/messages", methods=["POST"])
+@require_auth
+def send_channel_message_route(channel_id: str):
+    user_id = g.current_user["user_id"]
+    data = request.get_json() or {}
+    content = data.get("content", "")
+    reply_to_id = data.get("reply_to_id")
+
+    ch = get_service().repo.get_channel(channel_id)
+    if not ch:
+        return jsonify({"error": "Canal no encontrado"}), 404
+
+    try:
+        msg = get_service().send_message(
+            community_id=ch["community_id"],
+            channel_id=channel_id,
+            author_id=user_id,
+            content=content,
+            reply_to_id=reply_to_id,
+        )
+        return jsonify({"message": msg}), 201
+    except PermissionError as e:
+        return jsonify({"error": str(e)}), 403
+    except (ValueError, LookupError) as e:
+        return jsonify({"error": str(e)}), 400
+
+
+@communities_bp.route("/channels/<channel_id>/messages/<message_id>", methods=["PATCH"])
+@require_auth
+def edit_channel_message_route(channel_id: str, message_id: str):
+    user_id = g.current_user["user_id"]
+    data = request.get_json() or {}
+    content = data.get("content", "")
+
+    ch = get_service().repo.get_channel(channel_id)
+    if not ch:
+        return jsonify({"error": "Canal no encontrado"}), 404
+
+    try:
+        updated = get_service().edit_message(
+            community_id=ch["community_id"],
+            channel_id=channel_id,
+            message_id=message_id,
+            requester_id=user_id,
+            new_content=content,
+        )
+        return jsonify({"message": updated}), 200
+    except PermissionError as e:
+        return jsonify({"error": str(e)}), 403
+    except (ValueError, LookupError) as e:
+        return jsonify({"error": str(e)}), 400
+
+
+@communities_bp.route("/channels/<channel_id>/messages/<message_id>", methods=["DELETE"])
+@require_auth
+def delete_channel_message_route(channel_id: str, message_id: str):
+    user_id = g.current_user["user_id"]
+
+    ch = get_service().repo.get_channel(channel_id)
+    if not ch:
+        return jsonify({"error": "Canal no encontrado"}), 404
+
+    try:
+        get_service().delete_message(
+            community_id=ch["community_id"],
+            channel_id=channel_id,
+            message_id=message_id,
+            requester_id=user_id,
+        )
+        return jsonify({"status": "deleted", "message_id": message_id}), 200
+    except PermissionError as e:
+        return jsonify({"error": str(e)}), 403
+    except LookupError as e:
+        return jsonify({"error": str(e)}), 404
+
+
+# =============================================================================
+# RUTAS DE PRESENCIA DE USUARIO
+# =============================================================================
+
+@communities_bp.route("/users/presence", methods=["GET"])
+@require_auth
+def get_presence_route():
+    viewer_id = g.current_user["user_id"]
+    user_ids_arg = request.args.get("user_ids", "")
+    if user_ids_arg:
+        uids = [u.strip() for u in user_ids_arg.split(",") if u.strip()]
+        presences = get_service().list_user_presences(uids, viewer_id=viewer_id)
+        return jsonify({"presences": presences}), 200
+    else:
+        p = get_service().get_user_presence(viewer_id, viewer_id=viewer_id)
+        return jsonify({"presence": p}), 200
+
+
+@communities_bp.route("/users/presence", methods=["POST"])
+@require_auth
+def set_presence_route():
+    user_id = g.current_user["user_id"]
+    data = request.get_json() or {}
+    status = data.get("status", "online")
+    custom_status = data.get("custom_status")
+
+    try:
+        updated = get_service().set_user_presence(
+            user_id=user_id,
+            status=status,
+            custom_status=custom_status,
+        )
+        return jsonify({"presence": updated}), 200
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+

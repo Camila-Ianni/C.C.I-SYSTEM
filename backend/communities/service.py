@@ -126,9 +126,15 @@ class CommunitiesService:
             if has_role_allow:
                 return True
 
-            # Si el canal es privado y se busca leer/conectar sin allow explícito
-            if chan.get("is_private") and permission_id in ("messages.read", "voice.connect"):
-                return base_allowed and has_role_allow
+            # Si el canal es privado, cualquier acción exige allow explícito o rol de gestión
+            if chan.get("is_private"):
+                has_channel_access = has_role_allow or any(
+                    ov["allow"] for ov in overrides
+                    if (ov["target_type"] == "user" and ov["target_id"] == user_id) or
+                       (ov["target_type"] == "role" and ov["target_id"] in role_ids)
+                )
+                if not has_channel_access:
+                    return False
 
         return base_allowed
 
@@ -451,3 +457,146 @@ class CommunitiesService:
         if not ch or ch["community_id"] != community_id:
             raise LookupError("Canal no encontrado")
         return self.repo.set_channel_override(channel_id, target_type, target_id, permission_id, allow, deny)
+
+    # =========================================================================
+    # MENSAJERÍA EN TIEMPO REAL E HISTORIAL PAGINADO
+    # =========================================================================
+
+    def send_message(
+        self,
+        community_id: str,
+        channel_id: str,
+        author_id: str,
+        content: str,
+        reply_to_id: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Publica un mensaje en un canal de texto validando permiso messages.send y límites."""
+        clean_content = content.strip()
+        if not clean_content:
+            raise ValueError("El contenido del mensaje no puede estar vacío")
+        if len(clean_content) > 2000:
+            raise ValueError("El mensaje excede el límite máximo de 2000 caracteres")
+
+        ch = self.repo.get_channel(channel_id)
+        if not ch or ch["community_id"] != community_id:
+            raise LookupError("Canal no encontrado en esta comunidad")
+        if ch["type"] != "text":
+            raise ValueError("Solo es posible enviar mensajes en canales de tipo texto")
+
+        if not self.has_permission(community_id, author_id, "messages.send", channel_id=channel_id):
+            raise PermissionError("Acceso denegado: se requiere permiso messages.send")
+
+        if reply_to_id:
+            parent = self.repo.get_message(reply_to_id)
+            if not parent or parent["channel_id"] != channel_id:
+                raise LookupError("Mensaje de respuesta no encontrado en este canal")
+
+        msg = self.repo.create_message(
+            channel_id=channel_id,
+            author_id=author_id,
+            content=clean_content,
+            reply_to_id=reply_to_id,
+        )
+        return msg
+
+    def list_channel_messages(
+        self,
+        community_id: str,
+        channel_id: str,
+        requester_id: str,
+        limit: int = 50,
+        before_id: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
+        """Recupera el historial paginado de mensajes validando permiso messages.read."""
+        ch = self.repo.get_channel(channel_id)
+        if not ch or ch["community_id"] != community_id:
+            raise LookupError("Canal no encontrado en esta comunidad")
+
+        if not self.has_permission(community_id, requester_id, "messages.read", channel_id=channel_id):
+            raise PermissionError("Acceso denegado: se requiere permiso messages.read")
+
+        limit = max(1, min(100, limit))
+        return self.repo.list_messages(channel_id, limit=limit, before_id=before_id)
+
+    def edit_message(
+        self,
+        community_id: str,
+        channel_id: str,
+        message_id: str,
+        requester_id: str,
+        new_content: str,
+    ) -> Dict[str, Any]:
+        """Edita un mensaje existente: solo el autor original o moderador con messages.manage."""
+        clean_content = new_content.strip()
+        if not clean_content:
+            raise ValueError("El contenido del mensaje no puede estar vacío")
+        if len(clean_content) > 2000:
+            raise ValueError("El mensaje excede el límite máximo de 2000 caracteres")
+
+        msg = self.repo.get_message(message_id)
+        if not msg or msg["channel_id"] != channel_id:
+            raise LookupError("Mensaje no encontrado")
+
+        is_author = (msg["author_id"] == requester_id)
+        has_manage = self.has_permission(community_id, requester_id, "messages.manage", channel_id=channel_id)
+        if not (is_author or has_manage):
+            raise PermissionError("No tienes permiso para editar este mensaje")
+
+        updated = self.repo.update_message(message_id, clean_content)
+        if not updated:
+            raise LookupError("Mensaje no encontrado")
+        return updated
+
+    def delete_message(
+        self,
+        community_id: str,
+        channel_id: str,
+        message_id: str,
+        requester_id: str,
+    ) -> bool:
+        """Eliminación lógica de mensaje: autor original o moderador con messages.manage."""
+        msg = self.repo.get_message(message_id)
+        if not msg or msg["channel_id"] != channel_id:
+            raise LookupError("Mensaje no encontrado")
+
+        is_author = (msg["author_id"] == requester_id)
+        has_manage = self.has_permission(community_id, requester_id, "messages.manage", channel_id=channel_id)
+        if not (is_author or has_manage):
+            raise PermissionError("No tienes permiso para eliminar este mensaje")
+
+        return self.repo.delete_message(message_id)
+
+    # =========================================================================
+    # PRESENCIA DE USUARIOS (ONLINE, IDLE, DND, INVISIBLE)
+    # =========================================================================
+
+    def set_user_presence(
+        self,
+        user_id: str,
+        status: str = "online",
+        custom_status: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Actualiza el estado de presencia global del usuario."""
+        valid_statuses = {"online", "idle", "dnd", "invisible", "offline"}
+        if status not in valid_statuses:
+            raise ValueError(f"Estado de presencia inválido: {status}")
+
+        return self.repo.set_presence(user_id, status=status, custom_status=custom_status)
+
+    def get_user_presence(self, user_id: str, viewer_id: Optional[str] = None) -> Dict[str, Any]:
+        """Obtiene la presencia de un usuario; si está en 'invisible', se enmascara como 'offline'."""
+        p = self.repo.get_presence(user_id)
+        res = dict(p)
+        if res.get("status") == "invisible" and viewer_id != user_id:
+            res["status"] = "offline"
+        return res
+
+    def list_user_presences(self, user_ids: List[str], viewer_id: Optional[str] = None) -> Dict[str, Dict[str, Any]]:
+        raw = self.repo.list_presences(user_ids)
+        result = {}
+        for uid, p in raw.items():
+            entry = dict(p)
+            if entry.get("status") == "invisible" and viewer_id != uid:
+                entry["status"] = "offline"
+            result[uid] = entry
+        return result

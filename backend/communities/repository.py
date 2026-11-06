@@ -167,6 +167,36 @@ class CommunitiesRepository:
                 is_revoked INTEGER NOT NULL DEFAULT 0,
                 created_at REAL NOT NULL
             );
+
+            CREATE TABLE IF NOT EXISTS messages (
+                id TEXT PRIMARY KEY,
+                channel_id TEXT NOT NULL REFERENCES channels(id) ON DELETE CASCADE,
+                author_id TEXT NOT NULL,
+                content TEXT NOT NULL,
+                reply_to_id TEXT REFERENCES messages(id) ON DELETE SET NULL,
+                is_pinned INTEGER NOT NULL DEFAULT 0,
+                created_at REAL NOT NULL,
+                edited_at REAL NULL,
+                deleted_at REAL NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS message_attachments (
+                id TEXT PRIMARY KEY,
+                message_id TEXT NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+                storage_key TEXT NOT NULL,
+                filename TEXT NOT NULL,
+                content_type TEXT NOT NULL,
+                size_bytes INTEGER NOT NULL,
+                checksum_sha256 TEXT NOT NULL,
+                created_at REAL NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS user_presence (
+                user_id TEXT PRIMARY KEY,
+                status TEXT NOT NULL DEFAULT 'offline',
+                custom_status TEXT,
+                last_seen REAL NOT NULL
+            );
             """)
 
             # Sembrar catálogo canónico de permisos
@@ -635,3 +665,157 @@ class CommunitiesRepository:
                 (code,)
             )
             return True
+
+    # =========================================================================
+    # MENSAJERÍA, HISTORIAL Y ADJUNTOS
+    # =========================================================================
+
+    def create_message(
+        self,
+        channel_id: str,
+        author_id: str,
+        content: str,
+        reply_to_id: Optional[str] = None,
+        is_pinned: bool = False,
+    ) -> Dict[str, Any]:
+        msg_id = str(uuid.uuid4())
+        now = time.time()
+        conn = self._get_connection()
+        with conn:
+            conn.execute(
+                """
+                INSERT INTO messages (id, channel_id, author_id, content, reply_to_id, is_pinned, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                (msg_id, channel_id, author_id, content, reply_to_id, int(is_pinned), now)
+            )
+        return self.get_message(msg_id)  # type: ignore
+
+    def get_message(self, message_id: str) -> Optional[Dict[str, Any]]:
+        conn = self._get_connection()
+        row = conn.execute(
+            "SELECT * FROM messages WHERE id = ? AND deleted_at IS NULL",
+            (message_id,)
+        ).fetchone()
+        if not row:
+            return None
+        res = dict(row)
+        res["is_pinned"] = bool(res["is_pinned"])
+        return res
+
+    def list_messages(
+        self,
+        channel_id: str,
+        limit: int = 50,
+        before_id: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
+        """Lista mensajes en orden cronológico con paginación basada en cursor before_id."""
+        conn = self._get_connection()
+        before_time = None
+        if before_id:
+            row_b = conn.execute("SELECT created_at FROM messages WHERE id = ?", (before_id,)).fetchone()
+            if row_b:
+                before_time = row_b[0]
+
+        if before_time:
+            rows = conn.execute(
+                """
+                SELECT * FROM messages
+                WHERE channel_id = ? AND deleted_at IS NULL AND created_at < ?
+                ORDER BY created_at DESC LIMIT ?
+                """,
+                (channel_id, before_time, limit)
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                """
+                SELECT * FROM messages
+                WHERE channel_id = ? AND deleted_at IS NULL
+                ORDER BY created_at DESC LIMIT ?
+                """,
+                (channel_id, limit)
+            ).fetchall()
+
+        # Retornar en orden cronológico ascendente para renderizado de chat
+        result = [dict(r) for r in reversed(rows)]
+        for r in result:
+            r["is_pinned"] = bool(r["is_pinned"])
+        return result
+
+    def update_message(self, message_id: str, new_content: str) -> Optional[Dict[str, Any]]:
+        now = time.time()
+        conn = self._get_connection()
+        with conn:
+            cur = conn.execute(
+                "UPDATE messages SET content = ?, edited_at = ? WHERE id = ? AND deleted_at IS NULL",
+                (new_content, now, message_id)
+            )
+            if cur.rowcount == 0:
+                return None
+        return self.get_message(message_id)
+
+    def delete_message(self, message_id: str) -> bool:
+        now = time.time()
+        conn = self._get_connection()
+        with conn:
+            cur = conn.execute(
+                "UPDATE messages SET deleted_at = ? WHERE id = ? AND deleted_at IS NULL",
+                (now, message_id)
+            )
+            return cur.rowcount > 0
+
+    # =========================================================================
+    # ESTADOS DE PRESENCIA (ONLINE, IDLE, DND, INVISIBLE)
+    # =========================================================================
+
+    def set_presence(
+        self,
+        user_id: str,
+        status: str = "online",
+        custom_status: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        now = time.time()
+        conn = self._get_connection()
+        with conn:
+            conn.execute(
+                """
+                INSERT INTO user_presence (user_id, status, custom_status, last_seen)
+                VALUES (?, ?, ?, ?)
+                ON CONFLICT(user_id) DO UPDATE SET
+                    status = excluded.status,
+                    custom_status = excluded.custom_status,
+                    last_seen = excluded.last_seen
+                """,
+                (user_id, status, custom_status, now)
+            )
+        return self.get_presence(user_id)
+
+    def get_presence(self, user_id: str) -> Dict[str, Any]:
+        conn = self._get_connection()
+        row = conn.execute("SELECT * FROM user_presence WHERE user_id = ?", (user_id,)).fetchone()
+        if not row:
+            return {
+                "user_id": user_id,
+                "status": "offline",
+                "custom_status": None,
+                "last_seen": 0.0,
+            }
+        return dict(row)
+
+    def list_presences(self, user_ids: List[str]) -> Dict[str, Dict[str, Any]]:
+        if not user_ids:
+            return {}
+        conn = self._get_connection()
+        placeholders = ",".join("?" for _ in user_ids)
+        rows = conn.execute(
+            f"SELECT * FROM user_presence WHERE user_id IN ({placeholders})",
+            user_ids
+        ).fetchall()
+        result = {}
+        for r in rows:
+            d = dict(r)
+            result[d["user_id"]] = d
+        for uid in user_ids:
+            if uid not in result:
+                result[uid] = {"user_id": uid, "status": "offline", "custom_status": None, "last_seen": 0.0}
+        return result
