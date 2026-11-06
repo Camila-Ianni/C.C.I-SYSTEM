@@ -108,10 +108,16 @@ class VoiceService:
         return {"success": True, "call": call.to_dict()}
 
     def join_call(self, session_id: str, user_id: str, username: str, socket_id: Optional[str] = None) -> Dict[str, Any]:
-        """Añade a un miembro a la llamada activa."""
+        """Añade a un miembro a la llamada activa previa validación de membresía de grupo."""
         call = self._active_calls.get(session_id)
         if not call or call.status != "active":
             return {"success": False, "error": "La llamada no está activa o ya finalizó."}
+
+        # Validar pertenencia del usuario al grupo de la llamada (Fail-Closed)
+        if call.group_id:
+            from backend.auth import check_group_membership
+            if not check_group_membership(str(user_id), str(call.group_id)):
+                return {"success": False, "error": "Acceso denegado: no perteneces al grupo de esta llamada."}
 
         participant = CallParticipant(
             user_id=user_id,
@@ -169,11 +175,31 @@ class VoiceService:
         return {"success": True, "muted": muted}
 
     def end_call(self, session_id: str, actor_id: str) -> Dict[str, Any]:
-        """Finaliza la llamada grupal para todos los participantes."""
-        call = self._active_calls.pop(session_id, None)
+        """Finaliza la llamada grupal para todos los participantes previa validación de permisos de moderador/iniciador."""
+        call = self._active_calls.get(session_id)
         if not call:
             return {"success": False, "error": "Llamada no encontrada."}
 
+        # Validar política de autorización: iniciador, admin/owner del grupo, participante activo o llamada vacía al salir
+        is_initiator = (str(call.started_by) == str(actor_id))
+        is_participant = (str(actor_id) in call.participants)
+        is_empty = (len(call.participants) == 0)
+        is_group_admin = False
+        if call.group_id:
+            grp = cci_database.get_group_detail(call.group_id)
+            if grp:
+                for m in grp.get("members", []):
+                    if str(m.get("user_id")) == str(actor_id) and m.get("role") in ("owner", "admin"):
+                        is_group_admin = True
+                        break
+
+        if not (is_initiator or is_group_admin or is_participant or is_empty):
+            return {
+                "success": False,
+                "error": "Acceso denegado: no tienes permisos para finalizar esta llamada."
+            }
+
+        self._active_calls.pop(session_id, None)
         call.status = "ended"
         try:
             cci_database.end_call_session_entry(session_id)

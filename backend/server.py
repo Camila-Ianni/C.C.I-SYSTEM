@@ -502,12 +502,29 @@ def join_multiplayer_room():
 @app.route("/api/v1/multiplayer/rooms/<room_id>", methods=["GET"])
 @require_auth
 def get_multiplayer_room(room_id):
+    user_id = str(g.current_user["user_id"])
     room = room_mgr.get_room(room_id)
     if not room:
         db_room = cci_database.get_game_room(room_id)
         if not db_room:
             return jsonify({"success": False, "error": "Sala no encontrada"}), 404
+        # Validación de visibilidad / autorización para salas privadas persistidas
+        is_private = (db_room.get("visibility") == "private") or bool(db_room.get("is_private"))
+        if is_private:
+            is_host = str(db_room.get("host_id")) == user_id
+            members = db_room.get("members", [])
+            is_member = any(str(m.get("user_id")) == user_id for m in members)
+            if not (is_host or is_member):
+                return jsonify({"success": False, "error": "Acceso denegado: esta sala es privada."}), 403
         return jsonify({"success": True, "room": db_room})
+
+    # Validación de visibilidad / autorización para sala en memoria
+    if getattr(room, "visibility", "public") == "private":
+        is_host = str(room.host_id) == user_id
+        is_member = user_id in room.members
+        if not (is_host or is_member):
+            return jsonify({"success": False, "error": "Acceso denegado: esta sala es privada."}), 403
+
     return jsonify({"success": True, "room": room.to_dict()})
 
 
@@ -548,8 +565,20 @@ def join_voice_call(session_id):
     user_id = g.current_user["user_id"]
     username = g.current_user.get("username", user_id)
 
+    call = voice_svc.get_call_session(session_id)
+    if not call:
+        db_call = cci_database.get_call_session_by_id(session_id)
+        if not db_call:
+            return jsonify({"success": False, "error": "Llamada no encontrada o inactiva"}), 404
+        group_id = db_call.get("group_id")
+    else:
+        group_id = call.group_id
+
+    if group_id and not check_group_membership(user_id, group_id):
+        return jsonify({"success": False, "error": "Acceso denegado: no perteneces al grupo de esta llamada."}), 403
+
     res = voice_svc.join_call(session_id, user_id, username)
-    status_code = 200 if res.get("success") else 400
+    status_code = 200 if res.get("success") else (403 if "Acceso denegado" in res.get("error", "") else 400)
     return jsonify(res), status_code
 
 
@@ -579,7 +608,7 @@ def mute_voice_call(session_id):
 def end_voice_call(session_id):
     actor_id = g.current_user["user_id"]
     res = voice_svc.end_call(session_id, actor_id)
-    status_code = 200 if res.get("success") else 400
+    status_code = 200 if res.get("success") else (403 if "Acceso denegado" in res.get("error", "") else 400)
     return jsonify(res), status_code
 
 

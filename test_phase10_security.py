@@ -250,6 +250,126 @@ class TestPhase10SecurityAndAuthorization(unittest.TestCase):
                 f"Ruta privada {method} {path} debe retornar 401 Unauthorized sin token Bearer"
             )
 
+    def test_09_join_call_rejects_non_group_member(self):
+        """Un usuario ajeno al grupo no puede unirse a la llamada aunque conozca el session_id (P0)."""
+        from backend.server import voice_svc
+
+        # 1. Crear cuentas
+        cci_database.create_account("alice_v@cci.org", "alice_v", "Pass1234!")
+        cci_database.create_account("bob_v@cci.org", "bob_v", "Pass1234!")
+        cci_database.create_account("intruder_v@cci.org", "intruder_v", "Pass1234!")
+
+        token_alice = create_access_token("u_alice_v", "alice_v")
+        token_bob = create_access_token("u_bob_v", "bob_v")
+        token_intruder = create_access_token("u_intruder_v", "intruder_v")
+
+        # 2. Grupo privado con Alice y Bob
+        res_grp = self.friends_svc.create_group("Grupo Privado Voz", "u_alice_v")
+        grp_id = res_grp["group"]["id"]
+        self.friends_svc.invite_member(grp_id, "u_alice_v", "u_bob_v")
+
+        # 3. Alice inicia llamada
+        r_start = self.client.post(
+            "/api/v1/voice/calls/start",
+            headers={"Authorization": f"Bearer {token_alice}"},
+            json={"group_id": grp_id}
+        )
+        self.assertEqual(r_start.status_code, 200)
+        session_id = r_start.get_json()["call"]["session_id"]
+
+        # 4. Bob (miembro legítimo) se une -> 200 OK
+        r_bob = self.client.post(
+            f"/api/v1/voice/calls/{session_id}/join",
+            headers={"Authorization": f"Bearer {token_bob}"}
+        )
+        self.assertEqual(r_bob.status_code, 200)
+
+        # 5. Intruso (ajeno al grupo) intenta unirse -> 403 Forbidden estricto
+        r_intruder = self.client.post(
+            f"/api/v1/voice/calls/{session_id}/join",
+            headers={"Authorization": f"Bearer {token_intruder}"}
+        )
+        self.assertEqual(r_intruder.status_code, 403)
+        self.assertIn("Acceso denegado", r_intruder.get_json()["error"])
+
+        # Verificar que el intruso NO fue agregado a participantes
+        call = voice_svc.get_call_session(session_id)
+        self.assertNotIn("u_intruder_v", call.participants)
+
+    def test_10_end_call_rejects_unauthorized_third_party(self):
+        """Un tercero no puede finalizar una llamada activa; solo el iniciador o admin (P0)."""
+        from backend.server import voice_svc
+
+        token_alice = create_access_token("u_alice_end", "alice_end")
+        token_intruder = create_access_token("u_intruder_end", "intruder_end")
+
+        res_grp = self.friends_svc.create_group("Grupo End Call", "u_alice_end")
+        grp_id = res_grp["group"]["id"]
+
+        r_start = self.client.post(
+            "/api/v1/voice/calls/start",
+            headers={"Authorization": f"Bearer {token_alice}"},
+            json={"group_id": grp_id}
+        )
+        session_id = r_start.get_json()["call"]["session_id"]
+
+        # 1. Intruso intenta finalizar llamada ajena -> 403 Forbidden
+        r_fail = self.client.post(
+            f"/api/v1/voice/calls/{session_id}/end",
+            headers={"Authorization": f"Bearer {token_intruder}"}
+        )
+        self.assertEqual(r_fail.status_code, 403)
+        self.assertIn("Acceso denegado", r_fail.get_json()["error"])
+
+        # La llamada sigue activa
+        self.assertIn(session_id, voice_svc._active_calls)
+
+        # 2. Iniciador legítimo finaliza la llamada -> 200 OK
+        r_ok = self.client.post(
+            f"/api/v1/voice/calls/{session_id}/end",
+            headers={"Authorization": f"Bearer {token_alice}"}
+        )
+        self.assertEqual(r_ok.status_code, 200)
+        self.assertNotIn(session_id, voice_svc._active_calls)
+
+    def test_11_private_room_access_control(self):
+        """Lectura de salas privadas exige ser host o miembro; rechaza a terceros con 403 (P1)."""
+        from backend.server import room_mgr
+
+        token_host = create_access_token("u_host_rm", "HostUser")
+        token_intruder = create_access_token("u_intruder_rm", "IntruderUser")
+
+        # 1. Sala privada
+        res_priv = room_mgr.create_room("davinci", "u_host_rm", "HostUser", visibility="private")
+        room_id_priv = res_priv.room_id
+
+        # Intruso consulta sala privada -> 403 Forbidden
+        r_priv_fail = self.client.get(
+            f"/api/v1/multiplayer/rooms/{room_id_priv}",
+            headers={"Authorization": f"Bearer {token_intruder}"}
+        )
+        self.assertEqual(r_priv_fail.status_code, 403)
+        self.assertIn("privada", r_priv_fail.get_json()["error"])
+
+        # Host consulta sala privada -> 200 OK
+        r_priv_ok = self.client.get(
+            f"/api/v1/multiplayer/rooms/{room_id_priv}",
+            headers={"Authorization": f"Bearer {token_host}"}
+        )
+        self.assertEqual(r_priv_ok.status_code, 200)
+        self.assertEqual(r_priv_ok.get_json()["room"]["room_id"], room_id_priv)
+
+        # 2. Sala pública -> Intruso puede consultarla libremente
+        res_pub = room_mgr.create_room("davinci", "u_host_rm", "HostUser", visibility="public")
+        room_id_pub = res_pub.room_id
+
+        r_pub_ok = self.client.get(
+            f"/api/v1/multiplayer/rooms/{room_id_pub}",
+            headers={"Authorization": f"Bearer {token_intruder}"}
+        )
+        self.assertEqual(r_pub_ok.status_code, 200)
+        self.assertEqual(r_pub_ok.get_json()["room"]["room_id"], room_id_pub)
+
 
 if __name__ == "__main__":
     unittest.main()

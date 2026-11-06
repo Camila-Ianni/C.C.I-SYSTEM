@@ -36,8 +36,11 @@ class VoiceMediaClient:
 
         # Canales de audio salientes y entrantes
         self._send_transport_fn: Optional[Callable[[Dict[str, Any]], None]] = None
+        self._input_source_fn: Optional[Callable[[], Optional[bytes]]] = None
+        self._output_sink_fn: Optional[Callable[[bytes], None]] = None
         self._remote_audio_queues: Dict[str, List[bytes]] = {}
         self._peer_states: Dict[str, Dict[str, Any]] = {}
+        self._peer_candidates: Dict[str, List[str]] = {}
 
         self._seq = 0
         self._lock = threading.Lock()
@@ -50,14 +53,23 @@ class VoiceMediaClient:
         """Asigna la función de transporte de paquetes de audio hacia la red / peer."""
         self._send_transport_fn = send_fn
 
+    def set_audio_drivers(
+        self,
+        input_source: Optional[Callable[[], Optional[bytes]]] = None,
+        output_sink: Optional[Callable[[bytes], None]] = None,
+    ) -> None:
+        """Asigna drivers de entrada (micrófono) y salida (altavoces/DAC)."""
+        self._input_source_fn = input_source
+        self._output_sink_fn = output_sink
+
     def start_audio(self) -> bool:
-        """Inicia el pipeline de captura y reproducción de voz con hilos en segundo plano."""
+        """Inicia el pipeline completo de captura y reproducción de voz con hilos en segundo plano."""
         if self.is_active:
             return True
 
         self.is_active = True
 
-        # Iniciar hilo de reproducción si no está activo
+        # Iniciar hilo de reproducción
         if not self._playback_thread or not self._playback_thread.is_alive():
             self._playback_thread = threading.Thread(
                 target=self._playback_worker,
@@ -65,6 +77,15 @@ class VoiceMediaClient:
                 name=f"VoicePlayback-{self.user_id}"
             )
             self._playback_thread.start()
+
+        # Iniciar hilo de captura de audio continuo
+        if not self._capture_thread or not self._capture_thread.is_alive():
+            self._capture_thread = threading.Thread(
+                target=self._capture_worker,
+                daemon=True,
+                name=f"VoiceCapture-{self.user_id}"
+            )
+            self._capture_thread.start()
 
         return True
 
@@ -160,8 +181,22 @@ class VoiceMediaClient:
         with self._lock:
             return self._peer_states.get(peer_id, {"speaking": False, "last_seen": 0.0})
 
+    def _capture_worker(self) -> None:
+        """Hilo de captura continua que muestrea el driver de micrófono o entrada de voz."""
+        dt = self.FRAME_DURATION_MS / 1000.0
+        while self.is_active:
+            if not self.is_muted and self._input_source_fn:
+                try:
+                    frame = self._input_source_fn()
+                    if frame:
+                        self.process_microphone_pcm(frame)
+                except Exception:
+                    pass
+            time.sleep(dt)
+
     def _playback_worker(self) -> None:
-        """Hilo de reproducción que mezcla y drena paquetes entrantes de la cola remota."""
+        """Hilo de reproducción que mezcla y drena paquetes entrantes de la cola remota hacia el sink."""
+        dt = self.FRAME_DURATION_MS / 1000.0
         while self.is_active:
             frame = self.pop_mixed_playback_frame()
             if frame:
@@ -169,7 +204,12 @@ class VoiceMediaClient:
                     self._playback_buffer.append(frame)
                     if len(self._playback_buffer) > 20:
                         self._playback_buffer.pop(0)
-            time.sleep(self.FRAME_DURATION_MS / 1000.0)
+                if self._output_sink_fn:
+                    try:
+                        self._output_sink_fn(frame)
+                    except Exception:
+                        pass
+            time.sleep(dt)
 
     def pop_mixed_playback_frame(self) -> Optional[bytes]:
         """Obtiene y mezcla el siguiente bloque PCM disponible de todos los pares remotos activos."""
@@ -252,6 +292,9 @@ class VoiceMediaClient:
         cand_str = candidate.get("candidate", "") if isinstance(candidate, dict) else str(candidate)
         if not cand_str:
             return False
-        if peer_id not in self.connection_states:
-            self.connection_states[peer_id] = "connecting"
+        with self._lock:
+            if peer_id not in self._peer_candidates:
+                self._peer_candidates[peer_id] = []
+            self._peer_candidates[peer_id].append(cand_str)
+            self.connection_states[peer_id] = "connected"
         return True

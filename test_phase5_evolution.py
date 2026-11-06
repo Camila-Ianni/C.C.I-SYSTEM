@@ -187,6 +187,7 @@ class TestPhase5VoiceRESTEndpoints(unittest.TestCase):
         FriendsService.get_instance().create_group("Voice Test API Group", "host_api")
         groups = cci_database.get_user_groups("host_api")
         self.group_id = groups[0]["id"]
+        FriendsService.get_instance().invite_member(self.group_id, "host_api", "guest_api")
 
     def tearDown(self):
         cci_database.get_db = self._orig_get_db

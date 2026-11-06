@@ -272,7 +272,7 @@ def check_recording_ownership(user_id: str, recording_id: str) -> bool:
 
 def check_room_participation(user_id: str, room_id: str) -> bool:
     """Verifica si el usuario pertenece a la sala de juego activa."""
-    room = cci_database.get_game_room_detail(room_id)
+    room = cci_database.get_game_room(room_id)
     if not room:
         return False
     members = room.get("members", [])
@@ -291,4 +291,4 @@ def check_call_participation(user_id: str, session_id: str) -> bool:
     call = getattr(svc, "_active_calls", {}).get(session_id)
     if call and str(user_id) in call.participants:
         return True
-    return check_room_membership(user_id, session_id)
+    return check_room_participation(user_id, session_id)

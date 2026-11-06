@@ -246,6 +246,85 @@ class TestPhase10MediaAndCombatPhysics(unittest.TestCase):
         self.assertNotIn(test_room, room_tickers)
         self.assertFalse(second_instance.running)
 
+    def test_06_bidirectional_multi_client_audio_and_webrtc_mesh(self):
+        """Verifica negociación WebRTC P2P (SDP/ICE) e intercambio bidireccional de audio entre dos clientes (P1)."""
+        client_a = VoiceMediaClient("u_alice", "Alice")
+        client_b = VoiceMediaClient("u_bob", "Bob")
+
+        sink_a_frames = []
+        sink_b_frames = []
+        client_a.set_audio_drivers(output_sink=lambda f: sink_a_frames.append(f))
+        client_b.set_audio_drivers(output_sink=lambda f: sink_b_frames.append(f))
+
+        # Enrutar transporte simétrico de red simulando malla WebRTC P2P
+        client_a.set_transport(lambda pkt: client_b.receive_remote_audio("u_alice", pkt))
+        client_b.set_transport(lambda pkt: client_a.receive_remote_audio("u_bob", pkt))
+
+        # 1. Iniciar subsistemas de audio (hilos de captura y reproducción)
+        self.assertTrue(client_a.start_audio())
+        self.assertTrue(client_b.start_audio())
+        self.assertTrue(client_a._playback_thread.is_alive())
+        self.assertTrue(client_a._capture_thread.is_alive())
+        self.assertTrue(client_b._playback_thread.is_alive())
+        self.assertTrue(client_b._capture_thread.is_alive())
+
+        # 2. Negociación WebRTC de extremo a extremo
+        offer = client_a.create_offer("u_bob")
+        self.assertEqual(offer["type"], "offer")
+        self.assertIn("m=audio", offer["sdp"])
+        self.assertEqual(client_a.connection_states["u_bob"], "connecting")
+
+        answer = client_b.create_answer("u_alice", offer["sdp"])
+        self.assertEqual(answer["type"], "answer")
+        self.assertEqual(client_b.connection_states["u_alice"], "connected")
+
+        cand_a = {"candidate": "candidate:1 1 UDP 2122260223 192.168.1.10 50000 typ host"}
+        cand_b = {"candidate": "candidate:2 1 UDP 2122260223 192.168.1.20 50002 typ host"}
+        self.assertTrue(client_b.add_ice_candidate("u_alice", cand_a))
+        self.assertTrue(client_a.add_ice_candidate("u_bob", cand_b))
+        self.assertEqual(client_a.connection_states["u_bob"], "connected")
+
+        # 3. Transmisión bidireccional simultánea de audio PCM
+        samples_a = [int(7000 * math.sin(2 * math.pi * 440 * i / 48000)) for i in range(client_a.SAMPLES_PER_FRAME)]
+        pcm_a = struct.pack(f"<{len(samples_a)}h", *samples_a)
+
+        samples_b = [int(9000 * math.sin(2 * math.pi * 880 * i / 48000)) for i in range(client_b.SAMPLES_PER_FRAME)]
+        pcm_b = struct.pack(f"<{len(samples_b)}h", *samples_b)
+
+        pkt_a = client_a.process_microphone_pcm(pcm_a)
+        pkt_b = client_b.process_microphone_pcm(pcm_b)
+
+        self.assertIsNotNone(pkt_a)
+        self.assertIsNotNone(pkt_b)
+
+        # Verificar que ambos clientes recibieron y registraron la voz del otro par
+        peer_b_state = client_a.get_peer_state("u_bob")
+        peer_a_state = client_b.get_peer_state("u_alice")
+        self.assertTrue(peer_b_state["speaking"])
+        self.assertTrue(peer_a_state["speaking"])
+
+        # Verificar mezcla de reproducción
+        mixed_for_b = client_b.pop_mixed_playback_frame()
+        mixed_for_a = client_a.pop_mixed_playback_frame()
+        self.assertIsNotNone(mixed_for_b)
+        self.assertIsNotNone(mixed_for_a)
+        self.assertEqual(len(mixed_for_b), len(pcm_a))
+
+        # 4. Privacidad estricta al mutear
+        client_a.set_mute(True)
+        self.assertTrue(client_a.is_muted)
+        self.assertIsNone(client_a.process_microphone_pcm(pcm_a))
+
+        # 5. Cierre determinista sin fugas de threads
+        client_a.stop_audio()
+        client_b.stop_audio()
+        self.assertFalse(client_a.is_active)
+        self.assertFalse(client_b.is_active)
+        self.assertIsNone(client_a._playback_thread)
+        self.assertIsNone(client_a._capture_thread)
+        self.assertIsNone(client_b._playback_thread)
+        self.assertIsNone(client_b._capture_thread)
+
 
 if __name__ == "__main__":
     unittest.main()
