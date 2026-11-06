@@ -110,3 +110,6 @@ class LiveKitTokenGenerator:
             return payload
         except Exception:
             return None
+
+    # Alias de conveniencia
+    verify_token = verify_access_token

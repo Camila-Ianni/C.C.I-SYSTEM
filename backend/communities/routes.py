@@ -8,7 +8,8 @@ from __future__ import annotations
 import base64
 from flask import Blueprint, g, jsonify, request
 from backend.auth import require_auth
-from backend.communities.service import CommunitiesService, SoundCooldownError
+from backend.communities.service import CommunitiesService, SoundCooldownError, StreamLimitError
+from backend.communities.stream_adapter import StreamValidationError
 
 communities_bp = Blueprint("communities", __name__)
 
@@ -830,5 +831,200 @@ def authorize_sound_play_route(sound_id: str):
         return jsonify({"error": str(e)}), 400
     except LookupError as e:
         return jsonify({"error": str(e)}), 404
+
+
+# =============================================================================
+# STREAMING (COMPARTIR PANTALLA, VENTANA Y JUEGOS)
+# =============================================================================
+
+@communities_bp.route("/streams/sources", methods=["GET"])
+@require_auth
+def get_stream_sources_route():
+    user_id = g.current_user["user_id"]
+    sources = get_service().get_capture_sources(user_id)
+    return jsonify(sources), 200
+
+
+@communities_bp.route("/channels/<channel_id>/stream-start", methods=["POST"])
+@require_auth
+def start_stream_route(channel_id: str):
+    user_id = g.current_user["user_id"]
+    username = g.current_user.get("username", "Streamer")
+    data = request.get_json() or {}
+
+    ch = get_service().repo.get_channel(channel_id)
+    if not ch:
+        return jsonify({"error": "Canal no encontrado"}), 404
+
+    stream_type = data.get("stream_type", "screen")
+    title = data.get("title", f"Stream de {username}")
+    game_id = data.get("game_id")
+    resolution = data.get("resolution", "1080p")
+    fps = int(data.get("fps", 60))
+    bitrate_kbps = int(data.get("bitrate_kbps", 4500))
+    has_audio = bool(data.get("has_audio", True))
+
+    try:
+        res = get_service().start_stream(
+            actor_id=user_id,
+            username=username,
+            community_id=ch["community_id"],
+            channel_id=channel_id,
+            stream_type=stream_type,
+            title=title,
+            game_id=game_id,
+            resolution=resolution,
+            fps=fps,
+            bitrate_kbps=bitrate_kbps,
+            has_audio=has_audio,
+        )
+        return jsonify(res), 201
+    except PermissionError as e:
+        return jsonify({"error": str(e)}), 403
+    except StreamLimitError as e:
+        return jsonify({"error": "STREAM_LIMIT_REACHED", "message": str(e)}), 409
+    except StreamValidationError as e:
+        return jsonify({"error": e.code, "message": str(e)}), 400
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    except LookupError as e:
+        return jsonify({"error": str(e)}), 404
+
+
+@communities_bp.route("/channels/<channel_id>/stream-pause", methods=["POST"])
+@require_auth
+def pause_stream_route(channel_id: str):
+    user_id = g.current_user["user_id"]
+    data = request.get_json() or {}
+    session_id = data.get("session_id")
+    is_paused = bool(data.get("is_paused", True))
+
+    ch = get_service().repo.get_channel(channel_id)
+    if not ch:
+        return jsonify({"error": "Canal no encontrado"}), 404
+
+    if not session_id:
+        active = get_service().repo.get_active_stream_for_channel(channel_id)
+        if not active:
+            return jsonify({"error": "No hay transmisión activa en este canal"}), 404
+        session_id = active["id"]
+
+    try:
+        updated = get_service().pause_stream(
+            actor_id=user_id,
+            community_id=ch["community_id"],
+            channel_id=channel_id,
+            session_id=session_id,
+            is_paused=is_paused,
+        )
+        return jsonify(updated), 200
+    except PermissionError as e:
+        return jsonify({"error": str(e)}), 403
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    except LookupError as e:
+        return jsonify({"error": str(e)}), 404
+
+
+@communities_bp.route("/channels/<channel_id>/stream-resume", methods=["POST"])
+@require_auth
+def resume_stream_route(channel_id: str):
+    user_id = g.current_user["user_id"]
+    data = request.get_json() or {}
+    session_id = data.get("session_id")
+
+    ch = get_service().repo.get_channel(channel_id)
+    if not ch:
+        return jsonify({"error": "Canal no encontrado"}), 404
+
+    if not session_id:
+        active = get_service().repo.get_active_stream_for_channel(channel_id)
+        if not active:
+            return jsonify({"error": "No hay transmisión activa en este canal"}), 404
+        session_id = active["id"]
+
+    try:
+        updated = get_service().pause_stream(
+            actor_id=user_id,
+            community_id=ch["community_id"],
+            channel_id=channel_id,
+            session_id=session_id,
+            is_paused=False,
+        )
+        return jsonify(updated), 200
+    except PermissionError as e:
+        return jsonify({"error": str(e)}), 403
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+    except LookupError as e:
+        return jsonify({"error": str(e)}), 404
+
+
+@communities_bp.route("/channels/<channel_id>/stream-stop", methods=["POST"])
+@require_auth
+def stop_stream_route(channel_id: str):
+    user_id = g.current_user["user_id"]
+    data = request.get_json() or {}
+    session_id = data.get("session_id")
+
+    ch = get_service().repo.get_channel(channel_id)
+    if not ch:
+        return jsonify({"error": "Canal no encontrado"}), 404
+
+    if not session_id:
+        active = get_service().repo.get_active_stream_for_channel(channel_id)
+        if not active:
+            return jsonify({"status": "stopped", "message": "No había stream activo"}), 200
+        session_id = active["id"]
+
+    try:
+        success = get_service().stop_stream(
+            actor_id=user_id,
+            community_id=ch["community_id"],
+            channel_id=channel_id,
+            session_id=session_id,
+        )
+        return jsonify({"status": "stopped", "session_id": session_id}), 200
+    except PermissionError as e:
+        return jsonify({"error": str(e)}), 403
+    except LookupError as e:
+        return jsonify({"error": str(e)}), 404
+
+
+@communities_bp.route("/channels/<channel_id>/stream", methods=["GET"])
+@require_auth
+def get_channel_stream_route(channel_id: str):
+    user_id = g.current_user["user_id"]
+    ch = get_service().repo.get_channel(channel_id)
+    if not ch:
+        return jsonify({"error": "Canal no encontrado"}), 404
+
+    try:
+        stream = get_service().get_active_channel_stream(
+            actor_id=user_id,
+            community_id=ch["community_id"],
+            channel_id=channel_id,
+        )
+        return jsonify({"stream": stream}), 200
+    except PermissionError as e:
+        return jsonify({"error": str(e)}), 403
+    except LookupError as e:
+        return jsonify({"error": str(e)}), 404
+
+
+@communities_bp.route("/streams", methods=["GET"])
+@require_auth
+def list_active_streams_route():
+    user_id = g.current_user["user_id"]
+    community_id = request.args.get("community_id")
+
+    try:
+        streams = get_service().list_active_streams(
+            actor_id=user_id,
+            community_id=community_id,
+        )
+        return jsonify({"streams": streams}), 200
+    except PermissionError as e:
+        return jsonify({"error": str(e)}), 403
 
 

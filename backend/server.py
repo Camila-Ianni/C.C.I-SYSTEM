@@ -1076,6 +1076,52 @@ def on_community_sound_stop(data: Dict[str, Any]):
         }, to=room_name)
 
 
+@socketio.on("community:stream:start")
+@require_socket_auth
+def on_community_stream_start(data: Dict[str, Any]):
+    """Notifica el inicio de una transmisión de pantalla o juego en tiempo real."""
+    channel_id = data.get("channel_id")
+    user_id = data.get("user_id")
+    stream_type = data.get("stream_type", "screen")
+    title = data.get("title", "Stream")
+    resolution = data.get("resolution", "1080p")
+    fps = data.get("fps", 60)
+    if channel_id and user_id:
+        room_name = f"comm_voice_{channel_id}"
+        emit("stream.started", {
+            "channel_id": channel_id,
+            "user_id": user_id,
+            "stream_type": stream_type,
+            "title": title,
+            "resolution": resolution,
+            "fps": fps,
+        }, to=room_name)
+
+
+@socketio.on("community:stream:pause")
+@require_socket_auth
+def on_community_stream_pause(data: Dict[str, Any]):
+    """Notifica pausa o reanudación de una transmisión."""
+    channel_id = data.get("channel_id")
+    user_id = data.get("user_id")
+    is_paused = bool(data.get("is_paused", True))
+    if channel_id:
+        room_name = f"comm_voice_{channel_id}"
+        event = "stream.paused" if is_paused else "stream.resumed"
+        emit(event, {"channel_id": channel_id, "user_id": user_id, "is_paused": is_paused}, to=room_name)
+
+
+@socketio.on("community:stream:stop")
+@require_socket_auth
+def on_community_stream_stop(data: Dict[str, Any]):
+    """Notifica el fin de una transmisión."""
+    channel_id = data.get("channel_id")
+    user_id = data.get("user_id")
+    if channel_id:
+        room_name = f"comm_voice_{channel_id}"
+        emit("stream.ended", {"channel_id": channel_id, "user_id": user_id}, to=room_name)
+
+
 
 # ==============================================================================
 # EVENTOS WEBSOCKET: MULTIJUGADOR ONLINE (CON AUTORIZACIÓN CENTRALIZADA)

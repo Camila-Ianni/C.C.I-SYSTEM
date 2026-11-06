@@ -261,6 +261,23 @@ class CommunitiesRepository:
                 channel_id TEXT NOT NULL,
                 played_at REAL NOT NULL
             );
+
+            CREATE TABLE IF NOT EXISTS stream_sessions (
+                id TEXT PRIMARY KEY,
+                channel_id TEXT NOT NULL REFERENCES channels(id) ON DELETE CASCADE,
+                user_id TEXT NOT NULL,
+                stream_type TEXT NOT NULL DEFAULT 'screen',
+                title TEXT NOT NULL,
+                game_id TEXT NULL,
+                resolution TEXT NOT NULL DEFAULT '1080p',
+                fps INTEGER NOT NULL DEFAULT 60,
+                bitrate_kbps INTEGER NOT NULL DEFAULT 4500,
+                has_audio INTEGER NOT NULL DEFAULT 1,
+                is_paused INTEGER NOT NULL DEFAULT 0,
+                livekit_track_id TEXT NULL,
+                started_at REAL NOT NULL,
+                ended_at REAL NULL
+            );
             """)
 
             # Sembrar catálogo canónico de permisos
@@ -1253,3 +1270,144 @@ class CommunitiesRepository:
             params.append(channel_id)
         row = conn.execute(query, tuple(params)).fetchone()
         return row[0] if (row and row[0] is not None) else None
+
+    # =========================================================================
+    # STREAMING (PANTALLA, VENTANA, JUEGO)
+    # =========================================================================
+
+    def create_stream_session(
+        self,
+        session_id: str,
+        channel_id: str,
+        user_id: str,
+        stream_type: str,
+        title: str,
+        game_id: Optional[str] = None,
+        resolution: str = "1080p",
+        fps: int = 60,
+        bitrate_kbps: int = 4500,
+        has_audio: bool = True,
+        livekit_track_id: Optional[str] = None
+    ) -> Dict[str, Any]:
+        conn = self._get_connection()
+        now = time.time()
+        with conn:
+            conn.execute(
+                """
+                INSERT INTO stream_sessions (
+                    id, channel_id, user_id, stream_type, title, game_id,
+                    resolution, fps, bitrate_kbps, has_audio, is_paused,
+                    livekit_track_id, started_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)
+                """,
+                (
+                    session_id, channel_id, user_id, stream_type, title, game_id,
+                    resolution, fps, bitrate_kbps, int(has_audio),
+                    livekit_track_id, now
+                )
+            )
+            # Marcar is_screen_sharing en la sesión de voz si existe
+            conn.execute(
+                "UPDATE voice_sessions SET is_screen_sharing = 1 WHERE channel_id = ? AND user_id = ? AND left_at IS NULL",
+                (channel_id, user_id)
+            )
+        return self.get_stream_session(session_id)
+
+    def get_stream_session(self, session_id: str) -> Optional[Dict[str, Any]]:
+        conn = self._get_connection()
+        row = conn.execute(
+            "SELECT * FROM stream_sessions WHERE id = ?",
+            (session_id,)
+        ).fetchone()
+        if not row:
+            return None
+        d = dict(row)
+        d["has_audio"] = bool(d["has_audio"])
+        d["is_paused"] = bool(d["is_paused"])
+        return d
+
+    def get_active_stream_for_channel(self, channel_id: str) -> Optional[Dict[str, Any]]:
+        conn = self._get_connection()
+        row = conn.execute(
+            "SELECT * FROM stream_sessions WHERE channel_id = ? AND ended_at IS NULL ORDER BY started_at DESC LIMIT 1",
+            (channel_id,)
+        ).fetchone()
+        if not row:
+            return None
+        d = dict(row)
+        d["has_audio"] = bool(d["has_audio"])
+        d["is_paused"] = bool(d["is_paused"])
+        return d
+
+    def count_active_streams(self, channel_id: str) -> int:
+        conn = self._get_connection()
+        row = conn.execute(
+            "SELECT COUNT(*) FROM stream_sessions WHERE channel_id = ? AND ended_at IS NULL",
+            (channel_id,)
+        ).fetchone()
+        return row[0] if row else 0
+
+    def list_active_streams(self, community_id: Optional[str] = None) -> List[Dict[str, Any]]:
+        conn = self._get_connection()
+        if community_id:
+            rows = conn.execute(
+                """
+                SELECT s.* FROM stream_sessions s
+                JOIN channels c ON s.channel_id = c.id
+                WHERE c.community_id = ? AND s.ended_at IS NULL
+                ORDER BY s.started_at DESC
+                """,
+                (community_id,)
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                "SELECT * FROM stream_sessions WHERE ended_at IS NULL ORDER BY started_at DESC"
+            ).fetchall()
+        result = []
+        for r in rows:
+            d = dict(r)
+            d["has_audio"] = bool(d["has_audio"])
+            d["is_paused"] = bool(d["is_paused"])
+            result.append(d)
+        return result
+
+    def pause_stream_session(self, session_id: str, is_paused: bool = True) -> bool:
+        conn = self._get_connection()
+        with conn:
+            cur = conn.execute(
+                "UPDATE stream_sessions SET is_paused = ? WHERE id = ? AND ended_at IS NULL",
+                (int(is_paused), session_id)
+            )
+            return cur.rowcount > 0
+
+    def end_stream_session(self, session_id: str) -> bool:
+        conn = self._get_connection()
+        now = time.time()
+        with conn:
+            # Obtener channel_id y user_id antes de cerrar
+            row = conn.execute("SELECT channel_id, user_id FROM stream_sessions WHERE id = ?", (session_id,)).fetchone()
+            cur = conn.execute(
+                "UPDATE stream_sessions SET ended_at = ? WHERE id = ? AND ended_at IS NULL",
+                (now, session_id)
+            )
+            if row:
+                conn.execute(
+                    "UPDATE voice_sessions SET is_screen_sharing = 0 WHERE channel_id = ? AND user_id = ? AND left_at IS NULL",
+                    (row["channel_id"], row["user_id"])
+                )
+            return cur.rowcount > 0
+
+    def end_active_streams_for_user(self, channel_id: str, user_id: str) -> int:
+        conn = self._get_connection()
+        now = time.time()
+        with conn:
+            cur = conn.execute(
+                "UPDATE stream_sessions SET ended_at = ? WHERE channel_id = ? AND user_id = ? AND ended_at IS NULL",
+                (now, channel_id, user_id)
+            )
+            conn.execute(
+                "UPDATE voice_sessions SET is_screen_sharing = 0 WHERE channel_id = ? AND user_id = ? AND left_at IS NULL",
+                (channel_id, user_id)
+            )
+            return cur.rowcount

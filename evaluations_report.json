@@ -1,18 +1,18 @@
 {
-  "timestamp": "2026-11-06T10:09:03.727759",
-  "git_commit_sha": "7df8adca8878307321a8083e05842f5b4b420731",
+  "timestamp": "2026-11-06T10:16:35.727270",
+  "git_commit_sha": "e0f33917b16c8c70e02b52328e7fc37b7f664936",
   "git_branch": "feature/communities-phase0-design",
   "python_interpreter": "/Users/cami/Desktop/C.C.I SYSTEM/.venv/bin/python",
   "python_version": "3.14.5 (main, May 10 2026, 10:21:34) [Clang 21.0.0 (clang-2100.0.123.102)]",
   "platform": "macOS-26.6.2-arm64-arm-64bit-Mach-O",
-  "suites_expected": 17,
-  "suites_executed": 17,
+  "suites_expected": 18,
+  "suites_executed": 18,
   "missing_suites": 0,
-  "total_run": 145,
-  "total_passed": 145,
+  "total_run": 155,
+  "total_passed": 155,
   "total_failed": 0,
   "total_errors": 0,
-  "total_time_seconds": 19.42,
+  "total_time_seconds": 17.74,
   "suites": [
     {
       "suite": "test_phase2.py",
@@ -21,7 +21,7 @@
       "passed": 9,
       "failures": 0,
       "errors": 0,
-      "elapsed": 0.419,
+      "elapsed": 0.397,
       "success": true
     },
     {
@@ -31,7 +31,7 @@
       "passed": 7,
       "failures": 0,
       "errors": 0,
-      "elapsed": 0.129,
+      "elapsed": 0.107,
       "success": true
     },
     {
@@ -41,7 +41,7 @@
       "passed": 9,
       "failures": 0,
       "errors": 0,
-      "elapsed": 1.126,
+      "elapsed": 1.001,
       "success": true
     },
     {
@@ -51,7 +51,7 @@
       "passed": 11,
       "failures": 0,
       "errors": 0,
-      "elapsed": 1.571,
+      "elapsed": 1.324,
       "success": true
     },
     {
@@ -61,7 +61,7 @@
       "passed": 8,
       "failures": 0,
       "errors": 0,
-      "elapsed": 1.302,
+      "elapsed": 1.107,
       "success": true
     },
     {
@@ -71,7 +71,7 @@
       "passed": 8,
       "failures": 0,
       "errors": 0,
-      "elapsed": 1.233,
+      "elapsed": 1.065,
       "success": true
     },
     {
@@ -81,7 +81,7 @@
       "passed": 6,
       "failures": 0,
       "errors": 0,
-      "elapsed": 1.074,
+      "elapsed": 0.912,
       "success": true
     },
     {
@@ -91,7 +91,7 @@
       "passed": 4,
       "failures": 0,
       "errors": 0,
-      "elapsed": 2.156,
+      "elapsed": 1.984,
       "success": true
     },
     {
@@ -101,7 +101,7 @@
       "passed": 8,
       "failures": 0,
       "errors": 0,
-      "elapsed": 0.594,
+      "elapsed": 0.548,
       "success": true
     },
     {
@@ -111,7 +111,7 @@
       "passed": 7,
       "failures": 0,
       "errors": 0,
-      "elapsed": 0.58,
+      "elapsed": 0.513,
       "success": true
     },
     {
@@ -121,7 +121,7 @@
       "passed": 8,
       "failures": 0,
       "errors": 0,
-      "elapsed": 1.721,
+      "elapsed": 1.517,
       "success": true
     },
     {
@@ -131,7 +131,7 @@
       "passed": 12,
       "failures": 0,
       "errors": 0,
-      "elapsed": 2.09,
+      "elapsed": 1.763,
       "success": true
     },
     {
@@ -141,7 +141,7 @@
       "passed": 8,
       "failures": 0,
       "errors": 0,
-      "elapsed": 2.579,
+      "elapsed": 2.415,
       "success": true
     },
     {
@@ -151,7 +151,7 @@
       "passed": 10,
       "failures": 0,
       "errors": 0,
-      "elapsed": 0.615,
+      "elapsed": 0.534,
       "success": true
     },
     {
@@ -161,7 +161,7 @@
       "passed": 10,
       "failures": 0,
       "errors": 0,
-      "elapsed": 0.616,
+      "elapsed": 0.539,
       "success": true
     },
     {
@@ -171,7 +171,7 @@
       "passed": 10,
       "failures": 0,
       "errors": 0,
-      "elapsed": 0.879,
+      "elapsed": 0.779,
       "success": true
     },
     {
@@ -181,7 +181,17 @@
       "passed": 10,
       "failures": 0,
       "errors": 0,
-      "elapsed": 0.732,
+      "elapsed": 0.628,
+      "success": true
+    },
+    {
+      "suite": "test_communities_phase5.py",
+      "returncode": 0,
+      "tests_run": 10,
+      "passed": 10,
+      "failures": 0,
+      "errors": 0,
+      "elapsed": 0.607,
       "success": true
     }
   ]

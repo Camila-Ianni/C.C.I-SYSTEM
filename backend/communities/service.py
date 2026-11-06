@@ -19,6 +19,11 @@ from backend.communities.sound_validator import (
     save_sound_file,
     SoundValidationError,
 )
+from backend.communities.stream_adapter import (
+    validate_stream_profile,
+    detect_available_capture_sources,
+    StreamValidationError,
+)
 
 
 class SoundCooldownError(Exception):
@@ -26,6 +31,12 @@ class SoundCooldownError(Exception):
         super().__init__(message)
         self.message = message
         self.retry_after = retry_after
+
+
+class StreamLimitError(Exception):
+    def __init__(self, message: str = "Límite de streams concurrentes alcanzado"):
+        super().__init__(message)
+        self.message = message
 
 
 class CommunitiesService:
@@ -1040,3 +1051,162 @@ class CommunitiesService:
             "volume_scale": sound["volume_scale"],
             "cooldown_seconds": cooldown_sec,
         }
+
+    # =========================================================================
+    # STREAMING (COMPARTIR PANTALLA, VENTANA Y JUEGOS EN VIVO)
+    # =========================================================================
+
+    def get_capture_sources(self, actor_id: str) -> Dict[str, Any]:
+        """Obtiene las fuentes detectables (pantallas, ventanas, juegos instalados) y perfiles."""
+        return detect_available_capture_sources()
+
+    def start_stream(
+        self,
+        actor_id: str,
+        username: str,
+        community_id: str,
+        channel_id: str,
+        stream_type: str,
+        title: str,
+        game_id: Optional[str] = None,
+        resolution: str = "1080p",
+        fps: int = 60,
+        bitrate_kbps: int = 4500,
+        has_audio: bool = True,
+    ) -> Dict[str, Any]:
+        """
+        Inicia una sesión de transmisión de pantalla o juego en un canal.
+        Valida:
+        1. Existencia del canal y tipo compatible ('voice' o 'stream').
+        2. Permiso 'voice.stream'.
+        3. Límites de concurrencia de stream por canal (max_streams_per_channel).
+        4. Parámetros técnicos del perfil de video.
+        5. Emisión de token LiveKit con video grant can_publish=True.
+        """
+        ch = self.repo.get_channel(channel_id)
+        if not ch or ch["community_id"] != community_id:
+            raise LookupError("Canal no encontrado")
+
+        if ch.get("type") not in ("voice", "stream"):
+            raise ValueError("El canal debe ser de tipo 'voice' o 'stream' para transmitir pantalla")
+
+        # Comprobar permiso fail-closed
+        if not self.has_permission(community_id, actor_id, "voice.stream", channel_id=channel_id):
+            raise PermissionError("Se requiere permiso voice.stream para transmitir pantalla o juegos")
+
+        # Validar perfil técnico
+        res_clean, fps_clean, bitrate_clean = validate_stream_profile(resolution, fps, bitrate_kbps)
+
+        # Comprobar límite de transmisiones simultáneas por canal
+        active_stream = self.repo.get_active_stream_for_channel(channel_id)
+        if active_stream:
+            if active_stream["user_id"] != actor_id:
+                raise StreamLimitError("El canal ha alcanzado el límite de transmisiones simultáneas")
+            else:
+                # El usuario ya tenía una sesión activa; cerrarla limpiamente antes de reiniciar
+                self.repo.end_stream_session(active_stream["id"])
+
+        # Generar credencial LiveKit autoritativa para el stream
+        from backend.communities.livekit_token import LiveKitTokenGenerator
+        room_name = f"comm_{community_id[:8]}_chan_{channel_id[:8]}"
+        generator = LiveKitTokenGenerator()
+        livekit_cred = generator.create_access_token(
+            identity=actor_id,
+            name=username,
+            room_name=room_name,
+            can_publish=True,
+            can_subscribe=True,
+            can_publish_data=True,
+            valid_for_seconds=1800,
+        )
+
+        session_id = str(uuid.uuid4())
+        session = self.repo.create_stream_session(
+            session_id=session_id,
+            channel_id=channel_id,
+            user_id=actor_id,
+            stream_type=stream_type,
+            title=title.strip() if title else "Live Stream",
+            game_id=game_id,
+            resolution=res_clean,
+            fps=fps_clean,
+            bitrate_kbps=bitrate_clean,
+            has_audio=has_audio,
+            livekit_track_id=f"track_v_{session_id[:8]}",
+        )
+
+        return {
+            "session": session,
+            "livekit": livekit_cred,
+        }
+
+    def pause_stream(
+        self,
+        actor_id: str,
+        community_id: str,
+        channel_id: str,
+        session_id: str,
+        is_paused: bool = True,
+    ) -> Dict[str, Any]:
+        """Pausa o reanuda la transmisión activa."""
+        session = self.repo.get_stream_session(session_id)
+        if not session or session["channel_id"] != channel_id:
+            raise LookupError("Sesión de stream no encontrada")
+
+        if session["ended_at"] is not None:
+            raise ValueError("La sesión de stream ya ha finalizado")
+
+        # Solo el emisor o moderadores pueden pausar
+        if session["user_id"] != actor_id:
+            can_mod = self.has_permission(community_id, actor_id, "voice.move_members", channel_id=channel_id)
+            if not can_mod:
+                raise PermissionError("No tienes permiso para pausar el stream de otro usuario")
+
+        self.repo.pause_stream_session(session_id, is_paused)
+        session["is_paused"] = is_paused
+        return session
+
+    def stop_stream(
+        self,
+        actor_id: str,
+        community_id: str,
+        channel_id: str,
+        session_id: str,
+    ) -> bool:
+        """Detiene la transmisión activa liberando el slot del canal."""
+        session = self.repo.get_stream_session(session_id)
+        if not session or session["channel_id"] != channel_id:
+            raise LookupError("Sesión de stream no encontrada")
+
+        if session["ended_at"] is not None:
+            return True
+
+        if session["user_id"] != actor_id:
+            can_mod = self.has_permission(community_id, actor_id, "voice.move_members", channel_id=channel_id)
+            if not can_mod:
+                raise PermissionError("No tienes permiso para detener el stream de otro usuario")
+
+        return self.repo.end_stream_session(session_id)
+
+    def get_active_channel_stream(
+        self,
+        actor_id: str,
+        community_id: str,
+        channel_id: str,
+    ) -> Optional[Dict[str, Any]]:
+        """Obtiene la información del stream activo en el canal."""
+        if not self.has_permission(community_id, actor_id, "community.view", channel_id=channel_id):
+            raise PermissionError("No tienes permiso para ver este canal")
+
+        return self.repo.get_active_stream_for_channel(channel_id)
+
+    def list_active_streams(
+        self,
+        actor_id: str,
+        community_id: Optional[str] = None,
+    ) -> List[Dict[str, Any]]:
+        """Lista streams activos visibles para el usuario."""
+        if community_id and not self.has_permission(community_id, actor_id, "community.view"):
+            raise PermissionError("No tienes permiso para ver esta comunidad")
+
+        return self.repo.list_active_streams(community_id=community_id)
