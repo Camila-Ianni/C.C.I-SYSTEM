@@ -9,13 +9,14 @@
 
 ![Python Version](https://img.shields.io/badge/python-3.12%20%7C%203.14-blue)
 ![Pygame-CE](https://img.shields.io/badge/pygame--ce-2.5%2B-brightgreen)
-![Tests](https://img.shields.io/badge/tests-192%2F192%20suites%20passed%20(100%25)-success)
+![Tests](https://img.shields.io/badge/tests-22%20suites%20%2F%20192%20passed%20(0%20skips)-success)
 ![Database](https://img.shields.io/badge/database-SQLite%203%20(WAL%20Mode)-orange)
 ![Multiplayer](https://img.shields.io/badge/multiplayer-60%20Hz%20Authoritative-purple)
-![Voice Chat](https://img.shields.io/badge/voice-LiveKit%20JWT%20%2B%20UDP%20RTP-cyan)
+![Voice Chat](https://img.shields.io/badge/voice-LiveKit%20SFU%20%2B%20CoTURN%20UDP-cyan)
 ![Recorder](https://img.shields.io/badge/recorder-MP4%20Async%20Worker-red)
+![Docker](https://img.shields.io/badge/deploy-Docker%20Compose%20(4%20services)-2496ED)
 
-**C.C.I. SYSTEM** es una plataforma arcade integral y emulador multiplataforma desarrollado **100% en Python** con **Pygame-CE (Community Edition)** y orquestación web/tiempo real en **Flask + Flask-SocketIO** (`puerto 5050`). Unifica **19 clásicos arcade** bajo un entorno retrofuturista Cyberpunk / PS5 de ventana única (`1280x720`, 60 FPS), módulo de **Comunidades (`CCI Communities`: grupos, canales, chat en tiempo real, Sound Deck MP3, plano de control de voz/streaming y moderación jerárquica)**, multijugador online autoritativo a 60 Hz, grabador de gameplay en segundo plano, máquina de estados determinista, persistencia relacional en **SQLite 3 (modo WAL)** y adaptación móvil táctil para Android e iOS.
+**C.C.I. SYSTEM** es una plataforma arcade integral y emulador multiplataforma desarrollado **100% en Python** con **Pygame-CE (Community Edition)** y orquestación web/tiempo real en **Flask + Flask-SocketIO** (`puerto 5050`). Unifica **19 clásicos arcade** bajo un entorno retrofuturista Cyberpunk / PS5 de ventana única (`1280x720`, 60 FPS), módulo nativo de **Comunidades (`CCI Communities`: grupos pixel-art, canales de texto/voz, chat en tiempo real con clipping independiente, Sound Deck MP3 con inspección binaria MPEG Layer III, plano de control de voz LiveKit SFU + CoTURN UDP relay, streaming local y moderación jerárquica RBAC fail-closed)**, multijugador online autoritativo a 60 Hz, grabador de gameplay en segundo plano, persistencia relacional en **SQLite 3 (modo WAL)** y adaptación móvil táctil para Android e iOS.
 
 🌐 **Sitio Web Oficial en Producción:** [https://c-c-i-system.onrender.com](https://c-c-i-system.onrender.com)
 
@@ -40,7 +41,7 @@ La consola incluye 19 videojuegos accesibles desde la Biblioteca, el Carrusel 3D
 
 | # | Juego | Desarrollador | Año | Género | Características |
 | :-: | :--- | :--- | :-: | :--- | :--- |
-| 1 | **Da Vinci Fighters** | C.C.I. System | 2026 | Acción / Lucha | Motor CPS-1 propio, combate 1P vs CPU y 2P Local, supers y cinemáticas. |
+| 1 | **Da Vinci Fighters** | C.C.I. System | 2026 | Acción / Lucha | Motor CPS-1 propio, combate 1P vs CPU, 2P Local y Online 60 Hz, supers y cinemáticas. |
 | 2 | **Asteroids** | Atari | 1979 | Arcade / Shooter | Físicas vectoriales, inercia, disparos reactivos y puntuación. |
 | 3 | **Super Mario Bros** | Nintendo | 1985 | Plataformas | Motor modular por estados, físicas precisas y niveles clásicos. |
 | 4 | **The Legend of Zelda** | Nintendo | 1986 | Acción / RPG | Exploración top-down en Hyrule, armas, magias e inventario. |
@@ -62,26 +63,48 @@ La consola incluye 19 videojuegos accesibles desde la Biblioteca, el Carrusel 3D
 
 ---
 
-## 👤 Sistema Multiusuario Limpio (0 Perfiles de Fábrica)
+## 🌐 Subsistema CCI Communities & Grupos (`groups_ui.py` + `backend/communities/`)
 
-- **Distribución Limpia:** El instalador parte con **0 perfiles precreados** para que cada usuario cree su cuenta personalizada desde el primer boot.
-- **Datos Segregados:** Archivos JSON independientes (`.cci-user-data/users/{usuario}.json`) para horas de juego, récords, favoritos y trofeos.
-- **Selector de Avatares:** 8 personajes ciberpunk con anillo luminoso de neón.
-- **Cambio Rápido:** Alterna de usuario en cualquier momento desde el menú con `F3`.
+El módulo nativo **CCI Communities** integra un ecosistema social completo dentro de la ventana Pygame-CE (`1280x720`) y del servidor en tiempo real:
+
+- **Hub de Grupos Pixel-Art (`GroupsScreen`):**
+  - Pestañas dedicadas para **MIS GRUPOS**, **CHATS PRIVADOS** y **SOLICITUDES**, buscador instantáneo, creación de grupos (`+ CREAR GRUPO`) y unión por código de invitación (`UNIRSE CON CÓDIGO`).
+  - Tarjetas interactivas con insignia de rol (`ADMIN`, `MOD`, `MIEMBRO`), contador de integrantes en línea y acceso directo a la comunidad.
+- **Vista de Comunidad (`CommunityViewScreen`):**
+  - **Árbol de Canales:** Categorías colapsables de **INFORMACIÓN** (`# bienvenida`, `# reglas`, `# anuncios`), **CANALES DE TEXTO** (`# general`, `# clips`, `# memes`) y **SALAS DE VOZ** (`🔊 Sala General`, `🔊 Squad 1`) con avatares y estados de micrófono en vivo.
+  - **Chat en Tiempo Real con Scroll Independiente:** Renderizado con recorte (`surface.set_clip`), paginación por cursor compuesto (`created_at, id`), reacciones rápidas, adjuntos y barra de entrada dedicada.
+  - **Panel Derecho de Miembros & Sound Deck MP3:** Lista de miembros agrupados por estado (`CONECTADOS` / `DESCONECTADOS`), botonera de efectos de sonido MP3 (**Sound Deck**) con validación binaria de cabeceras ID3v2 / tramas MPEG Layer III reales (`sound_validator.py`) y controles de voz (`Silenciar`, `Ensordecer`, `Compartir pantalla`, `Colgar`).
+- **Seguridad y Moderación Jerárquica (RBAC Fail-Closed):**
+  - Permisos bitmask granulares (`VIEW_CHANNEL`, `SEND_MESSAGES`, `CONNECT_VOICE`, `SPEAK_VOICE`, `STREAM_VIDEO`, `USE_SOUND_DECK`, `KICK_MEMBERS`, `BAN_MEMBERS`, `MANAGE_CHANNELS`, `MANAGE_ROLES`, `ADMINISTRATOR`) con precedencia explícita de `deny_bits` sobre `allow_bits`.
+  - Jerarquía estricta (`owner > admin > mod > member`) y bitácora inmutable de auditoría (`moderation_audit_log`).
+- **Plano de Control de Voz, Streaming y Relay TURN:**
+  - Emisión de tokens **LiveKit JWT (`HS256`, `TTL <= 300s`)** vinculados criptográficamente a `user_id`, `community_id`, `channel_id` y `session_id`, más credenciales **TURN REST HMAC-SHA1** efímeras (`coturn`) para atravesar NATs simétricos.
+  - Adaptador de captura y previsualización de transmisión local (`stream_adapter.py`) a 720p/30fps.
 
 ---
 
-## 📳 Sistema Háptico & Mandos Plug & Play (`cci_rumble.py`)
+## 🚀 Evolución Multiplataforma: Multijugador 60 Hz, Voz, Grabación y Móvil
 
-- Soporte nativo para mandos **Sony DualSense (PS5), DualShock 4, Xbox Series/One, Switch Pro y USB arcade**.
-- **Retroalimentación por eventos:** Vibración adaptativa en golpes (`hit_rumble`), daño sostenido (`damage_rumble`), explosiones (`explosion_rumble`) y navegación sutil (`light_rumble`).
-- **Captura HD Instantánea:** Presionando `F12` guarda un screenshot 720p sin pérdidas en la carpeta `capturas/` con notificación toast.
+- **⚔️ Multijugador Autoritativo a 60 Hz (`backend/davinci_bridge.py` + `net_Rollback`):**
+  - Sincronización determinista de combate para **Da Vinci Fighters** sobre WebSockets (`Flask-SocketIO`), predicción en cliente y reconciliación de estado en servidor con latencia compensada.
+- **🎙️ Chat de Voz P2P & Salas (`mobile/voice_client.py`):**
+  - Transporte de audio de baja latencia por paquetes UDP RTP y señalización integrada con el backend unificado.
+- **🎥 Grabador Asíncrono de Gameplay (`recorder/`):**
+  - Captura de partidas en segundo plano mediante worker multiproceso sin bloquear el bucle de 60 FPS de Pygame-CE, exportando video MP4 listo para compartir en canales de `# clips`.
+- **📱 Soporte Móvil: Android & iOS (`mobile/` + `ios/`):**
+  - Controles táctiles superpuestos (cruceta virtual y botones arcade adaptativos), empaquetado Android APK mediante `buildozer.spec` y blueprint nativo de Xcode para iOS (`ios/`).
+
+---
+
+## 👤 Sistema Multiusuario Limpio & Mandos Hápticos (`cci_rumble.py`)
+
+- **Distribución Limpia (0 Perfiles de Fábrica):** Cada instalación inicia limpia para que cada jugador cree su perfil personalizado (`.cci-user-data/users/{usuario}.json`) con selector de 8 avatares ciberpunk y cambio rápido con `F3`.
+- **Vibración Háptica Plug & Play:** Soporte nativo para **Sony DualSense (PS5), DualShock 4, Xbox Series/One, Switch Pro y USB arcade** (`hit_rumble`, `damage_rumble`, `explosion_rumble`, `light_rumble`).
+- **Captura HD Instantánea (`F12`):** Guarda screenshots 720p sin pérdidas en `capturas/`.
 
 ---
 
 ## 💻 Ejecución para Desarrolladores
-
-Si prefieres ejecutar o modificar el código fuente localmente:
 
 ### 1. Clonar el Repositorio
 ```bash
@@ -89,7 +112,7 @@ git clone https://github.com/Camila-Ianni/C.C.I-SYSTEM.git
 cd C.C.I-SYSTEM
 ```
 
-### 2. Configurar Entorno Virtual
+### 2. Configurar Entorno Virtual e Instalar Dependencias
 ```bash
 # macOS / Linux
 python3 -m venv .venv
@@ -98,18 +121,18 @@ source .venv/bin/activate
 # Windows
 python -m venv .venv
 .venv\Scripts\activate
-```
 
-### 3. Instalar Dependencias
-```bash
 pip install --upgrade pip
 pip install -r requirements-dev.txt
 ```
 
-### 4. Lanzar la Consola Emulada o el Servidor Web
+### 3. Lanzar la Consola Emulada o el Servidor Unificado
 ```bash
-# Iniciar la consola virtual retro
+# Iniciar la consola virtual retro (1280x720 @ 60 FPS)
 python main.py
+
+# Iniciar el servidor unificado (API REST + Socket.IO + Communities en puerto 5050)
+python -m backend.server
 
 # Iniciar la landing page web oficial
 python run_web.py
@@ -117,43 +140,72 @@ python run_web.py
 
 ---
 
+## 🐳 Despliegue con Docker Compose (`deploy/`)
+
+El directorio `deploy/` incluye la topología reproducible de **4 contenedores** (`api`, `livekit`, `coturn`, `caddy`) con persistencia en volúmenes Docker y proxy inverso TLS/WSS:
+
+```bash
+# 1. Crear archivo de variables de entorno a partir de la plantilla
+cp deploy/.env.communities.example deploy/.env.communities
+# (Edita deploy/.env.communities con secretos criptográficos de >= 32 caracteres)
+
+# 2. Levantar el stack completo de producción/staging
+docker compose -f deploy/docker-compose.communities.yml --env-file deploy/.env.communities up -d --build
+```
+
+- **Persistencia garantizada:** Base de datos SQLite WAL y adjuntos MP3 en el volumen nombrado `cci_app_data` (`/data/communities.db` y `/data/uploads`).
+- **TLS / WSS y Relay TURN:** `Caddy` gestiona HTTPS/WSS (`tls internal` en entorno local/CI o ACME Let's Encrypt en dominio público) y `coturn` provee relay UDP/TCP autenticado por HMAC-SHA1.
+
+---
+
+## ✅ Suite de Certificación Automatizada (22 Suites / 192 Pruebas)
+
+El proyecto cuenta con un runner unificado (`run_all_evaluations.py`) que ejecuta las **22 suites de pruebas (192 casos de prueba, 0 fallos, 0 errores y 0 pruebas omitidas)**, incluyendo pruebas E2E en vivo con Docker Compose (`Caddy TLS X.509 + WebSocket 101 + Persistencia de Volúmenes + Relay Bidireccional UDP TURN`):
+
+```bash
+python run_all_evaluations.py
+```
+
+El reporte auditable se genera automáticamente en `evaluations_report.json` e incluye el hash SHA-256 del árbol de código certificado (`git_code_tree_sha256`).
+
+---
+
 ## 📁 Estructura del Repositorio
 
 ```text
 C.C.I-SYSTEM/
-├── main.py                     # Entry point de la consola virtual en Pygame-CE (60 FPS)
-├── groups_ui.py                # Pantallas nativas de Grupos y Comunidades conectadas a SQLite WAL
-├── sidebar_ui.py               # Barra lateral global de navegación (Inicio, Juegos, Grupos, Perfil...)
-├── run_all_evaluations.py      # Runner unificado de certificación (22 suites / 191 tests passing)
+├── main.py                              # Entry point de la consola virtual en Pygame-CE (60 FPS)
+├── groups_ui.py                         # Hub de Grupos y Vista de Comunidad pixel-art (Pygame-CE)
+├── sidebar_ui.py                        # Barra lateral global (Inicio, Juegos, Grupos, Perfil...)
+├── run_all_evaluations.py               # Runner de certificación (22 suites / 192 tests passing, 0 skips)
+├── evaluations_report.json              # Reporte auditable de certificación y trazabilidad SHA
 ├── backend/
-│   ├── server.py               # Servidor unificado Flask + Flask-SocketIO (puerto 5050)
-│   └── communities/            # Subsistema CCI Communities (SQLite 3 WAL, RBAC, LiveKit JWT, MP3, Stream)
-├── deploy/                     # Manifiestos Docker Compose, Dockerfile.backend, Caddyfile, LiveKit y coturn
-├── catalog_data.py             # Metadatos del catálogo oficial de 19 juegos (100% Python)
-├── cci_database.py             # Capa de persistencia SQLite relacional (WAL mode, foreign keys)
-├── cci_sync.py                 # Cliente de sincronización en segundo plano (Daemon Thread)
-├── cci_updater.py              # Módulo de auto-actualización y gestión de versiones SemVer
-├── version.json                # Manifiesto canónico de versión y metadata oficial
-├── build_distribution.py       # Generador de instaladores nativos (.dmg y .exe)
-├── installer.py                # Asistente gráfico de instalación interactiva 1-clic
-├── states.py                   # Máquina de estados finita (Boot, Intro, Menu, Playing)
-├── user_select_state.py        # Selector interactivo de jugadores y creación de perfiles
-├── cci_console.py              # Hub: Biblioteca, Perfil, Logros y Configuración
-├── cci_rumble.py               # Motor de vibración háptica universal para joysticks
-├── screenshot_manager.py       # Módulo capturador de pantalla F12
-├── api/
-│   └── index.py                # Entrypoint serverless WSGI
+│   ├── server.py                        # Servidor unificado Flask + Flask-SocketIO (puerto 5050)
+│   ├── davinci_bridge.py                # Motor autoritativo 60 Hz para Da Vinci Fighters Online
+│   └── communities/                     # Subsistema CCI Communities (SQLite WAL, RBAC, LiveKit, MP3, Stream)
+├── deploy/                              # Docker Compose (api, livekit, coturn, caddy) y configs de red
+├── mobile/                              # Adaptación táctil móvil y cliente de voz UDP RTP
+├── ios/                                 # Blueprint de empaquetado nativo para iOS (Xcode)
+├── recorder/                            # Grabador asíncrono de gameplay a MP4 en segundo plano
+├── catalog_data.py                      # Metadatos del catálogo oficial de 19 juegos (100% Python)
+├── cci_database.py                      # Capa de persistencia SQLite relacional (WAL mode, foreign keys)
+├── cci_sync.py                          # Cliente de sincronización en segundo plano (Daemon Thread)
+├── cci_updater.py                       # Módulo de auto-actualización y gestión de versiones SemVer
+├── version.json                         # Manifiesto canónico de versión y metadata oficial (v2.1.0)
+├── build_distribution.py                # Generador de instaladores nativos (.dmg y .exe)
+├── installer.py                         # Asistente gráfico de instalación interactiva 1-clic
+├── states.py                            # Máquina de estados finita (Boot, Intro, Menu, Playing)
+├── user_select_state.py                 # Selector interactivo de jugadores y creación de perfiles
+├── cci_console.py                       # Hub: Biblioteca, Perfil, Logros y Configuración
+├── cci_rumble.py                        # Motor de vibración háptica universal para joysticks
+├── screenshot_manager.py                # Módulo capturador de pantalla F12
 ├── web/
-│   ├── app.py                  # Aplicación web Flask oficial y API REST v1
-│   └── landing_page.py         # Landing page interactiva, Salón de la Fama y Video en vivo
-├── fotos web/                  # Logos e ilustraciones oficiales de los 19 juegos para la web
-├── assets_cards/               # Tarjetas y carátulas nativas para la consola
-├── pantallas/                  # Fondos y paneles de interfaz retrofuturistas
-├── documentacion/              # Especificación técnica, arquitectura, SRS y manuales
-├── test_phase2.py              # Tests unitarios para BD SQLite y API REST v1
-├── test_phase3.py              # Tests unitarios para Auto-Updater y Manifiesto
-├── requirements.txt            # Dependencias ligeras para hosting cloud (Flask)
-└── requirements-dev.txt        # Dependencias completas para el emulador (Pygame-CE, OpenCV, Pymunk)
+│   ├── app.py                           # Aplicación web Flask oficial y API REST v1
+│   └── landing_page.py                  # Landing page interactiva, Salón de la Fama y Video en vivo
+├── documentacion/                       # Especificación técnica, arquitectura, SRS y certificación
+├── test_communities_merge_audit.py      # Suite de auditoría pre-merge y E2E Docker/TLS/WSS/TURN
+├── requirements.txt                     # Dependencias para servidor cloud y API
+└── requirements-dev.txt                 # Dependencias completas (Pygame-CE, Socket.IO, PyJWT, OpenCV)
 ```
 
 ---
