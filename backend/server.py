@@ -1346,3 +1346,17 @@ def on_webrtc_ice(data: Dict[str, Any]):
 
 def create_app():
     return app
+
+
+if __name__ == "__main__":
+    config.validate_production_secrets()
+    cci_database.init_db()
+    print(f"[CCI-SERVER] Iniciando servidor unificado Flask + Socket.IO en {config.host}:{config.port} (env={config.env})...")
+    socketio.run(
+        app,
+        host=config.host,
+        port=config.port,
+        debug=config.debug,
+        use_reloader=False,
+        allow_unsafe_werkzeug=True,
+    )

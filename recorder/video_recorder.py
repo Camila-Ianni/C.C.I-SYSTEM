@@ -14,9 +14,22 @@ import time
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Optional
-import cv2
-import numpy as np
-import pygame
+
+try:
+    import cv2
+except ImportError:
+    cv2 = None  # type: ignore
+
+try:
+    import numpy as np
+except ImportError:
+    np = None  # type: ignore
+
+try:
+    import pygame
+except ImportError:
+    pygame = None  # type: ignore
+
 import cci_database
 from backend.config import config
 

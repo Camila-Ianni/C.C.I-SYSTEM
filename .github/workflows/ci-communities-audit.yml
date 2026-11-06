@@ -1,0 +1,58 @@
+name: C.C.I. SYSTEM & Communities Pre-Merge Certification CI
+
+on:
+  push:
+    branches:
+      - feature/communities-phase0-design
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  certification-suite:
+    name: Run 22 Evaluation Suites & Docker Compose Validation
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: "pip"
+
+      - name: Install system dependencies for headless Pygame & OpenCV
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libsdl2-dev libsdl2-image-dev libsdl2-mixer-dev libsdl2-ttf-dev libgl1
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt
+          pip install -r requirements-server.txt
+
+      - name: Validate Docker Compose Manifest
+        env:
+          CCI_SECRET_KEY: a9f8e7d6c5b4a3f2e1d0c9b8a7f6e5d4c3b2a1f0e9d8c7b6a5f4e3d2c1b0a9f8
+          LIVEKIT_API_KEY: APx9K7mQ2vL8nR4pT6wY1zB3
+          LIVEKIT_API_SECRET: 9f8e7d6c5b4a3f2e1d0c9b8a7f6e5d4c3b2a1f0e9d8c7b6a5f4e3d2c1b0a9f8e
+          TURN_SECRET: 7e6d5c4b3a2f1e0d9c8b7a6f5e4d3c2b1a0f9e8d7c6b5a4f3e2d1c0b9a8f7e6d
+        run: |
+          docker compose -f deploy/docker-compose.communities.yml config > /dev/null
+
+      - name: Run Full 22-Suite Certification Protocol
+        env:
+          SDL_VIDEODRIVER: dummy
+          SDL_AUDIODRIVER: dummy
+        run: |
+          python run_all_evaluations.py
+
+      - name: Upload Evaluation Report Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: evaluations-report
+          path: evaluations_report.json

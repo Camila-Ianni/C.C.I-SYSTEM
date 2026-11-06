@@ -9,7 +9,7 @@
 
 ![Python Version](https://img.shields.io/badge/python-3.12%20%7C%203.14-blue)
 ![Pygame-CE](https://img.shields.io/badge/pygame--ce-2.5%2B-brightgreen)
-![Tests](https://img.shields.io/badge/tests-191%2F191%20suites%20passed%20(100%25)-success)
+![Tests](https://img.shields.io/badge/tests-192%2F192%20suites%20passed%20(100%25)-success)
 ![Database](https://img.shields.io/badge/database-SQLite%203%20(WAL%20Mode)-orange)
 ![Multiplayer](https://img.shields.io/badge/multiplayer-60%20Hz%20Authoritative-purple)
 ![Voice Chat](https://img.shields.io/badge/voice-LiveKit%20JWT%20%2B%20UDP%20RTP-cyan)

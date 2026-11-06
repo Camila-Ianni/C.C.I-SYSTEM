@@ -9,6 +9,8 @@
 }
 
 {$API_DOMAIN:api.ccisystem.org} {
+    tls {$CADDY_TLS_MODE:ops@ccisystem.org}
+
     # API REST v1 y endpoints del sistema
     handle /api/* {
         reverse_proxy api:5050 {
@@ -20,8 +22,8 @@
     # Transporte en tiempo real Socket.IO y WebSocket (HTTP 101 Upgrade)
     handle /socket.io/* {
         reverse_proxy api:5050 {
-            header_up Connection {>Connection}
-            header_up Upgrade {>Upgrade}
+            header_up Connection {http.request.header.Connection}
+            header_up Upgrade {http.request.header.Upgrade}
             header_up X-Real-IP {remote_host}
             header_up X-Forwarded-Proto {scheme}
         }
@@ -29,8 +31,8 @@
 
     handle /ws/* {
         reverse_proxy api:5050 {
-            header_up Connection {>Connection}
-            header_up Upgrade {>Upgrade}
+            header_up Connection {http.request.header.Connection}
+            header_up Upgrade {http.request.header.Upgrade}
             header_up X-Real-IP {remote_host}
             header_up X-Forwarded-Proto {scheme}
         }
@@ -46,10 +48,12 @@
 }
 
 {$RTC_DOMAIN:rtc.ccisystem.org} {
+    tls {$CADDY_TLS_MODE:ops@ccisystem.org}
+
     # Señalización WebRTC hacia LiveKit SFU Server
     reverse_proxy livekit:7880 {
-        header_up Connection {>Connection}
-        header_up Upgrade {>Upgrade}
+        header_up Connection {http.request.header.Connection}
+        header_up Upgrade {http.request.header.Upgrade}
         header_up X-Real-IP {remote_host}
         header_up X-Forwarded-Proto {scheme}
     }

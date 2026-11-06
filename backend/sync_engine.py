@@ -7,7 +7,38 @@ from __future__ import annotations
 import time
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
-import pygame
+
+try:
+    import pygame
+    _RectClass = pygame.Rect
+except ImportError:
+    class _FallbackRect:
+        """Implementación pura en Python de pygame.Rect para contenedores de servidor sin SDL."""
+        def __init__(self, x: int, y: int, w: int, h: int):
+            self.x = int(x)
+            self.y = int(y)
+            self.w = int(w)
+            self.h = int(h)
+            self.width = self.w
+            self.height = self.h
+            self.left = self.x
+            self.top = self.y
+            self.right = self.x + self.w
+            self.bottom = self.y + self.h
+
+        def colliderect(self, other: Any) -> bool:
+            return (
+                self.left < other.right
+                and self.right > other.left
+                and self.top < other.bottom
+                and self.bottom > other.top
+            )
+
+    class _FallbackPygame:
+        Rect = _FallbackRect
+
+    pygame = _FallbackPygame()  # type: ignore
+
 from backend.contracts import PlayerInputPacket, WorldSnapshotPacket
 
 

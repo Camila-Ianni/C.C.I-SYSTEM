@@ -3,7 +3,7 @@
 **Fecha:** 2026-11-06  
 **Versión del Sistema:** v2.1.0 + CCI Communities  
 **Rama Activa Unificada:** `feature/communities-phase0-design` (incluye historial completo de `feature/evolution-phase10-remediation`)  
-**Estado de Auditoría:** APROBADO (22 suites ejecutadas, 191/191 pruebas aprobadas, 0 fallidas, 0 errores)  
+**Estado de Auditoría:** APROBADO (22 suites ejecutadas, 192/192 pruebas aprobadas, 0 fallidas, 0 errores)  
 **Certificación Pre-Merge de Communities:** Véase [`documentacion/communities/CERTIFICACION_PREMERGE_COMMUNITIES.md`](file:///Users/cami/Desktop/C.C.I%20SYSTEM/documentacion/communities/CERTIFICACION_PREMERGE_COMMUNITIES.md)  
 
 ---
@@ -79,10 +79,10 @@ El ejecutor [`run_all_evaluations.py`](../run_all_evaluations.py) valida de form
 19. `test_communities_phase6.py`: 10 pruebas (Moderación jerárquica, reportes y bitácora inmutable de auditoría).
 20. `test_communities_phase7.py`: 10 pruebas (Métricas `process_local`, healthcheck real y benchmark multihilo).
 21. `test_communities_ui.py`: 6 pruebas (Pantallas Pygame `GroupsHubState` y `CommunityViewState`).
-22. `test_communities_merge_audit.py`: 10 pruebas (Persistencia SQLite WAL tras reinicio, concurrencia multihilo, manifiestos Docker/Caddy/LiveKit/coturn `no-tls`, validación fail-fast de secretos en producción, matriz de permisos y aislamiento de canales, persistencia UI Pygame en SQLite, decodificación real MP3, métricas y prueba TCP en vivo HTTP `200 OK` + WebSocket `101 Switching Protocols`).
+22. `test_communities_merge_audit.py`: 11 pruebas (Persistencia SQLite WAL tras reinicio, concurrencia multihilo, manifiestos Docker/Caddy/LiveKit/coturn `no-tls`, validación fail-fast de secretos en producción, matriz de permisos y aislamiento de canales, persistencia UI Pygame en SQLite, decodificación real MP3, métricas, prueba TCP local `test_10` y prueba E2E de contenedores reales `test_11` atravesando Caddy TLS `HTTP 200 OK` + `WSS 101 Switching Protocols` + `docker restart cci_communities_api` con volumen `cci_app_data` + STUN/TURN Allocate HMAC-SHA1 en `coturn:3478`).
 
-**Total de Pruebas Ejecutadas:** 191 (en 22 suites)  
-**Tasa de Éxito:** 100% (191 aprobadas, 0 fallidas, 0 errores)  
+**Total de Pruebas Ejecutadas:** 192 (en 22 suites)  
+**Tasa de Éxito:** 100% (192 aprobadas, 0 fallidas, 0 errores)  
 **Suites Ausentes:** 0  
 **Trazabilidad CI:** Reporte estructurado emitido en `evaluations_report.json` con Commit SHA vinculado.
 

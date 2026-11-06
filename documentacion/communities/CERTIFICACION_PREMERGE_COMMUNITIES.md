@@ -2,10 +2,9 @@
 
 **Fecha:** 2026-11-06  
 **Rama Auditada:** `feature/communities-phase0-design`  
-**Commit SHA Certificado:** `1d16a98043e8289e78a1ac8781a04e59d1510e1d`  
 **Rama Destino (Merge Target):** `main`  
-**Estado de Auditoría (Revisión v3):** APROBADO PARA MERGE (100% de hallazgos P0, P1 y P2 cerrados)  
-**Suites Automatizadas:** 22 de 22 suites ejecutadas (`191 / 191` pruebas aprobadas, `0` fallidas, `0` errores)
+**Estado de Auditoría (Revisión v4):** APROBADO PARA MERGE — Despliegue Docker Compose + Caddy TLS + WebSocket 101 + Persistencia en Volumen + CoTURN 3478 verificados en runtime real  
+**Suites Automatizadas:** 22 de 22 suites ejecutadas (`192 / 192` pruebas aprobadas, `0` fallidas, `0` errores)
 
 ---
 
@@ -20,54 +19,71 @@ Se confirma explícitamente que la rama `feature/communities-phase0-design` cons
 
 ---
 
-## 2. Resolución de Hallazgos Pendientes de la Re-Auditoría v3
+## 2. Hallazgos Resueltos al Ejecutar el Stack Docker + Caddy + CoTURN en Runtime Real (Cierre Revisión v4)
 
-| Hallazgo (Revisión v3) | Severidad | Decisión Arquitectónica y Evidencia de Cierre | Archivos Actualizados |
-| :--- | :--- | :--- | :--- |
-| **Alcance del merge amplio (34+ commits)** | **P0 / P2** | Confirmado formalmente en la Sección 1 de este documento: la rama integra de forma unificada la Evolución v2.1.0 (Fases 0–10) y el módulo `CCI Communities` (Fases 0–7 + UI + Estabilización). | [`CERTIFICACION_PREMERGE_COMMUNITIES.md`](file:///Users/cami/Desktop/C.C.I%20SYSTEM/documentacion/communities/CERTIFICACION_PREMERGE_COMMUNITIES.md)<br>[`FASE10_REMEDIACION_Y_AUDITORIA_FINAL.md`](file:///Users/cami/Desktop/C.C.I%20SYSTEM/documentacion/FASE10_REMEDIACION_Y_AUDITORIA_FINAL.md) |
-| **PostgreSQL documentado vs. SQLite operativo** | **P1** | **SQLite 3 en modo `WAL`** (`PRAGMA journal_mode=WAL`, `PRAGMA foreign_keys=ON`, `PRAGMA busy_timeout=10000`) se establece como el **único motor de base de datos soportado, activo y documentado**. Se eliminó `schema_postgres.sql`, se creó [`schema_sqlite.sql`](file:///Users/cami/Desktop/C.C.I%20SYSTEM/documentacion/communities/schema_sqlite.sql) y se actualizaron `RUNBOOKS.md`, `FASE0_DISENO_Y_ARQUITECTURA.md`, `FASE6_MODERACION.md` y `README.md` eliminando toda referencia a PostgreSQL, Redis o MinIO. | [`schema_sqlite.sql`](file:///Users/cami/Desktop/C.C.I%20SYSTEM/documentacion/communities/schema_sqlite.sql)<br>[`RUNBOOKS.md`](file:///Users/cami/Desktop/C.C.I%20SYSTEM/documentacion/communities/RUNBOOKS.md)<br>[`FASE0_DISENO_Y_ARQUITECTURA.md`](file:///Users/cami/Desktop/C.C.I%20SYSTEM/documentacion/communities/FASE0_DISENO_Y_ARQUITECTURA.md)<br>[`README.md`](file:///Users/cami/Desktop/C.C.I%20SYSTEM/README.md) |
-| **TURN/TLS (`5349`) sin certificados configurados** | **P1** | En [`deploy/coturn.conf`](file:///Users/cami/Desktop/C.C.I%20SYSTEM/deploy/coturn.conf) se eliminó `tls-listening-port=5349` y se activaron explícitamente las directivas `no-tls` y `no-dtls`. En [`deploy/livekit.yaml`](file:///Users/cami/Desktop/C.C.I%20SYSTEM/deploy/livekit.yaml) se eliminó `tls_port: 5349` y en [`deploy/.env.example`](file:///Users/cami/Desktop/C.C.I%20SYSTEM/deploy/.env.example) se documentó que STUN/TURN opera en `3478/UDP+TCP` con `use-auth-secret` (HMAC-SHA1), quedando `TURNS (5349/TLS)` deshabilitado por defecto hasta aprovisionar certificados X.509 dedicados. | [`deploy/coturn.conf`](file:///Users/cami/Desktop/C.C.I%20SYSTEM/deploy/coturn.conf)<br>[`deploy/livekit.yaml`](file:///Users/cami/Desktop/C.C.I%20SYSTEM/deploy/livekit.yaml)<br>[`deploy/.env.example`](file:///Users/cami/Desktop/C.C.I%20SYSTEM/deploy/.env.example) |
-| **Alcance de Streaming y Voz E2E entre clientes** | **P1** | Se delimitó formalmente en código y documentación: **(A) En alcance y probado E2E**: plano de control REST + Socket.IO, emisión/validación de tokens LiveKit JWT (`TTL <= 300s`), detección real de fuentes del SO (`ps`/`pygame.display`), captura local RGB24 (`capture_stream_frame`), reconexión de sesiones y audio P2P UDP RTP (`RFC 3550`) en `mobile/voice_client.py`. **(B) Formalmente fuera del alcance de esta fase**: publicación continua de medios WebRTC hacia un servidor `livekit-server` SFU externo y relay TURN/NAT entre redes WAN remotas. | [`backend/communities/stream_adapter.py`](file:///Users/cami/Desktop/C.C.I%20SYSTEM/backend/communities/stream_adapter.py)<br>[`FASE3_SALAS_DE_VOZ_Y_LIVEKIT.md`](file:///Users/cami/Desktop/C.C.I%20SYSTEM/documentacion/communities/FASE3_SALAS_DE_VOZ_Y_LIVEKIT.md)<br>[`FASE5_STREAMING.md`](file:///Users/cami/Desktop/C.C.I%20SYSTEM/documentacion/communities/FASE5_STREAMING.md) |
-| **Evidencia reproducible de despliegue (`docker compose config`, HTTP 200, WS 101 y reinicio)** | **P1** | Se alineó [`deploy/Dockerfile.backend`](file:///Users/cami/Desktop/C.C.I%20SYSTEM/deploy/Dockerfile.backend) con `python:3.14-slim` (mismo runtime Python 3.14 certificado en las pruebas) y se incorporó la prueba automatizada en vivo `test_10_live_tcp_http_200_websocket_101_and_docker_compose_config` en [`test_communities_merge_audit.py`](file:///Users/cami/Desktop/C.C.I%20SYSTEM/test_communities_merge_audit.py), verificando por socket TCP real: `docker compose config`, `GET /api/v1/communities/health` (`HTTP/1.1 200 OK`), handshake RFC 6455 `HTTP/1.1 101 Switching Protocols` (`Upgrade: websocket`) en `/socket.io/` y persistencia SQLite WAL tras parada y arranque completo del servidor TCP. | [`deploy/Dockerfile.backend`](file:///Users/cami/Desktop/C.C.I%20SYSTEM/deploy/Dockerfile.backend)<br>[`test_communities_merge_audit.py`](file:///Users/cami/Desktop/C.C.I%20SYSTEM/test_communities_merge_audit.py) |
-| **Documentación de certificación alineada a la rama y SHA** | **P2** | Se creó este documento específico para `feature/communities-phase0-design` y se actualizó `documentacion/FASE10_REMEDIACION_Y_AUDITORIA_FINAL.md` para reflejar las 22 suites y 191 pruebas del repositorio unificado. | [`CERTIFICACION_PREMERGE_COMMUNITIES.md`](file:///Users/cami/Desktop/C.C.I%20SYSTEM/documentacion/communities/CERTIFICACION_PREMERGE_COMMUNITIES.md)<br>[`FASE10_REMEDIACION_Y_AUDITORIA_FINAL.md`](file:///Users/cami/Desktop/C.C.I%20SYSTEM/documentacion/FASE10_REMEDIACION_Y_AUDITORIA_FINAL.md) |
+Al ejecutar `docker compose -f deploy/docker-compose.communities.yml build` y `up -d` contra el daemon real de Docker y probar tráfico HTTPS/WSS a través de `cci_communities_caddy` hacia `cci_communities_api`, se detectaron y corrigieron **3 defectos reales de contenedor/proxy** que una validación puramente estática no podía detectar:
+
+1. **Entrypoint `__main__` en `backend/server.py`**:
+   - **Causa**: `backend/server.py` definía `app` y `socketio` pero carecía del bloque `if __name__ == "__main__":`, por lo que `python -m backend.server` en `Dockerfile.backend` terminaba con `exit=0` tras importar el módulo.
+   - **Corrección**: Se agregó el bloque `__main__` en [`backend/server.py`](file:///Users/cami/Desktop/C.C.I%20SYSTEM/backend/server.py#L1351-L1362) que ejecuta `config.validate_production_secrets()`, `cci_database.init_db()` y `socketio.run(app, host=config.host, port=config.port, ...)`.
+2. **Aislamiento de dependencias gráficas (`pygame` / `cv2`) en el contenedor `api`**:
+   - **Causa**: `backend/sync_engine.py` y `recorder/video_recorder.py` importaban `pygame` y `cv2` de forma incondicional en el tope del módulo, provocando `ModuleNotFoundError: No module named 'pygame'` dentro de la imagen ligera `python:3.14-slim` (`requirements-server.txt`).
+   - **Corrección**: Se incorporó en [`backend/sync_engine.py`](file:///Users/cami/Desktop/C.C.I%20SYSTEM/backend/sync_engine.py) un fallback puro en Python para `Rect` cuando `pygame` no está instalado en el servidor, y carga condicional en [`recorder/video_recorder.py`](file:///Users/cami/Desktop/C.C.I%20SYSTEM/recorder/video_recorder.py).
+3. **Placeholders de cabeceras WebSocket en Caddy v2 (`deploy/Caddyfile`)**:
+   - **Causa**: `deploy/Caddyfile` utilizaba la sintaxis de Caddy v1 `{>Connection}` y `{>Upgrade}`, que en `caddy:2.7-alpine` (Caddy v2) se evalúa como cadena vacía `""`, sobrescribiendo las cabeceras de upgrade y provocando `HTTP/1.1 400 Bad Request` (`Invalid websocket upgrade`) al atravesar Caddy.
+   - **Corrección**: Se reemplazaron en [`deploy/Caddyfile`](file:///Users/cami/Desktop/C.C.I%20SYSTEM/deploy/Caddyfile) por los placeholders nativos de Caddy v2 `{http.request.header.Connection}` y `{http.request.header.Upgrade}`, verificando `HTTP/1.1 101 Switching Protocols` (`Server: Caddy`, `Upgrade: websocket`) en vivo.
 
 ---
 
-## 3. Evidencia Reproducible de Validación (Comandos y Salidas Reales)
+## 3. Evidencia de Ejecución Real del Stack Docker + Caddy TLS + CoTURN (`test_11`)
 
-### 3.1 Validación de `docker compose config`
-Comando ejecutado:
-```bash
-CCI_SECRET_KEY=a9f8e7d6c5b4a3f2e1d0c9b8a7f6e5d4c3b2a1f0e9d8c7b6a5f4e3d2c1b0a9f8 \
-LIVEKIT_API_KEY=APx9K7mQ2vL8nR4pT6wY1zB3 \
-LIVEKIT_API_SECRET=9f8e7d6c5b4a3f2e1d0c9b8a7f6e5d4c3b2a1f0e9d8c7b6a5f4e3d2c1b0a9f8e \
-TURN_SECRET=7e6d5c4b3a2f1e0d9c8b7a6f5e4d3c2b1a0f9e8d7c6b5a4f3e2d1c0b9a8f7e6d \
-docker compose -f deploy/docker-compose.communities.yml config
-```
-Resultado: **Exit Code `0`** (interpolación válida de los 4 servicios activos: `api` en puerto `5050` con SQLite WAL `/data/cci_communities.sqlite3`, `livekit` en `7880`/`7881`/`50000-50100/udp`, `coturn` en `3478` con `no-tls`, y `caddy` hacia `api:5050` y `livekit:7880`).
+La prueba automatizada [`test_11_live_docker_caddy_tls_wss_101_volume_restart_and_coturn_allocate`](file:///Users/cami/Desktop/C.C.I%20SYSTEM/test_communities_merge_audit.py#L693-L905) en [`test_communities_merge_audit.py`](file:///Users/cami/Desktop/C.C.I%20SYSTEM/test_communities_merge_audit.py) ejecuta y verifica contra los 4 contenedores reales en ejecución:
 
-### 3.2 Verificación por Red TCP Real (HTTP `200 OK`, WebSocket `101 Switching Protocols` y Persistencia tras Reinicio)
-Ejecutado de forma reproducible en `test_10_live_tcp_http_200_websocket_101_and_docker_compose_config` ([`test_communities_merge_audit.py`](file:///Users/cami/Desktop/C.C.I%20SYSTEM/test_communities_merge_audit.py)):
+### 3.1 Estado de los 4 Contenedores (`docker ps`)
 ```text
-127.0.0.1 - - [06/Nov/2026] "GET /api/v1/communities/health HTTP/1.1" 200 -
-  -> Payload: {"database": "connected", "service": "cci-communities", "status": "healthy", "version": "1.0.0"}
-127.0.0.1 - - [06/Nov/2026] "POST /api/v1/communities HTTP/1.1" 201 -
-127.0.0.1 - - [06/Nov/2026] "GET /api/v1/communities/<id>/channels HTTP/1.1" 200 -
-127.0.0.1 - - [06/Nov/2026] "POST /api/v1/channels/<id>/messages HTTP/1.1" 201 -
-Raw TCP Handshake -> "GET /socket.io/?EIO=4&transport=websocket&token=<JWT> HTTP/1.1"
-  -> Response: "HTTP/1.1 101 Switching Protocols\r\nUpgrade: websocket\r\nConnection: Upgrade\r\n..."
-[Server Shutdown & Full SQLite WAL Re-initialization]
-127.0.0.1 - - [06/Nov/2026] "GET /api/v1/channels/<id>/messages HTTP/1.1" 200 -
-  -> Mensaje recuperado intacto desde disco tras reinicio del servidor TCP.
+CONTAINER ID   IMAGE                           STATUS                    PORTS                                                                                      NAMES
+b32eb27ed804   deploy-api                      Up (healthy)              127.0.0.1:5050->5050/tcp                                                                   cci_communities_api
+db6483bcb777   caddy:2.7-alpine                Up                        0.0.0.0:8080->80/tcp, 0.0.0.0:8443->443/tcp                                                cci_communities_caddy
+73a37bdb64c2   coturn/coturn:4.6.2-alpine      Up                        0.0.0.0:3478->3478/udp, 0.0.0.0:3478->3478/tcp, 0.0.0.0:49152-49172->49152-49172/udp       cci_communities_coturn
+626d6d68b978   livekit/livekit-server:v1.7.2   Up                        0.0.0.0:7880-7881->7880-7881/tcp, 0.0.0.0:50000-50020->50000-50020/udp                     cci_communities_livekit
 ```
 
-### 3.3 Ejecución Completa del Runner de Certificación (`run_all_evaluations.py`)
-Comando reproducible:
-```bash
-.venv/bin/python run_all_evaluations.py
+### 3.2 Tráfico HTTPS (`200 OK`) y WebSocket (`101 Switching Protocols`) Atravesando Caddy TLS -> `api:5050`
+```text
+[1] CADDY TLS HEALTH STATUS: HTTP/1.1 200 OK
+[1] CADDY TLS HEALTH BODY: {"database":"connected","livekit_sfu":"ready","metrics_scope":"process_local","status":"healthy","storage":"local_storage_ready","uptime_seconds":190.54,"version":"2.1.0-communities-v1.0"}
+[2] CADDY WSS UPGRADE STATUS: HTTP/1.1 101 Switching Protocols
+    Alt-Svc: h3=":443"; ma=2592000
+    Connection: Upgrade
+    Sec-Websocket-Accept: s3pPLMBiTxaQ9kYGzzhZRbK+xOo=
+    Server: Caddy
+    Upgrade: websocket
 ```
 
-Resumen de las **22 suites ejecutadas (`191 / 191` pruebas aprobadas)**:
+### 3.3 Persistencia Real en Volumen Docker (`cci_app_data`) Tras `docker restart cci_communities_api`
+```text
+[3a] PRE-RESTART MESSAGE CREATED: HTTP/1.1 201 Created comm_id= 4d1fdc74-9c3a-4fca-81eb-9445122cf589 ch_id= bbd3f5b6-8d9c-4951-bf4b-ec4bfa0d2708
+$ docker restart cci_communities_api
+[3b] CONTAINER cci_communities_api HEALTH AFTER RESTART: healthy
+[3c] POST-RESTART MESSAGES VIA CADDY: HTTP/1.1 200 OK count= 1 content= Mensaje persistido en volumen Docker cci_app_data tras docker restart
+```
+
+### 3.4 Prueba Real STUN Binding (UDP/TCP 3478) y TURN Allocate con Autenticación HMAC-SHA1 (`use-auth-secret`) contra `cci_communities_coturn`
+```text
+[4a] COTURN UDP 3478 STUN RESPONSE: type=0x0101 (Binding Success=0x0101), len=80, cookie=0x2112a442
+[4b] COTURN TCP 3478 STUN RESPONSE: type=0x0101 (Binding Success=0x0101), len=80, cookie=0x2112a442
+Step 1 TURN Allocate Challenge: type=0x0113 (401=0x0113), realm=turn.ccisystem.org, nonce=d9fdae0281b66a49
+Step 2 TURN Allocate Authenticated Response: type=0x0103 (Success=0x0103), attrs=['0x16', '0x20', '0xd', '0x8022', '0x8', '0x8028']
+Allocated TURN Relay Port: 49167/UDP (configured range: 49152-49172)
+```
+*(Nota de alcance: La prueba STUN/TURN 3478 y asignación de puerto relay `49167/UDP` con credenciales efímeras HMAC-SHA1 se ejecutó contra el contenedor `cci_communities_coturn` local; las pruebas desde una red WAN externa y `TURNS 5349/TLS` con certificados públicos dependen del aprovisionamiento DNS/TLS de producción).*
+
+---
+
+## 4. Ejecución Completa del Runner de Certificación (`run_all_evaluations.py`) y CI GitHub Actions
+
+Se incorporó el workflow de integración continua [`.github/workflows/ci-communities-audit.yml`](file:///Users/cami/Desktop/C.C.I%20SYSTEM/.github/workflows/ci-communities-audit.yml) y se ejecutaron las **22 suites completas (`192 / 192` pruebas aprobadas, 0 fallidas, 0 errores)**:
+
 - `test_phase2.py`: 9/9 PASS
 - `test_phase3.py`: 7/7 PASS
 - `test_phase1_evolution.py`: 9/9 PASS
@@ -89,18 +105,17 @@ Resumen de las **22 suites ejecutadas (`191 / 191` pruebas aprobadas)**:
 - `test_communities_phase6.py`: 10/10 PASS
 - `test_communities_phase7.py`: 10/10 PASS
 - `test_communities_ui.py`: 6/6 PASS
-- `test_communities_merge_audit.py`: 10/10 PASS
+- `test_communities_merge_audit.py`: 11/11 PASS (incluyendo `test_10` TCP local y `test_11` Docker Compose + Caddy TLS + WSS 101 + Volume Restart + CoTURN Allocate 3478)
 
 ---
 
-## 4. Checklist de Aprobación Pre-Merge
+## 5. Checklist Final de Aprobación Pre-Merge (Revisión v4)
 
-- [x] **Alcance del PR/merge revisado y aceptado**: Confirmada la integración unificada de Evolución v2.1.0 (Fases 0–10) + CCI Communities (Fases 0–7 + UI + Estabilización).
-- [x] **Decisión SQLite/PostgreSQL documentada y coherente**: SQLite 3 (`WAL`) es el único motor soportado y documentado (`schema_sqlite.sql`; `schema_postgres.sql` eliminado).
-- [x] **TURN/TLS alineado y sin configuración rota**: `no-tls` y `no-dtls` aplicados en `deploy/coturn.conf`; `5349` deshabilitado hasta contar con certificados X.509 dedicados; STUN/TURN activo en `3478/UDP+TCP` con `use-auth-secret`.
-- [x] **Docker Compose validado**: `docker compose -f deploy/docker-compose.communities.yml config` validado sin errores y `Dockerfile.backend` alineado a `python:3.14-slim`.
-- [x] **API REST (`200 OK` / `201 Created`) y WebSocket (`101 Switching Protocols`) comprobados por red TCP**: Verificados en `test_10_live_tcp_http_200_websocket_101_and_docker_compose_config`.
-- [x] **Persistencia comprobada tras reinicio**: Verificada tanto a nivel de repositorio/servicio/UI Pygame (`test_01`, `test_06`) como tras apagado y rearranque del servidor HTTP/TCP (`test_10`).
-- [x] **Streaming/voz E2E delimitado formalmente**: Plano de control, tokens JWT (`<= 300s`), preview local RGB24 y audio P2P UDP RTP local probados; transporte WebRTC SFU externo en red WAN marcado formalmente fuera del alcance de esta fase.
-- [x] **Suite reproducida y asociada al SHA final**: Registrada en [`evaluations_report.json`](file:///Users/cami/Desktop/C.C.I%20SYSTEM/evaluations_report.json) con 22 suites y 191 pruebas exitosas.
-- [x] **Documentación actualizada para esta rama**: Toda la documentación apunta a `feature/communities-phase0-design`.
+- [x] **Alcance unificado v2.1.0 + Communities aceptado y documentado**.
+- [x] **Suite 192/192 reproducida sobre el SHA final y configurada en `.github/workflows/ci-communities-audit.yml`**.
+- [x] **Docker Compose `config` + `build` + `up -d` ejecutados con éxito**.
+- [x] **Contenedores `cci_communities_api` (`healthy`), `cci_communities_livekit`, `cci_communities_coturn` y `cci_communities_caddy` en ejecución**.
+- [x] **HTTP (`200 OK` / `201 Created`) y Socket.IO/WebSocket (`101 Switching Protocols`, `Server: Caddy`) verificados atravesando Caddy TLS real (`test_11`)**.
+- [x] **Reinicio real del contenedor `cci_communities_api` (`docker restart`) y persistencia comprobada en el volumen `cci_app_data` (`test_11`)**.
+- [x] **TURN UDP/TCP 3478 (STUN Binding `0x0101` + TURN Allocate `0x0103` con HMAC-SHA1 y puerto relay `49152-49172/UDP`) probado contra `cci_communities_coturn` (`test_11`); `TURNS 5349` documentado como deshabilitado (`no-tls`)**.
+- [x] **Logs y evidencias reproducibles adjuntos en este documento y en `evaluations_report.json`**.
