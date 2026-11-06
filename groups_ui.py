@@ -1089,6 +1089,43 @@ class CommunityViewState(BaseState):
         {"author": "KAI", "time": "Hoy 18:40", "text": "Está increíble 🔥"},
     ]
 
+    CHANNEL_PRESETS: Dict[str, List[Dict[str, str]]] = {
+        "anuncios": [
+            {"author": "ALEX", "time": "Ayer 20:00", "text": "📢 Torneo oficial Night Raid este viernes a las 22:00 hs."},
+            {"author": "MIRA", "time": "Ayer 20:15", "text": "Inscripciones abiertas en #busqueda-de-equipo. ¡Premios C.C.I.!"},
+            {"author": "KAI", "time": "Hoy 12:00", "text": "Actualización v2.1 del servidor completada sin cortes."},
+        ],
+        "reglas": [
+            {"author": "ALEX", "time": "Fijado", "text": "1. Respeto mutuo entre todos los miembros de la comunidad."},
+            {"author": "ALEX", "time": "Fijado", "text": "2. Usar cada canal para su temática correspondiente."},
+            {"author": "ALEX", "time": "Fijado", "text": "3. Prohibido el spam o compartir enlaces no verificados."},
+        ],
+        "bienvenidas": [
+            {"author": "KAI", "time": "Ayer 19:10", "text": "¡Bienvenido ZERO a NIGHT RAID! Pasá por #reglas."},
+            {"author": "MIRA", "time": "Hoy 14:30", "text": "¡Bienvenida LUNA al escuadrón! 🎉"},
+        ],
+        "off-topic": [
+            {"author": "KAI", "time": "Hoy 16:10", "text": "¿Alguien escuchó el nuevo soundtrack synthwave de C.C.I.?"},
+            {"author": "MIRA", "time": "Hoy 16:14", "text": "Sí, lo tengo en loop mientras diseño los mapas."},
+            {"author": "ALEX", "time": "Hoy 16:20", "text": "Quedó brutal para jugar de noche."},
+            {"author": "KAI", "time": "Hoy 16:25", "text": "Después paso la playlist completa por acá."},
+        ],
+        "clips-y-memes": [
+            {"author": "MIRA", "time": "Hoy 17:05", "text": "Subí el clip de la jugada final 1v3 en Da Vinci Fighters 🎬"},
+            {"author": "KAI", "time": "Hoy 17:09", "text": "Jajaja ese parry en el último segundo fue de película."},
+            {"author": "ALEX", "time": "Hoy 17:15", "text": "Directo al compilado de mejores momentos del mes."},
+        ],
+        "busqueda-de-equipo": [
+            {"author": "ALEX", "time": "Hoy 18:00", "text": "Buscamos +2 para Ranked 5v5 hoy a las 22:00 (Sala Gaming)."},
+            {"author": "KAI", "time": "Hoy 18:04", "text": "Me anoto de entry/soporte."},
+            {"author": "MIRA", "time": "Hoy 18:06", "text": "Yo voy de sniper, nos falta uno más."},
+        ],
+        "sugerencias": [
+            {"author": "MIRA", "time": "Ayer 21:00", "text": "Idea: sumar un canal de retos semanales de speedrun."},
+            {"author": "ALEX", "time": "Hoy 10:30", "text": "¡Aprobado! Lo abrimos después del torneo del viernes."},
+        ],
+    }
+
     def __init__(self, state_machine: Optional[Any] = None) -> None:
         super().__init__(state_machine)
         self.sidebar_surface: Optional[pygame.Surface] = None
@@ -1104,7 +1141,14 @@ class CommunityViewState(BaseState):
         self.user_hearted: bool = False
         self.user_fired: bool = False
 
-        self.chat_messages: List[Dict[str, str]] = [dict(m) for m in self.DEFAULT_GENERAL_MESSAGES]
+        self.channel_histories: Dict[str, List[Dict[str, str]]] = {
+            "general": [dict(m) for m in self.DEFAULT_GENERAL_MESSAGES],
+            **{k: [dict(m) for m in v] for k, v in self.CHANNEL_PRESETS.items()},
+        }
+        self.chat_messages: List[Dict[str, str]] = self.channel_histories["general"]
+        self.scroll_offset: int = 0
+        self.max_scroll: int = 0
+
         self.input_text: str = ""
         self.input_focused: bool = False
 
@@ -1112,6 +1156,7 @@ class CommunityViewState(BaseState):
         self.server_icon_rects: List[Tuple[pygame.Rect, int]] = []
         self.channel_rects: List[Tuple[pygame.Rect, str]] = []
         self.voice_rects: List[Tuple[pygame.Rect, str]] = []
+        self.chat_viewport = pygame.Rect(460, 186, 574, 386)
         self.input_rect = pygame.Rect(500, 580, 535, 36)
         self.heart_rect = pygame.Rect(528, 502, 46, 22)
         self.fire_rect = pygame.Rect(578, 502, 46, 22)
@@ -1129,9 +1174,21 @@ class CommunityViewState(BaseState):
                 self.active_group_idx = i
                 break
 
+        self.channel_histories = {
+            "general": [dict(m) for m in self.DEFAULT_GENERAL_MESSAGES],
+            **{k: [dict(m) for m in v] for k, v in self.CHANNEL_PRESETS.items()},
+        }
         self.current_channel = "general"
-        self.chat_messages = [dict(m) for m in self.DEFAULT_GENERAL_MESSAGES]
+        self.chat_messages = self.channel_histories["general"]
+        self.scroll_offset = 0
         self.input_text = ""
+
+    def _switch_channel(self, ch_name: str) -> None:
+        if ch_name not in self.channel_histories:
+            self.channel_histories[ch_name] = []
+        self.current_channel = ch_name
+        self.chat_messages = self.channel_histories[ch_name]
+        self.scroll_offset = 0
 
     def _change_state(self, dest: str, **kwargs) -> None:
         if self.state_machine is not None:
@@ -1139,6 +1196,11 @@ class CommunityViewState(BaseState):
 
     def handle_events(self, events: List[pygame.event.Event]) -> None:
         for e in events:
+            if e.type == pygame.MOUSEWHEEL:
+                # Scroll vertical del chat (e.y > 0 sube, e.y < 0 baja)
+                self.scroll_offset = max(0, min(self.max_scroll, self.scroll_offset - e.y * 36))
+                continue
+
             if e.type == pygame.KEYDOWN:
                 if e.key == pygame.K_RETURN and self.input_text.strip():
                     self._send_message()
@@ -1157,18 +1219,31 @@ class CommunityViewState(BaseState):
 
                 if e.key == pygame.K_ESCAPE:
                     self._change_state("GROUPS")
+                elif e.key == pygame.K_PAGEUP:
+                    self.scroll_offset = max(0, self.scroll_offset - 72)
+                elif e.key == pygame.K_PAGEDOWN:
+                    self.scroll_offset = min(self.max_scroll, self.scroll_offset + 72)
                 elif e.key in (pygame.K_DOWN, pygame.K_s):
                     names = [c[0] for c in self.TEXT_CHANNELS]
                     idx = names.index(self.current_channel) if self.current_channel in names else 3
-                    self.current_channel = names[(idx + 1) % len(names)]
+                    self._switch_channel(names[(idx + 1) % len(names)])
                 elif e.key in (pygame.K_UP, pygame.K_w):
                     names = [c[0] for c in self.TEXT_CHANNELS]
                     idx = names.index(self.current_channel) if self.current_channel in names else 3
-                    self.current_channel = names[(idx - 1) % len(names)]
+                    self._switch_channel(names[(idx - 1) % len(names)])
                 elif e.key == pygame.K_RETURN:
                     self.input_focused = True
 
-            elif e.type == pygame.MOUSEBUTTONDOWN and e.button == 1:
+            elif e.type == pygame.MOUSEBUTTONDOWN:
+                if e.button == 4:  # Wheel up (legacy SDL)
+                    self.scroll_offset = max(0, self.scroll_offset - 36)
+                    continue
+                if e.button == 5:  # Wheel down (legacy SDL)
+                    self.scroll_offset = min(self.max_scroll, self.scroll_offset + 36)
+                    continue
+                if e.button != 1:
+                    continue
+
                 pos = self._to_logical_pos(e.pos)
 
                 # 1. Sidebar compartida (x < 170)
@@ -1188,15 +1263,16 @@ class CommunityViewState(BaseState):
                         else:
                             self.active_group_idx = idx
                             self.community_id = COMMUNITIES_CATALOG[idx]["id"]
+                            self.scroll_offset = 0
                         return
 
-                # 3. Canales de texto (x = 245..440)
+                # 3. Canales de texto (x = 246..438)
                 for rect, ch_name in self.channel_rects:
                     if rect.collidepoint(pos):
-                        self.current_channel = ch_name
+                        self._switch_channel(ch_name)
                         return
 
-                # 4. Salas de voz
+                # 4. Salas de voz (x = 246..438)
                 for rect, vc_name in self.voice_rects:
                     if rect.collidepoint(pos):
                         self.active_voice = None if self.active_voice == vc_name else vc_name
@@ -1236,6 +1312,8 @@ class CommunityViewState(BaseState):
             return
         self.chat_messages.append({"author": "ALEX", "time": "Hoy 18:42", "text": txt})
         self.input_text = ""
+        # Auto-scroll al final al enviar un nuevo mensaje
+        self.scroll_offset = 999999
 
     def update(self, dt: float) -> None:
         pass
@@ -1281,88 +1359,133 @@ class CommunityViewState(BaseState):
             canvas.blit(f_title.render(grp["name"], True, (245, 247, 252)), (280, 92))
             canvas.blit(f_sub.render(grp["subtitle"], True, (180, 185, 196)), (280, 116))
 
-        # 3. Registrar rects de canales de texto y salas de voz
+        # 3. Registrar rects de canales de texto y salas de voz alineados al píxel exacto de la base limpia
         self.channel_rects = [
-            (pygame.Rect(246, 198, 192, 22), "anuncios"),
-            (pygame.Rect(246, 221, 192, 22), "reglas"),
-            (pygame.Rect(246, 244, 192, 22), "bienvenidas"),
-            (pygame.Rect(246, 297, 192, 26), "general"),
-            (pygame.Rect(246, 326, 192, 22), "off-topic"),
-            (pygame.Rect(246, 350, 192, 22), "clips-y-memes"),
-            (pygame.Rect(246, 374, 192, 22), "busqueda-de-equipo"),
-            (pygame.Rect(246, 398, 192, 22), "sugerencias"),
+            (pygame.Rect(246, 181, 192, 22), "anuncios"),
+            (pygame.Rect(246, 205, 192, 22), "reglas"),
+            (pygame.Rect(246, 230, 192, 22), "bienvenidas"),
+            (pygame.Rect(246, 289, 192, 24), "general"),
+            (pygame.Rect(246, 316, 192, 22), "off-topic"),
+            (pygame.Rect(246, 340, 192, 22), "clips-y-memes"),
+            (pygame.Rect(246, 364, 192, 22), "busqueda-de-equipo"),
+            (pygame.Rect(246, 389, 192, 22), "sugerencias"),
         ]
         self.voice_rects = [
-            (pygame.Rect(246, 462, 192, 22), "Sala principal"),
-            (pygame.Rect(246, 486, 192, 22), "Gaming"),
-            (pygame.Rect(246, 510, 192, 22), "Rankeds"),
-            (pygame.Rect(246, 534, 192, 22), "Streaming"),
+            (pygame.Rect(246, 445, 192, 22), "Sala principal"),
+            (pygame.Rect(246, 471, 192, 22), "Gaming"),
+            (pygame.Rect(246, 496, 192, 22), "Rankeds"),
+            (pygame.Rect(246, 521, 192, 22), "Streaming"),
         ]
 
+        # Si el canal activo NO es #general, quitar el resaltado horneado de #general y resaltar el canal activo
         if self.current_channel != "general":
+            unsel_patch = _PACK.sprites.get("general_unselected.png")
+            if unsel_patch is not None:
+                canvas.blit(unsel_patch, (246, 288))
             for rect, ch_name in self.channel_rects:
                 if ch_name == self.current_channel:
-                    pygame.draw.rect(canvas, (242, 244, 248), rect, 1, border_radius=4)
+                    hl = pygame.Surface((rect.width, rect.height), pygame.SRCALPHA)
+                    pygame.draw.rect(hl, (235, 240, 250, 38), hl.get_rect(), border_radius=5)
+                    pygame.draw.rect(hl, (242, 244, 248, 220), hl.get_rect(), 1, border_radius=5)
+                    canvas.blit(hl, rect.topleft)
+            # Actualizar cabecera superior del canal y el placeholder de escritura
             pygame.draw.rect(canvas, (14, 16, 20), pygame.Rect(462, 150, 380, 28))
             ch_desc = dict(self.TEXT_CHANNELS).get(self.current_channel, "")
             canvas.blit(f_body_b.render(f"#  {self.current_channel}", True, (245, 247, 252)), (466, 155))
-            canvas.blit(f_small.render(ch_desc, True, (175, 180, 192)), (590, 158))
+            canvas.blit(f_small.render(ch_desc, True, (175, 180, 192)), (605, 158))
+            if not self.input_focused and not self.input_text:
+                pygame.draw.rect(canvas, (14, 16, 20), pygame.Rect(504, 586, 370, 24))
+                canvas.blit(f_body.render(f"Enviar un mensaje a #{self.current_channel}...", True, (150, 155, 168)), (508, 590))
 
-        # 4. Área central de mensajes (x=456..1040, y=186..574)
-        extra = self.chat_messages[len(self.DEFAULT_GENERAL_MESSAGES):]
+        # Resaltar la sala de voz activa (con indicador conectado)
+        if self.active_voice is not None:
+            for rect, vc_name in self.voice_rects:
+                if vc_name == self.active_voice:
+                    v_hl = pygame.Surface((rect.width, rect.height), pygame.SRCALPHA)
+                    pygame.draw.rect(v_hl, (90, 220, 135, 28), v_hl.get_rect(), border_radius=5)
+                    pygame.draw.rect(v_hl, (110, 235, 150, 190), v_hl.get_rect(), 1, border_radius=5)
+                    canvas.blit(v_hl, rect.topleft)
+                    pygame.draw.circle(canvas, (100, 235, 145), (rect.x + 8, rect.centery), 3)
 
-        if self.current_channel == "general" and not extra:
-            msg_layout = [
-                ("nr_msg_0_alex.png", 470, 196),
-                ("nr_msg_1_mira.png", 470, 246),
-                ("nr_msg_2_kai.png", 470, 294),
-                ("nr_msg_3_alex.png", 470, 342),
-                ("nr_msg_4_mira_skin.png", 470, 386),
-                ("nr_msg_5_kai.png", 470, 526),
+        # 4. Área central fija de mensajes con recorte (clip) y scroll real (x=460..1034, y=186..572)
+        vp = self.chat_viewport
+        items_heights: List[Tuple[str, Any, int]] = []
+
+        if self.current_channel == "general":
+            default_sprites = [
+                ("nr_msg_0_alex.png", 44),
+                ("nr_msg_1_mira.png", 42),
+                ("nr_msg_2_kai.png", 42),
+                ("nr_msg_3_alex.png", 38),
+                ("nr_msg_4_mira_skin.png", 132),
+                ("nr_msg_5_kai.png", 44),
             ]
-            for sp_name, mx, my in msg_layout:
-                sp = _PACK.sprites.get(sp_name)
-                if sp is not None:
-                    canvas.blit(sp, (mx, my))
-
-            if self.user_hearted:
-                pygame.draw.rect(canvas, (36, 40, 50), self.heart_rect, border_radius=4)
-                pygame.draw.rect(canvas, (242, 244, 248), self.heart_rect, 1, border_radius=4)
-                canvas.blit(f_small_b.render(f"♥ {self.reaction_heart}", True, (245, 247, 252)), (self.heart_rect.x + 10, self.heart_rect.y + 4))
-            if self.user_fired:
-                pygame.draw.rect(canvas, (36, 40, 50), self.fire_rect, border_radius=4)
-                pygame.draw.rect(canvas, (242, 244, 248), self.fire_rect, 1, border_radius=4)
-                canvas.blit(f_small_b.render(f"🔥 {self.reaction_fire}", True, (245, 247, 252)), (self.fire_rect.x + 10, self.fire_rect.y + 4))
+            for sp_name, sh in default_sprites:
+                items_heights.append(("sprite", sp_name, sh))
+            for msg in self.chat_messages[len(self.DEFAULT_GENERAL_MESSAGES):]:
+                items_heights.append(("msg", msg, 50))
         else:
-            cur_y = 196
-            if self.current_channel == "general":
-                base_msgs = [
-                    ("nr_msg_2_kai.png", 44),
-                    ("nr_msg_3_alex.png", 40),
-                    ("nr_msg_4_mira_skin.png", 134),
-                    ("nr_msg_5_kai.png", 46),
-                ]
-                for sp_name, mh in base_msgs[max(0, len(extra) - 1):]:
-                    sp = _PACK.sprites.get(sp_name)
-                    if sp is not None and cur_y + mh <= 515:
-                        canvas.blit(sp, (470, cur_y))
-                        cur_y += mh + 6
-            else:
-                info_rect = pygame.Rect(472, cur_y, 532, 48)
-                _draw_cut_rect(canvas, info_rect, (16, 18, 23), (80, 86, 100), cut=5, border_w=1)
-                canvas.blit(f_body_b.render(f"Bienvenido a #{self.current_channel}", True, (242, 244, 248)), (486, cur_y + 7))
-                canvas.blit(f_sub.render(dict(self.TEXT_CHANNELS).get(self.current_channel, ""), True, (175, 180, 192)), (486, cur_y + 26))
-                cur_y += 58
+            items_heights.append(("welcome", self.current_channel, 52))
+            for msg in self.chat_messages:
+                items_heights.append(("msg", msg, 52))
 
-            for msg in extra[-4:]:
-                if cur_y > 530:
-                    break
-                m_rect = pygame.Rect(472, cur_y, 532, 44)
-                _draw_cut_rect(canvas, m_rect, (20, 23, 29), (110, 116, 130), cut=5, border_w=1)
-                canvas.blit(f_body_b.render(msg["author"], True, (244, 246, 250)), (486, cur_y + 5))
-                canvas.blit(f_small.render(msg["time"], True, (155, 160, 172)), (536, cur_y + 7))
-                canvas.blit(f_body.render(msg["text"], True, (232, 235, 242)), (486, cur_y + 23))
-                cur_y += 50
+        gap = 8
+        total_h = sum(h for _, _, h in items_heights) + max(0, len(items_heights) - 1) * gap
+        self.max_scroll = max(0, total_h - (vp.height - 14))
+        self.scroll_offset = max(0, min(self.scroll_offset, self.max_scroll))
+
+        old_clip = canvas.get_clip()
+        canvas.set_clip(vp)
+
+        cur_y = vp.y + 8 - self.scroll_offset
+        for kind, payload, h in items_heights:
+            if cur_y + h >= vp.y and cur_y <= vp.bottom:
+                if kind == "sprite":
+                    sp = _PACK.sprites.get(payload)
+                    if sp is not None:
+                        canvas.blit(sp, (470, cur_y))
+                    if payload == "nr_msg_4_mira_skin.png":
+                        # Actualizar posición dinámica de las píldoras de reacción con el scroll
+                        self.heart_rect = pygame.Rect(528, cur_y + 114, 46, 22)
+                        self.fire_rect = pygame.Rect(578, cur_y + 114, 46, 22)
+                        if self.user_hearted:
+                            pygame.draw.rect(canvas, (36, 40, 50), self.heart_rect, border_radius=4)
+                            pygame.draw.rect(canvas, (242, 244, 248), self.heart_rect, 1, border_radius=4)
+                            canvas.blit(f_small_b.render(f"♥ {self.reaction_heart}", True, (245, 247, 252)), (self.heart_rect.x + 10, self.heart_rect.y + 4))
+                        if self.user_fired:
+                            pygame.draw.rect(canvas, (36, 40, 50), self.fire_rect, border_radius=4)
+                            pygame.draw.rect(canvas, (242, 244, 248), self.fire_rect, 1, border_radius=4)
+                            canvas.blit(f_small_b.render(f"🔥 {self.reaction_fire}", True, (245, 247, 252)), (self.fire_rect.x + 10, self.fire_rect.y + 4))
+                elif kind == "welcome":
+                    info_rect = pygame.Rect(470, cur_y, 536, h)
+                    _draw_cut_rect(canvas, info_rect, (16, 18, 23), (85, 92, 106), cut=5, border_w=1)
+                    canvas.blit(f_body_b.render(f"Bienvenido a #{payload}", True, (242, 244, 248)), (484, cur_y + 8))
+                    canvas.blit(f_sub.render(dict(self.TEXT_CHANNELS).get(payload, ""), True, (175, 180, 192)), (484, cur_y + 27))
+                elif kind == "msg":
+                    m_rect = pygame.Rect(470, cur_y, 536, h)
+                    _draw_cut_rect(canvas, m_rect, (18, 20, 26), (72, 78, 90), cut=5, border_w=1)
+                    author = payload.get("author", "ALEX").upper()
+                    av_key = "av_mira.png" if "MIRA" in author else ("av_kai.png" if "KAI" in author else "av_alex.png")
+                    av_sp = _PACK.sprites.get(av_key)
+                    if av_sp is not None:
+                        canvas.blit(av_sp, (478, cur_y + 7))
+                    canvas.blit(f_body_b.render(payload.get("author", "ALEX"), True, (244, 246, 250)), (526, cur_y + 7))
+                    canvas.blit(f_small.render(payload.get("time", "Hoy"), True, (150, 156, 168)), (584, cur_y + 9))
+                    canvas.blit(f_body.render(payload.get("text", ""), True, (226, 230, 238)), (526, cur_y + 26))
+            cur_y += h + gap
+
+        canvas.set_clip(old_clip)
+
+        # Barra de scroll derecha interactiva / visual dentro del área del chat (x=1030..1036, y=198..560)
+        track_top, track_h = 200, 356
+        pygame.draw.rect(canvas, (18, 20, 25), pygame.Rect(1030, track_top, 6, track_h), border_radius=3)
+        if self.max_scroll > 0:
+            thumb_h = max(36, int(track_h * (vp.height / (total_h + 1))))
+            thumb_y = track_top + int((track_h - thumb_h) * (self.scroll_offset / self.max_scroll))
+        else:
+            thumb_h = track_h
+            thumb_y = track_top
+        pygame.draw.rect(canvas, (170, 176, 188), pygame.Rect(1030, thumb_y, 6, thumb_h), border_radius=3)
 
         # 5. Barra de entrada de texto inferior (y=578..619)
         if self.input_focused or self.input_text:
