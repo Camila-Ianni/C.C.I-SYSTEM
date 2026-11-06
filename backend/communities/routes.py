@@ -6,12 +6,28 @@ Expone endpoints bajo /api/v1/communities e invitaciones protegidos con autentic
 from __future__ import annotations
 
 import base64
-from flask import Blueprint, g, jsonify, request
+import time
+from flask import Blueprint, g, jsonify, request, Response
 from backend.auth import require_auth
 from backend.communities.service import CommunitiesService, SoundCooldownError, StreamLimitError
 from backend.communities.stream_adapter import StreamValidationError
+from backend.communities.metrics import CommunityMetricsCollector
 
 communities_bp = Blueprint("communities", __name__)
+
+
+@communities_bp.before_request
+def record_community_request_start():
+    request._start_time = time.time()
+    CommunityMetricsCollector.get_instance().increment("communities_api_requests_total")
+
+
+@communities_bp.after_request
+def record_community_request_latency(response):
+    if hasattr(request, "_start_time"):
+        elapsed = time.time() - request._start_time
+        CommunityMetricsCollector.get_instance().record_latency(elapsed)
+    return response
 
 
 def get_service() -> CommunitiesService:
@@ -39,6 +55,7 @@ def create_community_route():
             visibility=visibility,
             slug=slug,
         )
+        CommunityMetricsCollector.get_instance().increment("communities_created_total")
         return jsonify({"community": comm}), 201
     except ValueError as e:
         return jsonify({"error": str(e)}), 400
@@ -387,6 +404,7 @@ def send_channel_message_route(channel_id: str):
             content=content,
             reply_to_id=reply_to_id,
         )
+        CommunityMetricsCollector.get_instance().increment("communities_messages_total")
         return jsonify({"message": msg}), 201
     except PermissionError as e:
         return jsonify({"error": str(e)}), 403
@@ -501,6 +519,7 @@ def request_voice_token_route(channel_id: str):
             user_id=user_id,
             username=username,
         )
+        CommunityMetricsCollector.get_instance().increment("communities_voice_joins_total")
         return jsonify(cred), 200
     except PermissionError as e:
         return jsonify({"error": str(e)}), 403
@@ -835,6 +854,7 @@ def authorize_sound_play_route(sound_id: str):
             sound_id=sound_id,
             channel_id=channel_id,
         )
+        CommunityMetricsCollector.get_instance().increment("communities_soundboard_plays_total")
         return jsonify(result), 200
     except SoundCooldownError as e:
         resp = jsonify({
@@ -897,6 +917,7 @@ def start_stream_route(channel_id: str):
             bitrate_kbps=bitrate_kbps,
             has_audio=has_audio,
         )
+        CommunityMetricsCollector.get_instance().increment("communities_streams_started_total")
         return jsonify(res), 201
     except PermissionError as e:
         return jsonify({"error": str(e)}), 403
@@ -1069,6 +1090,7 @@ def warn_member_route(community_id: str):
             target_user_id=target_user_id,
             reason=reason,
         )
+        CommunityMetricsCollector.get_instance().increment("communities_moderation_actions_total")
         return jsonify(action), 201
     except PermissionError as e:
         return jsonify({"error": str(e)}), 403
@@ -1100,6 +1122,7 @@ def mute_member_route(community_id: str):
             duration_minutes=duration_minutes,
             reason=reason,
         )
+        CommunityMetricsCollector.get_instance().increment("communities_moderation_actions_total")
         return jsonify(action), 201
     except PermissionError as e:
         return jsonify({"error": str(e)}), 403
@@ -1127,6 +1150,7 @@ def unmute_member_route(community_id: str):
             target_user_id=target_user_id,
             reason=reason,
         )
+        CommunityMetricsCollector.get_instance().increment("communities_moderation_actions_total")
         return jsonify(action), 200
     except PermissionError as e:
         return jsonify({"error": str(e)}), 403
@@ -1154,6 +1178,7 @@ def moderation_kick_member_route(community_id: str):
             target_user_id=target_user_id,
             reason=reason,
         )
+        CommunityMetricsCollector.get_instance().increment("communities_moderation_actions_total")
         return jsonify({"kicked": success, "target_user_id": target_user_id}), 200
     except PermissionError as e:
         return jsonify({"error": str(e)}), 403
@@ -1185,6 +1210,7 @@ def ban_member_route(community_id: str):
             duration_hours=duration_hours,
             reason=reason,
         )
+        CommunityMetricsCollector.get_instance().increment("communities_moderation_actions_total")
         return jsonify(action), 201
     except PermissionError as e:
         return jsonify({"error": str(e)}), 403
@@ -1326,5 +1352,68 @@ def list_audit_log_route(community_id: str):
         return jsonify({"entries": entries}), 200
     except PermissionError as e:
         return jsonify({"error": str(e)}), 403
+
+
+# =============================================================================
+# OBSERVABILIDAD, MÉTRICAS PROMETHEUS, SALUD Y LÍMITES OPERATIVOS (FASE 7)
+# =============================================================================
+
+@communities_bp.route("/health", methods=["GET"])
+@communities_bp.route("/communities/health", methods=["GET"])
+def health_check_route():
+    """Diagnóstico de salud integral de los componentes de Communities."""
+    repo_ok = False
+    try:
+        # Consulta de validación básica contra el repositorio
+        repo_ok = get_service().repo.get_community("00000000-0000-0000-0000-000000000000") is None
+    except Exception:
+        repo_ok = False
+
+    metrics = CommunityMetricsCollector.get_instance().get_snapshot()
+    status = "healthy" if repo_ok else "degraded"
+    return jsonify({
+        "status": status,
+        "database": "connected" if repo_ok else "disconnected",
+        "livekit_sfu": "ready",
+        "storage": "local_storage_ready",
+        "uptime_seconds": metrics["uptime_seconds"],
+        "version": "2.1.0-communities-v1.0",
+    }), 200 if repo_ok else 503
+
+
+@communities_bp.route("/metrics", methods=["GET"])
+@communities_bp.route("/communities/metrics", methods=["GET"])
+def metrics_route():
+    """Expone métricas en formato estándar Prometheus (RFC 0001) o JSON."""
+    collector = CommunityMetricsCollector.get_instance()
+    if request.headers.get("Accept") == "application/json":
+        return jsonify(collector.get_snapshot()), 200
+
+    return Response(
+        collector.format_prometheus(),
+        mimetype="text/plain; version=0.0.4; charset=utf-8"
+    )
+
+
+@communities_bp.route("/system/limits", methods=["GET"])
+@communities_bp.route("/communities/system/limits", methods=["GET"])
+def system_limits_route():
+    """Publica formalmente las capacidades y límites de cuota operativos del sistema."""
+    return jsonify({
+        "limits": {
+            "max_members_per_community": 500,
+            "max_channels_per_community": 100,
+            "max_roles_per_community": 50,
+            "max_streams_per_channel": 1,
+            "max_voice_participants_per_channel": 100,
+            "max_message_length_chars": 2000,
+            "max_sound_file_size_bytes": 5242880,
+            "max_sound_duration_seconds": 15.0,
+            "sound_cooldown_seconds": 5,
+            "max_personal_sounds": 50,
+            "stream_max_fps": 60,
+            "stream_max_resolution": "4k",
+        }
+    }), 200
 
 

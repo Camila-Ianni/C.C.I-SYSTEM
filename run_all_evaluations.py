@@ -40,6 +40,7 @@ CORE_EVOLUTION_SUITES = [
     "test_communities_phase4.py",
     "test_communities_phase5.py",
     "test_communities_phase6.py",
+    "test_communities_phase7.py",
 ]
 
 # 2. Baterías de motores de juegos internos
