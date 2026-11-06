@@ -12,6 +12,7 @@ import cci_database
 from backend.config import config
 from backend.contracts import SocketEvents
 from backend.friends_service import FriendsService
+from backend.chat_service import ChatService
 from backend.room_manager import RoomManager
 from backend.sync_engine import AuthoritativeSyncEngine
 from backend.webrtc_signaling import WebRTCSignalingRouter
@@ -31,14 +32,16 @@ socketio = SocketIO(
 
 room_mgr = RoomManager.get_instance()
 friends_svc = FriendsService.get_instance()
+chat_svc = ChatService.get_instance()
 sync_engines: Dict[str, AuthoritativeSyncEngine] = {}
 
 def _emit_to(event: str, data: Any, to: Any = None):
     if to:
-        emit(event, data, to=to)
+        socketio.emit(event, data, to=to)
     else:
-        emit(event, data)
+        socketio.emit(event, data)
 
+chat_svc.set_broadcast_fn(_emit_to)
 signaling_router = WebRTCSignalingRouter(emit_fn=_emit_to)
 
 
@@ -203,6 +206,57 @@ def update_group_role(group_id):
     return jsonify(res), status_code
 
 
+# ==============================================================================
+# ENDPOINTS REST: CHAT Y MODERACIÓN (FASE 3)
+# ==============================================================================
+
+@app.route("/api/v1/chat/send", methods=["POST"])
+def send_chat_message():
+    data = request.get_json() or {}
+    group_id = data.get("group_id")
+    sender_id = data.get("sender_id")
+    sender_name = data.get("sender_name", sender_id)
+    body = data.get("body")
+    if not group_id or not sender_id or not body:
+        return jsonify({"success": False, "error": "group_id, sender_id y body requeridos"}), 400
+
+    res = chat_svc.send_message(group_id, sender_id, sender_name, body)
+    status_code = 200 if res.get("success") else 400
+    return jsonify(res), status_code
+
+
+@app.route("/api/v1/chat/<group_id>/history", methods=["GET"])
+def get_chat_history(group_id):
+    limit = int(request.args.get("limit", 30))
+    before = request.args.get("before")
+    history = chat_svc.get_history(group_id, limit=limit, before_created_at=before)
+    return jsonify({"success": True, "data": history})
+
+
+@app.route("/api/v1/chat/message/<message_id>", methods=["DELETE"])
+def delete_chat_message(message_id):
+    data = request.get_json() or {}
+    actor_id = data.get("actor_id")
+    if not actor_id:
+        return jsonify({"success": False, "error": "actor_id requerido"}), 400
+    res = chat_svc.delete_message(message_id, actor_id)
+    status_code = 200 if res.get("success") else 400
+    return jsonify(res), status_code
+
+
+@app.route("/api/v1/chat/message/<message_id>/report", methods=["POST"])
+def report_chat_message(message_id):
+    data = request.get_json() or {}
+    reporter_id = data.get("reporter_id")
+    reason = data.get("reason", "Contenido inapropiado")
+    if not reporter_id:
+        return jsonify({"success": False, "error": "reporter_id requerido"}), 400
+    res = chat_svc.report_message(message_id, reporter_id, reason)
+    status_code = 200 if res.get("success") else 400
+    return jsonify(res), status_code
+
+
+
 
 # ==============================================================================
 # EVENTOS WEBSOCKET: GESTIÓN DE SALAS
@@ -266,6 +320,46 @@ def on_room_leave(data: Dict[str, Any]):
     leave_room(room_id)
     if room:
         emit(SocketEvents.ROOM_STATE, room.to_dict(), to=room_id)
+
+
+# ==============================================================================
+# EVENTOS WEBSOCKET: CHAT EN TIEMPO REAL (FASE 3)
+# ==============================================================================
+
+@socketio.on("chat:join")
+def on_chat_join(data: Dict[str, Any]):
+    group_id = data.get("group_id", "")
+    if group_id:
+        join_room(group_id)
+        emit("chat:joined", {"group_id": group_id, "user_id": data.get("user_id")}, to=group_id)
+
+
+@socketio.on("chat:leave")
+def on_chat_leave(data: Dict[str, Any]):
+    group_id = data.get("group_id", "")
+    if group_id:
+        leave_room(group_id)
+
+
+@socketio.on(SocketEvents.CHAT_SEND)
+def on_chat_send(data: Dict[str, Any]):
+    group_id = data.get("group_id", "")
+    sender_id = data.get("sender_id", "")
+    sender_name = data.get("sender_name", sender_id)
+    body = data.get("body", "")
+
+    res = chat_svc.send_message(group_id, sender_id, sender_name, body)
+    if not res.get("success"):
+        emit("chat:error", res)
+
+
+@socketio.on("chat:typing")
+def on_chat_typing(data: Dict[str, Any]):
+    group_id = data.get("group_id", "")
+    user_id = data.get("user_id", "")
+    if group_id and user_id:
+        emit("chat:typing", {"user_id": user_id, "typing": data.get("typing", True)}, to=group_id, include_self=False)
+
 
 
 # ==============================================================================

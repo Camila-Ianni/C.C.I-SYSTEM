@@ -1224,3 +1224,114 @@ def get_user_gameplay_recordings(owner_id: str, db_path: Optional[Path] = None) 
         """, (owner_id,))
         return [dict(r) for r in cursor.fetchall()]
 
+
+# ==============================================================================
+# HELPER FUNCTIONS: FASE 3 CHAT Y MENSAJERÍA GRUPAL
+# ==============================================================================
+
+def save_chat_message_entry(
+    message_id: str,
+    group_id: str,
+    sender_id: str,
+    body: str,
+    db_path: Optional[Path] = None
+) -> Dict[str, Any]:
+    """Guarda un mensaje de texto en el historial del grupo."""
+    now_iso = datetime.now().isoformat(timespec="seconds")
+    with get_db(db_path) as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT INTO messages (id, group_id, sender_id, body, created_at)
+            VALUES (?, ?, ?, ?, ?)
+        """, (message_id, group_id, sender_id, body, now_iso))
+
+    return {
+        "id": message_id,
+        "group_id": group_id,
+        "sender_id": sender_id,
+        "body": body,
+        "created_at": now_iso,
+        "edited_at": None,
+        "deleted_at": None,
+    }
+
+
+def get_chat_message_by_id(message_id: str, db_path: Optional[Path] = None) -> Optional[Dict[str, Any]]:
+    """Obtiene un mensaje por su ID."""
+    with get_db(db_path) as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM messages WHERE id = ?", (message_id,))
+        row = cursor.fetchone()
+        return dict(row) if row else None
+
+
+def get_paged_messages_entry(
+    group_id: str,
+    limit: int = 30,
+    before_created_at: Optional[str] = None,
+    db_path: Optional[Path] = None
+) -> List[Dict[str, Any]]:
+    """Obtiene el historial paginado de mensajes de un grupo (excluyendo eliminados)."""
+    with get_db(db_path) as conn:
+        cursor = conn.cursor()
+        if before_created_at:
+            cursor.execute("""
+                SELECT * FROM messages
+                WHERE group_id = ? AND deleted_at IS NULL AND created_at < ?
+                ORDER BY created_at DESC
+                LIMIT ?
+            """, (group_id, before_created_at, limit))
+        else:
+            cursor.execute("""
+                SELECT * FROM messages
+                WHERE group_id = ? AND deleted_at IS NULL
+                ORDER BY created_at DESC
+                LIMIT ?
+            """, (group_id, limit))
+
+        rows = [dict(r) for r in cursor.fetchall()]
+        # Retornar en orden cronológico ascendente para renderizado de chat
+        return sorted(rows, key=lambda m: m["created_at"])
+
+
+def soft_delete_chat_message_entry(message_id: str, db_path: Optional[Path] = None) -> bool:
+    """Borrado lógico de un mensaje (marca deleted_at)."""
+    now_iso = datetime.now().isoformat(timespec="seconds")
+    with get_db(db_path) as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            UPDATE messages
+            SET deleted_at = ?
+            WHERE id = ? AND deleted_at IS NULL
+        """, (now_iso, message_id))
+        return cursor.rowcount > 0
+
+
+def record_message_report_entry(
+    report_id: str,
+    message_id: str,
+    reporter_id: str,
+    reason: str,
+    db_path: Optional[Path] = None
+) -> bool:
+    """Registra un reporte de moderación para un mensaje."""
+    now_iso = datetime.now().isoformat(timespec="seconds")
+    with get_db(db_path) as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS message_reports (
+                id TEXT PRIMARY KEY,
+                message_id TEXT NOT NULL,
+                reporter_id TEXT NOT NULL,
+                reason TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                FOREIGN KEY (message_id) REFERENCES messages(id) ON DELETE CASCADE
+            )
+        """)
+        cursor.execute("""
+            INSERT INTO message_reports (id, message_id, reporter_id, reason, created_at)
+            VALUES (?, ?, ?, ?, ?)
+        """, (report_id, message_id, reporter_id, reason, now_iso))
+        return True
+
+
