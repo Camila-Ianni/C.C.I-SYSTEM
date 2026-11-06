@@ -1,10 +1,10 @@
 {
   "name": "C.C.I. SYSTEM",
   "version": "2.1.0",
-  "release_name": "Ecosistema Arcade & Cloud Sync",
+  "release_name": "Evolución Multijugador, Comunidad y Móvil",
   "author": "Camila Carolina Ianni",
   "academic_project": "Analista de Sistemas — Escuela Da Vinci (Parcial 2)",
-  "release_date": "2026-11-03",
+  "release_date": "2026-11-05",
   "min_supported_version": "1.0.0",
   "downloads": {
     "mac": {
@@ -14,11 +14,25 @@
     "windows": {
       "filename": "CCI_System_Windows_Installer.exe",
       "url": "/download/windows"
+    },
+    "android": {
+      "filename": "CCI_System_v2.1.0.apk",
+      "url": "/download/android"
+    },
+    "ios": {
+      "filename": "CCI_System_v2.1.0.ipa",
+      "url": "/download/ios"
     }
   },
   "changelog": [
-    "Fase 1: HUD con enlaces a portfolio de reclutador y video gameplay 60 FPS en vivo.",
-    "Fase 2: Base de datos relacional SQLite (WAL mode), API REST v1 y Salón de la Fama global.",
-    "Fase 3: Actualizador automático con verificación en segundo plano y empaquetador pulido."
+    "Fase 0-1: Auditoría técnica, migración SQLite v2 (9 tablas) y arquitectura modular backend desacoplada.",
+    "Fase 2: Sistema de amigos bidireccional, grupos con RBAC y estado de presencia en tiempo real.",
+    "Fase 3: Chat directo y grupal en tiempo real con WebSocket, anti-spam sliding-window y moderación.",
+    "Fase 4: Multijugador piloto Da Vinci Fighters con simulación autoritativa a 60 Hz y reconciliación de red.",
+    "Fase 5: Llamadas de voz WebRTC grupal P2P con Opus, silenciado individual y señalización segura.",
+    "Fase 6: Grabación asíncrona de gameplay MP4 sin caídas de framerate, miniaturas PNG y cuota FIFO.",
+    "Fase 7: Soporte Android con VirtualTouchGamepad multitáctil, gestión de ciclo de vida y Buildozer.",
+    "Fase 8: Soporte iOS con compensación de Safe Area (Notch / Dynamic Island), Info.plist y permisos Apple.",
+    "Fase 9: Suite de pruebas de integración completa E2E y certificación de compatibilidad multiplataforma."
   ]
 }

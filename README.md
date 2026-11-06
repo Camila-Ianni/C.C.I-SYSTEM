@@ -4,16 +4,18 @@
 [![Web Oficial](https://img.shields.io/badge/Web%20Oficial-c--c--i--system.onrender.com-00f0ff?style=for-the-badge&logo=render&logoColor=white)](https://c-c-i-system.onrender.com)
 [![macOS Release](https://img.shields.io/badge/Descargar-macOS%20(.dmg)-white?style=for-the-badge&logo=apple&logoColor=black)](https://github.com/Camila-Ianni/C.C.I-SYSTEM/releases/download/v1.0.0/CCI_System_macOS.dmg)
 [![Windows Release](https://img.shields.io/badge/Descargar-Windows%20(.exe)-0078D4?style=for-the-badge&logo=windows&logoColor=white)](https://github.com/Camila-Ianni/C.C.I-SYSTEM/releases/download/v1.0.0/CCI_System_Windows_Installer.exe)
+[![Android Support](https://img.shields.io/badge/Android-APK%20(Buildozer)-brightgreen?style=for-the-badge&logo=android&logoColor=white)](#-soporte-móvil-android--ios)
+[![iOS Support](https://img.shields.io/badge/iOS-IPA%20(Xcode%20Blueprint)-lightgrey?style=for-the-badge&logo=apple&logoColor=black)](#-soporte-móvil-android--ios)
 
 ![Python Version](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12%20%7C%203.14-blue)
 ![Pygame-CE](https://img.shields.io/badge/pygame--ce-2.5%2B-brightgreen)
-![Tests](https://img.shields.io/badge/tests-16%2F16%20passed%20(100%25)-success)
-![Database](https://img.shields.io/badge/database-SQLite%20(WAL%20Mode)-orange)
-![API REST](https://img.shields.io/badge/api-REST%20v1%20(Flask)-lightgrey)
-![Architecture](https://img.shields.io/badge/architecture-State%20Machine-purple)
-![Multi-User](https://img.shields.io/badge/multi--user-0%20Factory%20Profiles-cyan)
+![Tests](https://img.shields.io/badge/tests-61%2F61%20evolution%20passed%20(100%25)-success)
+![Database](https://img.shields.io/badge/database-SQLite%20Schema%20v2%20(WAL%20Mode)-orange)
+![Multiplayer](https://img.shields.io/badge/multiplayer-60%20Hz%20Authoritative-purple)
+![Voice Chat](https://img.shields.io/badge/voice-WebRTC%20P2P%20Opus-cyan)
+![Recorder](https://img.shields.io/badge/recorder-MP4%20Async%20Worker-red)
 
-**C.C.I. SYSTEM** es una plataforma arcade integral y emulador multiplataforma desarrollado **100% en Python** con **Pygame-CE (Community Edition)** y orquestación web nativa en **Flask**. Unifica **19 clásicos arcade** bajo un entorno retrofuturista Cyberpunk / PS5 de ventana única (`1280x720`), máquina de estados determinista (`State Machine`), háptica universal plug & play, capturador HD y sistema multiusuario con gestión de estadísticas independientes.
+**C.C.I. SYSTEM** es una plataforma arcade integral y emulador multiplataforma desarrollado **100% en Python** con **Pygame-CE (Community Edition)** y orquestación web nativa en **Flask + Flask-SocketIO**. Unifica **19 clásicos arcade** bajo un entorno retrofuturista Cyberpunk / PS5 de ventana única (`1280x720`, 60 FPS), multijugador online autoritativo a 60 Hz, chat y llamadas de voz WebRTC en tiempo real, grabador de gameplay en segundo plano, máquina de estados determinista, persistencia dual (JSON + SQLite v2) y adaptación móvil táctil para Android e iOS.
 
 🌐 **Sitio Web Oficial en Producción:** [https://c-c-i-system.onrender.com](https://c-c-i-system.onrender.com)
 
