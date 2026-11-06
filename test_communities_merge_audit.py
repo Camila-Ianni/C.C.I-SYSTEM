@@ -716,8 +716,8 @@ class TestCommunitiesMergeAudit(unittest.TestCase):
         livekit_key = "AP" + secrets.token_hex(11)
         livekit_secret = secrets.token_hex(32)
 
-        # P1 (Revisión v6): Aislar completamente el stack de prueba mediante un COMPOSE_PROJECT_NAME y CCI_CONTAINER_PREFIX únicos
-        # para proteger cualquier contenedor o volumen persistente de desarrollo/producción (ej. deploy_cci_app_data).
+        # P1 (Revisión v6/v7): Aislar completamente el stack de prueba mediante un COMPOSE_PROJECT_NAME, CCI_CONTAINER_PREFIX
+        # y puertos efímeros libres dinámicos, garantizando que ningún volumen preexistente sea tocado ni eliminado.
         test_project = f"cci_e2e_test_{secrets.token_hex(4)}"
         self.assertIn("_test_", test_project)
         self.assertTrue(test_project.startswith("cci_e2e_test_"))
@@ -727,12 +727,48 @@ class TestCommunitiesMergeAudit(unittest.TestCase):
         livekit_container = f"{test_project}_livekit"
         coturn_container = f"{test_project}_coturn"
         caddy_container = f"{test_project}_caddy"
-        caddy_https_port = 18443
 
-        # Crear volúmenes centinela preexistentes del entorno para demostrar que el teardown del test NO los elimina
-        sentinel_vols = ("deploy_cci_app_data", "cci_preexisting_prod_guard_vol")
-        for svol in sentinel_vols:
-            subprocess.run(["docker", "volume", "create", svol], capture_output=True, text=True, check=True)
+        used_ports = set()
+
+        def _pick_free_port(require_udp: bool = False) -> int:
+            for _ in range(50):
+                with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s_tcp:
+                    s_tcp.bind(("127.0.0.1", 0))
+                    port = s_tcp.getsockname()[1]
+                if port in used_ports:
+                    continue
+                if require_udp:
+                    try:
+                        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as s_udp:
+                            s_udp.bind(("127.0.0.1", port))
+                    except OSError:
+                        continue
+                used_ports.add(port)
+                return port
+            raise RuntimeError("No se encontró un puerto libre para el test de integración")
+
+        api_host_port = _pick_free_port()
+        caddy_http_port = _pick_free_port()
+        caddy_https_port = _pick_free_port()
+        livekit_http_port = _pick_free_port()
+        livekit_rtc_port = _pick_free_port()
+        turn_port = _pick_free_port(require_udp=True)
+
+        # Registrar todos los volúmenes preexistentes en el host antes de iniciar el test
+        preexisting_volumes = set(
+            subprocess.check_output(["docker", "volume", "ls", "-q"], text=True).splitlines()
+        )
+
+        # Crear un volumen centinela con nombre aleatorio único de esta corrida y etiqueta de propiedad verificable
+        sentinel_vol = f"cci_sentinel_{test_project}_{secrets.token_hex(8)}"
+        self.assertNotIn(sentinel_vol, preexisting_volumes, "Colisión inesperada con volumen preexistente")
+        subprocess.run(
+            ["docker", "volume", "create", "--label", f"cci_sentinel_owner={test_project}", sentinel_vol],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        sentinel_created_by_this_run = True
 
         compose_file = str(ROOT_DIR / "deploy" / "docker-compose.communities.yml")
         env_docker = {
@@ -744,11 +780,12 @@ class TestCommunitiesMergeAudit(unittest.TestCase):
             "LIVEKIT_API_SECRET": livekit_secret,
             "TURN_SECRET": turn_secret,
             "CADDY_TLS_MODE": "internal",
-            "CADDY_HTTP_PORT": "18080",
+            "CADDY_HTTP_PORT": str(caddy_http_port),
             "CADDY_HTTPS_PORT": str(caddy_https_port),
-            "API_HOST_PORT": "15050",
-            "LIVEKIT_HTTP_PORT": "17880",
-            "LIVEKIT_RTC_TCP_PORT": "17881",
+            "API_HOST_PORT": str(api_host_port),
+            "LIVEKIT_HTTP_PORT": str(livekit_http_port),
+            "LIVEKIT_RTC_TCP_PORT": str(livekit_rtc_port),
+            "TURN_PORT": str(turn_port),
         }
 
         try:
@@ -941,18 +978,18 @@ class TestCommunitiesMergeAudit(unittest.TestCase):
             msgs = json.loads(bd_get[bd_get.find("{"):bd_get.rfind("}") + 1])["messages"]
             self.assertTrue(any("volumen Docker tras docker restart" in m["content"] for m in msgs))
 
-            # 5. P1: STUN Binding (UDP/TCP 3478) + TURN Allocate + CreatePermission + ChannelBind + Relay Bidireccional de Medios entre Peer A y Peer B
+            # 5. P1: STUN Binding (UDP/TCP turn_port) + TURN Allocate + CreatePermission + ChannelBind + Relay Bidireccional de Medios entre Peer A y Peer B
             magic_cookie = 0x2112A442
             stun_req = struct.pack("!HHI12s", 0x0001, 0, magic_cookie, b"\x01" * 12)
 
             udp_s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
             udp_s.settimeout(3.0)
-            udp_s.sendto(stun_req, ("127.0.0.1", 3478))
+            udp_s.sendto(stun_req, ("127.0.0.1", turn_port))
             udp_resp, _ = udp_s.recvfrom(1024)
             udp_s.close()
             self.assertEqual(struct.unpack("!H", udp_resp[:2])[0], 0x0101)
 
-            tcp_s = socket.create_connection(("127.0.0.1", 3478), timeout=3.0)
+            tcp_s = socket.create_connection(("127.0.0.1", turn_port), timeout=3.0)
             tcp_s.sendall(stun_req)
             tcp_resp = tcp_s.recv(1024)
             tcp_s.close()
@@ -989,14 +1026,14 @@ class TestCommunitiesMergeAudit(unittest.TestCase):
             try:
                 # Descubrir dirección reflexiva de Peer B mediante STUN Binding
                 stun_b = struct.pack("!HHI12s", 0x0001, 0, magic_cookie, b"\x02" * 12)
-                peer_b.sendto(stun_b, ("127.0.0.1", 3478))
+                peer_b.sendto(stun_b, ("127.0.0.1", turn_port))
                 rb, _ = peer_b.recvfrom(1024)
                 b_ip, b_port = _decode_xor_addr(_parse(rb)[0x0020])
 
                 # Peer A solicita TURN Allocate (0x0003) -> 401 Challenge -> Allocate autenticado con HMAC-SHA1
                 req_tr = _attr(0x0019, struct.pack("!B3s", 17, b"\x00\x00\x00"))
                 pkt1 = struct.pack("!HHI12s", 0x0003, len(req_tr), magic_cookie, b"\x11" * 12) + req_tr
-                peer_a.sendto(pkt1, ("127.0.0.1", 3478))
+                peer_a.sendto(pkt1, ("127.0.0.1", turn_port))
                 r1, _ = peer_a.recvfrom(2048)
                 self.assertEqual(struct.unpack("!H", r1[:2])[0], 0x0113)
                 a1 = _parse(r1)
@@ -1012,7 +1049,7 @@ class TestCommunitiesMergeAudit(unittest.TestCase):
                     body = attrs_bytes + _attr(0x0006, uname.encode("utf-8")) + _attr(0x0014, realm) + _attr(0x0015, nonce)
                     hdr = struct.pack("!HHI12s", msg_type, len(body) + 24, magic_cookie, txid)
                     mi = _attr(0x0008, hmac.new(hkey, hdr + body, hashlib.sha1).digest())
-                    peer_a.sendto(hdr + body + mi, ("127.0.0.1", 3478))
+                    peer_a.sendto(hdr + body + mi, ("127.0.0.1", turn_port))
                     resp, _ = peer_a.recvfrom(2048)
                     return struct.unpack("!H", resp[:2])[0], _parse(resp)
 
@@ -1041,7 +1078,7 @@ class TestCommunitiesMergeAudit(unittest.TestCase):
 
                 payload_a2b = b"CCI-TURN-RELAY-MEDIA-A2B-CHANNEL-0x4000"
                 ch_frame = struct.pack("!HH", 0x4000, len(payload_a2b)) + payload_a2b
-                peer_a.sendto(ch_frame, ("127.0.0.1", 3478))
+                peer_a.sendto(ch_frame, ("127.0.0.1", turn_port))
                 relayed_to_b, from_relay_addr = peer_b.recvfrom(2048)
                 self.assertEqual(relayed_to_b, payload_a2b)
                 self.assertEqual(from_relay_addr[1], relay_port)
@@ -1049,7 +1086,7 @@ class TestCommunitiesMergeAudit(unittest.TestCase):
                 peer_a.close()
                 peer_b.close()
         finally:
-            # P1 (Revisión v6): Verificar que el project name sea estrictamente de test antes de ejecutar down -v
+            # P1 (Revisión v7): Verificar que el project name sea estrictamente de test antes de ejecutar down -v
             self.assertIn("_test_", test_project)
             self.assertTrue(test_project.startswith("cci_e2e_test_"))
             subprocess.run(
@@ -1059,11 +1096,24 @@ class TestCommunitiesMergeAudit(unittest.TestCase):
                 timeout=60,
                 check=False,
             )
-            # Comprobar que los volúmenes preexistentes del entorno NO se eliminaron tras el teardown
-            for svol in sentinel_vols:
-                chk = subprocess.run(["docker", "volume", "inspect", svol], capture_output=True, text=True, check=False)
-                self.assertEqual(chk.returncode, 0, f"El volumen preexistente {svol} fue eliminado indebidamente")
-            subprocess.run(["docker", "volume", "rm", "cci_preexisting_prod_guard_vol"], capture_output=True, check=False)
+            # Comprobar que TODOS los volúmenes preexistentes del host y el volumen centinela siguen intactos
+            post_volumes = set(
+                subprocess.check_output(["docker", "volume", "ls", "-q"], text=True).splitlines()
+            )
+            self.assertTrue(
+                preexisting_volumes.issubset(post_volumes),
+                f"Volúmenes preexistentes eliminados indebidamente: {preexisting_volumes - post_volumes}",
+            )
+            self.assertIn(sentinel_vol, post_volumes, "El volumen centinela externo al proyecto de test fue eliminado")
+
+            # Eliminar ÚNICAMENTE el volumen centinela aleatorio si y sólo si no era preexistente y su etiqueta coincide con esta corrida
+            if sentinel_created_by_this_run and sentinel_vol not in preexisting_volumes:
+                owner_lbl = subprocess.check_output(
+                    ["docker", "volume", "inspect", "--format", '{{index .Labels "cci_sentinel_owner"}}', sentinel_vol],
+                    text=True,
+                ).strip()
+                self.assertEqual(owner_lbl, test_project)
+                subprocess.run(["docker", "volume", "rm", sentinel_vol], capture_output=True, check=True)
 
 
 if __name__ == "__main__":

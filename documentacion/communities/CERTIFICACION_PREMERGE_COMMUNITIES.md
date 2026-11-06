@@ -3,7 +3,7 @@
 **Fecha:** 2026-11-06  
 **Rama Auditada:** `feature/communities-phase0-design`  
 **Rama Destino (Merge Target):** `main`  
-**Estado de Auditoría (Revisión v6):** APROBADO PARA MERGE — Proyecto Docker Aislado (`cci_e2e_test_<rand>`) con Protección Verificada de Volúmenes Preexistentes + Runner Estricto Cero-Skips + TLS CA/Hostname Verificado + Relay TURN Bidireccional + CI Python 3.14 Autónomo  
+**Estado de Auditoría (Revisión v7):** APROBADO PARA MERGE — Protección Estricta de Volúmenes Preexistentes (`preexisting_volumes` + Centinela Aleatorio con Etiqueta de Propiedad) + Puertos Efímeros Dinámicos + GitHub Actions CI Verde (`42270305967`)  
 **Suites Automatizadas:** 22 de 22 suites ejecutadas (`192 / 192` pruebas aprobadas, `0` fallidas, `0` errores, `0` omitidas / `total_skipped: 0`)
 
 ---
@@ -58,13 +58,17 @@ Se confirma explícitamente que la rama `feature/communities-phase0-design` cons
   2. Además, `test_11` verifica en tiempo de ejecución `docker exec cci_communities_api python --version` (`Python 3.14.x`) dentro del contenedor Linux activo.
   3. El workflow incluye un paso de compuerta explícito (`Verify Zero Skips and Mandatory Docker E2E Execution in Report`) que falla si `total_skipped != 0` o si `test_11` no registra `"status": "PASS"`, y publica `evaluations_report.json` como artifact vinculado al SHA (`evaluations-report-${{ github.sha }}`).
 
-### 2.5 [P1/P2 Revisión v6] Aislamiento de Proyecto Docker (`COMPOSE_PROJECT_NAME` Único), Parametrización de Contenedores y Protección de Volúmenes Persistentes
-- **Hallazgo v5/v6**: `test_11` ejecutaba `docker compose down -v --remove-orphans` sobre el proyecto por defecto y con nombres de contenedores fijos (`cci_communities_*`), lo que implicaba riesgo de detener contenedores o borrar volúmenes persistentes (`deploy_cci_app_data`) de una instalación previa.
+### 2.5 [P1/P2 Revisión v6 y v7] Aislamiento de Proyecto Docker (`COMPOSE_PROJECT_NAME` Único), Puertos Dinámicos Libres y Protección Estricta de Volúmenes Preexistentes
+- **Hallazgo v6/v7**: En v6 se introdujo un volumen centinela con nombre fijo (`cci_preexisting_prod_guard_vol`) que se eliminaba al final con `docker volume rm`, y puertos fijos (`18080`, `18443`, `15050`, `17880`, `17881`). Si un volumen con ese nombre ya existía antes del test, `docker volume create` reutilizaba el existente y el test podía eliminarlo al finalizar.
 - **Solución Aplicada**:
-  1. En [`deploy/docker-compose.communities.yml`](file:///Users/cami/Desktop/C.C.I%20SYSTEM/deploy/docker-compose.communities.yml) se parametrizaron los nombres de contenedores con `${CCI_CONTAINER_PREFIX:-cci_communities}_api`, `_livekit`, `_coturn` y `_caddy`, así como los puertos publicados (`API_HOST_PORT`, `CADDY_HTTP_PORT`, `CADDY_HTTPS_PORT`, `LIVEKIT_HTTP_PORT`, `LIVEKIT_RTC_TCP_PORT`, `TURN_PORT`).
-  2. En [`test_11`](file:///Users/cami/Desktop/C.C.I%20SYSTEM/test_communities_merge_audit.py#L719-L760), cada corrida genera un proyecto aislado único `test_project = f"cci_e2e_test_{secrets.token_hex(4)}"`, pasa `-p {test_project}` y `CCI_CONTAINER_PREFIX={test_project}`, y utiliza puertos de test aislados (`18080`, `18443`, `17880`, `17881`, `15050`).
-  3. **Verificación explícita de no eliminación de volúmenes preexistentes**: Antes de iniciar el stack de test, `test_11` garantiza la existencia de los volúmenes preexistentes `deploy_cci_app_data` y `cci_preexisting_prod_guard_vol`; antes del teardown comprueba `self.assertIn("_test_", test_project)` y `self.assertTrue(test_project.startswith("cci_e2e_test_"))`, ejecuta `down -v` **únicamente** sobre `-p {test_project}`, y verifica con `docker volume inspect` que `deploy_cci_app_data` y `cci_preexisting_prod_guard_vol` permanecen intactos tras el teardown.
-  4. **Autonomía en CI (`ubuntu-latest`) y Trazabilidad SHA**: Se dotó a [`test_phase2.py`](file:///Users/cami/Desktop/C.C.I%20SYSTEM/test_phase2.py) y [`test_phase3.py`](file:///Users/cami/Desktop/C.C.I%20SYSTEM/test_phase3.py) de arranque automático de `web/app.py` en `setUpClass` cuando el puerto `5050` no está activo en runners limpios de GitHub Actions, y se añadió `git_code_tree_sha256` en [`run_all_evaluations.py`](file:///Users/cami/Desktop/C.C.I%20SYSTEM/run_all_evaluations.py) junto con la verificación `report["git_commit_sha"] == os.environ["GITHUB_SHA"]` en [`.github/workflows/ci-communities-audit.yml`](file:///Users/cami/Desktop/C.C.I%20SYSTEM/.github/workflows/ci-communities-audit.yml).
+  1. **Snapshot de volúmenes preexistentes (`preexisting_volumes`) y centinela aleatorio con etiqueta de propiedad**: En [`test_11`](file:///Users/cami/Desktop/C.C.I%20SYSTEM/test_communities_merge_audit.py#L719-L795), antes de crear cualquier recurso se captura el conjunto completo `preexisting_volumes` (`docker volume ls -q`). Luego se genera un volumen centinela con nombre aleatorio único por ejecución (`sentinel_vol = f"cci_sentinel_{test_project}_{secrets.token_hex(8)}"`), se comprueba `self.assertNotIn(sentinel_vol, preexisting_volumes)` antes de crearlo con `--label cci_sentinel_owner={test_project}`, y al finalizar el teardown de `-p {test_project}` se verifica:
+     - Que **todos** los volúmenes de `preexisting_volumes` sigan existiendo (`preexisting_volumes.issubset(post_volumes)`).
+     - Que `sentinel_vol` siga existiendo tras `docker compose -p {test_project} down -v`.
+     - Que sólo se elimine `sentinel_vol` tras comprobar que `sentinel_vol not in preexisting_volumes` y que su etiqueta `cci_sentinel_owner` coincide con `test_project`. Ningún volumen preexistente se toca ni elimina jamás.
+  2. **Asignación dinámica de puertos libres (`_pick_free_port`)**: Todos los puertos publicados del stack de prueba (`API_HOST_PORT`, `CADDY_HTTP_PORT`, `CADDY_HTTPS_PORT`, `LIVEKIT_HTTP_PORT`, `LIVEKIT_RTC_TCP_PORT` y `TURN_PORT` TCP/UDP) se asignan dinámicamente consultando puertos efímeros libres en `127.0.0.1` antes de levantar el stack, evitando cualquier colisión con servicios locales.
+  3. **Evidencia Verificable de GitHub Actions CI Verde**:
+     - Workflow Run ID: [`42270305967`](https://github.com/Camila-Ianni/C.C.I-SYSTEM/actions/runs/42270305967) (`completed` — **`success`**)
+     - Check-Run / Job ID: [`128072834137`](https://github.com/Camila-Ianni/C.C.I-SYSTEM/actions/runs/42270305967/job/128072834137) (`Run 22 Evaluation Suites & Docker Compose E2E (Python 3.14)` -> `success`, `192/192 PASS`, `0 SKIP`, `test_11 PASS`).
 
 ---
 
