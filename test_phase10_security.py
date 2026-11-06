@@ -297,14 +297,16 @@ class TestPhase10SecurityAndAuthorization(unittest.TestCase):
         self.assertNotIn("u_intruder_v", call.participants)
 
     def test_10_end_call_rejects_unauthorized_third_party(self):
-        """Un tercero no puede finalizar una llamada activa; solo el iniciador o admin (P0)."""
+        """Un tercero o participante regular no puede finalizar una llamada; solo el iniciador o admin del grupo (P0)."""
         from backend.server import voice_svc
 
         token_alice = create_access_token("u_alice_end", "alice_end")
+        token_bob = create_access_token("u_bob_regular", "bob_regular")
         token_intruder = create_access_token("u_intruder_end", "intruder_end")
 
         res_grp = self.friends_svc.create_group("Grupo End Call", "u_alice_end")
         grp_id = res_grp["group"]["id"]
+        self.friends_svc.invite_member(grp_id, "u_alice_end", "u_bob_regular")
 
         r_start = self.client.post(
             "/api/v1/voice/calls/start",
@@ -313,18 +315,33 @@ class TestPhase10SecurityAndAuthorization(unittest.TestCase):
         )
         session_id = r_start.get_json()["call"]["session_id"]
 
-        # 1. Intruso intenta finalizar llamada ajena -> 403 Forbidden
-        r_fail = self.client.post(
+        # Bob se une a la llamada como participante regular
+        r_bob_join = self.client.post(
+            f"/api/v1/voice/calls/{session_id}/join",
+            headers={"Authorization": f"Bearer {token_bob}"}
+        )
+        self.assertEqual(r_bob_join.status_code, 200)
+
+        # 1. Intruso (ajeno) intenta finalizar llamada ajena -> 403 Forbidden
+        r_fail_intruder = self.client.post(
             f"/api/v1/voice/calls/{session_id}/end",
             headers={"Authorization": f"Bearer {token_intruder}"}
         )
-        self.assertEqual(r_fail.status_code, 403)
-        self.assertIn("Acceso denegado", r_fail.get_json()["error"])
+        self.assertEqual(r_fail_intruder.status_code, 403)
+        self.assertIn("Acceso denegado", r_fail_intruder.get_json()["error"])
+
+        # 2. Bob (participante regular no admin ni iniciador) intenta finalizar llamada para todos -> 403 Forbidden
+        r_fail_bob = self.client.post(
+            f"/api/v1/voice/calls/{session_id}/end",
+            headers={"Authorization": f"Bearer {token_bob}"}
+        )
+        self.assertEqual(r_fail_bob.status_code, 403)
+        self.assertIn("Acceso denegado", r_fail_bob.get_json()["error"])
 
         # La llamada sigue activa
         self.assertIn(session_id, voice_svc._active_calls)
 
-        # 2. Iniciador legítimo finaliza la llamada -> 200 OK
+        # 3. Iniciador legítimo (Alice) finaliza la llamada -> 200 OK
         r_ok = self.client.post(
             f"/api/v1/voice/calls/{session_id}/end",
             headers={"Authorization": f"Bearer {token_alice}"}

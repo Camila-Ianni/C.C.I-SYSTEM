@@ -12,10 +12,42 @@ Resuelve de forma rigurosa los requerimientos de la Auditoría:
 from __future__ import annotations
 
 import math
+import select
+import socket
 import struct
 import threading
 import time
 from typing import Any, Callable, Dict, List, Optional
+import pygame
+
+
+class RTPPacket:
+    """Paquete RTP estándar RFC 3550 para transporte multimedia de voz de baja latencia."""
+    VERSION = 2
+    PAYLOAD_TYPE_OPUS_PCM = 111
+
+    def __init__(self, seq: int, timestamp: int, ssrc: int, payload: bytes):
+        self.seq = seq & 0xFFFF
+        self.timestamp = timestamp & 0xFFFFFFFF
+        self.ssrc = ssrc & 0xFFFFFFFF
+        self.payload = payload
+
+    def serialize(self) -> bytes:
+        b0 = (self.VERSION << 6) & 0xC0
+        b1 = self.PAYLOAD_TYPE_OPUS_PCM & 0x7F
+        header = struct.pack("!BBHII", b0, b1, self.seq, self.timestamp, self.ssrc)
+        return header + self.payload
+
+    @classmethod
+    def parse(cls, data: bytes) -> Optional[RTPPacket]:
+        if len(data) < 12:
+            return None
+        b0, b1, seq, timestamp, ssrc = struct.unpack("!BBHII", data[:12])
+        version = (b0 >> 6) & 0x03
+        if version != cls.VERSION:
+            return None
+        payload = data[12:]
+        return cls(seq, timestamp, ssrc, payload)
 
 
 class VoiceMediaClient:
@@ -30,6 +62,7 @@ class VoiceMediaClient:
     def __init__(self, user_id: str, username: str):
         self.user_id = str(user_id)
         self.username = str(username)
+        self.ssrc = abs(hash(self.user_id)) & 0xFFFFFFFF
         self.is_active = False
         self.is_muted = False
         self.is_speaking = False
@@ -41,6 +74,13 @@ class VoiceMediaClient:
         self._remote_audio_queues: Dict[str, List[bytes]] = {}
         self._peer_states: Dict[str, Dict[str, Any]] = {}
         self._peer_candidates: Dict[str, List[str]] = {}
+        self._peer_endpoints: Dict[str, tuple[str, int]] = {}
+
+        # Sockets de red para transporte UDP / RTP real
+        self._udp_socket: Optional[socket.socket] = None
+        self._udp_port: int = 0
+        self._udp_running: bool = False
+        self._udp_thread: Optional[threading.Thread] = None
 
         self._seq = 0
         self._lock = threading.Lock()
@@ -48,6 +88,81 @@ class VoiceMediaClient:
         self._playback_thread: Optional[threading.Thread] = None
         self._capture_thread: Optional[threading.Thread] = None
         self._playback_buffer: List[bytes] = []
+
+    def bind_udp_transport(self, host: str = "127.0.0.1", port: int = 0) -> int:
+        """Enlaza un socket UDP real del sistema operativo para transporte RTP RFC 3550."""
+        self._udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        self._udp_socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        self._udp_socket.bind((host, port))
+        self._udp_port = self._udp_socket.getsockname()[1]
+        self._udp_socket.settimeout(0.1)
+        self._udp_running = True
+
+        self._udp_thread = threading.Thread(
+            target=self._udp_listen_worker,
+            daemon=True,
+            name=f"VoiceUDP-{self.user_id}"
+        )
+        self._udp_thread.start()
+        return self._udp_port
+
+    def set_peer_endpoint(self, peer_id: str, host: str, port: int) -> None:
+        """Registra la dirección y puerto UDP del par remoto resuelto vía ICE."""
+        self._peer_endpoints[peer_id] = (host, port)
+
+    def _udp_listen_worker(self) -> None:
+        """Hilo receptor de red: escucha datagramas UDP del kernel y decodifica paquetes RTP."""
+        while self._udp_running and self._udp_socket:
+            try:
+                data, addr = self._udp_socket.recvfrom(4096)
+                if not data:
+                    continue
+                rtp = RTPPacket.parse(data)
+                if rtp:
+                    peer_id = None
+                    for pid, ep in self._peer_endpoints.items():
+                        if ep[0] == addr[0] and ep[1] == addr[1]:
+                            peer_id = pid
+                            break
+                    if not peer_id:
+                        peer_id = f"peer_ssrc_{rtp.ssrc}"
+
+                    pkt = {
+                        "user_id": peer_id,
+                        "seq": rtp.seq,
+                        "timestamp": rtp.timestamp / 1000.0,
+                        "speaking": True,
+                        "audio_payload": rtp.payload,
+                    }
+                    self.receive_remote_audio(peer_id, pkt)
+            except (socket.timeout, BlockingIOError):
+                continue
+            except Exception:
+                break
+
+    def send_rtp_packet(self, peer_id: str, pcm_bytes: bytes) -> bool:
+        """Envía un paquete RTP serializado directamente al socket UDP del peer."""
+        if not self._udp_socket or peer_id not in self._peer_endpoints:
+            return False
+        self._seq += 1
+        ts = int(time.time() * 1000) & 0xFFFFFFFF
+        rtp = RTPPacket(self._seq, ts, self.ssrc, pcm_bytes)
+        data = rtp.serialize()
+        endpoint = self._peer_endpoints[peer_id]
+        try:
+            self._udp_socket.sendto(data, endpoint)
+            return True
+        except Exception:
+            return False
+
+    def generate_local_ice_candidate(self, host: str = "127.0.0.1") -> Dict[str, Any]:
+        """Genera un candidato ICE de host RFC 5245 con el puerto UDP real del socket."""
+        port = self._udp_port or 48000
+        return {
+            "candidate": f"candidate:1 1 UDP 2122260223 {host} {port} typ host",
+            "sdpMid": "0",
+            "sdpMLineIndex": 0,
+        }
 
     def set_transport(self, send_fn: Callable[[Dict[str, Any]], None]) -> None:
         """Asigna la función de transporte de paquetes de audio hacia la red / peer."""
@@ -90,9 +205,21 @@ class VoiceMediaClient:
         return True
 
     def stop_audio(self) -> None:
-        """Detiene de forma determinista la captura y reproducción, liberando búferes."""
+        """Detiene de forma determinista la captura y reproducción, liberando búferes y sockets."""
         self.is_active = False
         self.is_speaking = False
+        self._udp_running = False
+
+        if self._udp_socket:
+            try:
+                self._udp_socket.close()
+            except Exception:
+                pass
+            self._udp_socket = None
+
+        if self._udp_thread and self._udp_thread.is_alive():
+            self._udp_thread.join(timeout=1.0)
+        self._udp_thread = None
 
         # Esperar al hilo de reproducción si está activo
         if self._playback_thread and self._playback_thread.is_alive():
@@ -288,7 +415,7 @@ class VoiceMediaClient:
         }
 
     def add_ice_candidate(self, peer_id: str, candidate: Dict[str, Any]) -> bool:
-        """Registra y valida un candidato ICE para traversal NAT / STUN."""
+        """Registra y valida un candidato ICE para traversal NAT / STUN y enlaza el endpoint de red."""
         cand_str = candidate.get("candidate", "") if isinstance(candidate, dict) else str(candidate)
         if not cand_str:
             return False
@@ -297,4 +424,14 @@ class VoiceMediaClient:
                 self._peer_candidates[peer_id] = []
             self._peer_candidates[peer_id].append(cand_str)
             self.connection_states[peer_id] = "connected"
+
+            tokens = cand_str.split()
+            # Formato estándar RFC 5245: candidate:<foundation> <component> <transport> <priority> <ip> <port> typ <type>
+            if len(tokens) >= 6 and tokens[2].upper() == "UDP":
+                try:
+                    ip = tokens[4]
+                    port = int(tokens[5])
+                    self._peer_endpoints[peer_id] = (ip, port)
+                except (ValueError, IndexError):
+                    pass
         return True

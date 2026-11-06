@@ -152,11 +152,24 @@ class VoiceService:
                 "user_id": user_id,
             }, session_id)
 
-        # Si no quedan participantes, finalizar la sesión
+        # Si no quedan participantes, finalizar la sesión mediante limpieza interna
         if len(call.participants) == 0:
-            self.end_call(session_id, user_id)
+            self._cleanup_empty_call(session_id)
 
         return {"success": True, "message": "Has salido de la llamada."}
+
+    def _cleanup_empty_call(self, session_id: str) -> None:
+        """Operación interna del sistema: remueve y finaliza llamadas que quedaron sin participantes."""
+        call = self._active_calls.pop(session_id, None)
+        if not call:
+            return
+        call.status = "ended"
+        try:
+            cci_database.end_call_session_entry(session_id)
+        except Exception as exc:
+            print(f"[VoiceService] Error finalizando llamada vacía en SQLite: {exc}")
+        if self._broadcast:
+            self._broadcast("call:ended", {"session_id": session_id, "ended_by": "system_auto_cleanup"}, session_id)
 
     def toggle_mute(self, session_id: str, user_id: str, muted: bool) -> Dict[str, Any]:
         """Silencia o activa el micrófono del participante."""
@@ -175,15 +188,17 @@ class VoiceService:
         return {"success": True, "muted": muted}
 
     def end_call(self, session_id: str, actor_id: str) -> Dict[str, Any]:
-        """Finaliza la llamada grupal para todos los participantes previa validación de permisos de moderador/iniciador."""
+        """
+        Finaliza voluntariamente la llamada grupal para todos los participantes.
+        Política de autorización estricta: Solo el iniciador (started_by) o un administrador/propietario del grupo.
+        Participantes regulares y terceros NO tienen permiso de cerrar la llamada para el resto.
+        """
         call = self._active_calls.get(session_id)
         if not call:
             return {"success": False, "error": "Llamada no encontrada."}
 
-        # Validar política de autorización: iniciador, admin/owner del grupo, participante activo o llamada vacía al salir
+        # Validar política de autorización estricta: iniciador o admin/owner del grupo
         is_initiator = (str(call.started_by) == str(actor_id))
-        is_participant = (str(actor_id) in call.participants)
-        is_empty = (len(call.participants) == 0)
         is_group_admin = False
         if call.group_id:
             grp = cci_database.get_group_detail(call.group_id)
@@ -193,10 +208,10 @@ class VoiceService:
                         is_group_admin = True
                         break
 
-        if not (is_initiator or is_group_admin or is_participant or is_empty):
+        if not (is_initiator or is_group_admin):
             return {
                 "success": False,
-                "error": "Acceso denegado: no tienes permisos para finalizar esta llamada."
+                "error": "Acceso denegado: solo el iniciador o un administrador del grupo pueden finalizar la llamada para todos."
             }
 
         self._active_calls.pop(session_id, None)

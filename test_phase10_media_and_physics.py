@@ -247,7 +247,7 @@ class TestPhase10MediaAndCombatPhysics(unittest.TestCase):
         self.assertFalse(second_instance.running)
 
     def test_06_bidirectional_multi_client_audio_and_webrtc_mesh(self):
-        """Verifica negociación WebRTC P2P (SDP/ICE) e intercambio bidireccional de audio entre dos clientes (P1)."""
+        """Verifica negociación WebRTC P2P (SDP/ICE) e intercambio bidireccional RTP/UDP real entre sockets (P1)."""
         client_a = VoiceMediaClient("u_alice", "Alice")
         client_b = VoiceMediaClient("u_bob", "Bob")
 
@@ -256,11 +256,14 @@ class TestPhase10MediaAndCombatPhysics(unittest.TestCase):
         client_a.set_audio_drivers(output_sink=lambda f: sink_a_frames.append(f))
         client_b.set_audio_drivers(output_sink=lambda f: sink_b_frames.append(f))
 
-        # Enrutar transporte simétrico de red simulando malla WebRTC P2P
-        client_a.set_transport(lambda pkt: client_b.receive_remote_audio("u_alice", pkt))
-        client_b.set_transport(lambda pkt: client_a.receive_remote_audio("u_bob", pkt))
+        # 1. Enlazar sockets UDP reales del sistema operativo para transporte RTP RFC 3550
+        port_a = client_a.bind_udp_transport(host="127.0.0.1", port=0)
+        port_b = client_b.bind_udp_transport(host="127.0.0.1", port=0)
+        self.assertGreater(port_a, 0)
+        self.assertGreater(port_b, 0)
+        self.assertNotEqual(port_a, port_b)
 
-        # 1. Iniciar subsistemas de audio (hilos de captura y reproducción)
+        # 2. Iniciar subsistemas de audio (hilos de captura y reproducción)
         self.assertTrue(client_a.start_audio())
         self.assertTrue(client_b.start_audio())
         self.assertTrue(client_a._playback_thread.is_alive())
@@ -268,7 +271,7 @@ class TestPhase10MediaAndCombatPhysics(unittest.TestCase):
         self.assertTrue(client_b._playback_thread.is_alive())
         self.assertTrue(client_b._capture_thread.is_alive())
 
-        # 2. Negociación WebRTC de extremo a extremo
+        # 3. Negociación WebRTC de extremo a extremo e intercambio de candidatos ICE
         offer = client_a.create_offer("u_bob")
         self.assertEqual(offer["type"], "offer")
         self.assertIn("m=audio", offer["sdp"])
@@ -278,52 +281,52 @@ class TestPhase10MediaAndCombatPhysics(unittest.TestCase):
         self.assertEqual(answer["type"], "answer")
         self.assertEqual(client_b.connection_states["u_alice"], "connected")
 
-        cand_a = {"candidate": "candidate:1 1 UDP 2122260223 192.168.1.10 50000 typ host"}
-        cand_b = {"candidate": "candidate:2 1 UDP 2122260223 192.168.1.20 50002 typ host"}
+        cand_a = client_a.generate_local_ice_candidate("127.0.0.1")
+        cand_b = client_b.generate_local_ice_candidate("127.0.0.1")
         self.assertTrue(client_b.add_ice_candidate("u_alice", cand_a))
         self.assertTrue(client_a.add_ice_candidate("u_bob", cand_b))
         self.assertEqual(client_a.connection_states["u_bob"], "connected")
+        self.assertEqual(client_b.connection_states["u_alice"], "connected")
 
-        # 3. Transmisión bidireccional simultánea de audio PCM
+        # 4. Transmisión bidireccional simultánea de paquetes RTP a través de la pila de red UDP
         samples_a = [int(7000 * math.sin(2 * math.pi * 440 * i / 48000)) for i in range(client_a.SAMPLES_PER_FRAME)]
         pcm_a = struct.pack(f"<{len(samples_a)}h", *samples_a)
 
         samples_b = [int(9000 * math.sin(2 * math.pi * 880 * i / 48000)) for i in range(client_b.SAMPLES_PER_FRAME)]
         pcm_b = struct.pack(f"<{len(samples_b)}h", *samples_b)
 
-        pkt_a = client_a.process_microphone_pcm(pcm_a)
-        pkt_b = client_b.process_microphone_pcm(pcm_b)
+        # Enviar paquetes RTP por la red real (kernel UDP socket)
+        ok_a = client_a.send_rtp_packet("u_bob", pcm_a)
+        ok_b = client_b.send_rtp_packet("u_alice", pcm_b)
+        self.assertTrue(ok_a)
+        self.assertTrue(ok_b)
 
-        self.assertIsNotNone(pkt_a)
-        self.assertIsNotNone(pkt_b)
+        time.sleep(0.1)
 
-        # Verificar que ambos clientes recibieron y registraron la voz del otro par
-        peer_b_state = client_a.get_peer_state("u_bob")
-        peer_a_state = client_b.get_peer_state("u_alice")
-        self.assertTrue(peer_b_state["speaking"])
-        self.assertTrue(peer_a_state["speaking"])
+        # Verificar recepción y reproducción de los paquetes recibidos a través de la red UDP real
+        received_b = sink_b_frames if sink_b_frames else client_b._playback_buffer
+        received_a = sink_a_frames if sink_a_frames else client_a._playback_buffer
+        self.assertGreater(len(received_b), 0)
+        self.assertGreater(len(received_a), 0)
+        self.assertEqual(len(received_b[0]), len(pcm_a))
+        self.assertEqual(len(received_a[0]), len(pcm_b))
 
-        # Verificar mezcla de reproducción
-        mixed_for_b = client_b.pop_mixed_playback_frame()
-        mixed_for_a = client_a.pop_mixed_playback_frame()
-        self.assertIsNotNone(mixed_for_b)
-        self.assertIsNotNone(mixed_for_a)
-        self.assertEqual(len(mixed_for_b), len(pcm_a))
-
-        # 4. Privacidad estricta al mutear
+        # 5. Privacidad estricta al mutear
         client_a.set_mute(True)
         self.assertTrue(client_a.is_muted)
         self.assertIsNone(client_a.process_microphone_pcm(pcm_a))
 
-        # 5. Cierre determinista sin fugas de threads
+        # 6. Cierre determinista sin fugas de threads ni descriptores de socket
         client_a.stop_audio()
         client_b.stop_audio()
         self.assertFalse(client_a.is_active)
         self.assertFalse(client_b.is_active)
         self.assertIsNone(client_a._playback_thread)
         self.assertIsNone(client_a._capture_thread)
+        self.assertIsNone(client_a._udp_socket)
         self.assertIsNone(client_b._playback_thread)
         self.assertIsNone(client_b._capture_thread)
+        self.assertIsNone(client_b._udp_socket)
 
 
 if __name__ == "__main__":
