@@ -1410,4 +1410,69 @@ def get_match_history_entries(
         return results
 
 
+# ==============================================================================
+# HELPER FUNCTIONS: FASE 5 LLAMADAS DE VOZ WEBRTC
+# ==============================================================================
+
+def create_call_session_entry(
+    session_id: str,
+    group_id: str,
+    started_by: str,
+    db_path: Optional[Path] = None
+) -> Dict[str, Any]:
+    """Crea una sesión de llamada de voz activa para el grupo."""
+    now_iso = datetime.now().isoformat(timespec="seconds")
+    with get_db(db_path) as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            INSERT INTO call_sessions (id, group_id, started_by, status, started_at)
+            VALUES (?, ?, ?, 'active', ?)
+        """, (session_id, group_id, started_by, now_iso))
+
+    return {
+        "id": session_id,
+        "group_id": group_id,
+        "started_by": started_by,
+        "status": "active",
+        "started_at": now_iso,
+        "ended_at": None,
+    }
+
+
+def get_call_session_by_id(session_id: str, db_path: Optional[Path] = None) -> Optional[Dict[str, Any]]:
+    """Obtiene una sesión de llamada por su identificador."""
+    with get_db(db_path) as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM call_sessions WHERE id = ?", (session_id,))
+        row = cursor.fetchone()
+        return dict(row) if row else None
+
+
+def get_active_call_for_group(group_id: str, db_path: Optional[Path] = None) -> Optional[Dict[str, Any]]:
+    """Busca si existe una llamada en curso en el grupo."""
+    with get_db(db_path) as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT * FROM call_sessions
+            WHERE group_id = ? AND status = 'active'
+            ORDER BY started_at DESC LIMIT 1
+        """, (group_id,))
+        row = cursor.fetchone()
+        return dict(row) if row else None
+
+
+def end_call_session_entry(session_id: str, db_path: Optional[Path] = None) -> bool:
+    """Finaliza una sesión de llamada marcando ended_at."""
+    now_iso = datetime.now().isoformat(timespec="seconds")
+    with get_db(db_path) as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            UPDATE call_sessions
+            SET status = 'ended', ended_at = ?
+            WHERE id = ? AND status = 'active'
+        """, (now_iso, session_id))
+        return cursor.rowcount > 0
+
+
+
 

@@ -13,6 +13,7 @@ from backend.config import config
 from backend.contracts import SocketEvents
 from backend.friends_service import FriendsService
 from backend.chat_service import ChatService
+from backend.voice_service import VoiceService
 from backend.room_manager import RoomManager
 from backend.sync_engine import AuthoritativeSyncEngine
 from backend.webrtc_signaling import WebRTCSignalingRouter
@@ -33,6 +34,7 @@ socketio = SocketIO(
 room_mgr = RoomManager.get_instance()
 friends_svc = FriendsService.get_instance()
 chat_svc = ChatService.get_instance()
+voice_svc = VoiceService.get_instance()
 sync_engines: Dict[str, AuthoritativeSyncEngine] = {}
 
 def _emit_to(event: str, data: Any, to: Any = None):
@@ -42,6 +44,7 @@ def _emit_to(event: str, data: Any, to: Any = None):
         socketio.emit(event, data)
 
 chat_svc.set_broadcast_fn(_emit_to)
+voice_svc.set_broadcast_fn(_emit_to)
 signaling_router = WebRTCSignalingRouter(emit_fn=_emit_to)
 
 
@@ -321,6 +324,93 @@ def get_matches_history():
     return jsonify({"success": True, "matches": matches})
 
 
+# ==============================================================================
+# ENDPOINTS REST: LLAMADAS DE VOZ WEBRTC (FASE 5)
+# ==============================================================================
+
+@app.route("/api/v1/voice/calls/start", methods=["POST"])
+def start_voice_call():
+    data = request.get_json() or {}
+    group_id = data.get("group_id")
+    user_id = data.get("user_id")
+    username = data.get("username", user_id)
+    if not group_id or not user_id:
+        return jsonify({"success": False, "error": "group_id y user_id requeridos"}), 400
+
+    res = voice_svc.start_call(group_id, user_id, username)
+    status_code = 200 if res.get("success") else 400
+    return jsonify(res), status_code
+
+
+@app.route("/api/v1/voice/calls/<session_id>/join", methods=["POST"])
+def join_voice_call(session_id):
+    data = request.get_json() or {}
+    user_id = data.get("user_id")
+    username = data.get("username", user_id)
+    if not user_id:
+        return jsonify({"success": False, "error": "user_id requerido"}), 400
+
+    res = voice_svc.join_call(session_id, user_id, username)
+    status_code = 200 if res.get("success") else 400
+    return jsonify(res), status_code
+
+
+@app.route("/api/v1/voice/calls/<session_id>/leave", methods=["POST"])
+def leave_voice_call(session_id):
+    data = request.get_json() or {}
+    user_id = data.get("user_id")
+    if not user_id:
+        return jsonify({"success": False, "error": "user_id requerido"}), 400
+
+    res = voice_svc.leave_call(session_id, user_id)
+    status_code = 200 if res.get("success") else 400
+    return jsonify(res), status_code
+
+
+@app.route("/api/v1/voice/calls/<session_id>/mute", methods=["POST"])
+def mute_voice_call(session_id):
+    data = request.get_json() or {}
+    user_id = data.get("user_id")
+    muted = bool(data.get("muted", True))
+    if not user_id:
+        return jsonify({"success": False, "error": "user_id requerido"}), 400
+
+    res = voice_svc.toggle_mute(session_id, user_id, muted)
+    status_code = 200 if res.get("success") else 400
+    return jsonify(res), status_code
+
+
+@app.route("/api/v1/voice/calls/<session_id>/end", methods=["POST"])
+def end_voice_call(session_id):
+    data = request.get_json() or {}
+    actor_id = data.get("actor_id")
+    if not actor_id:
+        return jsonify({"success": False, "error": "actor_id requerido"}), 400
+
+    res = voice_svc.end_call(session_id, actor_id)
+    status_code = 200 if res.get("success") else 400
+    return jsonify(res), status_code
+
+
+@app.route("/api/v1/voice/calls/active/<group_id>", methods=["GET"])
+def get_active_call_for_group_endpoint(group_id):
+    call = voice_svc.get_active_call_for_group(group_id)
+    if not call:
+        # Fallback a SQLite
+        db_call = cci_database.get_active_call_for_group(group_id)
+        if not db_call:
+            return jsonify({"success": True, "active": False, "call": None})
+        return jsonify({"success": True, "active": True, "call": db_call})
+    return jsonify({"success": True, "active": True, "call": call.to_dict()})
+
+
+@app.route("/api/v1/voice/ice-servers", methods=["GET"])
+def get_ice_servers_endpoint():
+    servers = voice_svc.get_ice_servers()
+    return jsonify({"success": True, "ice_servers": servers})
+
+
+
 
 
 
@@ -509,6 +599,52 @@ def on_game_resume(data: Dict[str, Any]):
         room.status = RoomStatus.PLAYING
         full_sync = engine.get_full_world_sync()
         emit(SocketEvents.GAME_RESUME, {"room_id": room_id, "snapshot": full_sync}, to=room_id)
+
+
+# ==============================================================================
+# EVENTOS WEBSOCKET: CONTROL DE LLAMADAS DE VOZ (FASE 5)
+# ==============================================================================
+
+@socketio.on("call:start")
+def on_call_start(data: Dict[str, Any]):
+    group_id = data.get("group_id", "")
+    user_id = data.get("user_id", "")
+    username = data.get("username", user_id)
+    if group_id and user_id:
+        res = voice_svc.start_call(group_id, user_id, username, socket_id=request.sid)
+        if res.get("success"):
+            join_room(res["call"]["session_id"])
+            emit("call:started", res["call"], to=group_id)
+
+
+@socketio.on("call:join")
+def on_call_join(data: Dict[str, Any]):
+    session_id = data.get("session_id", "")
+    user_id = data.get("user_id", "")
+    username = data.get("username", user_id)
+    if session_id and user_id:
+        res = voice_svc.join_call(session_id, user_id, username, socket_id=request.sid)
+        if res.get("success"):
+            join_room(session_id)
+            emit("call:joined", res["call"], to=session_id)
+
+
+@socketio.on("call:leave")
+def on_call_leave(data: Dict[str, Any]):
+    session_id = data.get("session_id", "")
+    user_id = data.get("user_id", "")
+    if session_id and user_id:
+        leave_room(session_id)
+        voice_svc.leave_call(session_id, user_id)
+
+
+@socketio.on("call:mute")
+def on_call_mute(data: Dict[str, Any]):
+    session_id = data.get("session_id", "")
+    user_id = data.get("user_id", "")
+    muted = bool(data.get("muted", True))
+    if session_id and user_id:
+        voice_svc.toggle_mute(session_id, user_id, muted)
 
 
 # ==============================================================================
