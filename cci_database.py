@@ -1225,6 +1225,54 @@ def get_user_gameplay_recordings(owner_id: str, db_path: Optional[Path] = None) 
         return [dict(r) for r in cursor.fetchall()]
 
 
+def get_gameplay_recording_by_id(recording_id: str, db_path: Optional[Path] = None) -> Optional[Dict[str, Any]]:
+    """Obtiene una grabación por su ID."""
+    with get_db(db_path) as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM gameplay_recordings WHERE id = ?", (recording_id,))
+        row = cursor.fetchone()
+        return dict(row) if row else None
+
+
+def delete_gameplay_recording_entry(recording_id: str, db_path: Optional[Path] = None) -> bool:
+    """Elimina el registro de una grabación en SQLite."""
+    with get_db(db_path) as conn:
+        cursor = conn.cursor()
+        cursor.execute("DELETE FROM gameplay_recordings WHERE id = ?", (recording_id,))
+        return cursor.rowcount > 0
+
+
+def update_gameplay_recording_visibility_entry(
+    recording_id: str,
+    visibility: str,
+    db_path: Optional[Path] = None
+) -> bool:
+    """Actualiza la visibilidad de una grabación ('private', 'shared')."""
+    with get_db(db_path) as conn:
+        cursor = conn.cursor()
+        cursor.execute("UPDATE gameplay_recordings SET visibility = ? WHERE id = ?", (visibility, recording_id))
+        return cursor.rowcount > 0
+
+
+def get_oldest_gameplay_recording(db_path: Optional[Path] = None) -> Optional[Dict[str, Any]]:
+    """Obtiene la grabación más antigua registrada para política de depuración FIFO."""
+    with get_db(db_path) as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM gameplay_recordings ORDER BY created_at ASC LIMIT 1")
+        row = cursor.fetchone()
+        return dict(row) if row else None
+
+
+def get_total_recordings_disk_usage(db_path: Optional[Path] = None) -> int:
+    """Retorna el tamaño acumulado en bytes de todas las grabaciones registradas."""
+    with get_db(db_path) as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT SUM(size_bytes) FROM gameplay_recordings")
+        row = cursor.fetchone()
+        return int(row[0]) if (row and row[0] is not None) else 0
+
+
+
 # ==============================================================================
 # HELPER FUNCTIONS: FASE 3 CHAT Y MENSAJERÍA GRUPAL
 # ==============================================================================

@@ -17,6 +17,8 @@ from backend.voice_service import VoiceService
 from backend.room_manager import RoomManager
 from backend.sync_engine import AuthoritativeSyncEngine
 from backend.webrtc_signaling import WebRTCSignalingRouter
+from recorder.video_recorder import GameplayVideoRecorder
+from recorder.gallery_service import GalleryService
 
 # Crear aplicación Flask para el backend de red
 app = Flask(__name__)
@@ -35,6 +37,8 @@ room_mgr = RoomManager.get_instance()
 friends_svc = FriendsService.get_instance()
 chat_svc = ChatService.get_instance()
 voice_svc = VoiceService.get_instance()
+video_recorder = GameplayVideoRecorder.get_instance()
+gallery_svc = GalleryService.get_instance()
 sync_engines: Dict[str, AuthoritativeSyncEngine] = {}
 
 def _emit_to(event: str, data: Any, to: Any = None):
@@ -408,6 +412,69 @@ def get_active_call_for_group_endpoint(group_id):
 def get_ice_servers_endpoint():
     servers = voice_svc.get_ice_servers()
     return jsonify({"success": True, "ice_servers": servers})
+
+
+# ==============================================================================
+# ENDPOINTS REST: GRABACIONES DE GAMEPLAY Y GALERÍA (FASE 6)
+# ==============================================================================
+
+@app.route("/api/v1/recordings/start", methods=["POST"])
+def start_gameplay_recording():
+    data = request.get_json() or {}
+    game_id = data.get("game_id", "general")
+    owner_id = data.get("owner_id", "pilot")
+    res = video_recorder.start_recording(game_id=game_id, owner_id=owner_id)
+    status_code = 200 if res.get("success") else 400
+    return jsonify(res), status_code
+
+
+@app.route("/api/v1/recordings/stop", methods=["POST"])
+def stop_gameplay_recording():
+    res = video_recorder.stop_recording()
+    status_code = 200 if res.get("success") else 400
+    return jsonify(res), status_code
+
+
+@app.route("/api/v1/recordings/status", methods=["GET"])
+def get_recording_status():
+    return jsonify({"success": True, "status": video_recorder.get_status()})
+
+
+@app.route("/api/v1/recordings/<owner_id>", methods=["GET"])
+def get_user_recordings_gallery(owner_id):
+    game_id = request.args.get("game_id")
+    clips = gallery_svc.get_gallery_clips(owner_id, game_id=game_id)
+    return jsonify({"success": True, "owner_id": owner_id, "clips": clips})
+
+
+@app.route("/api/v1/recordings/<recording_id>", methods=["DELETE"])
+def delete_gameplay_recording(recording_id):
+    res = gallery_svc.delete_clip(recording_id)
+    status_code = 200 if res.get("success") else 400
+    return jsonify(res), status_code
+
+
+@app.route("/api/v1/recordings/<recording_id>/visibility", methods=["PATCH"])
+def patch_recording_visibility(recording_id):
+    data = request.get_json() or {}
+    visibility = data.get("visibility", "private")
+    res = gallery_svc.update_visibility(recording_id, visibility)
+    status_code = 200 if res.get("success") else 400
+    return jsonify(res), status_code
+
+
+@app.route("/api/v1/recordings/storage/stats", methods=["GET"])
+def get_recordings_storage_stats():
+    stats = gallery_svc.get_storage_stats()
+    return jsonify({"success": True, "stats": stats})
+
+
+@app.route("/api/v1/recordings/<recording_id>/play", methods=["POST"])
+def play_recording_in_system(recording_id):
+    res = gallery_svc.open_in_system_player(recording_id)
+    status_code = 200 if res.get("success") else 400
+    return jsonify(res), status_code
+
 
 
 
