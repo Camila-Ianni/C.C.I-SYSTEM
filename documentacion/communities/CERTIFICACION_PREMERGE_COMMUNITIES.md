@@ -3,8 +3,8 @@
 **Fecha:** 2026-11-06  
 **Rama Auditada:** `feature/communities-phase0-design`  
 **Rama Destino (Merge Target):** `main`  
-**Estado de Auditoría (Revisión v4):** APROBADO PARA MERGE — Despliegue Docker Compose + Caddy TLS + WebSocket 101 + Persistencia en Volumen + CoTURN 3478 verificados en runtime real  
-**Suites Automatizadas:** 22 de 22 suites ejecutadas (`192 / 192` pruebas aprobadas, `0` fallidas, `0` errores)
+**Estado de Auditoría (Revisión v5):** APROBADO PARA MERGE — Runner Estricto Cero-Skips + TLS CA/Hostname Verificado + Relay TURN Bidireccional entre Peers + Secretos Efímeros + Recreación Aislada de Contenedores  
+**Suites Automatizadas:** 22 de 22 suites ejecutadas (`192 / 192` pruebas aprobadas, `0` fallidas, `0` errores, `0` omitidas / `total_skipped: 0`)
 
 ---
 
@@ -19,103 +19,58 @@ Se confirma explícitamente que la rama `feature/communities-phase0-design` cons
 
 ---
 
-## 2. Hallazgos Resueltos al Ejecutar el Stack Docker + Caddy + CoTURN en Runtime Real (Cierre Revisión v4)
+## 2. Cierre de Hallazgos de la Revisión v5 (P0, P1, P2)
 
-Al ejecutar `docker compose -f deploy/docker-compose.communities.yml build` y `up -d` contra el daemon real de Docker y probar tráfico HTTPS/WSS a través de `cci_communities_caddy` hacia `cci_communities_api`, se detectaron y corrigieron **3 defectos reales de contenedor/proxy** que una validación puramente estática no podía detectar:
+### 2.1 [P0] Runner Estricto (`run_all_evaluations.py`) con Conteo Explícito de `skipped` y Prohibición de Omisiones
+- **Hallazgo v5**: `run_all_evaluations.py` calculaba `passed = tests_run - failures - errors` sin restar `skipped`, y `test_11` podía invocar `self.skipTest(...)` si Docker no estaba presente.
+- **Solución Aplicada**:
+  1. [`run_all_evaluations.py`](file:///Users/cami/Desktop/C.C.I%20SYSTEM/run_all_evaluations.py) utiliza ahora una subclase estructurada `StructuredTestResult(unittest.TextTestResult)` que intercepta `addSuccess`, `addFailure`, `addError` y `addSkip` de cada método individual, calculando `passed = tests_run - failures - errors - skipped`.
+  2. Si `total_skipped > 0`, el runner marca la suite como `[FAIL]` y termina con código de salida `1`.
+  3. En [`test_communities_merge_audit.py`](file:///Users/cami/Desktop/C.C.I%20SYSTEM/test_communities_merge_audit.py) (`test_10` y `test_11`) se eliminó todo uso de `skipTest`: la presencia de Docker CLI y del daemon activo se valida con `self.assertIsNotNone(shutil.which("docker"))` y `self.assertEqual(info_proc.returncode, 0)`.
+  4. [`evaluations_report.json`](file:///Users/cami/Desktop/C.C.I%20SYSTEM/evaluations_report.json) conserva `total_skipped: 0`, `skipped: 0` por suite, el hash `output_sha256` de la salida de cada suite y el arreglo `test_cases` con el `id`, `status` (`PASS`) y `elapsed_ms` de las 192 pruebas ejecutadas.
 
-1. **Entrypoint `__main__` en `backend/server.py`**:
-   - **Causa**: `backend/server.py` definía `app` y `socketio` pero carecía del bloque `if __name__ == "__main__":`, por lo que `python -m backend.server` en `Dockerfile.backend` terminaba con `exit=0` tras importar el módulo.
-   - **Corrección**: Se agregó el bloque `__main__` en [`backend/server.py`](file:///Users/cami/Desktop/C.C.I%20SYSTEM/backend/server.py#L1351-L1362) que ejecuta `config.validate_production_secrets()`, `cci_database.init_db()` y `socketio.run(app, host=config.host, port=config.port, ...)`.
-2. **Aislamiento de dependencias gráficas (`pygame` / `cv2`) en el contenedor `api`**:
-   - **Causa**: `backend/sync_engine.py` y `recorder/video_recorder.py` importaban `pygame` y `cv2` de forma incondicional en el tope del módulo, provocando `ModuleNotFoundError: No module named 'pygame'` dentro de la imagen ligera `python:3.14-slim` (`requirements-server.txt`).
-   - **Corrección**: Se incorporó en [`backend/sync_engine.py`](file:///Users/cami/Desktop/C.C.I%20SYSTEM/backend/sync_engine.py) un fallback puro en Python para `Rect` cuando `pygame` no está instalado en el servidor, y carga condicional en [`recorder/video_recorder.py`](file:///Users/cami/Desktop/C.C.I%20SYSTEM/recorder/video_recorder.py).
-3. **Placeholders de cabeceras WebSocket en Caddy v2 (`deploy/Caddyfile`)**:
-   - **Causa**: `deploy/Caddyfile` utilizaba la sintaxis de Caddy v1 `{>Connection}` y `{>Upgrade}`, que en `caddy:2.7-alpine` (Caddy v2) se evalúa como cadena vacía `""`, sobrescribiendo las cabeceras de upgrade y provocando `HTTP/1.1 400 Bad Request` (`Invalid websocket upgrade`) al atravesar Caddy.
-   - **Corrección**: Se reemplazaron en [`deploy/Caddyfile`](file:///Users/cami/Desktop/C.C.I%20SYSTEM/deploy/Caddyfile) por los placeholders nativos de Caddy v2 `{http.request.header.Connection}` y `{http.request.header.Upgrade}`, verificando `HTTP/1.1 101 Switching Protocols` (`Server: Caddy`, `Upgrade: websocket`) en vivo.
+### 2.2 [P1] Validación Estricta de Cadena de Certificados TLS (`CERT_REQUIRED`) y Hostname (`check_hostname = True`)
+- **Hallazgo v5**: `test_11` utilizaba `check_hostname = False` y `verify_mode = ssl.CERT_NONE`.
+- **Solución Aplicada**:
+  1. En [`test_11_live_docker_caddy_tls_wss_101_volume_restart_and_coturn_allocate`](file:///Users/cami/Desktop/C.C.I%20SYSTEM/test_communities_merge_audit.py#L768-L826), se extrae la CA raíz generada por la PKI interna de Caddy (`/data/caddy/pki/authorities/local/root.crt`) directamente desde el contenedor `cci_communities_caddy`.
+  2. Se construye un contexto estricto `verified_ctx = ssl.create_default_context(cadata=root_ca_pem)` con `verify_mode = ssl.CERT_REQUIRED` y `check_hostname = True`.
+  3. Se verifica que cada conexión HTTPS y WSS hacia `server_hostname="api.ccisystem.org"` entregue un certificado X.509 validado (`tls_s.getpeercert()`) con Subject Alternative Name `('DNS', 'api.ccisystem.org')`.
+  4. Se ejecutan dos **pruebas negativas obligatorias**:
+     - Conectar sin la CA raíz confiable arroja `ssl.SSLCertVerificationError`.
+     - Conectar hacia un hostname no coincidente (`untrusted.invalid.example`) es rechazado con `ssl.SSLError`.
+  5. **Delimitación explícita de alcance TLS**: Esta prueba certifica la cadena X.509 y validación de hostname contra la CA local de Caddy (`tls internal`) en entorno Docker de integración; la emisión de certificados públicos ACME/Let's Encrypt corresponde al despliegue en staging/producción con DNS público.
 
----
+### 2.3 [P1] Prueba de Relay de Medios TURN Bidireccional entre Dos Peers (`Allocate` + `CreatePermission` + `ChannelBind` + Transferencia UDP)
+- **Hallazgo v5**: `test_11` comprobaba STUN Binding y TURN Allocate, pero no realizaba transferencia real de datos entre dos peers a través del puerto relay asignado.
+- **Solución Aplicada**:
+  1. En [`test_11`](file:///Users/cami/Desktop/C.C.I%20SYSTEM/test_communities_merge_audit.py#L905-L985) se abren dos sockets UDP independientes (`peer_a` y `peer_b`).
+  2. `peer_b` descubre su dirección reflexiva mediante `STUN Binding (0x0001 -> 0x0101)`.
+  3. `peer_a` negocia `TURN Allocate (0x0003 -> 0x0113 Challenge -> 0x0103 Allocate Success)` con credenciales efímeras HMAC-SHA1 (`use-auth-secret`), obteniendo un puerto relay en el rango configurado `49152-49172/UDP`.
+  4. `peer_a` autoriza a `peer_b` mediante `TURN CreatePermission (0x0008 -> 0x0108)`.
+  5. **Transferencia de medios Peer B -> CoTURN Relay (`relay_port`) -> Peer A**: `peer_b` envía `b"CCI-TURN-RELAY-MEDIA-B2A"` al puerto relay de CoTURN y `peer_a` recibe un `STUN Data Indication (0x0017)` con atributo `DATA (0x0013)` idéntico al payload enviado y `XOR-PEER-ADDRESS (0x0012)` de `peer_b`.
+  6. **Transferencia de medios Peer A -> CoTURN (`ChannelBind 0x4000`) -> Peer B**: `peer_a` vincula el canal `0x4000` (`ChannelBind 0x0009 -> 0x0109`) y transmite una trama `ChannelData` (`0x4000`) con `b"CCI-TURN-RELAY-MEDIA-A2B-CHANNEL-0x4000"`, verificando que `peer_b` recibe los bytes íntegros desde el puerto `relay_port` de CoTURN.
+  7. **Delimitación explícita de alcance TURN**: Queda demostrado el relay bidireccional real de paquetes UDP entre dos clientes a través de `cci_communities_coturn` (`3478/UDP` y `49152-49172/UDP`). Las pruebas de travesía NAT desde una red WAN externa y `TURNS 5349/TLS` quedan documentadas como alcance de staging externo.
 
-## 3. Evidencia de Ejecución Real del Stack Docker + Caddy TLS + CoTURN (`test_11`)
+### 2.4 [P1] Alineación de Runtimes (`Python 3.14`) y Workflow CI GitHub Actions
+- **Hallazgo v5**: El workflow CI declaraba Python 3.12 mientras el contenedor (`python:3.14-slim`) y el entorno local ejecutaban Python 3.14.
+- **Solución Aplicada**:
+  1. Se alineó [`.github/workflows/ci-communities-audit.yml`](file:///Users/cami/Desktop/C.C.I%20SYSTEM/.github/workflows/ci-communities-audit.yml) a `python-version: "3.14"`, coincidiendo exactamente con `python:3.14-slim` en [`deploy/Dockerfile.api`](file:///Users/cami/Desktop/C.C.I%20SYSTEM/deploy/Dockerfile.api) y con el intérprete local `Python 3.14.5`.
+  2. Además, `test_11` verifica en tiempo de ejecución `docker exec cci_communities_api python --version` (`Python 3.14.x`) dentro del contenedor Linux activo.
+  3. El workflow incluye un paso de compuerta explícito (`Verify Zero Skips and Mandatory Docker E2E Execution in Report`) que falla si `total_skipped != 0` o si `test_11` no registra `"status": "PASS"`, y publica `evaluations_report.json` como artifact vinculado al SHA (`evaluations-report-${{ github.sha }}`).
 
-La prueba automatizada [`test_11_live_docker_caddy_tls_wss_101_volume_restart_and_coturn_allocate`](file:///Users/cami/Desktop/C.C.I%20SYSTEM/test_communities_merge_audit.py#L693-L905) en [`test_communities_merge_audit.py`](file:///Users/cami/Desktop/C.C.I%20SYSTEM/test_communities_merge_audit.py) ejecuta y verifica contra los 4 contenedores reales en ejecución:
-
-### 3.1 Estado de los 4 Contenedores (`docker ps`)
-```text
-CONTAINER ID   IMAGE                           STATUS                    PORTS                                                                                      NAMES
-b32eb27ed804   deploy-api                      Up (healthy)              127.0.0.1:5050->5050/tcp                                                                   cci_communities_api
-db6483bcb777   caddy:2.7-alpine                Up                        0.0.0.0:8080->80/tcp, 0.0.0.0:8443->443/tcp                                                cci_communities_caddy
-73a37bdb64c2   coturn/coturn:4.6.2-alpine      Up                        0.0.0.0:3478->3478/udp, 0.0.0.0:3478->3478/tcp, 0.0.0.0:49152-49172->49152-49172/udp       cci_communities_coturn
-626d6d68b978   livekit/livekit-server:v1.7.2   Up                        0.0.0.0:7880-7881->7880-7881/tcp, 0.0.0.0:50000-50020->50000-50020/udp                     cci_communities_livekit
-```
-
-### 3.2 Tráfico HTTPS (`200 OK`) y WebSocket (`101 Switching Protocols`) Atravesando Caddy TLS -> `api:5050`
-```text
-[1] CADDY TLS HEALTH STATUS: HTTP/1.1 200 OK
-[1] CADDY TLS HEALTH BODY: {"database":"connected","livekit_sfu":"ready","metrics_scope":"process_local","status":"healthy","storage":"local_storage_ready","uptime_seconds":190.54,"version":"2.1.0-communities-v1.0"}
-[2] CADDY WSS UPGRADE STATUS: HTTP/1.1 101 Switching Protocols
-    Alt-Svc: h3=":443"; ma=2592000
-    Connection: Upgrade
-    Sec-Websocket-Accept: s3pPLMBiTxaQ9kYGzzhZRbK+xOo=
-    Server: Caddy
-    Upgrade: websocket
-```
-
-### 3.3 Persistencia Real en Volumen Docker (`cci_app_data`) Tras `docker restart cci_communities_api`
-```text
-[3a] PRE-RESTART MESSAGE CREATED: HTTP/1.1 201 Created comm_id= 4d1fdc74-9c3a-4fca-81eb-9445122cf589 ch_id= bbd3f5b6-8d9c-4951-bf4b-ec4bfa0d2708
-$ docker restart cci_communities_api
-[3b] CONTAINER cci_communities_api HEALTH AFTER RESTART: healthy
-[3c] POST-RESTART MESSAGES VIA CADDY: HTTP/1.1 200 OK count= 1 content= Mensaje persistido en volumen Docker cci_app_data tras docker restart
-```
-
-### 3.4 Prueba Real STUN Binding (UDP/TCP 3478) y TURN Allocate con Autenticación HMAC-SHA1 (`use-auth-secret`) contra `cci_communities_coturn`
-```text
-[4a] COTURN UDP 3478 STUN RESPONSE: type=0x0101 (Binding Success=0x0101), len=80, cookie=0x2112a442
-[4b] COTURN TCP 3478 STUN RESPONSE: type=0x0101 (Binding Success=0x0101), len=80, cookie=0x2112a442
-Step 1 TURN Allocate Challenge: type=0x0113 (401=0x0113), realm=turn.ccisystem.org, nonce=d9fdae0281b66a49
-Step 2 TURN Allocate Authenticated Response: type=0x0103 (Success=0x0103), attrs=['0x16', '0x20', '0xd', '0x8022', '0x8', '0x8028']
-Allocated TURN Relay Port: 49167/UDP (configured range: 49152-49172)
-```
-*(Nota de alcance: La prueba STUN/TURN 3478 y asignación de puerto relay `49167/UDP` con credenciales efímeras HMAC-SHA1 se ejecutó contra el contenedor `cci_communities_coturn` local; las pruebas desde una red WAN externa y `TURNS 5349/TLS` con certificados públicos dependen del aprovisionamiento DNS/TLS de producción).*
+### 2.5 [P2] Aislamiento por Ejecución (`--build --force-recreate` + Teardown `down -v`) y Secretos Efímeros
+- **Hallazgo v5**: `test_11` podía reutilizar contenedores previos y empleaba secretos de prueba estáticos.
+- **Solución Aplicada**:
+  1. Tanto en `test_10`, `test_11` como en `.github/workflows/ci-communities-audit.yml` se eliminaron todos los secretos estáticos: cada ejecución genera secretos aleatorios efímeros de 256 bits mediante `secrets.token_hex(32)`.
+  2. `test_11` ejecuta `docker compose down -v --remove-orphans` antes de iniciar, levanta el stack desde cero con `docker compose up -d --build --force-recreate`, inspecciona el contenedor `cci_communities_api` para confirmar que tiene inyectado el `CCI_SECRET_KEY` efímero recién generado, y ejecuta `docker compose down -v --remove-orphans` en un bloque `finally:` al terminar.
 
 ---
 
-## 4. Ejecución Completa del Runner de Certificación (`run_all_evaluations.py`) y CI GitHub Actions
+## 3. Checklist Final de Aprobación Pre-Merge (Revisión v5)
 
-Se incorporó el workflow de integración continua [`.github/workflows/ci-communities-audit.yml`](file:///Users/cami/Desktop/C.C.I%20SYSTEM/.github/workflows/ci-communities-audit.yml) y se ejecutaron las **22 suites completas (`192 / 192` pruebas aprobadas, 0 fallidas, 0 errores)**:
-
-- `test_phase2.py`: 9/9 PASS
-- `test_phase3.py`: 7/7 PASS
-- `test_phase1_evolution.py`: 9/9 PASS
-- `test_phase2_evolution.py`: 11/11 PASS
-- `test_phase3_evolution.py`: 8/8 PASS
-- `test_phase4_evolution.py`: 8/8 PASS
-- `test_phase5_evolution.py`: 6/6 PASS
-- `test_phase6_evolution.py`: 4/4 PASS
-- `test_phase7_evolution.py`: 8/8 PASS
-- `test_phase8_evolution.py`: 7/7 PASS
-- `test_phase9_evolution.py`: 8/8 PASS
-- `test_phase10_security.py`: 12/12 PASS
-- `test_phase10_media_and_physics.py`: 8/8 PASS
-- `test_communities_phase1.py`: 10/10 PASS
-- `test_communities_phase2.py`: 10/10 PASS
-- `test_communities_phase3.py`: 10/10 PASS
-- `test_communities_phase4.py`: 10/10 PASS
-- `test_communities_phase5.py`: 10/10 PASS
-- `test_communities_phase6.py`: 10/10 PASS
-- `test_communities_phase7.py`: 10/10 PASS
-- `test_communities_ui.py`: 6/6 PASS
-- `test_communities_merge_audit.py`: 11/11 PASS (incluyendo `test_10` TCP local y `test_11` Docker Compose + Caddy TLS + WSS 101 + Volume Restart + CoTURN Allocate 3478)
-
----
-
-## 5. Checklist Final de Aprobación Pre-Merge (Revisión v4)
-
-- [x] **Alcance unificado v2.1.0 + Communities aceptado y documentado**.
-- [x] **Suite 192/192 reproducida sobre el SHA final y configurada en `.github/workflows/ci-communities-audit.yml`**.
-- [x] **Docker Compose `config` + `build` + `up -d` ejecutados con éxito**.
-- [x] **Contenedores `cci_communities_api` (`healthy`), `cci_communities_livekit`, `cci_communities_coturn` y `cci_communities_caddy` en ejecución**.
-- [x] **HTTP (`200 OK` / `201 Created`) y Socket.IO/WebSocket (`101 Switching Protocols`, `Server: Caddy`) verificados atravesando Caddy TLS real (`test_11`)**.
-- [x] **Reinicio real del contenedor `cci_communities_api` (`docker restart`) y persistencia comprobada en el volumen `cci_app_data` (`test_11`)**.
-- [x] **TURN UDP/TCP 3478 (STUN Binding `0x0101` + TURN Allocate `0x0103` con HMAC-SHA1 y puerto relay `49152-49172/UDP`) probado contra `cci_communities_coturn` (`test_11`); `TURNS 5349` documentado como deshabilitado (`no-tls`)**.
-- [x] **Logs y evidencias reproducibles adjuntos en este documento y en `evaluations_report.json`**.
+- [x] **[P0] Runner `run_all_evaluations.py` contabiliza `skipped` por separado y falla si `total_skipped > 0`**.
+- [x] **[P0] `test_11` es obligatorio (sin `skipTest`) y aparece con `"status": "PASS"` en `evaluations_report.json`**.
+- [x] **[P1] TLS validado con CA raíz de Caddy (`verify_mode=ssl.CERT_REQUIRED`, `check_hostname=True`, SAN `api.ccisystem.org`) y pruebas negativas de rechazo**.
+- [x] **[P1] Relay de medios TURN bidireccional verificado entre `Peer A` y `Peer B` (`Allocate` + `CreatePermission` + `Data Indication 0x0017` + `ChannelBind 0x4000` + `ChannelData`)**.
+- [x] **[P1] Runtimes alineados en Python 3.14 entre `.github/workflows/ci-communities-audit.yml`, `deploy/Dockerfile.api` y reporte de certificación**.
+- [x] **[P2] Recreación forzada de contenedores y volúmenes (`--build --force-recreate` + teardown `down -v`) con secretos efímeros `secrets.token_hex(32)` por ejecución**.

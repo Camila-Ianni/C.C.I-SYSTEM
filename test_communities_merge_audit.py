@@ -564,29 +564,30 @@ class TestCommunitiesMergeAudit(unittest.TestCase):
         from werkzeug.serving import make_server
         from backend.server import socketio
 
-        # 1. Validar sintaxis e interpolación de deploy/docker-compose.communities.yml con docker compose config
-        if shutil.which("docker"):
-            env_compose = {
-                **os.environ,
-                "CCI_SECRET_KEY": "a9f8e7d6c5b4a3f2e1d0c9b8a7f6e5d4c3b2a1f0e9d8c7b6a5f4e3d2c1b0a9f8",
-                "LIVEKIT_API_KEY": "APx9K7mQ2vL8nR4pT6wY1zB3",
-                "LIVEKIT_API_SECRET": "9f8e7d6c5b4a3f2e1d0c9b8a7f6e5d4c3b2a1f0e9d8c7b6a5f4e3d2c1b0a9f8e",
-                "TURN_SECRET": "7e6d5c4b3a2f1e0d9c8b7a6f5e4d3c2b1a0f9e8d7c6b5a4f3e2d1c0b9a8f7e6d",
-            }
-            proc = subprocess.run(
-                ["docker", "compose", "-f", str(ROOT_DIR / "deploy" / "docker-compose.communities.yml"), "config"],
-                capture_output=True,
-                text=True,
-                env=env_compose,
-                timeout=15,
-                check=False,
-            )
-            self.assertEqual(proc.returncode, 0, f"docker compose config falló: {proc.stderr}")
-            self.assertIn("cci_communities_api", proc.stdout)
-            self.assertIn("cci_communities_livekit", proc.stdout)
-            self.assertIn("cci_communities_coturn", proc.stdout)
-            self.assertIn("cci_communities_caddy", proc.stdout)
-            self.assertIn("5050", proc.stdout)
+        # 1. Validar sintaxis e interpolación de deploy/docker-compose.communities.yml con docker compose config y secretos efímeros
+        import secrets
+        self.assertIsNotNone(shutil.which("docker"), "Docker CLI es obligatorio para la certificación")
+        env_compose = {
+            **os.environ,
+            "CCI_SECRET_KEY": secrets.token_hex(32),
+            "LIVEKIT_API_KEY": "AP" + secrets.token_hex(11),
+            "LIVEKIT_API_SECRET": secrets.token_hex(32),
+            "TURN_SECRET": secrets.token_hex(32),
+        }
+        proc = subprocess.run(
+            ["docker", "compose", "-f", str(ROOT_DIR / "deploy" / "docker-compose.communities.yml"), "config"],
+            capture_output=True,
+            text=True,
+            env=env_compose,
+            timeout=15,
+            check=False,
+        )
+        self.assertEqual(proc.returncode, 0, f"docker compose config falló: {proc.stderr}")
+        self.assertIn("cci_communities_api", proc.stdout)
+        self.assertIn("cci_communities_livekit", proc.stdout)
+        self.assertIn("cci_communities_coturn", proc.stdout)
+        self.assertIn("cci_communities_caddy", proc.stdout)
+        self.assertIn("5050", proc.stdout)
 
         # 2. Levantar servidor HTTP/WebSocket real en puerto TCP local sobre SQLite WAL
         server = make_server("127.0.0.1", 0, app, threaded=True)
@@ -691,238 +692,350 @@ class TestCommunitiesMergeAudit(unittest.TestCase):
             server2.server_close()
 
     def test_11_live_docker_caddy_tls_wss_101_volume_restart_and_coturn_allocate(self):
-        """[P1 Docker + Caddy TLS + CoTURN en Vivo] Valida contenedores reales: HTTPS 200 y WSS 101 vía Caddy TLS, docker restart con volumen real y TURN Allocate HMAC 3478."""
+        """[P0/P1 Docker + Caddy TLS Verificado + CoTURN Relay en Vivo] Valida contenedores recién recreados con secretos efímeros, cadena TLS CA + hostname, WSS 101, reinicio con volumen y relay bidireccional TURN entre 2 peers."""
+        import dataclasses
         import hashlib
         import hmac
         import json
+        import secrets
         import socket
         import ssl
         import struct
         import subprocess
         import time
+        from backend.config import config as live_cfg
 
-        if not shutil.which("docker"):
-            self.skipTest("Docker CLI no disponible en este entorno")
-
-        # Comprobar si el stack Docker de 4 contenedores está levantado; si el daemon está activo pero no los contenedores, levantarlos
+        # P0: Prohibido omitir (skipTest) en certificación; si Docker CLI o daemon no están disponibles, la prueba FALLA.
+        self.assertIsNotNone(shutil.which("docker"), "Docker CLI es obligatorio para la certificación E2E")
         info_proc = subprocess.run(["docker", "info"], capture_output=True, text=True, timeout=10, check=False)
-        if info_proc.returncode != 0:
-            self.skipTest("Docker daemon no activo en este entorno")
+        self.assertEqual(info_proc.returncode, 0, f"Docker daemon debe estar activo: {info_proc.stderr}")
 
-        secret_key = "a9f8e7d6c5b4a3f2e1d0c9b8a7f6e5d4c3b2a1f0e9d8c7b6a5f4e3d2c1b0a9f8"
-        turn_secret = "7e6d5c4b3a2f1e0d9c8b7a6f5e4d3c2b1a0f9e8d7c6b5a4f3e2d1c0b9a8f7e6d"
+        # P2: Secretos efímeros generados criptográficamente por ejecución (nunca valores estáticos reutilizables)
+        secret_key = secrets.token_hex(32)
+        turn_secret = secrets.token_hex(32)
+        livekit_key = "AP" + secrets.token_hex(11)
+        livekit_secret = secrets.token_hex(32)
+
+        compose_file = str(ROOT_DIR / "deploy" / "docker-compose.communities.yml")
         env_docker = {
             **os.environ,
             "CCI_SECRET_KEY": secret_key,
-            "LIVEKIT_API_KEY": "APx9K7mQ2vL8nR4pT6wY1zB3",
-            "LIVEKIT_API_SECRET": "9f8e7d6c5b4a3f2e1d0c9b8a7f6e5d4c3b2a1f0e9d8c7b6a5f4e3d2c1b0a9f8e",
+            "LIVEKIT_API_KEY": livekit_key,
+            "LIVEKIT_API_SECRET": livekit_secret,
             "TURN_SECRET": turn_secret,
             "CADDY_TLS_MODE": "internal",
             "CADDY_HTTP_PORT": "8080",
             "CADDY_HTTPS_PORT": "8443",
+            "API_HOST_PORT": "15050",
         }
 
-        need_compose_up = False
-        ps_check = subprocess.run(
-            ["docker", "inspect", "--format", "{{.State.Running}}", "cci_communities_caddy"],
+        # P2: Forzar reconstrucción y recreación limpia del stack por ejecución y garantizar teardown al finalizar
+        subprocess.run(
+            ["docker", "compose", "-f", compose_file, "down", "-v", "--remove-orphans"],
+            env=env_docker,
             capture_output=True,
-            text=True,
+            timeout=60,
             check=False,
         )
-        if ps_check.returncode != 0 or ps_check.stdout.strip() != "true":
-            need_compose_up = True
-        else:
-            try:
-                with socket.create_connection(("127.0.0.1", 8443), timeout=1):
-                    pass
-            except OSError:
-                need_compose_up = True
 
-        if need_compose_up:
+        try:
             subprocess.run(
-                ["docker", "compose", "-f", str(ROOT_DIR / "deploy" / "docker-compose.communities.yml"), "up", "-d", "--build"],
+                ["docker", "compose", "-f", compose_file, "up", "-d", "--build", "--force-recreate"],
                 env=env_docker,
-                timeout=120,
+                timeout=180,
                 check=True,
             )
 
-        # 1. Verificar que los 4 contenedores estén en ejecución y que cci_communities_api esté healthy
-        for cname in ("cci_communities_api", "cci_communities_livekit", "cci_communities_coturn", "cci_communities_caddy"):
-            st = subprocess.check_output(
-                ["docker", "inspect", "--format", "{{.State.Running}}", cname], text=True
-            ).strip()
-            self.assertEqual(st, "true", f"El contenedor {cname} no está en ejecución")
+            # 1. Verificar que los 4 contenedores recién recreados estén en ejecución, con el secreto efímero actual y runtime Python 3.14
+            for cname in ("cci_communities_api", "cci_communities_livekit", "cci_communities_coturn", "cci_communities_caddy"):
+                st = subprocess.check_output(
+                    ["docker", "inspect", "--format", "{{.State.Running}}", cname], text=True
+                ).strip()
+                self.assertEqual(st, "true", f"El contenedor {cname} no está en ejecución")
 
-        api_health = subprocess.check_output(
-            ["docker", "inspect", "--format", "{{.State.Health.Status}}", "cci_communities_api"], text=True
-        ).strip()
-        self.assertEqual(api_health, "healthy")
-
-        # Generar token JWT firmado con el CCI_SECRET_KEY del contenedor
-        import dataclasses
-        from backend.config import config as live_cfg
-        with patch("backend.auth.config", dataclasses.replace(live_cfg, secret_key=secret_key)):
-            docker_token = create_access_token("u_docker_audit", "DockerAudit")
-
-        ctx = ssl.create_default_context()
-        ctx.check_hostname = False
-        ctx.verify_mode = ssl.CERT_NONE
-
-        def _caddy_https(method: str, path: str, body=None, headers=None):
-            raw_s = socket.create_connection(("127.0.0.1", 8443), timeout=5)
-            tls_s = ctx.wrap_socket(raw_s, server_hostname="api.ccisystem.org")
-            hdrs = {"Host": "api.ccisystem.org", "Connection": "close"}
-            if headers:
-                hdrs.update(headers)
-            payload = b""
-            if body is not None:
-                payload = json.dumps(body).encode("utf-8")
-                hdrs["Content-Type"] = "application/json"
-                hdrs["Content-Length"] = str(len(payload))
-            lines = [f"{method} {path} HTTP/1.1"] + [f"{k}: {v}" for k, v in hdrs.items()]
-            tls_s.sendall(("\r\n".join(lines) + "\r\n\r\n").encode("utf-8") + payload)
-            chunks = []
-            while True:
-                chunk = tls_s.recv(4096)
-                if not chunk:
+            api_health = "starting"
+            for _ in range(30):
+                api_health = subprocess.check_output(
+                    ["docker", "inspect", "--format", "{{.State.Health.Status}}", "cci_communities_api"], text=True
+                ).strip()
+                if api_health == "healthy":
                     break
-                chunks.append(chunk)
-            tls_s.close()
-            raw = b"".join(chunks).decode("utf-8", errors="replace")
-            head, _, rbody = raw.partition("\r\n\r\n")
-            return head.splitlines()[0], head, rbody
+                time.sleep(1)
+            self.assertEqual(api_health, "healthy")
 
-        # 2. HTTPS GET /api/v1/communities/health atravesando Caddy TLS -> api:5050
-        st_line, head_str, body_str = _caddy_https("GET", "/api/v1/communities/health")
-        self.assertIn("200 OK", st_line)
-        self.assertIn("Server: Caddy", head_str)
-        health_json = json.loads(body_str[body_str.find("{"):body_str.rfind("}") + 1])
-        self.assertEqual(health_json["status"], "healthy")
-        self.assertEqual(health_json["database"], "connected")
-
-        # 3. Handshake WebSocket WSS (HTTP/1.1 101 Switching Protocols) atravesando Caddy TLS -> api:5050
-        raw_ws = socket.create_connection(("127.0.0.1", 8443), timeout=5)
-        tls_ws = ctx.wrap_socket(raw_ws, server_hostname="api.ccisystem.org")
-        try:
-            ws_req = (
-                f"GET /socket.io/?EIO=4&transport=websocket&token={docker_token} HTTP/1.1\r\n"
-                "Host: api.ccisystem.org\r\n"
-                "Upgrade: websocket\r\n"
-                "Connection: Upgrade\r\n"
-                "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n"
-                "Sec-WebSocket-Version: 13\r\n\r\n"
+            # Confirmar que el contenedor no fue reutilizado verificando el secreto efímero inyectado y versión de Python
+            api_env_dump = subprocess.check_output(
+                ["docker", "inspect", "--format", "{{range .Config.Env}}{{println .}}{{end}}", "cci_communities_api"],
+                text=True,
             )
-            tls_ws.sendall(ws_req.encode("ascii"))
-            ws_resp = tls_ws.recv(4096).decode("latin1", errors="ignore")
-            self.assertIn("101 Switching Protocols", ws_resp.splitlines()[0])
-            self.assertIn("Server: Caddy", ws_resp)
-            self.assertIn("Upgrade: websocket", ws_resp)
-        finally:
-            tls_ws.close()
-
-        # 4. Crear comunidad y mensaje a través de Caddy TLS, ejecutar `docker restart cci_communities_api` y verificar volumen real
-        st_c, _, bd_c = _caddy_https(
-            "POST",
-            "/api/v1/communities",
-            body={"name": "Caddy Docker Volume Guild", "visibility": "public"},
-            headers={"Authorization": f"Bearer {docker_token}"},
-        )
-        self.assertIn("201", st_c)
-        comm_id = json.loads(bd_c[bd_c.find("{"):bd_c.rfind("}") + 1])["community"]["id"]
-
-        _, _, bd_ch = _caddy_https(
-            "GET",
-            f"/api/v1/communities/{comm_id}/channels",
-            headers={"Authorization": f"Bearer {docker_token}"},
-        )
-        channels = json.loads(bd_ch[bd_ch.find("{"):bd_ch.rfind("}") + 1])["channels"]
-        ch_id = [c["id"] for c in channels if c["type"] == "text"][0]
-
-        st_m, _, _ = _caddy_https(
-            "POST",
-            f"/api/v1/channels/{ch_id}/messages",
-            body={"content": "Persistencia real en volumen Docker tras docker restart cci_communities_api"},
-            headers={"Authorization": f"Bearer {docker_token}"},
-        )
-        self.assertIn("201", st_m)
-
-        subprocess.run(["docker", "restart", "cci_communities_api"], timeout=30, check=True)
-        for _ in range(25):
-            time.sleep(1)
-            h_stat = subprocess.check_output(
-                ["docker", "inspect", "--format", "{{.State.Health.Status}}", "cci_communities_api"], text=True
+            self.assertIn(f"CCI_SECRET_KEY={secret_key}", api_env_dump)
+            container_py_ver = subprocess.check_output(
+                ["docker", "exec", "cci_communities_api", "python", "--version"], text=True
             ).strip()
-            if h_stat == "healthy":
-                break
-        self.assertEqual(h_stat, "healthy")
+            self.assertTrue(container_py_ver.startswith("Python 3.14"), f"Runtime inesperado en contenedor: {container_py_ver}")
 
-        st_get, _, bd_get = _caddy_https(
-            "GET",
-            f"/api/v1/channels/{ch_id}/messages",
-            headers={"Authorization": f"Bearer {docker_token}"},
-        )
-        self.assertIn("200 OK", st_get)
-        msgs = json.loads(bd_get[bd_get.find("{"):bd_get.rfind("}") + 1])["messages"]
-        self.assertTrue(any("volumen Docker tras docker restart" in m["content"] for m in msgs))
+            with patch("backend.auth.config", dataclasses.replace(live_cfg, secret_key=secret_key)):
+                docker_token = create_access_token("u_docker_audit", "DockerAudit")
 
-        # 5. Probar STUN Binding (UDP + TCP 3478) y TURN Allocate autenticado con HMAC-SHA1 contra cci_communities_coturn
-        magic_cookie = 0x2112A442
-        stun_req = struct.pack("!HHI12s", 0x0001, 0, magic_cookie, b"\x01" * 12)
+            # P1: Validación estricta de certificado TLS (CERT_REQUIRED + check_hostname=True) contra la CA local de Caddy
+            # Disparar apretón inicial para que Caddy aprovisione su PKI interna si el volumen acaba de crearse
+            bootstrap_ctx = ssl._create_unverified_context()
+            for _ in range(15):
+                try:
+                    with socket.create_connection(("127.0.0.1", 8443), timeout=3) as raw_b:
+                        with bootstrap_ctx.wrap_socket(raw_b, server_hostname="api.ccisystem.org"):
+                            break
+                except OSError:
+                    time.sleep(0.5)
 
-        udp_s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        udp_s.settimeout(3.0)
-        udp_s.sendto(stun_req, ("127.0.0.1", 3478))
-        udp_resp, _ = udp_s.recvfrom(1024)
-        udp_s.close()
-        self.assertEqual(struct.unpack("!H", udp_resp[:2])[0], 0x0101)
+            root_ca_pem = ""
+            for _ in range(15):
+                ca_proc = subprocess.run(
+                    ["docker", "exec", "cci_communities_caddy", "cat", "/data/caddy/pki/authorities/local/root.crt"],
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+                if ca_proc.returncode == 0 and "BEGIN CERTIFICATE" in ca_proc.stdout:
+                    root_ca_pem = ca_proc.stdout
+                    break
+                time.sleep(0.5)
+            self.assertIn("BEGIN CERTIFICATE", root_ca_pem, "No se pudo extraer la CA raíz de Caddy PKI")
 
-        tcp_s = socket.create_connection(("127.0.0.1", 3478), timeout=3.0)
-        tcp_s.sendall(stun_req)
-        tcp_resp = tcp_s.recv(1024)
-        tcp_s.close()
-        self.assertEqual(struct.unpack("!H", tcp_resp[:2])[0], 0x0101)
+            # Contexto TLS estricto que valida cadena X.509 y hostname RFC 6125
+            verified_ctx = ssl.create_default_context(cadata=root_ca_pem)
+            verified_ctx.verify_mode = ssl.CERT_REQUIRED
+            verified_ctx.check_hostname = True
 
-        # TURN Allocate (0x0003) con HMAC-SHA1 y verificación de puerto relay en rango 49152-49172
-        def _attr(atype: int, val: bytes) -> bytes:
-            pad = (4 - (len(val) % 4)) % 4
-            return struct.pack("!HH", atype, len(val)) + val + (b"\x00" * pad)
+            # Prueba negativa 1: Sin la CA raíz confiable debe fallar con SSLCertVerificationError
+            untrusted_ctx = ssl.create_default_context()
+            with self.assertRaises(ssl.SSLCertVerificationError):
+                with socket.create_connection(("127.0.0.1", 8443), timeout=5) as raw_u:
+                    untrusted_ctx.wrap_socket(raw_u, server_hostname="api.ccisystem.org")
 
-        def _parse(data: bytes):
-            out = {}
-            off = 20
-            while off + 4 <= len(data):
-                at, al = struct.unpack("!HH", data[off:off + 4])
-                out[at] = data[off + 4:off + 4 + al]
-                off += 4 + al + ((4 - (al % 4)) % 4)
-            return out
+            # Prueba negativa 2: Hostname no coincidente debe ser rechazado en el handshake TLS
+            with self.assertRaises(ssl.SSLError):
+                with socket.create_connection(("127.0.0.1", 8443), timeout=5) as raw_bad_host:
+                    verified_ctx.wrap_socket(raw_bad_host, server_hostname="untrusted.invalid.example")
 
-        req_tr = _attr(0x0019, struct.pack("!B3s", 17, b"\x00\x00\x00"))
-        pkt1 = struct.pack("!HHI12s", 0x0003, len(req_tr), magic_cookie, b"\x11" * 12) + req_tr
-        tsock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        tsock.settimeout(3.0)
-        tsock.sendto(pkt1, ("127.0.0.1", 3478))
-        r1, _ = tsock.recvfrom(2048)
-        self.assertEqual(struct.unpack("!H", r1[:2])[0], 0x0113)  # 401 Challenge
-        a1 = _parse(r1)
-        nonce = a1[0x0015]
-        realm = a1[0x0014]
+            def _caddy_https(method: str, path: str, body=None, headers=None):
+                raw_s = socket.create_connection(("127.0.0.1", 8443), timeout=5)
+                tls_s = verified_ctx.wrap_socket(raw_s, server_hostname="api.ccisystem.org")
+                peercert = tls_s.getpeercert()
+                self.assertIsNotNone(peercert)
+                self.assertIn(("DNS", "api.ccisystem.org"), peercert.get("subjectAltName", ()))
+                hdrs = {"Host": "api.ccisystem.org", "Connection": "close"}
+                if headers:
+                    hdrs.update(headers)
+                payload = b""
+                if body is not None:
+                    payload = json.dumps(body).encode("utf-8")
+                    hdrs["Content-Type"] = "application/json"
+                    hdrs["Content-Length"] = str(len(payload))
+                lines = [f"{method} {path} HTTP/1.1"] + [f"{k}: {v}" for k, v in hdrs.items()]
+                tls_s.sendall(("\r\n".join(lines) + "\r\n\r\n").encode("utf-8") + payload)
+                chunks = []
+                while True:
+                    chunk = tls_s.recv(4096)
+                    if not chunk:
+                        break
+                    chunks.append(chunk)
+                tls_s.close()
+                raw = b"".join(chunks).decode("utf-8", errors="replace")
+                head, _, rbody = raw.partition("\r\n\r\n")
+                return head.splitlines()[0], head, rbody
 
-        uname = f"{int(time.time()) + 3600}:u_docker_audit"
-        pwd = base64.b64encode(
-            hmac.new(turn_secret.encode("utf-8"), uname.encode("utf-8"), hashlib.sha1).digest()
-        ).decode("ascii")
-        hkey = hashlib.md5(f"{uname}:{realm.decode()}:{pwd}".encode("utf-8")).digest()
-        body_no_mi = req_tr + _attr(0x0006, uname.encode("utf-8")) + _attr(0x0014, realm) + _attr(0x0015, nonce)
-        hdr2 = struct.pack("!HHI12s", 0x0003, len(body_no_mi) + 24, magic_cookie, b"\x22" * 12)
-        mi = _attr(0x0008, hmac.new(hkey, hdr2 + body_no_mi, hashlib.sha1).digest())
-        tsock.sendto(hdr2 + body_no_mi + mi, ("127.0.0.1", 3478))
-        r2, _ = tsock.recvfrom(2048)
-        tsock.close()
-        self.assertEqual(struct.unpack("!H", r2[:2])[0], 0x0103)  # Allocate Success Response
-        a2 = _parse(r2)
-        _, _, xport = struct.unpack("!BBH", a2[0x0016][:4])
-        relay_port = xport ^ (magic_cookie >> 16)
-        self.assertTrue(49152 <= relay_port <= 49172, f"Puerto relay fuera de rango: {relay_port}")
+            # 2. HTTPS GET /api/v1/communities/health con certificado y hostname verificados
+            st_line, head_str, body_str = _caddy_https("GET", "/api/v1/communities/health")
+            self.assertIn("200 OK", st_line)
+            self.assertIn("Server: Caddy", head_str)
+            health_json = json.loads(body_str[body_str.find("{"):body_str.rfind("}") + 1])
+            self.assertEqual(health_json["status"], "healthy")
+            self.assertEqual(health_json["database"], "connected")
+
+            # 3. Handshake WebSocket WSS (HTTP/1.1 101 Switching Protocols) con certificado y hostname verificados
+            raw_ws = socket.create_connection(("127.0.0.1", 8443), timeout=5)
+            tls_ws = verified_ctx.wrap_socket(raw_ws, server_hostname="api.ccisystem.org")
+            try:
+                self.assertIn(("DNS", "api.ccisystem.org"), tls_ws.getpeercert().get("subjectAltName", ()))
+                ws_req = (
+                    f"GET /socket.io/?EIO=4&transport=websocket&token={docker_token} HTTP/1.1\r\n"
+                    "Host: api.ccisystem.org\r\n"
+                    "Upgrade: websocket\r\n"
+                    "Connection: Upgrade\r\n"
+                    "Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==\r\n"
+                    "Sec-WebSocket-Version: 13\r\n\r\n"
+                )
+                tls_ws.sendall(ws_req.encode("ascii"))
+                ws_resp = tls_ws.recv(4096).decode("latin1", errors="ignore")
+                self.assertIn("101 Switching Protocols", ws_resp.splitlines()[0])
+                self.assertIn("Server: Caddy", ws_resp)
+                self.assertIn("Upgrade: websocket", ws_resp)
+            finally:
+                tls_ws.close()
+
+            # 4. Crear comunidad y mensaje por HTTPS, ejecutar `docker restart cci_communities_api` y verificar persistencia en volumen real
+            st_c, _, bd_c = _caddy_https(
+                "POST",
+                "/api/v1/communities",
+                body={"name": "Caddy Docker Volume Guild", "visibility": "public"},
+                headers={"Authorization": f"Bearer {docker_token}"},
+            )
+            self.assertIn("201", st_c)
+            comm_id = json.loads(bd_c[bd_c.find("{"):bd_c.rfind("}") + 1])["community"]["id"]
+
+            _, _, bd_ch = _caddy_https(
+                "GET",
+                f"/api/v1/communities/{comm_id}/channels",
+                headers={"Authorization": f"Bearer {docker_token}"},
+            )
+            channels = json.loads(bd_ch[bd_ch.find("{"):bd_ch.rfind("}") + 1])["channels"]
+            ch_id = [c["id"] for c in channels if c["type"] == "text"][0]
+
+            st_m, _, _ = _caddy_https(
+                "POST",
+                f"/api/v1/channels/{ch_id}/messages",
+                body={"content": "Persistencia real en volumen Docker tras docker restart cci_communities_api"},
+                headers={"Authorization": f"Bearer {docker_token}"},
+            )
+            self.assertIn("201", st_m)
+
+            subprocess.run(["docker", "restart", "cci_communities_api"], timeout=30, check=True)
+            h_stat = "starting"
+            for _ in range(25):
+                time.sleep(1)
+                h_stat = subprocess.check_output(
+                    ["docker", "inspect", "--format", "{{.State.Health.Status}}", "cci_communities_api"], text=True
+                ).strip()
+                if h_stat == "healthy":
+                    break
+            self.assertEqual(h_stat, "healthy")
+
+            st_get, _, bd_get = _caddy_https(
+                "GET",
+                f"/api/v1/channels/{ch_id}/messages",
+                headers={"Authorization": f"Bearer {docker_token}"},
+            )
+            self.assertIn("200 OK", st_get)
+            msgs = json.loads(bd_get[bd_get.find("{"):bd_get.rfind("}") + 1])["messages"]
+            self.assertTrue(any("volumen Docker tras docker restart" in m["content"] for m in msgs))
+
+            # 5. P1: STUN Binding (UDP/TCP 3478) + TURN Allocate + CreatePermission + ChannelBind + Relay Bidireccional de Medios entre Peer A y Peer B
+            magic_cookie = 0x2112A442
+            stun_req = struct.pack("!HHI12s", 0x0001, 0, magic_cookie, b"\x01" * 12)
+
+            udp_s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            udp_s.settimeout(3.0)
+            udp_s.sendto(stun_req, ("127.0.0.1", 3478))
+            udp_resp, _ = udp_s.recvfrom(1024)
+            udp_s.close()
+            self.assertEqual(struct.unpack("!H", udp_resp[:2])[0], 0x0101)
+
+            tcp_s = socket.create_connection(("127.0.0.1", 3478), timeout=3.0)
+            tcp_s.sendall(stun_req)
+            tcp_resp = tcp_s.recv(1024)
+            tcp_s.close()
+            self.assertEqual(struct.unpack("!H", tcp_resp[:2])[0], 0x0101)
+
+            def _attr(atype: int, val: bytes) -> bytes:
+                pad = (4 - (len(val) % 4)) % 4
+                return struct.pack("!HH", atype, len(val)) + val + (b"\x00" * pad)
+
+            def _parse(data: bytes):
+                out = {}
+                off = 20
+                while off + 4 <= len(data):
+                    at, al = struct.unpack("!HH", data[off:off + 4])
+                    out[at] = data[off + 4:off + 4 + al]
+                    off += 4 + al + ((4 - (al % 4)) % 4)
+                return out
+
+            def _xor_addr(ip_str: str, port: int) -> bytes:
+                xport = port ^ (magic_cookie >> 16)
+                ip_int = struct.unpack("!I", socket.inet_aton(ip_str))[0] ^ magic_cookie
+                return struct.pack("!BBHI", 0, 1, xport, ip_int)
+
+            def _decode_xor_addr(raw: bytes):
+                _, _, xport, xip = struct.unpack("!BBHI", raw[:8])
+                port = xport ^ (magic_cookie >> 16)
+                ip = socket.inet_ntoa(struct.pack("!I", xip ^ magic_cookie))
+                return ip, port
+
+            peer_a = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            peer_a.settimeout(3.0)
+            peer_b = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            peer_b.settimeout(3.0)
+            try:
+                # Descubrir dirección reflexiva de Peer B mediante STUN Binding
+                stun_b = struct.pack("!HHI12s", 0x0001, 0, magic_cookie, b"\x02" * 12)
+                peer_b.sendto(stun_b, ("127.0.0.1", 3478))
+                rb, _ = peer_b.recvfrom(1024)
+                b_ip, b_port = _decode_xor_addr(_parse(rb)[0x0020])
+
+                # Peer A solicita TURN Allocate (0x0003) -> 401 Challenge -> Allocate autenticado con HMAC-SHA1
+                req_tr = _attr(0x0019, struct.pack("!B3s", 17, b"\x00\x00\x00"))
+                pkt1 = struct.pack("!HHI12s", 0x0003, len(req_tr), magic_cookie, b"\x11" * 12) + req_tr
+                peer_a.sendto(pkt1, ("127.0.0.1", 3478))
+                r1, _ = peer_a.recvfrom(2048)
+                self.assertEqual(struct.unpack("!H", r1[:2])[0], 0x0113)
+                a1 = _parse(r1)
+                nonce, realm = a1[0x0015], a1[0x0014]
+
+                uname = f"{int(time.time()) + 3600}:u_docker_audit"
+                pwd = base64.b64encode(
+                    hmac.new(turn_secret.encode("utf-8"), uname.encode("utf-8"), hashlib.sha1).digest()
+                ).decode("ascii")
+                hkey = hashlib.md5(f"{uname}:{realm.decode()}:{pwd}".encode("utf-8")).digest()
+
+                def _send_turn_authed(msg_type: int, txid: bytes, attrs_bytes: bytes):
+                    body = attrs_bytes + _attr(0x0006, uname.encode("utf-8")) + _attr(0x0014, realm) + _attr(0x0015, nonce)
+                    hdr = struct.pack("!HHI12s", msg_type, len(body) + 24, magic_cookie, txid)
+                    mi = _attr(0x0008, hmac.new(hkey, hdr + body, hashlib.sha1).digest())
+                    peer_a.sendto(hdr + body + mi, ("127.0.0.1", 3478))
+                    resp, _ = peer_a.recvfrom(2048)
+                    return struct.unpack("!H", resp[:2])[0], _parse(resp)
+
+                st_alloc, a_alloc = _send_turn_authed(0x0003, b"\x22" * 12, req_tr)
+                self.assertEqual(st_alloc, 0x0103)
+                _, relay_port = _decode_xor_addr(a_alloc[0x0016])
+                self.assertTrue(49152 <= relay_port <= 49172, f"Puerto relay fuera de rango: {relay_port}")
+
+                # CreatePermission (0x0008) autorizando a Peer B
+                st_perm, _ = _send_turn_authed(0x0008, b"\x33" * 12, _attr(0x0012, _xor_addr(b_ip, b_port)))
+                self.assertEqual(st_perm, 0x0108)
+
+                # Tráfico de medios 1 (Peer B -> Puerto Relay asignado en CoTURN -> Peer A Data Indication 0x0017)
+                payload_b2a = b"CCI-TURN-RELAY-MEDIA-B2A"
+                peer_b.sendto(payload_b2a, ("127.0.0.1", relay_port))
+                relayed_to_a, _ = peer_a.recvfrom(2048)
+                self.assertEqual(struct.unpack("!H", relayed_to_a[:2])[0], 0x0017)
+                ind_attrs = _parse(relayed_to_a)
+                self.assertEqual(ind_attrs[0x0013], payload_b2a)
+                peer_b_xor_addr_raw = ind_attrs[0x0012]
+
+                # ChannelBind (0x0009) del canal 0x4000 hacia la dirección de Peer B y envío ChannelData (Peer A -> CoTURN -> Peer B)
+                ch_attr = _attr(0x000C, struct.pack("!HH", 0x4000, 0)) + _attr(0x0012, peer_b_xor_addr_raw)
+                st_ch, _ = _send_turn_authed(0x0009, b"\x44" * 12, ch_attr)
+                self.assertEqual(st_ch, 0x0109)
+
+                payload_a2b = b"CCI-TURN-RELAY-MEDIA-A2B-CHANNEL-0x4000"
+                ch_frame = struct.pack("!HH", 0x4000, len(payload_a2b)) + payload_a2b
+                peer_a.sendto(ch_frame, ("127.0.0.1", 3478))
+                relayed_to_b, from_relay_addr = peer_b.recvfrom(2048)
+                self.assertEqual(relayed_to_b, payload_a2b)
+                self.assertEqual(from_relay_addr[1], relay_port)
+            finally:
+                peer_a.close()
+                peer_b.close()
+        finally:
+            # P2: Limpiar contenedores y volúmenes efímeros al finalizar la prueba
+            subprocess.run(
+                ["docker", "compose", "-f", compose_file, "down", "-v", "--remove-orphans"],
+                env=env_docker,
+                capture_output=True,
+                timeout=60,
+                check=False,
+            )
 
 
 if __name__ == "__main__":

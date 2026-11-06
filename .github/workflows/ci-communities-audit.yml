@@ -11,23 +11,23 @@ on:
 
 jobs:
   certification-suite:
-    name: Run 22 Evaluation Suites & Docker Compose Validation
+    name: Run 22 Evaluation Suites & Docker Compose E2E (Python 3.14)
     runs-on: ubuntu-latest
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up Python 3.12
+      - name: Set up Python 3.14 (aligned with deploy/Dockerfile.api python:3.14-slim)
         uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: "3.14"
           cache: "pip"
 
       - name: Install system dependencies for headless Pygame & OpenCV
         run: |
           sudo apt-get update
-          sudo apt-get install -y libsdl2-dev libsdl2-image-dev libsdl2-mixer-dev libsdl2-ttf-dev libgl1
+          sudo apt-get install -y libsdl2-dev libsdl2-image-dev libsdl2-mixer-dev libsdl2-ttf-dev libgl1 libglib2.0-0
 
       - name: Install Python dependencies
         run: |
@@ -35,24 +35,49 @@ jobs:
           pip install -r requirements-dev.txt
           pip install -r requirements-server.txt
 
+      - name: Generate ephemeral cryptographic test secrets
+        run: |
+          python - <<'PY' >> "$GITHUB_ENV"
+          import secrets
+          print(f"CCI_SECRET_KEY={secrets.token_hex(32)}")
+          print(f"LIVEKIT_API_KEY=AP{secrets.token_hex(11)}")
+          print(f"LIVEKIT_API_SECRET={secrets.token_hex(32)}")
+          print(f"TURN_SECRET={secrets.token_hex(32)}")
+          PY
+
       - name: Validate Docker Compose Manifest
-        env:
-          CCI_SECRET_KEY: a9f8e7d6c5b4a3f2e1d0c9b8a7f6e5d4c3b2a1f0e9d8c7b6a5f4e3d2c1b0a9f8
-          LIVEKIT_API_KEY: APx9K7mQ2vL8nR4pT6wY1zB3
-          LIVEKIT_API_SECRET: 9f8e7d6c5b4a3f2e1d0c9b8a7f6e5d4c3b2a1f0e9d8c7b6a5f4e3d2c1b0a9f8e
-          TURN_SECRET: 7e6d5c4b3a2f1e0d9c8b7a6f5e4d3c2b1a0f9e8d7c6b5a4f3e2d1c0b9a8f7e6d
         run: |
           docker compose -f deploy/docker-compose.communities.yml config > /dev/null
 
-      - name: Run Full 22-Suite Certification Protocol
+      - name: Run Full 22-Suite Certification Protocol (Strict Zero-Skip Gate)
         env:
           SDL_VIDEODRIVER: dummy
           SDL_AUDIODRIVER: dummy
         run: |
           python run_all_evaluations.py
 
+      - name: Verify Zero Skips and Mandatory Docker E2E Execution in Report
+        run: |
+          python - <<'PY'
+          import json, sys
+          from pathlib import Path
+
+          report = json.loads(Path("evaluations_report.json").read_text(encoding="utf-8"))
+          assert report["suites_executed"] == 22, f"Expected 22 suites, got {report['suites_executed']}"
+          assert report["total_failed"] == 0, f"Failures: {report['total_failed']}"
+          assert report["total_errors"] == 0, f"Errors: {report['total_errors']}"
+          assert report["total_skipped"] == 0, f"Skips prohibited: {report['total_skipped']}"
+          assert report["total_passed"] == report["total_run"] == 192, f"Passed {report['total_passed']}/{report['total_run']}"
+
+          audit_suite = [s for s in report["suites"] if s["suite"] == "test_communities_merge_audit.py"][0]
+          t11 = [c for c in audit_suite["test_cases"] if "test_11_live_docker_caddy_tls" in c["id"]]
+          assert len(t11) == 1 and t11[0]["status"] == "PASS", f"Mandatory Docker E2E test_11 did not pass: {t11}"
+          print("CI Gate Verified: 192/192 PASS, 0 SKIP, test_11 PASS.")
+          PY
+
       - name: Upload Evaluation Report Artifact
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: evaluations-report
+          name: evaluations-report-${{ github.sha }}
           path: evaluations_report.json
