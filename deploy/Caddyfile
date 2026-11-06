@@ -1,0 +1,26 @@
+{
+    email admin@ccisystem.local
+    local_certs
+}
+
+localhost, api.ccisystem.local {
+    # WebSocket & REST API
+    handle /api/* {
+        reverse_proxy api:8000
+    }
+    handle /ws/* {
+        reverse_proxy api:8000
+    }
+
+    # LiveKit Signal & WebRTC HTTP
+    handle /livekit/* {
+        uri strip_prefix /livekit
+        reverse_proxy livekit:7880
+    }
+
+    # S3 Assets MinIO
+    handle /assets/* {
+        uri strip_prefix /assets
+        reverse_proxy minio:9000
+    }
+}

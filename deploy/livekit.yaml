@@ -1,0 +1,23 @@
+port: 7880
+bind_addresses:
+  - ""
+rtc:
+  tcp_port: 7881
+  port_range_start: 50000
+  port_range_end: 50100
+  use_external_ip: false
+redis:
+  address: redis:6379
+  password: cci_redis_password
+  db: 1
+turn:
+  enabled: true
+  domain: turn.ccisystem.local
+  tls_port: 5349
+  udp_port: 3478
+  external_tls: false
+keys:
+  devkey: secretkey1234567890abcdef
+logging:
+  json: false
+  level: info
