@@ -1092,11 +1092,11 @@ class CCIConsoleState:
 
         # 1. Gran retrato de avatar cuando no es Alex (Alex ya está integrado perfecto en la base)
         if avatar_index != 0:
-            p_big = ROOT / "assets_ui" / "profile" / "avatars" / f"avatar_big_rounded_{avatar_index}.png"
-            if p_big.exists():
+            p_box = ROOT / "assets_ui" / "profile" / "avatars" / f"box_avatar_{avatar_index}.png"
+            if p_box.exists():
                 try:
-                    b_surf = pygame.image.load(str(p_big)).convert_alpha()
-                    self.canvas.blit(b_surf, (269, 164))
+                    b_surf = pygame.image.load(str(p_box)).convert()
+                    self.canvas.blit(b_surf, (266, 144))
                 except Exception:
                     pass
 
