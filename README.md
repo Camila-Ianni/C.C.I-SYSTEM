@@ -9,7 +9,7 @@
 
 ![Python Version](https://img.shields.io/badge/python-3.12%20%7C%203.14-blue)
 ![Pygame-CE](https://img.shields.io/badge/pygame--ce-2.5%2B-brightgreen)
-![Tests](https://img.shields.io/badge/tests-22%20suites%20%2F%20192%20passed%20(0%20skips)-success)
+![Tests](https://img.shields.io/badge/tests-22%20suites%20%2F%20197%20passed%20(0%20skips)-success)
 ![Database](https://img.shields.io/badge/database-SQLite%203%20(WAL%20Mode)-orange)
 ![Multiplayer](https://img.shields.io/badge/multiplayer-60%20Hz%20Authoritative-purple)
 ![Voice Chat](https://img.shields.io/badge/voice-LiveKit%20SFU%20%2B%20CoTURN%20UDP-cyan)
@@ -71,15 +71,19 @@ El módulo nativo **CCI Communities** integra un ecosistema social completo dent
   - Pestañas dedicadas para **MIS GRUPOS**, **CHATS PRIVADOS** y **SOLICITUDES**, buscador instantáneo, creación de grupos (`+ CREAR GRUPO`) y unión por código de invitación (`UNIRSE CON CÓDIGO`).
   - Tarjetas interactivas con insignia de rol (`ADMIN`, `MOD`, `MIEMBRO`), contador de integrantes en línea y acceso directo a la comunidad.
 - **Vista de Comunidad (`CommunityViewScreen`):**
-  - **Árbol de Canales:** Categorías colapsables de **INFORMACIÓN** (`# bienvenida`, `# reglas`, `# anuncios`), **CANALES DE TEXTO** (`# general`, `# clips`, `# memes`) y **SALAS DE VOZ** (`🔊 Sala General`, `🔊 Squad 1`) con avatares y estados de micrófono en vivo.
-  - **Chat en Tiempo Real con Scroll Independiente:** Renderizado con recorte (`surface.set_clip`), paginación por cursor compuesto (`created_at, id`), reacciones rápidas, adjuntos y barra de entrada dedicada.
-  - **Panel Derecho de Miembros & Sound Deck MP3:** Lista de miembros agrupados por estado (`CONECTADOS` / `DESCONECTADOS`), botonera de efectos de sonido MP3 (**Sound Deck**) con validación binaria de cabeceras ID3v2 / tramas MPEG Layer III reales (`sound_validator.py`) y controles de voz (`Silenciar`, `Ensordecer`, `Compartir pantalla`, `Colgar`).
+  - **Árbol de Canales:** Categorías colapsables de **INFORMACIÓN** (`# bienvenida`, `# reglas`, `# anuncios`), **CANALES DE TEXTO** (`# general`, `# clips`, `# memes`) y **SALAS DE VOZ** (`🔊 Sala General`, `🔊 Squad 1`) con creación dinámica con botón `[+]`.
+  - **Chat en Tiempo Real con Scroll Independiente:** Renderizado con recorte (`surface.set_clip`), paginación por cursor compuesto (`created_at, id`), reacciones interactivas, barra de escritura y autocompletado inteligente de **@menciones** (`@everyone`, miembros) con badges dorados y navegación rápida por teclado (`Tab`, flechas).
+  - **Adjuntos de Capturas F12 (`capturas/`):** Botón `[📎]` con selector modal interactivo de screenshots PNG tomados dentro de cualquier juego con `F12`, previsualización de miniatura en el historial y modal visor a pantalla completa.
+  - **Panel de Miembros & Rich Presence en Vivo:** Lista de miembros en línea y ausentes con detección automática de juego en tiempo real (`"🔴 En vivo: [Juego]"`, `"Jugando: METAL SLUG"`) sincronizado en SQLite WAL.
+  - **Sound Deck Interactivo (Soundboard):** Botonera flotante en vivo (`[🔊 SOUNDS]`, teclas `1..6`) con síntesis PCM en tiempo real de tonos arcade (`GG`, `AIRHORN`, `K.O.`, `VICTORY`, `LEVEL UP`, `BUZZER`) y auditoría en backend.
+  - **Transmisión de Pantalla y Juegos en Vivo ("Go Live" a 30/60 FPS):** Botón `[🎥 GO LIVE]` con selector de perfiles (`720p @ 30 FPS`, `1080p @ 60 FPS`), widget flotante **PiP (Picture-in-Picture)** sobre el chat y modo Cine/Teatro modal (`stream_theater`) a 920x530 con scanlines y métricas de bitrate (`LiveKit SFU`).
+  - **Motor de Voz Desktop & In-Game HUD Overlay:** Motor de voz desacoplado `DesktopVoiceEngine` sobre sockets UDP y paquetes RTP RFC 3550 / 3551 L16 48 kHz mono, barra de conexión de voz estilo Discord (`🟢 VOZ CONECTADA`, `[🎙️ MUTE]`, `[🎧 DEAFEN]`, `[🛡️ HUD]`, `[📞 SALIR]`), atajo de habla VAD (`V`) y **In-Game Voice HUD Overlay** flotante con halos verdes cuando los miembros hablan, configurable con tecla `F8`.
 - **Seguridad y Moderación Jerárquica (RBAC Fail-Closed):**
   - Permisos bitmask granulares (`VIEW_CHANNEL`, `SEND_MESSAGES`, `CONNECT_VOICE`, `SPEAK_VOICE`, `STREAM_VIDEO`, `USE_SOUND_DECK`, `KICK_MEMBERS`, `BAN_MEMBERS`, `MANAGE_CHANNELS`, `MANAGE_ROLES`, `ADMINISTRATOR`) con precedencia explícita de `deny_bits` sobre `allow_bits`.
   - Jerarquía estricta (`owner > admin > mod > member`) y bitácora inmutable de auditoría (`moderation_audit_log`).
 - **Plano de Control de Voz, Streaming y Relay TURN:**
   - Emisión de tokens **LiveKit JWT (`HS256`, `TTL <= 300s`)** vinculados criptográficamente a `user_id`, `community_id`, `channel_id` y `session_id`, más credenciales **TURN REST HMAC-SHA1** efímeras (`coturn`) para atravesar NATs simétricos.
-  - Adaptador de captura y previsualización de transmisión local (`stream_adapter.py`) a 720p/30fps.
+  - Adaptador de captura y detección de procesos activos (`stream_adapter.py`) para los 19 títulos de la consola.
 
 ---
 
@@ -158,9 +162,9 @@ docker compose -f deploy/docker-compose.communities.yml --env-file deploy/.env.c
 
 ---
 
-## ✅ Suite de Certificación Automatizada (22 Suites / 192 Pruebas)
+## ✅ Suite de Certificación Automatizada (22 Suites / 197 Pruebas)
 
-El proyecto cuenta con un runner unificado (`run_all_evaluations.py`) que ejecuta las **22 suites de pruebas (192 casos de prueba, 0 fallos, 0 errores y 0 pruebas omitidas)**, incluyendo pruebas E2E en vivo con Docker Compose (`Caddy TLS X.509 + WebSocket 101 + Persistencia de Volúmenes + Relay Bidireccional UDP TURN`):
+El proyecto cuenta con un runner unificado (`run_all_evaluations.py`) que ejecuta las **22 suites de pruebas (197 casos de prueba, 0 fallos, 0 errores y 0 pruebas omitidas)**, incluyendo pruebas E2E en vivo con Docker Compose (`Caddy TLS X.509 + WebSocket 101 + Persistencia de Volúmenes + Relay Bidireccional UDP TURN`):
 
 ```bash
 python run_all_evaluations.py
@@ -177,12 +181,17 @@ C.C.I-SYSTEM/
 ├── main.py                              # Entry point de la consola virtual en Pygame-CE (60 FPS)
 ├── groups_ui.py                         # Hub de Grupos y Vista de Comunidad pixel-art (Pygame-CE)
 ├── sidebar_ui.py                        # Barra lateral global (Inicio, Juegos, Grupos, Perfil...)
-├── run_all_evaluations.py               # Runner de certificación (22 suites / 192 tests passing, 0 skips)
+├── run_all_evaluations.py               # Runner de certificación (22 suites / 197 tests passing, 0 skips)
 ├── evaluations_report.json              # Reporte auditable de certificación y trazabilidad SHA
 ├── backend/
 │   ├── server.py                        # Servidor unificado Flask + Flask-SocketIO (puerto 5050)
 │   ├── davinci_bridge.py                # Motor autoritativo 60 Hz para Da Vinci Fighters Online
-│   └── communities/                     # Subsistema CCI Communities (SQLite WAL, RBAC, LiveKit, MP3, Stream)
+│   └── communities/                     # Subsistema CCI Communities (SQLite WAL, RBAC, LiveKit, Voice, Stream)
+│       ├── voice_engine.py              # Motor de voz Desktop UDP/RTP RFC 3550 L16 48kHz y HUD
+│       ├── stream_adapter.py            # Adaptador de captura y perfiles de transmisión Go Live
+│       ├── sound_validator.py           # Validador binario de efectos MPEG Layer III / ID3v2
+│       ├── service.py                   # Lógica de dominio, moderación jerárquica y tokens
+│       └── repository.py                # Persistencia relacional SQLite 3 en modo WAL
 ├── deploy/                              # Docker Compose (api, livekit, coturn, caddy) y configs de red
 ├── mobile/                              # Adaptación táctil móvil y cliente de voz UDP RTP
 ├── ios/                                 # Blueprint de empaquetado nativo para iOS (Xcode)
