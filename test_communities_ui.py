@@ -311,6 +311,67 @@ class TestCommunitiesUI(unittest.TestCase):
             if test_snap.exists():
                 test_snap.unlink()
 
+    def test_10_go_live_game_streaming(self):
+        """Verifica la transmisión en vivo (Go Live), selector de juegos, widget PiP y modo teatro."""
+        screen = pygame.display.get_surface()
+        self.sm.change_state("COMMUNITY", community_id="night_raid")
+
+        # 1. Clic en botón [🎥 GO LIVE (30 FPS)] abre el modal selector de juego/pantalla
+        self.assertFalse(self.comm_state.is_streaming)
+        btn_stream_pos = self.comm_state.stream_btn_rect.center
+        ev_click_stream = pygame.event.Event(pygame.MOUSEBUTTONDOWN, pos=btn_stream_pos, button=1)
+        self.comm_state.handle_events([ev_click_stream])
+        self.assertEqual(self.comm_state.modal_mode, "stream_picker")
+
+        # Renderizar modal selector y verificar catálogo de títulos
+        self.comm_state.draw(screen)
+        self.assertGreaterEqual(len(self.comm_state.stream_game_picker_rects), 6)
+
+        # 2. Alternar resolución técnica (1080p -> 720p)
+        ev_toggle_1080 = pygame.event.Event(pygame.MOUSEBUTTONDOWN, pos=(460, 155), button=1)
+        self.comm_state.handle_events([ev_toggle_1080])
+        self.assertEqual(self.comm_state.stream_res_selected, "1080p")
+        self.assertEqual(self.comm_state.stream_fps_selected, 60)
+
+        ev_toggle_720 = pygame.event.Event(pygame.MOUSEBUTTONDOWN, pos=(360, 155), button=1)
+        self.comm_state.handle_events([ev_toggle_720])
+        self.assertEqual(self.comm_state.stream_res_selected, "720p")
+        self.assertEqual(self.comm_state.stream_fps_selected, 30)
+
+        # 3. Seleccionar primer juego para transmitir (Davinci-Fighter o Metal Slug)
+        card_r, game_item = self.comm_state.stream_game_picker_rects[0]
+        ev_pick_game = pygame.event.Event(pygame.MOUSEBUTTONDOWN, pos=card_r.center, button=1)
+        self.comm_state.handle_events([ev_pick_game])
+
+        # Verificar que el estado pasa a En Vivo (is_streaming = True)
+        self.assertTrue(self.comm_state.is_streaming)
+        self.assertIsNotNone(self.comm_state.active_stream_info)
+        self.assertEqual(self.comm_state.active_stream_info["title"], game_item["title"])
+        self.assertIsNone(self.comm_state.modal_mode)
+        self.assertIn("En vivo", self.comm_state.status_toast)
+
+        # 4. Renderizar vista en vivo con widget PiP y presencia
+        self.comm_state.draw(screen)
+
+        # 5. Clic en widget PiP flotante amplía a modo teatro / cine
+        pip_pos = self.comm_state.stream_pip_rect.center
+        ev_click_pip = pygame.event.Event(pygame.MOUSEBUTTONDOWN, pos=pip_pos, button=1)
+        self.comm_state.handle_events([ev_click_pip])
+        self.assertEqual(self.comm_state.modal_mode, "stream_theater")
+
+        # Renderizar modo teatro cinema
+        self.comm_state.draw(screen)
+
+        # 6. Detener transmisión desde el botón de controles de cine
+        btn_stop_cinema = (500, 590)
+        ev_stop_cinema = pygame.event.Event(pygame.MOUSEBUTTONDOWN, pos=btn_stop_cinema, button=1)
+        self.comm_state.handle_events([ev_stop_cinema])
+
+        self.assertFalse(self.comm_state.is_streaming)
+        self.assertIsNone(self.comm_state.active_stream_info)
+        self.assertIsNone(self.comm_state.modal_mode)
+        self.assertIn("finalizada", self.comm_state.status_toast)
+
 
 if __name__ == "__main__":
     unittest.main()

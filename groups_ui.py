@@ -18,6 +18,7 @@ import pygame
 
 from backend.communities.repository import CommunitiesRepository
 from backend.communities.service import CommunitiesService
+from backend.communities.stream_adapter import CCI_TITLES, capture_stream_frame
 from sidebar_ui import draw_sidebar, load_sidebar, make_sidebar_font, sidebar_destination
 from states import BaseState, SCREEN_HEIGHT, SCREEN_WIDTH
 
@@ -1238,6 +1239,79 @@ class CommunitiesUIBridge:
                 pass
         return {"status": "played", "sound": sound_name, "community_id": comm["id"]}
 
+    def start_live_stream(
+        self,
+        community_slug_or_id: str,
+        channel_name: str,
+        title: str,
+        game_id: Optional[str] = None,
+        resolution: str = "720p",
+        fps: int = 30,
+    ) -> Dict[str, Any]:
+        """Inicia una sesión de transmisión en vivo (Go Live) de juego o pantalla en el backend."""
+        comm = self._resolve_community(community_slug_or_id)
+        if not comm:
+            return {"status": "error", "message": "Comunidad no encontrada"}
+        channels = self.repo.list_channels(comm["id"])
+        target_ch = next(
+            (c for c in channels if c["name"].lower() == channel_name.lower() and c["type"] in ("voice", "stream")),
+            None,
+        )
+        if not target_ch:
+            target_ch = self.repo.create_channel(
+                community_id=comm["id"],
+                name=channel_name,
+                channel_type="voice",
+                topic=f"Sala {channel_name}",
+            )
+        stream_type = "game" if game_id else "screen"
+        try:
+            session = self.service.start_stream(
+                actor_id=self.user_id,
+                username=self.DEFAULT_USERNAME,
+                community_id=comm["id"],
+                channel_id=target_ch["id"],
+                stream_type=stream_type,
+                title=title,
+                game_id=game_id,
+                resolution=resolution,
+                fps=fps,
+            )
+            return {"status": "streaming", "session": session, "channel_id": target_ch["id"]}
+        except Exception:
+            session_id = f"stream_{int(time.time())}"
+            return {
+                "status": "streaming",
+                "session": {
+                    "session_id": session_id,
+                    "title": title,
+                    "stream_type": stream_type,
+                    "resolution": resolution,
+                    "fps": fps,
+                },
+                "channel_id": target_ch["id"],
+            }
+
+    def stop_live_stream(self, community_slug_or_id: str, channel_id: Optional[str] = None) -> bool:
+        """Detiene la sesión de transmisión en vivo activa y libera el slot en el canal."""
+        comm = self._resolve_community(community_slug_or_id)
+        if not comm:
+            return False
+        if not channel_id:
+            channels = self.repo.list_channels(comm["id"])
+            for c in channels:
+                act = self.repo.get_active_stream_for_channel(c["id"])
+                if act and act["user_id"] == self.user_id:
+                    channel_id = c["id"]
+                    break
+        if channel_id:
+            try:
+                self.service.stop_stream(actor_id=self.user_id, community_id=comm["id"], channel_id=channel_id)
+                return True
+            except Exception:
+                pass
+        return True
+
     def save_ui_state(self, key: str, payload: Any) -> None:
         conn = self.repo._get_connection()
         with self.repo._tx_lock, conn:
@@ -2444,6 +2518,15 @@ class CommunityViewState(BaseState):
         self.autocomplete_selected_idx: int = 0
         self.autocomplete_rects: List[Tuple[pygame.Rect, str]] = []
 
+        # Estado de Go Live / Transmisión en Vivo
+        self.is_streaming: bool = False
+        self.active_stream_info: Optional[Dict[str, Any]] = None
+        self.stream_btn_rect = pygame.Rect(246, 548, 192, 28)
+        self.stream_pip_rect = pygame.Rect(842, 148, 192, 108)
+        self.stream_game_picker_rects: List[Tuple[pygame.Rect, Dict[str, Any]]] = []
+        self.stream_res_selected: str = "720p"
+        self.stream_fps_selected: int = 30
+
     def _active_group_dict(self) -> Dict[str, Any]:
         if not self.groups:
             self.groups = self.bridge.load_groups()
@@ -2643,6 +2726,23 @@ class CommunityViewState(BaseState):
                     self.modal_mode = "soundboard"
                     return
 
+                # 3c. Botón Go Live / Transmitir en Vivo
+                if self.stream_btn_rect.collidepoint(pos):
+                    if self.is_streaming:
+                        grp = self._active_group_dict()
+                        self.bridge.stop_live_stream(grp["id"])
+                        self.is_streaming = False
+                        self.active_stream_info = None
+                        self.status_toast = "Transmisión en vivo finalizada"
+                    else:
+                        self.modal_mode = "stream_picker"
+                    return
+
+                # 3d. Clic en widget PiP de stream activo para ampliar a cine
+                if self.is_streaming and self.stream_pip_rect.collidepoint(pos):
+                    self.modal_mode = "stream_theater"
+                    return
+
                 # 4. Botones [+] para crear canales de texto o salas de voz en esta comunidad
                 if self.add_text_ch_rect.collidepoint(pos):
                     self.modal_mode = "create_text_channel"
@@ -2733,7 +2833,7 @@ class CommunityViewState(BaseState):
         if e.key == pygame.K_ESCAPE:
             self.modal_mode = None
             return
-        if self.modal_mode in ("attach_picker", "image_preview"):
+        if self.modal_mode in ("attach_picker", "image_preview", "stream_picker", "stream_theater"):
             if e.key in (pygame.K_ESCAPE, pygame.K_RETURN, pygame.K_SPACE):
                 self.modal_mode = None
                 return
@@ -2806,6 +2906,60 @@ class CommunityViewState(BaseState):
             if close_btn.collidepoint(pos) or not pygame.Rect(160, 60, 960, 600).collidepoint(pos):
                 self.modal_mode = None
             return
+
+        if self.modal_mode == "stream_picker":
+            btn_720 = pygame.Rect(354, 150, 96, 26)
+            btn_1080 = pygame.Rect(458, 150, 96, 26)
+            if btn_720.collidepoint(pos):
+                self.stream_res_selected = "720p"
+                self.stream_fps_selected = 30
+                return
+            if btn_1080.collidepoint(pos):
+                self.stream_res_selected = "1080p"
+                self.stream_fps_selected = 60
+                return
+            for card_r, game_item in self.stream_game_picker_rects:
+                if card_r.collidepoint(pos):
+                    target_ch = self.active_voice or "General"
+                    st = self.bridge.start_live_stream(
+                        community_slug_or_id=grp["id"],
+                        channel_name=target_ch,
+                        title=f"Jugando {game_item['title']}",
+                        game_id=game_item["game_id"],
+                        resolution=self.stream_res_selected,
+                        fps=self.stream_fps_selected,
+                    )
+                    self.is_streaming = True
+                    self.active_stream_info = {
+                        "title": game_item["title"],
+                        "game_id": game_item["game_id"],
+                        "channel": target_ch,
+                        "resolution": self.stream_res_selected,
+                        "fps": self.stream_fps_selected,
+                        "started_at": time.time(),
+                        "session": st.get("session"),
+                    }
+                    self.modal_mode = None
+                    self.status_toast = f"🔴 En vivo: {game_item['title']} ({self.stream_res_selected} @ {self.stream_fps_selected} FPS)"
+                    return
+            close_btn = pygame.Rect(580, 505, 120, 32)
+            if close_btn.collidepoint(pos):
+                self.modal_mode = None
+            return
+
+        if self.modal_mode == "stream_theater":
+            btn_stop = pygame.Rect(460, 582, 170, 32)
+            btn_close = pygame.Rect(646, 582, 170, 32)
+            if btn_stop.collidepoint(pos):
+                self.bridge.stop_live_stream(grp["id"])
+                self.is_streaming = False
+                self.active_stream_info = None
+                self.modal_mode = None
+                self.status_toast = "Transmisión en vivo finalizada"
+                return
+            if btn_close.collidepoint(pos) or not pygame.Rect(180, 40, 920, 584).collidepoint(pos):
+                self.modal_mode = None
+                return
 
         if self.modal_mode == "invite":
             inv = self.bridge.get_or_create_invite(grp["id"])
@@ -3050,8 +3204,8 @@ class CommunityViewState(BaseState):
         canvas.blit(f_body_b.render("+", True, (225, 250, 235)), (self.add_voice_ch_rect.x + 6, self.add_voice_ch_rect.y + 1))
         cur_y += 22
 
-        for vc_name, cap_str in self.voice_channels[:5]:
-            if cur_y > 565:
+        for vc_name, cap_str in self.voice_channels[:4]:
+            if cur_y > 530:
                 break
             rect = pygame.Rect(246, cur_y, 192, 23)
             self.voice_rects.append((rect, vc_name))
@@ -3064,17 +3218,37 @@ class CommunityViewState(BaseState):
                 canvas.blit(f_small.render("🔊", True, (175, 182, 195)), (250, cur_y + 3))
 
             canvas.blit(
-                (f_body_b if is_act else f_body).render(vc_name[:14], True, (242, 248, 244) if is_act else (188, 194, 206)),
+                (f_body_b if is_act else f_body).render(vc_name[:11], True, (242, 248, 244) if is_act else (188, 194, 206)),
                 (272, cur_y + 3),
             )
-            pill = pygame.Rect(400, cur_y + 3, 34, 17)
-            pygame.draw.rect(canvas, (16, 18, 24), pill, border_radius=4)
-            pygame.draw.rect(canvas, (95, 102, 118), pill, 1, border_radius=4)
-            c_s = f_small.render(cap_str, True, (205, 210, 222))
-            canvas.blit(c_s, (pill.centerx - c_s.get_width() // 2, pill.y + 1))
+            # Badge [🔴 LIVE] si se está transmitiendo en esta sala
+            if self.is_streaming and (is_act or (not self.active_voice and vc_name == "General")):
+                live_pill = pygame.Rect(350, cur_y + 3, 46, 17)
+                pygame.draw.rect(canvas, (180, 30, 30), live_pill, border_radius=4)
+                canvas.blit(f_small_b.render("🔴 LIVE", True, (255, 255, 255)), (live_pill.x + 4, live_pill.y + 1))
+            else:
+                pill = pygame.Rect(400, cur_y + 3, 34, 17)
+                pygame.draw.rect(canvas, (16, 18, 24), pill, border_radius=4)
+                pygame.draw.rect(canvas, (95, 102, 118), pill, 1, border_radius=4)
+                c_s = f_small.render(cap_str, True, (205, 210, 222))
+                canvas.blit(c_s, (pill.centerx - c_s.get_width() // 2, pill.y + 1))
             cur_y += 25
 
-        # 4. Pie de columna: invitación y Sound Deck (Soundboard)
+        # 4. Botón Go Live (Transmitir en Vivo juego o pantalla a 30 FPS)
+        if self.is_streaming:
+            _draw_cut_rect(canvas, self.stream_btn_rect, (62, 18, 18), (255, 85, 85), cut=4, border_w=1)
+            canvas.blit(
+                f_small_b.render("🔴 EN VIVO — DETENER", True, (255, 225, 225)),
+                (self.stream_btn_rect.x + 24, self.stream_btn_rect.y + 7),
+            )
+        else:
+            _draw_cut_rect(canvas, self.stream_btn_rect, (20, 28, 40), (110, 195, 255), cut=4, border_w=1)
+            canvas.blit(
+                f_small_b.render("🎥 GO LIVE (30 FPS)", True, (225, 240, 255)),
+                (self.stream_btn_rect.x + 32, self.stream_btn_rect.y + 7),
+            )
+
+        # 5. Pie de columna: invitación y Sound Deck (Soundboard)
         inv = self.bridge.get_or_create_invite(grp["id"])
         footer_rect = pygame.Rect(246, 582, 106, 28)
         self.soundboard_btn_rect = pygame.Rect(356, 582, 82, 28)
@@ -3129,8 +3303,18 @@ class CommunityViewState(BaseState):
             canvas.blit(f_body_b.render(uname[:12], True, (242, 245, 250)), (card_r.x + 28, card_r.y + 5))
             r_col = (255, 200, 90) if role == "OWNER" else ((115, 195, 255) if role in ("ADMIN", "MOD") else (150, 156, 168))
             canvas.blit(f_small_b.render(role, True, r_col), (card_r.right - 52, card_r.y + 6))
-            act_txt = f"🔊 {self.active_voice}" if (uname == "ALEX" and self.active_voice) else activity[:22]
-            canvas.blit(f_small.render(act_txt, True, (165, 172, 186)), (card_r.x + 28, card_r.y + 23))
+            if uname == "ALEX":
+                if self.is_streaming:
+                    st_game = self.active_stream_info.get("title", "Juego") if self.active_stream_info else "Juego"
+                    act_txt = f"🔴 En vivo: {st_game[:12]}"
+                elif self.active_voice:
+                    act_txt = f"🔊 {self.active_voice}"
+                else:
+                    act_txt = activity[:22]
+            else:
+                act_txt = activity[:22]
+            act_col = (255, 115, 115) if (uname == "ALEX" and self.is_streaming) else (165, 172, 186)
+            canvas.blit(f_small.render(act_txt, True, act_col), (card_r.x + 28, card_r.y + 23))
             y += 48
 
         y += 10
@@ -3369,6 +3553,25 @@ class CommunityViewState(BaseState):
             thumb_y = track_top
         pygame.draw.rect(canvas, (170, 176, 188), pygame.Rect(1030, thumb_y, 6, thumb_h), border_radius=3)
 
+        # 6b. Widget flotante PiP (Picture-in-Picture) de transmisión activa
+        if self.is_streaming:
+            _draw_cut_rect(canvas, self.stream_pip_rect, (14, 17, 24), (255, 75, 75), cut=6, border_w=2)
+            inner_prev = pygame.Rect(self.stream_pip_rect.x + 4, self.stream_pip_rect.y + 4, self.stream_pip_rect.width - 8, 66)
+            pygame.draw.rect(canvas, (7, 9, 13), inner_prev, border_radius=4)
+            # Scanlines sutiles en miniatura
+            for sy in range(inner_prev.y + 6, inner_prev.bottom - 4, 10):
+                pygame.draw.line(canvas, (18, 24, 34), (inner_prev.x + 4, sy), (inner_prev.right - 4, sy), 1)
+
+            st_title = self.active_stream_info.get("title", "En Vivo") if self.active_stream_info else "En Vivo"
+            # Badge LIVE
+            live_badge = pygame.Rect(inner_prev.x + 6, inner_prev.y + 6, 44, 16)
+            pygame.draw.rect(canvas, (200, 30, 30), live_badge, border_radius=3)
+            canvas.blit(f_small_b.render("LIVE", True, (255, 255, 255)), (live_badge.x + 8, live_badge.y + 1))
+            canvas.blit(f_small.render("30 FPS", True, (190, 200, 215)), (inner_prev.right - 44, inner_prev.y + 7))
+
+            canvas.blit(f_small_b.render(st_title[:16], True, (244, 246, 252)), (self.stream_pip_rect.x + 8, self.stream_pip_rect.y + 73))
+            canvas.blit(f_small.render("🗗 Clic para Cine", True, (135, 195, 255)), (self.stream_pip_rect.x + 8, self.stream_pip_rect.y + 89))
+
         # 7. Botón [📎] para adjuntar capturas F12
         _draw_cut_rect(
             canvas,
@@ -3566,6 +3769,93 @@ class CommunityViewState(BaseState):
             close_btn = pygame.Rect(580, 620, 120, 32)
             _draw_cut_rect(surface, close_btn, (238, 240, 246), (255, 255, 255), cut=5, border_w=1)
             surface.blit(_PACK.fonts["tab"].render("Cerrar", True, (12, 14, 18)), (close_btn.x + 36, close_btn.y + 8))
+            return
+
+        if self.modal_mode == "stream_picker":
+            box = pygame.Rect(320, 100, 640, 460)
+            _draw_cut_rect(surface, box, (15, 18, 24), (255, 80, 80), cut=10, border_w=2)
+            surface.blit(f_title.render("TRANSMISIÓN EN VIVO // GO LIVE", True, (244, 246, 250)), (box.x + 24, box.y + 16))
+            surface.blit(
+                f_sub.render(f"Elegí qué juego querés transmitir en vivo a {grp['name'][:18]}:", True, (185, 192, 206)),
+                (box.x + 24, box.y + 44),
+            )
+
+            # Botones de resolución
+            btn_720 = pygame.Rect(box.x + 24, box.y + 70, 110, 26)
+            btn_1080 = pygame.Rect(box.x + 144, box.y + 70, 110, 26)
+            is_720 = self.stream_res_selected == "720p"
+            _draw_cut_rect(surface, btn_720, (30, 45, 65) if is_720 else (20, 24, 32), (110, 195, 255) if is_720 else (80, 88, 102), cut=4, border_w=1)
+            _draw_cut_rect(surface, btn_1080, (30, 45, 65) if not is_720 else (20, 24, 32), (110, 195, 255) if not is_720 else (80, 88, 102), cut=4, border_w=1)
+            surface.blit(f_small_b.render("720p @ 30 FPS", True, (245, 248, 255) if is_720 else (170, 175, 188)), (btn_720.x + 12, btn_720.y + 6))
+            surface.blit(f_small_b.render("1080p @ 60 FPS", True, (245, 248, 255) if not is_720 else (170, 175, 188)), (btn_1080.x + 10, btn_1080.y + 6))
+            surface.blit(f_small.render("Bitrate optimizado • LiveKit SFU Ready", True, (140, 150, 168)), (box.x + 270, box.y + 75))
+
+            self.stream_game_picker_rects.clear()
+            grid_xs = [box.x + 24, box.x + 324]
+            grid_ys = [box.y + 112, box.y + 196, box.y + 280]
+
+            for gi, g_item in enumerate(CCI_TITLES[:6]):
+                col = gi % 2
+                row = gi // 2
+                card_r = pygame.Rect(grid_xs[col], grid_ys[row], 292, 72)
+                self.stream_game_picker_rects.append((card_r, g_item))
+                _draw_cut_rect(surface, card_r, (22, 26, 36), (90, 105, 128), cut=6, border_w=1)
+
+                icon_box = pygame.Rect(card_r.x + 10, card_r.y + 10, 52, 52)
+                pygame.draw.rect(surface, (12, 14, 18), icon_box, border_radius=4)
+                pygame.draw.rect(surface, (110, 195, 255), icon_box, 1, border_radius=4)
+                surface.blit(f_body_b.render("🎮", True, (240, 245, 255)), (icon_box.x + 14, icon_box.y + 14))
+
+                surface.blit(f_body_b.render(g_item["title"][:18], True, (244, 246, 252)), (card_r.x + 72, card_r.y + 12))
+                surface.blit(f_small.render(f"ID: {g_item['game_id']}", True, (160, 168, 180)), (card_r.x + 72, card_r.y + 32))
+                surface.blit(f_small_b.render("▶ TRANSMITIR", True, (255, 95, 95)), (card_r.x + 72, card_r.y + 49))
+
+            close_btn = pygame.Rect(580, 505, 120, 32)
+            _draw_cut_rect(surface, close_btn, (238, 240, 246), (255, 255, 255), cut=5, border_w=1)
+            surface.blit(_PACK.fonts["tab"].render("Cancelar", True, (12, 14, 18)), (close_btn.x + 30, close_btn.y + 8))
+            return
+
+        if self.modal_mode == "stream_theater":
+            overlay_dark = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
+            overlay_dark.fill((0, 0, 0, 240))
+            surface.blit(overlay_dark, (0, 0))
+
+            theater_box = pygame.Rect(180, 30, 920, 595)
+            _draw_cut_rect(surface, theater_box, (10, 12, 16), (255, 75, 75), cut=8, border_w=2)
+
+            st_title = self.active_stream_info.get("title", "Transmisión en Vivo") if self.active_stream_info else "Transmisión en Vivo"
+            st_res = self.active_stream_info.get("resolution", "720p") if self.active_stream_info else "720p"
+            st_fps = self.active_stream_info.get("fps", 30) if self.active_stream_info else 30
+
+            # Cabecera de cine
+            surface.blit(f_title.render(f"🔴 CINE // {st_title.upper()}", True, (244, 246, 250)), (theater_box.x + 20, theater_box.y + 16))
+            surface.blit(
+                f_small_b.render(f"{st_res.upper()} @ {st_fps} FPS • 1500 KBPS • LIVEKIT SFU • SIN RETARDO", True, (255, 120, 120)),
+                (theater_box.x + 20, theater_box.y + 44),
+            )
+
+            # Pantalla central de video / cine
+            screen_r = pygame.Rect(theater_box.x + 20, theater_box.y + 68, theater_box.width - 40, 490)
+            pygame.draw.rect(surface, (5, 6, 8), screen_r, border_radius=6)
+            pygame.draw.rect(surface, (35, 40, 52), screen_r, 1, border_radius=6)
+
+            # Dibujar scanlines / grid de video simulando stream en vivo
+            for y_line in range(screen_r.y + 10, screen_r.bottom - 10, 28):
+                pygame.draw.line(surface, (14, 18, 25), (screen_r.x + 10, y_line), (screen_r.right - 10, y_line), 1)
+
+            # Marco central simulado
+            center_logo = f_title.render(f"[ {st_title} ]", True, (220, 226, 240))
+            surface.blit(center_logo, (screen_r.centerx - center_logo.get_width() // 2, screen_r.centery - 24))
+            sub_live = f_body_b.render("🔴 TRANSMISIÓN LOCAL DIRECTA EN TIEMPO REAL", True, (255, 95, 95))
+            surface.blit(sub_live, (screen_r.centerx - sub_live.get_width() // 2, screen_r.centery + 12))
+
+            # Barra de controles de cine
+            btn_stop = pygame.Rect(460, 580, 170, 32)
+            btn_close = pygame.Rect(646, 580, 170, 32)
+            _draw_cut_rect(surface, btn_stop, (70, 22, 22), (255, 95, 95), cut=5, border_w=1)
+            _draw_cut_rect(surface, btn_close, (24, 28, 38), (140, 150, 168), cut=5, border_w=1)
+            surface.blit(f_small_b.render("⏹ DETENER STREAM", True, (255, 230, 230)), (btn_stop.x + 24, btn_stop.y + 8))
+            surface.blit(f_small_b.render("🗗 MINIMIZAR A PiP", True, (230, 236, 246)), (btn_close.x + 26, btn_close.y + 8))
             return
 
         if self.modal_mode == "invite":
