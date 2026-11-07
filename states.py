@@ -31,6 +31,7 @@ except Exception:
 
 import pygame
 import cv2
+from catalog_data import CATALOG
 from sidebar_ui import draw_sidebar, load_sidebar, make_sidebar_font, sidebar_destination
 
 if _old_stderr_fd is not None:
@@ -562,10 +563,12 @@ class MenuState(BaseState):
         self.scroll_pos = 0.0  # Posición suave interpolada
         self.anim_timer = 0.0
 
-        # Cargar el lienzo original vacío del carrusel de selección.
+        # Cargar el lienzo original vacío del carrusel de selección (NUEVAS PANTALLAS).
         self.bg_image = None
         self.offset_x = 0
-        bg_path = os.path.join("pantallas", "Menú futurista C.C.I System.png")
+        new_bg_path = os.path.join("NUEVAS PANTALLAS", "Interfaz futurista monocroma sin texto.png")
+        legacy_bg_path = os.path.join("pantallas", "Menú futurista C.C.I System.png")
+        bg_path = new_bg_path if os.path.exists(new_bg_path) else legacy_bg_path
 
         if os.path.exists(bg_path):
             try:
@@ -580,13 +583,36 @@ class MenuState(BaseState):
         self.sidebar_surface = load_sidebar()
         self.sidebar_font = make_sidebar_font()
         self.sidebar_extensions = []
-        if self.bg_image:
+        if self.bg_image and not os.path.exists(new_bg_path):
             for destination, source, solid_columns in (
                 (pygame.Rect(260, 35, 90, 75), pygame.Rect(350, 35, 90, 75), 90),
                 (pygame.Rect(260, 100, 150, 480), pygame.Rect(410, 100, 150, 480), 80),
             ):
                 patch = self._feather_background_patch(destination, source, solid_columns)
                 self.sidebar_extensions.append((destination.topleft, patch))
+
+        # Cargar recursos recortados de la nueva interfaz (NUEVAS PANTALLAS / assets_ui/menu)
+        menu_assets_dir = "assets_ui/menu"
+        self.ui_header_logo = None
+        self.ui_preview_frame = None
+        self.ui_bottom_bar = None
+        self.ui_nav_tabs = None
+        if os.path.exists(menu_assets_dir):
+            try:
+                p_logo = os.path.join(menu_assets_dir, "asset_k_01_238x78.png")
+                if os.path.exists(p_logo):
+                    self.ui_header_logo = pygame.image.load(p_logo).convert_alpha()
+                p_preview = os.path.join(menu_assets_dir, "asset_k_19_345x435.png")
+                if os.path.exists(p_preview):
+                    self.ui_preview_frame = pygame.image.load(p_preview).convert_alpha()
+                p_bar = os.path.join(menu_assets_dir, "asset_k_30_953x71.png")
+                if os.path.exists(p_bar):
+                    self.ui_bottom_bar = pygame.image.load(p_bar).convert_alpha()
+                p_tabs = os.path.join(menu_assets_dir, "asset_k_18_556x42.png")
+                if os.path.exists(p_tabs):
+                    self.ui_nav_tabs = pygame.image.load(p_tabs).convert_alpha()
+            except Exception as e:
+                print(f"[MenuState] Error cargando assets de menú: {e}")
 
         # Cargar recursos del carrusel: tarjetas limpias y marco resaltado
         self.card_surfs = {}
@@ -793,18 +819,69 @@ class MenuState(BaseState):
     def draw(self, screen):
         screen.fill((0, 0, 0))
 
-        # Fondo intacto; se sustituye únicamente la franja lateral.
+        # 1. Fondo base monocromo (NUEVAS PANTALLAS / Interfaz futurista monocroma sin texto.png)
         if self.bg_image:
             screen.blit(self.bg_image, (self.offset_x, 0))
         self._draw_common_sidebar(screen)
 
-        # 2. Renderizar el carrusel vertical original (5 tarjetas visibles).
-        num_options = len(self.options)
-        center_y = 327
-        center_x = 960
+        # 2. Header superior con logo sci-fi y pestañas recortadas de la hoja de assets
+        if self.ui_header_logo:
+            screen.blit(self.ui_header_logo, (270, 20))
+        if self.ui_nav_tabs:
+            screen.blit(self.ui_nav_tabs, (530, 36))
 
-        # Para cada distancia relativa de -2 a +2 alrededor de la posición de scroll
-        # Renderizamos de afuera hacia adentro para un correcto z-index
+        # 3. Panel izquierdo de detalles del juego seleccionado (Preview Card sci-fi)
+        num_options = len(self.options)
+        sel_idx = self.selected_index % num_options
+        curr_game = self.options[sel_idx]
+        cat_meta = next((c for c in CATALOG if c.get("id") == curr_game["key"] or c.get("game_key") == curr_game["key"]), {})
+
+        if self.ui_preview_frame:
+            frame_s = pygame.transform.smoothscale(self.ui_preview_frame, (310, 450))
+            screen.blit(frame_s, (280, 155))
+
+            # Miniatura de tarjeta del juego dentro del recuadro
+            g_key = curr_game["key"]
+            if g_key in self.card_surfs:
+                card_thumb = pygame.transform.smoothscale(self.card_surfs[g_key], (264, 66))
+                screen.blit(card_thumb, (303, 180))
+
+            # Título y metadatos
+            if self.font_large:
+                t_surf = self.font_large.render(curr_game["title"].upper()[:22], True, (245, 248, 255))
+                screen.blit(t_surf, (303, 268))
+
+            if self.font:
+                dev = cat_meta.get("developer", "C.C.I. System")
+                year = cat_meta.get("year", "2026")
+                genre = cat_meta.get("genre", "Arcade")
+                meta_txt = f"{year} • {dev}"
+                screen.blit(self.font.render(meta_txt, True, (160, 215, 255)), (303, 296))
+                screen.blit(self.font.render(f"Género: {genre}", True, (180, 190, 205)), (303, 318))
+
+                # Diálogo / sinopsis
+                dialog = curr_game.get("dialog", "")
+                words = dialog.split(" ")
+                lines = []
+                cur_line = ""
+                for w in words:
+                    test_l = (cur_line + " " + w).strip()
+                    if len(test_l) > 26:
+                        lines.append(cur_line)
+                        cur_line = w
+                    else:
+                        cur_line = test_l
+                if cur_line:
+                    lines.append(cur_line)
+
+                dy = 358
+                for line in lines[:5]:
+                    screen.blit(self.font.render(line, True, (215, 225, 240)), (303, dy))
+                    dy += 22
+
+        # 4. Renderizar el carrusel vertical cilíndrico (5 tarjetas visibles)
+        center_y = 350
+        center_x = 940
         indices_to_draw = [-2, 2, -1, 1, 0]
         
         for offset in indices_to_draw:
@@ -818,13 +895,8 @@ class MenuState(BaseState):
                 continue
 
             # Parámetros cilíndricos calibrados con la imagen de referencia:
-            # d: distancia respecto al centro seleccionado (-2.0 .. +2.0)
             d = rel_idx
-            
-            # Altura en Y con espaciado cilíndrico (~115px por slot)
             slot_y = center_y + d * 115.0
-            
-            # Curvatura cilíndrica en X: se desplaza a la derecha cuanto más lejos del centro
             slot_x = center_x + (d * d) * 14.5
             
             # Escala de la tarjeta: 100% en el centro, disminuye en los extremos (~85%)
@@ -854,6 +926,14 @@ class MenuState(BaseState):
                     border_surf = pygame.transform.smoothscale(self.selected_border, (bw, bh))
                     b_rect = border_surf.get_rect(center=(int(slot_x), int(slot_y)))
                     screen.blit(border_surf, b_rect)
+
+        # 5. Barra inferior de comandos recortada de la hoja de assets
+        if self.ui_bottom_bar:
+            bar_s = pygame.transform.smoothscale(self.ui_bottom_bar, (970, 52))
+            screen.blit(bar_s, (280, 650))
+            if self.font:
+                cmds_txt = "[A / ENTER] JUGAR   •   [W/S / ↑↓] ELEGIR JUEGO   •   [F12] CAPTURA   •   [ESC] SALIR"
+                screen.blit(self.font.render(cmds_txt, True, (240, 245, 255)), (340, 668))
 
 
 class ScreenPreviewState(BaseState):
