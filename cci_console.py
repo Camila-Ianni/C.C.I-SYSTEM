@@ -449,21 +449,15 @@ class CCIConsoleState:
         self.scaled_size = None
         self.font_cache = {}
         self.ui_sound = self._make_ui_sound()
-        self.profile_sidebar = None
-        self.profile_header = None
-        self.profile_top_right = None
-        self.profile_panel_left = None
-        self.profile_panel_right = None
-        self.profile_bottom_bar = None
+        self.profile_slot0_unsel = None
+        self.profile_name_bg = None
         self.profile_glow_frame = None
+        self.profile_thumb_girl_color = None
         if page == "profile":
             p_dir = ROOT / "assets_ui" / "profile"
-            self.profile_sidebar = self._load_img_asset(p_dir / "sidebar_full.png")
-            self.profile_header = self._load_img_asset(p_dir / "header_full.png")
-            self.profile_top_right = self._load_img_asset(p_dir / "top_right_full.png")
-            self.profile_panel_left = self._load_img_asset(p_dir / "panel_profile_clean.png")
-            self.profile_panel_right = self._load_img_asset(p_dir / "panel_saves_right.png")
-            self.profile_bottom_bar = self._load_img_asset(p_dir / "bottom_bar_full.png")
+            self.profile_slot0_unsel = self._load_img_asset(p_dir / "slot0_unselected_perfect.png")
+            self.profile_name_bg = self._load_img_asset(p_dir / "name_bg_clean.png")
+            self.profile_thumb_girl_color = self._load_img_asset(p_dir / "avatars" / "avatar_thumb_1.png")
             f_p = p_dir / "avatars" / "glow_frame_alpha.png"
             if f_p.exists():
                 try:
@@ -542,9 +536,9 @@ class CCIConsoleState:
             "settings": "Interfaz futurista de configuración C.C.I System.png",
         }
         if page == "profile":
-            p_new = ROOT / "NUEVAS PANTALLAS" / "Interfaz futurista de perfil vacía.png"
-            p_base = ROOT / "assets_ui" / "profile" / "base_profile.png"
-            path = p_new if p_new.exists() else (p_base if p_base.exists() else _find_file(fallback, ends[page]))
+            p_perfect = ROOT / "assets_ui" / "profile" / "target_perfect_1280.png"
+            p_target = ROOT / "NUEVAS PANTALLAS" / "Perfil de Usuario C.C.I System.png"
+            path = p_perfect if p_perfect.exists() else (p_target if p_target.exists() else _find_file(fallback, ends[page]))
         else:
             path = (
                 _find_file(fallback, ends[page])
@@ -1093,44 +1087,42 @@ class CCIConsoleState:
         return True
 
     def _draw_profile(self):
-        # 1. Paneles base completos y limpios (sin agujeros de diff ni artefactos de wireframe)
-        if self.profile_sidebar:
-            self.canvas.blit(self.profile_sidebar, (18, 25))
-        if self.profile_header:
-            self.canvas.blit(self.profile_header, (240, 42))
-        if self.profile_top_right:
-            self.canvas.blit(self.profile_top_right, (1020, 26))
-        if self.profile_panel_left:
-            self.canvas.blit(self.profile_panel_left, (232, 138))
-        if self.profile_panel_right:
-            self.canvas.blit(self.profile_panel_right, (805, 138))
-        if self.profile_bottom_bar:
-            self.canvas.blit(self.profile_bottom_bar, (18, 585))
-
         name = str(self.user_data.data.get("player_name", "ALEX"))[:16]
         avatar_index = int(self.user_data.data.get("avatar", 0)) % 6
 
-        # 2. Gran retrato de avatar en el marco principal (x=269, y=164)
-        p_big = ROOT / "assets_ui" / "profile" / "avatars" / f"avatar_big_{avatar_index}.png"
-        if p_big.exists():
-            try:
-                b_surf = pygame.image.load(str(p_big)).convert()
-                self.canvas.blit(b_surf, (269, 164))
-            except Exception:
-                pass
+        # 1. Gran retrato de avatar cuando no es Alex (Alex ya está integrado perfecto en la base)
+        if avatar_index != 0:
+            p_big = ROOT / "assets_ui" / "profile" / "avatars" / f"avatar_big_rounded_{avatar_index}.png"
+            if p_big.exists():
+                try:
+                    b_surf = pygame.image.load(str(p_big)).convert_alpha()
+                    self.canvas.blit(b_surf, (269, 164))
+                except Exception:
+                    pass
 
-        # 3. Marco brillante de selección sobre el thumbnail activo en el carrusel
-        if self.profile_glow_frame:
-            thumb_xs = [297, 375, 453, 531, 609, 687]
-            self.canvas.blit(self.profile_glow_frame, (thumb_xs[avatar_index], 446))
+            # 2. Deseleccionar slot 0 en carrusel (Alex pasa a miniatura gris con marco oscuro)
+            if self.profile_slot0_unsel:
+                self.canvas.blit(self.profile_slot0_unsel, (297, 446))
 
-        # 4. Entrada de texto / edición de nombre interactiva (render limpio sobre vidrio)
+            # 3. Si avatar es 1 (Girl), pintar miniatura a color
+            if avatar_index == 1 and self.profile_thumb_girl_color:
+                self.canvas.blit(self.profile_thumb_girl_color, (375, 446))
+
+            # 4. Marco brillante de selección en el avatar activo
+            if self.profile_glow_frame:
+                thumb_xs = [297, 375, 453, 531, 609, 687]
+                self.canvas.blit(self.profile_glow_frame, (thumb_xs[avatar_index], 446))
+
+        # 5. Nombre del jugador (ALEX ya está integrado perfecto; si es otro nombre se dibuja limpio sobre cristal)
         if self.text_input_active:
-            pygame.draw.rect(self.canvas, (18, 20, 24), (418, 178, 180, 42), border_radius=4)
-            pygame.draw.rect(self.canvas, (100, 110, 130), (418, 178, 180, 42), 1, border_radius=4)
+            if self.profile_name_bg:
+                self.canvas.blit(self.profile_name_bg, (418, 178))
+            pygame.draw.rect(self.canvas, (100, 110, 130), (418, 178, 180, 40), 1, border_radius=4)
             cursor = "|" if int(time.time() * 2) % 2 == 0 else ""
             self._text(self.name_buffer + cursor, 422, 182, 26, WHITE, True, 170)
-        else:
+        elif name != "ALEX":
+            if self.profile_name_bg:
+                self.canvas.blit(self.profile_name_bg, (418, 178))
             self._text(name, 422, 182, 26, WHITE, True, 170)
 
     def _achievement_game_for_row(self, item):
