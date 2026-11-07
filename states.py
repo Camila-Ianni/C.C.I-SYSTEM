@@ -514,21 +514,24 @@ class IntroAvatarState(VideoState):
 
 class MenuState(BaseState):
     """
-    ESTADO 'MENU': Nuevo diseño futurista monocromo / neón basado en 'Menú C.C.I_ Selecciona un juego.png'.
-    - Fondo base: 'Plantilla de interfaz neón oscura.png' escalado a 1280x720.
-    - Cabecera: Cápsula estilizada con 'C.C.I SYSTEM | Select Game'.
-    - Esquina superior derecha: Iconos de Notificaciones, Comunidad / Amigos y Avatar de Perfil con indicador online.
+    ESTADO 'MENU': Nuevo diseño futurista sci-fi con barra lateral integrado.
+    - Mockup objetivo: 'Interfaz C.C.I. Selección de juegos sci-fi.png'
+    - Fondo base limpio: 'Interfaz futurista oscura sin texto.png' (1280x720)
+    - Hoja de recursos: 'Hoja de estilo UI C.C.I System.png'
+    - Barra lateral de navegación (Sidebar):
+        * Logo 'C.C.I SYSTEM' superior izquierdo.
+        * Fila 'Inicio'
+        * Fila 'Juegos' (activa, marco brillante neón blanco)
+        * Fila 'Perfil'
+        * Fila 'Logros'
+        * Fila 'Configuración'
+        * Fila 'Apagar'
+    - Cabecera: Separador y texto 'Select Game' + Notificaciones, Comunidad y Avatar circular.
     - Carrusel horizontal interactivo:
-        * 5 ranuras horizontales con navegación circular suave (< >).
-        * Tarjeta 0 (activa / seleccionada): Borde blanco brillante, efecto cristal glossy, icono gamepad,
-          título del juego y opción 'INICIAR JUEGO'.
-        * Tarjetas 1..4: Ranuras esmeriladas sutiles que muestran los siguientes juegos del catálogo con icono y título.
-    - Panel inferior de asistencia:
-        * Retrato de avatar anime a la izquierda.
-        * Diálogo de asistencia: 'Selecciona un juego para comenzar.' con sinopsis del juego seleccionado y acento neón.
-        * Controles a la derecha: Navegar [A/D / ←→], Jugar [ENTER], Atrás [ESC].
-    - Interacción completa con teclado (Flechas, WASD, ENTER, ESPACIO, ESC, F2-F8), mouse (hover, clicks en flechas y tarjetas)
-      y gamepad.
+        * Tarjeta 0: Marco blanco brillante glossy con icono y juego activo ('DA VINCI FIGHTERS', 'METAL SLUG', etc.) y botón 'Iniciar Juego'.
+        * Tarjetas 1..4: Ranuras con los siguientes juegos del catálogo.
+        * Flechas '<' y '>' para navegación continua.
+    - Barra inferior: Avatar anime asistente, diálogo y controles gamepad/teclado.
     """
     def __init__(self, state_machine, on_game_launch=None):
         super().__init__(state_machine)
@@ -559,11 +562,11 @@ class MenuState(BaseState):
         self.last_mouse_time = 0.0
         self.anim_timer = 0.0
 
-        # Cargar lienzo de fondo original neón oscuro (NUEVAS PANTALLAS / Plantilla de interfaz neón oscura.png)
+        # Fondo base: 'Interfaz futurista oscura sin texto.png'
         self.bg_image = None
-        new_bg_path = os.path.join("NUEVAS PANTALLAS", "Plantilla de interfaz neón oscura.png")
-        legacy_bg_path = os.path.join("pantallas", "Menú futurista C.C.I System.png")
-        bg_path = new_bg_path if os.path.exists(new_bg_path) else legacy_bg_path
+        new_bg_path = os.path.join("NUEVAS PANTALLAS", "Interfaz futurista oscura sin texto.png")
+        fallback_bg_path = os.path.join("NUEVAS PANTALLAS", "Plantilla de interfaz neón oscura.png")
+        bg_path = new_bg_path if os.path.exists(new_bg_path) else fallback_bg_path
         if os.path.exists(bg_path):
             try:
                 loaded = pygame.image.load(bg_path).convert()
@@ -571,21 +574,20 @@ class MenuState(BaseState):
             except Exception as e:
                 print(f"[MenuState] Error cargando fondo {bg_path}: {e}")
 
-        # Cargar assets de UI futuristas recortados
+        # Cargar assets de UI futuristas
         assets_dir = "assets_ui/menu"
-        self.ui_header = self._load_asset(os.path.join(assets_dir, "header_perfect.png"), convert_alpha=False)
-        self.ui_top_right = self._load_asset(os.path.join(assets_dir, "top_right.png"), convert_alpha=True)
-        self.ui_nav_l = self._load_asset(os.path.join(assets_dir, "nav_left.png"), convert_alpha=True)
-        self.ui_nav_r = self._load_asset(os.path.join(assets_dir, "nav_right.png"), convert_alpha=True)
-        self.ui_avatar = self._load_asset(os.path.join(assets_dir, "bottom_avatar.png"), convert_alpha=True)
-        self.ui_dialog_slot = self._load_asset(os.path.join(assets_dir, "dialog_perfect.png"), convert_alpha=False)
-        self.ui_controls = self._load_asset(os.path.join(assets_dir, "bottom_controls.png"), convert_alpha=True)
-        self.ui_card0_content = self._load_asset(os.path.join(assets_dir, "card0_content.png"), convert_alpha=True)
-        self.ui_card_prox_content = self._load_asset(os.path.join(assets_dir, "card_prox_content.png"), convert_alpha=True)
+        self.ui_sidebar = self._load_asset(os.path.join(assets_dir, "sidebar_block.png"), convert_alpha=False)
+        self.ui_header = self._load_asset(os.path.join(assets_dir, "select_game_header.png"), convert_alpha=False)
+        self.ui_top_right = self._load_asset(os.path.join(assets_dir, "top_right.png"), convert_alpha=False)
+        self.ui_nav_l = self._load_asset(os.path.join(assets_dir, "nav_left.png"), convert_alpha=False)
+        self.ui_nav_r = self._load_asset(os.path.join(assets_dir, "nav_right.png"), convert_alpha=False)
+        self.ui_c0 = self._load_asset(os.path.join(assets_dir, "card0_content.png"), convert_alpha=False)
+        self.ui_cp = self._load_asset(os.path.join(assets_dir, "card_prox_content.png"), convert_alpha=False)
+        self.ui_avatar = self._load_asset(os.path.join(assets_dir, "bottom_avatar.png"), convert_alpha=False)
+        self.ui_dialog = self._load_asset(os.path.join(assets_dir, "bottom_dialog.png"), convert_alpha=False)
+        self.ui_controls = self._load_asset(os.path.join(assets_dir, "bottom_controls.png"), convert_alpha=False)
 
-        # Fuentes tipográficas
-        self.font_title = None
-        self.font_sub = None
+        # Fuentes
         self.font_card = None
         for font_candidate in [
             "./Zelda/extracted/15 - fixes audio/graphics/font/joystix.ttf",
@@ -595,16 +597,12 @@ class MenuState(BaseState):
         ]:
             if os.path.exists(font_candidate):
                 try:
-                    self.font_title = pygame.font.Font(font_candidate, 14)
-                    self.font_sub = pygame.font.Font(font_candidate, 11)
                     self.font_card = pygame.font.Font(font_candidate, 12)
                     break
                 except Exception:
                     pass
-        if self.font_title is None:
-            self.font_title = pygame.font.SysFont("helveticaneue", 16, bold=True)
-            self.font_sub = pygame.font.SysFont("helveticaneue", 13)
-            self.font_card = pygame.font.SysFont("helveticaneue", 13, bold=True)
+        if self.font_card is None:
+            self.font_card = pygame.font.SysFont("helveticaneue", 12, bold=True)
 
     def _load_asset(self, path, convert_alpha=True):
         if os.path.exists(path):
@@ -651,17 +649,47 @@ class MenuState(BaseState):
         for event in events:
             if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                 mx, my = event.pos
-                # Flechas de navegación
-                if 20 <= mx <= 72 and 295 <= my <= 360:
+
+                # 1. Navegación barra lateral (Sidebar)
+                if 18 <= mx <= 185:
+                    if 125 <= my <= 170:
+                        # Inicio
+                        self.selected_index = 0
+                        self._play_beep(650)
+                        return
+                    elif 175 <= my <= 230:
+                        # Juegos (ya activo)
+                        self._play_beep(700)
+                        return
+                    elif 235 <= my <= 285:
+                        # Perfil
+                        self.state_machine.change_state("PROFILE")
+                        return
+                    elif 290 <= my <= 340:
+                        # Logros
+                        self.state_machine.change_state("ACHIEVEMENTS")
+                        return
+                    elif 345 <= my <= 395:
+                        # Configuración
+                        self.state_machine.change_state("SETTINGS")
+                        return
+                    elif 400 <= my <= 455:
+                        # Apagar
+                        pygame.event.post(pygame.event.Event(pygame.QUIT))
+                        return
+
+                # 2. Flechas carrusel
+                if 205 <= mx <= 260 and 295 <= my <= 360:
                     self.selected_index = (self.selected_index - 1) % num_options
                     self._play_beep(650)
                     return
-                if 1200 <= mx <= 1260 and 295 <= my <= 360:
+                if 1215 <= mx <= 1270 and 295 <= my <= 360:
                     self.selected_index = (self.selected_index + 1) % num_options
                     self._play_beep(550)
                     return
-                # Tarjeta 0 (Activa / Jugar)
-                if 80 <= mx <= 340 and 180 <= my <= 490:
+
+                # 3. Tarjeta 0 (Activa / Iniciar Juego)
+                if 265 <= mx <= 475 and 185 <= my <= 485:
                     now = time.monotonic()
                     if self.last_mouse_index == 0 and now - self.last_mouse_time < 0.45:
                         self._play_beep(900)
@@ -671,8 +699,9 @@ class MenuState(BaseState):
                         self.last_mouse_time = now
                         self._play_beep(750)
                     return
-                # Tarjetas 1..4 (Seleccionar siguiente juego)
-                slots = [(355, 560), (570, 775), (785, 990), (1000, 1205)]
+
+                # 4. Tarjetas 1..4 (Próximos juegos)
+                slots = [(480, 665), (670, 855), (860, 1045), (1050, 1235)]
                 for i, (x1, x2) in enumerate(slots, start=1):
                     if x1 <= mx <= x2 and 200 <= my <= 470:
                         target_idx = (self.selected_index + i) % num_options
@@ -681,14 +710,15 @@ class MenuState(BaseState):
                         self.last_mouse_time = time.monotonic()
                         self._play_beep(600)
                         return
-                # Iconos cabecera derecha
-                if 995 <= mx <= 1045 and 30 <= my <= 85:
+
+                # 5. Iconos superiores derechos
+                if 1010 <= mx <= 1060 and 25 <= my <= 85:
                     self.state_machine.change_state("GROUPS")
                     return
-                if 1046 <= mx <= 1095 and 30 <= my <= 85:
+                if 1061 <= mx <= 1125 and 25 <= my <= 85:
                     self.state_machine.change_state("COMMUNITY")
                     return
-                if 1096 <= mx <= 1180 and 30 <= my <= 85:
+                if 1126 <= mx <= 1230 and 25 <= my <= 85:
                     self.state_machine.change_state("PROFILE")
                     return
 
@@ -730,60 +760,61 @@ class MenuState(BaseState):
     def draw(self, screen):
         screen.fill((0, 0, 0))
 
-        # 1. Fondo base de la plantilla neón oscura
+        # 1. Fondo base de la plantilla oscura sin texto
         if self.bg_image:
             screen.blit(self.bg_image, (0, 0))
 
-        # 2. Cápsula de cabecera: C.C.I SYSTEM | Select Game
+        # 2. Barra lateral completa (Logo C.C.I SYSTEM + Inicio, Juegos, Perfil, Logros, Config, Apagar)
+        if self.ui_sidebar:
+            screen.blit(self.ui_sidebar, (18, 25))
+
+        # 3. Cabecera superior 'Select Game'
         if self.ui_header:
-            screen.blit(self.ui_header, (46, 29))
+            screen.blit(self.ui_header, (240, 42))
 
-        # 3. Iconos superiores derechos (campana notificaciones, comunidad, avatar online)
+        # 4. Iconos superiores derechos (campana, comunidad, avatar online)
         if self.ui_top_right:
-            screen.blit(self.ui_top_right, (1010, 32))
+            screen.blit(self.ui_top_right, (1020, 26))
 
-        # 4. Flechas de navegación izquierda y derecha
+        # 5. Flechas de navegación izquierda y derecha
         if self.ui_nav_l:
-            screen.blit(self.ui_nav_l, (24, 306))
+            screen.blit(self.ui_nav_l, (218, 306))
         if self.ui_nav_r:
-            screen.blit(self.ui_nav_r, (1208, 306))
+            screen.blit(self.ui_nav_r, (1228, 306))
 
-        # 5. Panel inferior de asistencia (avatar anime y slot de diálogo)
+        # 6. Panel inferior de asistencia (avatar anime, slot de diálogo y controles)
         if self.ui_avatar:
-            screen.blit(self.ui_avatar, (58, 536))
-        if self.ui_dialog_slot:
-            screen.blit(self.ui_dialog_slot, (191, 531))
+            screen.blit(self.ui_avatar, (222, 538))
+        if self.ui_dialog:
+            screen.blit(self.ui_dialog, (340, 535))
         if self.ui_controls:
-            screen.blit(self.ui_controls, (870, 620))
+            screen.blit(self.ui_controls, (880, 600))
 
         num_options = len(self.options)
         curr_game = self.options[self.selected_index % num_options]
 
-        # 6. Tarjeta 0 (Activa / Seleccionada con marco de cristal y brillo)
-        if self.ui_card0_content:
-            screen.blit(self.ui_card0_content, (130, 275))
+        # 7. Tarjeta 0 (Activa / Seleccionada con marco de cristal y brillo neón)
+        if self.ui_c0:
+            screen.blit(self.ui_c0, (270, 275))
         if self.font_card:
             t_title = self.font_card.render(curr_game["title"].upper(), True, (255, 255, 255))
-            screen.blit(t_title, (210 - t_title.get_width() // 2, 385))
+            screen.blit(t_title, (368 - t_title.get_width() // 2, 396))
 
-        # 7. Tarjetas 1..4 (Próximos juegos en catálogo)
+        # 8. Tarjetas 1..4 (Próximos juegos en catálogo)
         slots = [
-            (359, 207, 194, 255),
-            (575, 207, 194, 255),
-            (789, 207, 194, 255),
-            (1004, 207, 194, 255),
+            (486, 207, 186, 255),
+            (674, 207, 186, 255),
+            (862, 207, 186, 255),
+            (1050, 207, 186, 255),
         ]
         for i, (sx, sy, sw, sh) in enumerate(slots, start=1):
             next_idx = (self.selected_index + i) % num_options
             next_game = self.options[next_idx]
-            if self.ui_card_prox_content:
-                screen.blit(self.ui_card_prox_content, (sx + (sw - self.ui_card_prox_content.get_width()) // 2, sy + 70))
+            if self.ui_cp:
+                screen.blit(self.ui_cp, (sx + (sw - self.ui_cp.get_width()) // 2, 280))
             if self.font_card:
                 next_t = self.font_card.render(next_game["title"].upper(), True, (160, 165, 175))
                 screen.blit(next_t, (sx + (sw - next_t.get_width()) // 2, sy + sh - 45))
-
-        # 8. El slot de diálogo (dialog_perfect.png) contiene el mensaje oficial de bienvenida:
-        # 'Selecciona un juego para comenzar.' con estética idéntica al mockup.
 
 
 class ScreenPreviewState(BaseState):
