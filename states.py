@@ -1781,6 +1781,16 @@ class PlayingState(BaseState):
         pygame.event.clear()
         screen.fill((0, 0, 0))
         pygame.display.flip()
+        try:
+            from backend.communities.repository import CommunitiesRepository
+            from backend.communities.service import CommunitiesService
+            from cci_users import UserManager
+            service = CommunitiesService(CommunitiesRepository.get_instance())
+            active_u = getattr(UserManager.get_instance(), "active_user", None)
+            uid = getattr(active_u, "user_id", "u_alex") or "u_alex"
+            service.set_user_presence(uid, status="online", custom_status="En el Menú")
+        except Exception:
+            pass
         self.state_machine.change_state("MENU")
 
 

@@ -8,6 +8,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 import json
+import math
 import os
 from pathlib import Path
 import time
@@ -253,6 +254,57 @@ DEFAULT_DMS: List[DirectChatContact] = [
         ],
     ),
 ]
+
+
+# ---------------------------------------------------------------------------
+# Presets y sintetizador de Soundboard / Sound Deck (Efectos de audio estilo Discord)
+# ---------------------------------------------------------------------------
+
+SOUNDBOARD_PRESETS: List[Dict[str, str]] = [
+    {"id": "snd_gg", "name": "GG", "icon": "🟢", "desc": "Triunfo retro (C-E-G)", "key": "1"},
+    {"id": "snd_airhorn", "name": "AIRHORN", "icon": "📢", "desc": "Bocina MLG", "key": "2"},
+    {"id": "snd_ko", "name": "K.O.", "icon": "💥", "desc": "Impacto fatal", "key": "3"},
+    {"id": "snd_victory", "name": "VICTORY", "icon": "🏆", "desc": "Fanfarria estelar", "key": "4"},
+    {"id": "snd_levelup", "name": "LEVEL UP", "icon": "⚡", "desc": "Subida de nivel", "key": "5"},
+    {"id": "snd_buzzer", "name": "BUZZER", "icon": "🛑", "desc": "Alerta / Error", "key": "6"},
+]
+
+
+def play_soundboard_tone(sound_name: str) -> None:
+    """Sintetiza efectos de audio para la soundboard sin requerir archivos WAV/MP3 externos."""
+    try:
+        if not pygame.mixer.get_init():
+            return
+        sample_rate = 22050
+        buf = bytearray()
+        s_norm = sound_name.upper().strip()
+
+        if s_norm in ("GG", "SND_GG"):
+            tones = [(523.25, 0.08), (659.25, 0.08), (783.99, 0.22)]
+        elif s_norm in ("AIRHORN", "SND_AIRHORN"):
+            tones = [(587.33, 0.06), (587.33, 0.06), (587.33, 0.06), (880.00, 0.22)]
+        elif s_norm in ("K.O.", "KO", "SND_KO"):
+            tones = [(440.00, 0.09), (329.63, 0.09), (220.00, 0.11), (110.00, 0.25)]
+        elif s_norm in ("VICTORY", "SND_VICTORY"):
+            tones = [(440.00, 0.08), (554.37, 0.08), (659.25, 0.08), (880.00, 0.24)]
+        elif s_norm in ("LEVEL UP", "LEVELUP", "SND_LEVELUP"):
+            tones = [(330.00, 0.07), (392.00, 0.07), (523.25, 0.07), (659.25, 0.18)]
+        else:
+            tones = [(160.00, 0.12), (130.00, 0.18)]
+
+        for freq, dur in tones:
+            n_samples = int(sample_rate * dur)
+            for i in range(n_samples):
+                t = float(i) / sample_rate
+                env = 1.0 - (i / n_samples) * 0.4
+                val = int(127 * env) if math.sin(2.0 * math.pi * freq * t) > 0 else int(-128 * env)
+                buf.append(val & 0xFF)
+
+        sound = pygame.mixer.Sound(buffer=bytes(buf))
+        sound.set_volume(0.35)
+        sound.play()
+    except Exception:
+        pass
 
 
 # ---------------------------------------------------------------------------
@@ -994,18 +1046,28 @@ class CommunitiesUIBridge:
 
         slug = comm["slug"]
         tpl = COMMUNITY_CHANNEL_TEMPLATES.get(slug)
+        raw_list: List[Tuple[str, str, str, str]] = []
         if tpl and "members" in tpl:
-            return list(tpl["members"])
+            raw_list = list(tpl["members"])
+        else:
+            db_members = self.repo.list_members(comm["id"])
+            for m in db_members:
+                uid = m["user_id"]
+                uname = "ALEX" if uid == self.user_id else (m.get("nickname") or str(uid).replace("u_", "").upper())
+                role_label = "OWNER" if uid == comm.get("owner_id") else "MIEMBRO"
+                raw_list.append((uname, "En línea", f"En {comm['name'].upper()}", role_label))
+            if not raw_list:
+                raw_list.append(("ALEX", "En línea", f"Fundador de {comm['name'].upper()}", "OWNER"))
 
-        db_members = self.repo.list_members(comm["id"])
+        # Inyectar presencia real del usuario activo desde la base de datos
+        presence = self.repo.get_presence(self.user_id)
+        custom_act = presence.get("custom_status") if presence else None
         out: List[Tuple[str, str, str, str]] = []
-        for m in db_members:
-            uid = m["user_id"]
-            uname = "ALEX" if uid == self.user_id else (m.get("nickname") or str(uid).replace("u_", "").upper())
-            role_label = "OWNER" if uid == comm.get("owner_id") else "MIEMBRO"
-            out.append((uname, "En línea", f"En {comm['name'].upper()}", role_label))
-        if not out:
-            out.append(("ALEX", "En línea", f"Fundador de {comm['name'].upper()}", "OWNER"))
+        for uname, status, activity, role in raw_list:
+            if uname.upper() in ("ALEX", self.DEFAULT_USERNAME) and custom_act:
+                out.append((uname, status, custom_act, role))
+            else:
+                out.append((uname, status, activity, role))
         return out
 
     def load_channel_messages(
@@ -1099,6 +1161,30 @@ class CommunitiesUIBridge:
             )
         self.service.leave_voice_channel(comm["id"], target_ch["id"], self.user_id)
         return None
+
+    def trigger_soundboard(
+        self,
+        community_slug_or_id: str,
+        sound_name: str,
+    ) -> Dict[str, Any]:
+        """Dispara un sonido en la sala de voz de la comunidad y lo audita en backend."""
+        comm = self._resolve_community(community_slug_or_id)
+        if not comm:
+            return {"status": "ok", "sound": sound_name}
+        channels = self.repo.list_channels(comm["id"])
+        voice_ch = next((c for c in channels if c.get("type") in ("voice", "stream")), None)
+        ch_id = voice_ch["id"] if voice_ch else f"ch_v_{comm['id']}"
+        sound_id = f"snd_{sound_name.lower().replace(' ', '_').replace('.', '')}"
+        try:
+            self.service.play_sound(self.user_id, sound_id, ch_id)
+        except Exception:
+            try:
+                import uuid
+                play_id = str(uuid.uuid4())
+                self.repo.record_sound_play(play_id, sound_id, self.user_id, ch_id)
+            except Exception:
+                pass
+        return {"status": "played", "sound": sound_name, "community_id": comm["id"]}
 
     def save_ui_state(self, key: str, payload: Any) -> None:
         conn = self.repo._get_connection()
@@ -2047,6 +2133,7 @@ class GroupsHubState(BaseState):
 
         f_title = _PACK.fonts["title"]
         f_body = _PACK.fonts["body"]
+        f_body_b = _PACK.fonts["body_bold"]
         f_sub = _PACK.fonts["card_sub"]
         f_small = _PACK.fonts["small"]
         f_small_b = _PACK.fonts["small_bold"]
@@ -2274,12 +2361,15 @@ class CommunityViewState(BaseState):
         self.modal_topic_input: str = ""
         self.modal_field_idx: int = 0
         self.status_toast: str = ""
+        self.soundboard_open: bool = False
 
         # Rects interactivos sobre la Base Limpia 4 (1280x720)
         self.server_icon_rects: List[Tuple[pygame.Rect, int]] = []
         self.channel_rects: List[Tuple[pygame.Rect, str]] = []
         self.delete_channel_rects: List[Tuple[pygame.Rect, str]] = []
         self.voice_rects: List[Tuple[pygame.Rect, str]] = []
+        self.soundboard_btn_rect = pygame.Rect(352, 582, 86, 28)
+        self.sound_pad_rects: List[Tuple[pygame.Rect, str]] = []
         self.add_text_ch_rect = pygame.Rect(416, 260, 22, 22)
         self.add_voice_ch_rect = pygame.Rect(416, 420, 22, 22)
         self.invite_btn_rect = pygame.Rect(916, 92, 82, 28)
@@ -2463,6 +2553,11 @@ class CommunityViewState(BaseState):
                     self.modal_mode = "invite"
                     return
 
+                # 3b. Botón Soundboard / Sound Deck
+                if self.soundboard_btn_rect.collidepoint(pos):
+                    self.modal_mode = "soundboard"
+                    return
+
                 # 4. Botones [+] para crear canales de texto o salas de voz en esta comunidad
                 if self.add_text_ch_rect.collidepoint(pos):
                     self.modal_mode = "create_text_channel"
@@ -2527,6 +2622,15 @@ class CommunityViewState(BaseState):
         if e.key == pygame.K_ESCAPE:
             self.modal_mode = None
             return
+        if self.modal_mode == "soundboard":
+            if e.key in (pygame.K_RETURN, pygame.K_SPACE):
+                self.modal_mode = None
+                return
+            if e.key in (pygame.K_1, pygame.K_2, pygame.K_3, pygame.K_4, pygame.K_5, pygame.K_6):
+                idx = e.key - pygame.K_1
+                if 0 <= idx < len(SOUNDBOARD_PRESETS):
+                    self._fire_soundboard(SOUNDBOARD_PRESETS[idx]["name"])
+            return
         if self.modal_mode == "invite":
             if e.key == pygame.K_RETURN:
                 self.modal_mode = None
@@ -2560,6 +2664,16 @@ class CommunityViewState(BaseState):
 
     def _handle_modal_click(self, pos: Tuple[int, int]) -> None:
         grp = self._active_group_dict()
+        if self.modal_mode == "soundboard":
+            for pad_r, s_name in self.sound_pad_rects:
+                if pad_r.collidepoint(pos):
+                    self._fire_soundboard(s_name)
+                    return
+            close_rect = pygame.Rect(580, 470, 120, 34)
+            if close_rect.collidepoint(pos):
+                self.modal_mode = None
+            return
+
         if self.modal_mode == "invite":
             inv = self.bridge.get_or_create_invite(grp["id"])
             btn_copy_code = pygame.Rect(420, 310, 130, 32)
@@ -2633,6 +2747,13 @@ class CommunityViewState(BaseState):
             self._sync_active_community_data()
             self.status_toast = f"Servidor '{new_grp['name']}' creado (Código: {new_grp['invite_code']})"
         self.modal_mode = None
+
+    def _fire_soundboard(self, s_name: str) -> None:
+        """Reproduce un tono sintetizado y registra la emisión del efecto en el backend."""
+        play_soundboard_tone(s_name)
+        grp = self._active_group_dict()
+        self.bridge.trigger_soundboard(grp["id"], s_name)
+        self.status_toast = f"Sonido '{s_name}' reproducido en {grp['name']}"
 
     def _to_logical_pos(self, pos: Tuple[int, int]) -> Tuple[int, int]:
         surf = pygame.display.get_surface()
@@ -2767,13 +2888,19 @@ class CommunityViewState(BaseState):
             canvas.blit(c_s, (pill.centerx - c_s.get_width() // 2, pill.y + 1))
             cur_y += 25
 
-        # 4. Pie de columna con código de invitación rápido del grupo
+        # 4. Pie de columna: invitación y Sound Deck (Soundboard)
         inv = self.bridge.get_or_create_invite(grp["id"])
-        footer_rect = pygame.Rect(246, 582, 192, 28)
+        footer_rect = pygame.Rect(246, 582, 106, 28)
+        self.soundboard_btn_rect = pygame.Rect(356, 582, 82, 28)
         _draw_cut_rect(canvas, footer_rect, (14, 17, 22), (85, 92, 108), cut=4, border_w=1)
         canvas.blit(
-            f_small_b.render(f"🔗 Código: {inv['code'][:8]}", True, (185, 210, 245)),
-            (footer_rect.x + 10, footer_rect.y + 7),
+            f_small_b.render(f"🔗 {inv['code'][:6]}", True, (185, 210, 245)),
+            (footer_rect.x + 8, footer_rect.y + 7),
+        )
+        _draw_cut_rect(canvas, self.soundboard_btn_rect, (24, 28, 38), (110, 195, 255), cut=4, border_w=1)
+        canvas.blit(
+            f_small_b.render("🔊 SOUNDS", True, (240, 245, 255)),
+            (self.soundboard_btn_rect.x + 7, self.soundboard_btn_rect.y + 7),
         )
 
     def _draw_dynamic_members_sidebar(
@@ -2786,8 +2913,10 @@ class CommunityViewState(BaseState):
         f_small_b = _PACK.fonts["small_bold"]
         f_body_b = _PACK.fonts["body_bold"]
 
-        # Si es Night Raid y no cambió de grupo, podemos usar sus sprites o renderizar dinámico para todos los demás
-        if grp["id"].replace("-", "_") == "night_raid":
+        # Si es Night Raid y no hay actividad en juego ni sala de voz conectada, usar sprites base
+        presence = self.bridge.repo.get_presence(self.bridge.user_id)
+        has_custom = presence and presence.get("custom_status") and presence.get("custom_status") != "En el Menú"
+        if grp["id"].replace("-", "_") == "night_raid" and not has_custom and not self.active_voice:
             mem_on = _PACK.sprites.get("nr_members_online.png")
             mem_aw = _PACK.sprites.get("nr_members_away.png")
             if mem_on is not None:
@@ -3052,9 +3181,47 @@ class CommunityViewState(BaseState):
 
         f_title = _PACK.fonts["title"]
         f_body = _PACK.fonts["body"]
+        f_body_b = _PACK.fonts["body_bold"]
         f_sub = _PACK.fonts["card_sub"]
         f_small = _PACK.fonts["small"]
         f_small_b = _PACK.fonts["small_bold"]
+
+        if self.modal_mode == "soundboard":
+            box = pygame.Rect(360, 160, 560, 360)
+            _draw_cut_rect(surface, box, (15, 17, 23), (110, 195, 255), cut=10, border_w=2)
+            surface.blit(f_title.render("SOUND DECK // SOUNDBOARD", True, (244, 246, 250)), (box.x + 24, box.y + 18))
+            surface.blit(
+                f_sub.render(f"Efectos en vivo para salas de voz (Clic en un pad o presiona 1..6):", True, (185, 192, 206)),
+                (box.x + 24, box.y + 46),
+            )
+
+            self.sound_pad_rects.clear()
+            grid_xs = [box.x + 24, box.x + 196, box.x + 368]
+            grid_ys = [box.y + 76, box.y + 168]
+
+            for i, item in enumerate(SOUNDBOARD_PRESETS):
+                col = i % 3
+                row = i // 3
+                pad_r = pygame.Rect(grid_xs[col], grid_ys[row], 162, 80)
+                self.sound_pad_rects.append((pad_r, item["name"]))
+
+                _draw_cut_rect(surface, pad_r, (22, 26, 36), (90, 100, 120), cut=6, border_w=1)
+
+                badge_r = pygame.Rect(pad_r.right - 26, pad_r.y + 6, 20, 18)
+                _draw_cut_rect(surface, badge_r, (12, 14, 18), (140, 146, 160), cut=3, border_w=1)
+                surface.blit(f_small_b.render(item["key"], True, (230, 235, 245)), (badge_r.x + 6, badge_r.y + 2))
+
+                surface.blit(f_body.render(item["icon"], True, (245, 247, 252)), (pad_r.x + 12, pad_r.y + 12))
+                surface.blit(f_body_b.render(item["name"], True, (245, 247, 252)), (pad_r.x + 38, pad_r.y + 12))
+                surface.blit(f_small.render(item["desc"][:22], True, (165, 172, 186)), (pad_r.x + 12, pad_r.y + 44))
+
+            if self.status_toast:
+                surface.blit(f_small_b.render(f"✓ {self.status_toast}", True, (115, 235, 165)), (box.x + 24, box.y + 264))
+
+            close_rect = pygame.Rect(580, 470, 120, 34)
+            _draw_cut_rect(surface, close_rect, (238, 240, 246), (255, 255, 255), cut=5, border_w=1)
+            surface.blit(_PACK.fonts["tab"].render("Cerrar", True, (12, 14, 18)), (close_rect.x + 36, close_rect.y + 9))
+            return
 
         if self.modal_mode == "invite":
             box = pygame.Rect(390, 190, 500, 295)

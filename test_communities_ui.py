@@ -184,6 +184,54 @@ class TestCommunitiesUI(unittest.TestCase):
         self.hub_state._confirm_modal()
         self.assertEqual(self.hub_state.groups[0]["name"], "CLAN CYBERPUNK")
 
+    def test_08_rich_presence_and_soundboard_deck(self):
+        """Verifica Rich Presence ('Jugando a...') en lista de miembros y el Sound Deck modal e interactivo."""
+        screen = pygame.display.get_surface()
+        self.sm.change_state("COMMUNITY", community_id="night_raid")
+
+        # 1. Rich Presence: sincronizar actividad de juego activa
+        uid = self.comm_state.bridge.user_id
+        self.comm_state.bridge.service.set_user_presence(
+            user_id=uid,
+            status="online",
+            custom_status="Jugando: METAL SLUG",
+        )
+
+        members = self.comm_state.bridge.list_community_members_display("night_raid")
+        alex_member = next((m for m in members if m[0] == "ALEX"), None)
+        self.assertIsNotNone(alex_member)
+        self.assertEqual(alex_member[2], "Jugando: METAL SLUG")
+
+        # Renderizar vista con la presencia viva
+        self.comm_state.draw(screen)
+
+        # 2. Abrir Sound Deck mediante clic en botón [🔊 SOUNDS]
+        btn_pos = (self.comm_state.soundboard_btn_rect.centerx, self.comm_state.soundboard_btn_rect.centery)
+        ev_click_btn = pygame.event.Event(pygame.MOUSEBUTTONDOWN, pos=btn_pos, button=1)
+        self.comm_state.handle_events([ev_click_btn])
+        self.assertEqual(self.comm_state.modal_mode, "soundboard")
+
+        # Dibujar modal de soundboard para registrar rects interactivos de los pads
+        self.comm_state.draw(screen)
+        self.assertEqual(len(self.comm_state.sound_pad_rects), 6)
+
+        # 3. Disparar sonido con clic en el pad de GG
+        pad_gg_rect, pad_gg_name = self.comm_state.sound_pad_rects[0]
+        self.assertEqual(pad_gg_name, "GG")
+        ev_click_pad = pygame.event.Event(pygame.MOUSEBUTTONDOWN, pos=pad_gg_rect.center, button=1)
+        self.comm_state.handle_events([ev_click_pad])
+        self.assertIn("GG", self.comm_state.status_toast)
+
+        # 4. Disparar sonido mediante atajo numérico de teclado (Tecla 2: AIRHORN)
+        ev_key_2 = pygame.event.Event(pygame.KEYDOWN, key=pygame.K_2, unicode="2")
+        self.comm_state.handle_events([ev_key_2])
+        self.assertIn("AIRHORN", self.comm_state.status_toast)
+
+        # 5. Cerrar el modal con ESC
+        ev_esc = pygame.event.Event(pygame.KEYDOWN, key=pygame.K_ESCAPE)
+        self.comm_state.handle_events([ev_esc])
+        self.assertIsNone(self.comm_state.modal_mode)
+
 
 if __name__ == "__main__":
     unittest.main()

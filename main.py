@@ -104,6 +104,14 @@ def main():
         game = next((item for item in CATALOG if item["id"] == game_key), None)
         if game:
             user_manager.active_user.record_launch(game, elapsed)
+            try:
+                from backend.communities.repository import CommunitiesRepository
+                from backend.communities.service import CommunitiesService
+                service = CommunitiesService(CommunitiesRepository.get_instance())
+                uid = getattr(user_manager.active_user, "user_id", "u_alex") or "u_alex"
+                service.set_user_presence(uid, status="online", custom_status=f"Jugando: {game.get('title', game_key)}")
+            except Exception:
+                pass
 
     state_machine.register_state("MENU", MenuState(state_machine, on_game_launch=record_game_launch))
     state_machine.register_state("LIBRARY", CCIConsoleState(state_machine, "library", user_data, apply_display))
