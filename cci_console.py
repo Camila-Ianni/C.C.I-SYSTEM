@@ -449,6 +449,14 @@ class CCIConsoleState:
         self.scaled_size = None
         self.font_cache = {}
         self.ui_sound = self._make_ui_sound()
+        self.profile_overlay = None
+        if page == "profile":
+            p_ov = ROOT / "assets_ui" / "profile" / "profile_diff_overlay.png"
+            if p_ov.exists():
+                try:
+                    self.profile_overlay = pygame.image.load(str(p_ov)).convert_alpha()
+                except Exception:
+                    pass
         self.avatar_surfaces = self._load_avatars() if page == "profile" else []
         self.profile_icons = self._load_profile_icons() if page == "profile" else {}
         self.achievement_sprites = self._load_achievement_sprites() if page == "achievements" else {}
@@ -511,11 +519,16 @@ class CCIConsoleState:
             "achievements": "Interfaz futurista de logros vacía.png",
             "settings": "Interfaz futurista de configuración C.C.I System.png",
         }
-        path = (
-            _find_file(fallback, ends[page])
-            if page in ("achievements", "profile")
-            else _find_file(folder, prefixes[page]) or _find_file(fallback, ends[page])
-        )
+        if page == "profile":
+            p_new = ROOT / "NUEVAS PANTALLAS" / "Interfaz futurista de perfil vacía.png"
+            p_base = ROOT / "assets_ui" / "profile" / "base_profile.png"
+            path = p_new if p_new.exists() else (p_base if p_base.exists() else _find_file(fallback, ends[page]))
+        else:
+            path = (
+                _find_file(fallback, ends[page])
+                if page in ("achievements",)
+                else _find_file(folder, prefixes[page]) or _find_file(fallback, ends[page])
+            )
         if path is None:
             return pygame.Surface((LOGICAL_W, LOGICAL_H))
         try:
@@ -706,7 +719,8 @@ class CCIConsoleState:
     def draw(self, screen):
         self.canvas.fill(DARK)
         self.canvas.blit(self._scaled_background(), (0, 0))
-        self._draw_common_sidebar()
+        if self.page != "profile":
+            self._draw_common_sidebar()
         if self.page == "library":
             self._draw_library()
         elif self.page == "profile":
@@ -1057,93 +1071,50 @@ class CCIConsoleState:
         return True
 
     def _draw_profile(self):
-        name = str(self.user_data.data.get("player_name", "CAMI"))[:18]
-        avatar_count = max(1, len(self.avatar_surfaces))
-        avatar_index = int(self.user_data.data.get("avatar", 0)) % avatar_count
-        # Retrato original con su marco integrado en el asset del kit.
-        pygame.draw.rect(self.canvas, DARK, (360, 185, 422, 130))
-        if self.avatar_surfaces:
-            self._blit_contained(self.avatar_surfaces[avatar_index], pygame.Rect(300, 180, 116, 136))
-        self._text("JUGADOR", 445, 184, 13, MUTED)
-        self._text(name, 445, 207, 24, WHITE, True, 270)
-        edit_icon = self.profile_icons.get("edit")
-        if edit_icon is not None:
-            self.canvas.blit(pygame.transform.scale(edit_icon, (28, 28)), (746, 203))
+        if self.profile_overlay:
+            self.canvas.blit(self.profile_overlay, (0, 0))
 
-        # Botón Cambiar Usuario (conduce a USER_SELECT)
-        btn_switch = pygame.Rect(620, 178, 120, 24)
-        pygame.draw.rect(self.canvas, (24, 28, 34), btn_switch, border_radius=4)
-        pygame.draw.rect(self.canvas, (75, 79, 85), btn_switch, 1, border_radius=4)
-        self._text("CAMBIAR USUARIO", btn_switch.x + 8, btn_switch.y + 6, 9, LIGHT, True)
+        name = str(self.user_data.data.get("player_name", "ALEX"))[:16]
+        avatar_index = int(self.user_data.data.get("avatar", 0)) % 6
 
-        seconds = int(self.user_data.data.get("total_seconds", 0))
-        xp = (seconds // 60) * 10
-        level = xp // 1000 + 1
-        level_xp = xp % 1000
-        self._text(f"NIVEL {level}", 445, 248, 16, LIGHT, True)
-        self._text(f"EXP {level_xp} / 1000", 634, 252, 13, LIGHT, max_width=150)
-        pygame.draw.rect(self.canvas, (18, 19, 21), (445, 281, 290, 13), border_radius=3)
-        pygame.draw.rect(self.canvas, (204, 207, 211), (445, 281, int(290 * level_xp / 1000), 13), border_radius=3)
-        pygame.draw.rect(self.canvas, MID, (445, 281, 290, 13), 1, border_radius=3)
-        hours, mins = divmod(seconds // 60, 60)
-        percent = min(100, int(self.user_data.unlocked_count() / 56 * 100))
-        last = self.user_data.data.get("last_session", "")
-        if last:
-            try:
-                last = datetime.fromisoformat(last).strftime("%d/%m/%Y")
-            except ValueError:
-                last = "—"
-        else:
-            last = "—"
-        pygame.draw.rect(self.canvas, DARK, (292, 319, 504, 66))
-        for x, icon_key, label, value in (
-            (303, "clock", "TIEMPO TOTAL", f"{hours:02d} h {mins:02d} min"),
-            (464, "trophy", "PROGRESO GENERAL", f"{percent}%"),
-            (621, "calendar", "ÚLTIMA SESIÓN", last),
-        ):
-            icon = self.profile_icons.get(icon_key)
-            if icon is not None:
-                self.canvas.blit(pygame.transform.scale(icon, (20, 20)), (x + 1, 341))
-            text_x = x + 25
-            self._text(label, text_x, 330, 9, MUTED, max_width=132)
-            self._text(value, text_x, 352, 12, WHITE, True, 132)
-        # Selector clicable de los 8 avatares en fila limpia.
-        pygame.draw.rect(self.canvas, DARK, (294, 426, 508, 126))
-        if self.avatar_surfaces:
-            start_x, y, w, h, gap = 300, 444, 56, 78, 6
-            for i in range(len(self.avatar_surfaces)):
-                rect = pygame.Rect(start_x + i * (w + gap), y, w, h)
-                frame = pygame.transform.scale(self.avatar_surfaces[i], rect.size)
-                self.canvas.blit(frame, rect)
-                if i == avatar_index:
-                    pygame.draw.rect(self.canvas, WHITE, rect.inflate(4, 4), 2, border_radius=4)
+        # Gran retrato de avatar cuando no es el 0
+        if avatar_index != 0:
+            p_big = ROOT / "assets_ui" / "profile" / "avatars" / f"avatar_big_{avatar_index}.png"
+            if p_big.exists():
+                try:
+                    b_surf = pygame.image.load(str(p_big)).convert()
+                    self.canvas.blit(b_surf, (269, 164))
+                except Exception:
+                    pass
 
-        # Partidas guardadas: datos reales de sesiones recientes.
-        pygame.draw.rect(self.canvas, DARK, (832, 194, 403, 366))
-        history = self.user_data.data.get("history", [])[:4]
-        pygame.draw.rect(self.canvas, DARK, (837, 163, 398, 28))
-        self._text("SESIONES RECIENTES", 843, 170, 14, WHITE, True)
-        for row in range(4):
-            y = 199 + row * 89
-            rect = pygame.Rect(837, y, 399, 80)
-            pygame.draw.rect(self.canvas, (12, 13, 15), rect, border_radius=6)
-            pygame.draw.rect(self.canvas, (75, 79, 85), rect, 1, border_radius=6)
-            if row < len(history):
-                item = history[row]
-                game = next((g for g in CATALOG if g["id"] == item.get("id")), None)
-                if game:
-                    crop_rect = pygame.Rect(rect.x + 7, rect.y + 8, 120, 64)
-                    self._blit_contained(self.game_art[game["id"]], crop_rect)
-                title = item.get("title", "JUEGO")
-                date = item.get("date", "—")
-                elapsed = int(item.get("seconds", 0))
-                h_play, m_play = divmod(elapsed // 60, 60)
-                self._text(title, rect.x + 137, rect.y + 11, 14, WHITE, True, 245)
-                self._text("SESIÓN REGISTRADA", rect.x + 137, rect.y + 35, 10, MUTED, max_width=245)
-                self._text(f"{date} {item.get('time', '')}  {h_play:02d}h {m_play:02d}m", rect.x + 137, rect.y + 54, 10, LIGHT, max_width=245)
-            else:
-                self._text("SIN PARTIDAS GUARDADAS", rect.x + 14, rect.y + 28, 11, MUTED)
-        self._text("F2 EDITAR NOMBRE   F3 CAMBIAR USUARIO   ←→ CAMBIAR AVATAR", 192, 665, 12, MUTED, max_width=580)
+            # Deseleccionar avatar 0 thumbnail en el carrusel
+            p_unsel = ROOT / "assets_ui" / "profile" / "avatars" / "thumb_alex_normal.png"
+            if p_unsel.exists():
+                try:
+                    u_surf = pygame.image.load(str(p_unsel)).convert()
+                    self.canvas.blit(u_surf, (298, 447))
+                except Exception:
+                    pass
+
+            # Marco brillante de selección sobre el thumbnail activo
+            p_frame = ROOT / "assets_ui" / "profile" / "avatars" / "glow_frame_alpha.png"
+            if p_frame.exists():
+                try:
+                    f_surf = pygame.image.load(str(p_frame)).convert_alpha()
+                    thumb_xs = [297, 375, 453, 531, 609, 687]
+                    self.canvas.blit(f_surf, (thumb_xs[avatar_index], 446))
+                except Exception:
+                    pass
+
+        # Entrada de texto / edición de nombre interactiva
+        if self.text_input_active:
+            pygame.draw.rect(self.canvas, (18, 20, 24), (418, 178, 180, 42), border_radius=4)
+            pygame.draw.rect(self.canvas, (100, 110, 130), (418, 178, 180, 42), 1, border_radius=4)
+            cursor = "|" if int(time.time() * 2) % 2 == 0 else ""
+            self._text(self.name_buffer + cursor, 422, 182, 26, WHITE, True, 170)
+        elif name != "ALEX":
+            pygame.draw.rect(self.canvas, (18, 20, 24), (418, 178, 180, 42), border_radius=4)
+            self._text(name, 422, 182, 26, WHITE, True, 170)
 
     def _achievement_game_for_row(self, item):
         return item.get("game_id")
@@ -2014,20 +1985,70 @@ class CCIConsoleState:
             if pygame.Rect(1082, 529, 150, 43).collidepoint(pos):
                 self._launch_selected()
         elif self.page == "profile":
-            if pygame.Rect(620, 178, 120, 24).collidepoint(pos):
-                self.state_machine.change_state("USER_SELECT")
+            mx, my = pos
+            # 1. Barra lateral izquierda
+            if 18 <= mx <= 185:
+                if 125 <= my <= 170:
+                    self.state_machine.change_state("MENU")
+                    return
+                elif 175 <= my <= 230:
+                    self.state_machine.change_state("MENU")
+                    return
+                elif 235 <= my <= 285:
+                    return
+                elif 345 <= my <= 395:
+                    self.state_machine.change_state("SETTINGS")
+                    return
+                elif 400 <= my <= 455:
+                    pygame.event.post(pygame.event.Event(pygame.QUIT))
+                    return
+
+            # 2. Iconos superiores derechos
+            if 1010 <= mx <= 1060 and 25 <= my <= 85:
+                self.state_machine.change_state("GROUPS")
                 return
-            if pygame.Rect(742, 199, 38, 38).collidepoint(pos):
+            if 1061 <= mx <= 1125 and 25 <= my <= 85:
+                self.state_machine.change_state("COMMUNITY")
+                return
+
+            # 3. Botón de lápiz / editar nombre
+            if 720 <= mx <= 770 and 195 <= my <= 245:
                 self.text_input_active = True
-                self.name_buffer = str(self.user_data.data.get("player_name", "CAMI"))
+                self.name_buffer = str(self.user_data.data.get("player_name", "ALEX"))
                 pygame.key.start_text_input()
                 return
-            start_x, y, w, h, gap = 300, 444, 56, 78, 6
-            for i in range(len(self.avatar_surfaces)):
-                rect = pygame.Rect(start_x + i * (w + gap), y, w, h)
-                if rect.collidepoint(pos):
+
+            # 4. Carrusel de avatares
+            if 245 <= mx <= 285 and 460 <= my <= 500:
+                cur = int(self.user_data.data.get("avatar", 0))
+                self.user_data.data["avatar"] = (cur - 1) % 6
+                self.user_data.save()
+                return
+            if 755 <= mx <= 795 and 460 <= my <= 500:
+                cur = int(self.user_data.data.get("avatar", 0))
+                self.user_data.data["avatar"] = (cur + 1) % 6
+                self.user_data.save()
+                return
+            for i in range(6):
+                ax = 290 + i * 78
+                if ax <= mx <= ax + 74 and 465 <= my <= 550:
                     self.user_data.data["avatar"] = i
                     self.user_data.save()
+                    return
+
+            # 5. Slots de partidas guardadas
+            if 830 <= mx <= 1240:
+                if 180 <= my <= 265:
+                    self.state_machine.change_state("PLAYING", game_key="zelda")
+                    return
+                elif 270 <= my <= 355:
+                    self.state_machine.change_state("PLAYING", game_key="metalslug")
+                    return
+                elif 360 <= my <= 445:
+                    self.state_machine.change_state("PLAYING", game_key="minecraft")
+                    return
+                elif 450 <= my <= 535:
+                    self.state_machine.change_state("PLAYING", game_key="davinci")
                     return
         elif self.page == "achievements":
             if ACHIEVEMENT_LEFT_ARROW_RECT.collidepoint(pos):
