@@ -372,6 +372,90 @@ class TestCommunitiesUI(unittest.TestCase):
         self.assertIsNone(self.comm_state.modal_mode)
         self.assertIn("finalizada", self.comm_state.status_toast)
 
+    def test_11_desktop_voice_engine_and_hud_overlay(self):
+        """Verifica el motor de voz de escritorio (UDP/RTP), barra de conexión y HUD overlay in-game."""
+        screen = pygame.display.get_surface()
+        self.sm.change_state("COMMUNITY", community_id="night_raid")
+
+        # 1. Unirse a una sala de voz mediante clic en el canal de voz
+        self.assertIsNone(self.comm_state.active_voice)
+        self.comm_state.draw(screen)  # Genera self.voice_rects
+        self.assertGreaterEqual(len(self.comm_state.voice_rects), 1)
+
+        vc_rect, vc_name = self.comm_state.voice_rects[0]
+        ev_click_vc = pygame.event.Event(pygame.MOUSEBUTTONDOWN, pos=vc_rect.center, button=1)
+        self.comm_state.handle_events([ev_click_vc])
+
+        self.assertEqual(self.comm_state.active_voice, vc_name)
+        engine = self.comm_state.bridge.voice_engine
+        self.assertTrue(engine.is_connected)
+        self.assertEqual(engine.active_channel_name, vc_name)
+
+        # 2. Diagnósticos de red y transporte UDP
+        diag = engine.get_diagnostics()
+        self.assertTrue(diag["is_connected"])
+        self.assertIn("UDP/RTP", diag["protocol"])
+        self.assertGreater(diag["udp_port"], 0)
+        self.assertEqual(diag["sample_rate_hz"], 48000)
+
+        # Renderizar vista con la barra de voz conectada y HUD overlay visible
+        self.comm_state.draw(screen)
+
+        # 3. Mute / Unmute interactivo desde la barra de voz
+        mute_pos = self.comm_state.voice_mute_rect.center
+        ev_mute = pygame.event.Event(pygame.MOUSEBUTTONDOWN, pos=mute_pos, button=1)
+        self.comm_state.handle_events([ev_mute])
+        self.assertTrue(engine.is_muted)
+        self.assertIn("Silenciado", self.comm_state.status_toast)
+
+        self.comm_state.handle_events([ev_mute])
+        self.assertFalse(engine.is_muted)
+        self.assertIn("Activo", self.comm_state.status_toast)
+
+        # 4. Deafen / Ensordecer interactivo
+        deafen_pos = self.comm_state.voice_deafen_rect.center
+        ev_deafen = pygame.event.Event(pygame.MOUSEBUTTONDOWN, pos=deafen_pos, button=1)
+        self.comm_state.handle_events([ev_deafen])
+        self.assertTrue(engine.is_deafened)
+        self.assertIn("Ensordecido", self.comm_state.status_toast)
+
+        self.comm_state.handle_events([ev_deafen])
+        self.assertFalse(engine.is_deafened)
+
+        # 5. Detección de voz activa (VAD) / Speaking state
+        self.comm_state.input_focused = False
+        ev_key_v = pygame.event.Event(pygame.KEYDOWN, key=pygame.K_v, unicode="v")
+        self.comm_state.handle_events([ev_key_v])
+        self.assertTrue(engine.is_speaking)
+        self.assertIn("Hablando", self.comm_state.status_toast)
+
+        # Renderizar con estado speaking activo (halo verde en HUD y lista)
+        self.comm_state.draw(screen)
+
+        # Volver a presionar V para detener habla
+        self.comm_state.handle_events([ev_key_v])
+        self.assertFalse(engine.is_speaking)
+
+        # 6. Alternar visibilidad de In-Game HUD Overlay con Tecla F8
+        self.assertTrue(self.comm_state.hud_overlay_enabled)
+        ev_f8 = pygame.event.Event(pygame.KEYDOWN, key=pygame.K_F8)
+        self.comm_state.handle_events([ev_f8])
+        self.assertFalse(self.comm_state.hud_overlay_enabled)
+        self.assertIn("Desactivado", self.comm_state.status_toast)
+
+        self.comm_state.handle_events([ev_f8])
+        self.assertTrue(self.comm_state.hud_overlay_enabled)
+        self.assertIn("Activado", self.comm_state.status_toast)
+
+        # 7. Desconectar de la sala de voz mediante botón [SALIR]
+        disc_pos = self.comm_state.voice_disconnect_rect.center
+        ev_disc = pygame.event.Event(pygame.MOUSEBUTTONDOWN, pos=disc_pos, button=1)
+        self.comm_state.handle_events([ev_disc])
+
+        self.assertIsNone(self.comm_state.active_voice)
+        self.assertFalse(engine.is_connected)
+        self.assertIn("Desconectado", self.comm_state.status_toast)
+
 
 if __name__ == "__main__":
     unittest.main()

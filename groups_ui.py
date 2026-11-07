@@ -19,6 +19,7 @@ import pygame
 from backend.communities.repository import CommunitiesRepository
 from backend.communities.service import CommunitiesService
 from backend.communities.stream_adapter import CCI_TITLES, capture_stream_frame
+from backend.communities.voice_engine import DesktopVoiceEngine
 from sidebar_ui import draw_sidebar, load_sidebar, make_sidebar_font, sidebar_destination
 from states import BaseState, SCREEN_HEIGHT, SCREEN_WIDTH
 
@@ -642,6 +643,7 @@ class CommunitiesUIBridge:
         self.user_id = user_id
         self.repo = CommunitiesRepository(db_path) if db_path else CommunitiesRepository.get_instance()
         self.service = CommunitiesService(self.repo)
+        self.voice_engine = DesktopVoiceEngine.get_instance(user_id=self.user_id, username=self.DEFAULT_USERNAME)
         self._ensure_ui_tables_and_seed()
 
     def _ensure_ui_tables_and_seed(self) -> None:
@@ -1206,14 +1208,39 @@ class CommunitiesUIBridge:
                 topic=f"Sala de voz {voice_channel_name}",
             )
         if joining:
-            return self.service.request_voice_token(
+            tok = self.service.request_voice_token(
                 community_id=comm["id"],
                 channel_id=target_ch["id"],
                 user_id=self.user_id,
                 username=self.DEFAULT_USERNAME,
             )
+            self.voice_engine.connect(community_id=comm["id"], channel_name=voice_channel_name, token_info=tok)
+            return tok
+        self.voice_engine.disconnect()
         self.service.leave_voice_channel(comm["id"], target_ch["id"], self.user_id)
         return None
+
+    def toggle_voice_mute(self) -> bool:
+        """Alterna el micrófono en el motor de voz y notifica al backend."""
+        return self.voice_engine.set_mute()
+
+    def toggle_voice_deafen(self) -> bool:
+        """Alterna el ensordecimiento de audio en el motor de voz."""
+        return self.voice_engine.set_deafen()
+
+    def toggle_voice_speaking(self, speaking: Optional[bool] = None) -> bool:
+        """Actualiza el estado de habla (VAD) en el motor de voz."""
+        if speaking is None:
+            speaking = not self.voice_engine.is_speaking
+        return self.voice_engine.set_speaking(speaking)
+
+    def get_voice_diagnostics(self) -> Dict[str, Any]:
+        """Obtiene métricas técnicas de conexión de voz en tiempo real."""
+        return self.voice_engine.get_diagnostics()
+
+    def list_voice_room_participants(self) -> List[Dict[str, Any]]:
+        """Devuelve los participantes actuales de la sala de voz activa para el HUD overlay."""
+        return self.voice_engine.list_participants()
 
     def trigger_soundboard(
         self,
@@ -2464,7 +2491,7 @@ class CommunityViewState(BaseState):
         self.text_channels: List[Tuple[str, str]] = list(self.TEXT_CHANNELS)
         self.voice_channels: List[Tuple[str, str]] = list(self.VOICE_CHANNELS)
         self.current_channel: str = "general"
-        self.active_voice: Optional[str] = "Gaming"
+        self.active_voice: Optional[str] = None
         self.last_voice_token: Optional[Dict[str, Any]] = None
 
         self.reaction_heart: int = 8
@@ -2526,6 +2553,15 @@ class CommunityViewState(BaseState):
         self.stream_game_picker_rects: List[Tuple[pygame.Rect, Dict[str, Any]]] = []
         self.stream_res_selected: str = "720p"
         self.stream_fps_selected: int = 30
+
+        # Estado de Motor de Voz Desktop (UDP/RTP) y HUD In-Game Overlay
+        self.hud_overlay_enabled: bool = True
+        self.voice_bar_rect = pygame.Rect(244, 474, 196, 68)
+        self.voice_mute_rect = pygame.Rect(248, 514, 42, 24)
+        self.voice_deafen_rect = pygame.Rect(294, 514, 42, 24)
+        self.voice_hud_rect = pygame.Rect(340, 514, 42, 24)
+        self.voice_disconnect_rect = pygame.Rect(386, 514, 50, 24)
+        self.hud_overlay_rect = pygame.Rect(470, 72, 230, 110)
 
     def _active_group_dict(self) -> Dict[str, Any]:
         if not self.groups:
@@ -2670,6 +2706,12 @@ class CommunityViewState(BaseState):
                     names = [c[0] for c in self.text_channels] or [c[0] for c in self.TEXT_CHANNELS]
                     idx = names.index(self.current_channel) if self.current_channel in names else 0
                     self._switch_channel(names[(idx - 1) % len(names)])
+                elif e.key == pygame.K_F8:
+                    self.hud_overlay_enabled = not self.hud_overlay_enabled
+                    self.status_toast = f"HUD Overlay de voz: {'Activado' if self.hud_overlay_enabled else 'Desactivado'}"
+                elif e.key == pygame.K_v and not self.input_focused and self.active_voice:
+                    spk = self.bridge.toggle_voice_speaking()
+                    self.status_toast = f"Micrófono (VAD): {'Hablando' if spk else 'En reposo'}"
                 elif e.key == pygame.K_RETURN:
                     self.input_focused = True
 
@@ -2742,6 +2784,27 @@ class CommunityViewState(BaseState):
                 if self.is_streaming and self.stream_pip_rect.collidepoint(pos):
                     self.modal_mode = "stream_theater"
                     return
+
+                # 3e. Controles de barra de conexión de voz (Mute, Deafen, HUD Overlay, Desconectar)
+                if self.active_voice:
+                    if self.voice_mute_rect.collidepoint(pos):
+                        m = self.bridge.toggle_voice_mute()
+                        self.status_toast = f"Micrófono: {'Silenciado' if m else 'Activo'}"
+                        return
+                    if self.voice_deafen_rect.collidepoint(pos):
+                        d = self.bridge.toggle_voice_deafen()
+                        self.status_toast = f"Audio: {'Ensordecido' if d else 'Activo'}"
+                        return
+                    if self.voice_hud_rect.collidepoint(pos):
+                        self.hud_overlay_enabled = not self.hud_overlay_enabled
+                        self.status_toast = f"HUD Overlay: {'Visible' if self.hud_overlay_enabled else 'Oculto'}"
+                        return
+                    if self.voice_disconnect_rect.collidepoint(pos):
+                        grp = self._active_group_dict()
+                        self.bridge.toggle_voice_channel(grp["id"], self.active_voice, joining=False)
+                        self.active_voice = None
+                        self.status_toast = "Desconectado de la sala de voz"
+                        return
 
                 # 4. Botones [+] para crear canales de texto o salas de voz en esta comunidad
                 if self.add_text_ch_rect.collidepoint(pos):
@@ -3234,6 +3297,30 @@ class CommunityViewState(BaseState):
                 canvas.blit(c_s, (pill.centerx - c_s.get_width() // 2, pill.y + 1))
             cur_y += 25
 
+        # 3b. Panel de Conexión de Voz Activa (Discord Voice Control Bar)
+        if self.active_voice:
+            _draw_cut_rect(canvas, self.voice_bar_rect, (12, 22, 18), (80, 235, 140), cut=4, border_w=1)
+            canvas.blit(f_small_b.render("🟢 VOZ CONECTADA", True, (95, 240, 150)), (self.voice_bar_rect.x + 8, self.voice_bar_rect.y + 5))
+            diag = self.bridge.get_voice_diagnostics()
+            canvas.blit(f_small.render(f"{diag['latency_ms']:.0f}ms UDP", True, (160, 215, 185)), (self.voice_bar_rect.right - 58, self.voice_bar_rect.y + 5))
+            canvas.blit(f_small.render(f"#{self.active_voice[:10]} / {grp['name'][:10]}", True, (185, 225, 205)), (self.voice_bar_rect.x + 8, self.voice_bar_rect.y + 20))
+
+            # 4 Botones: Mute, Deafen, HUD, Desconectar
+            is_muted = self.bridge.voice_engine.is_muted
+            _draw_cut_rect(canvas, self.voice_mute_rect, (36, 18, 18) if is_muted else (20, 28, 36), (255, 95, 95) if is_muted else (110, 195, 255), cut=3, border_w=1)
+            canvas.blit(f_small_b.render("🔇" if is_muted else "🎙️", True, (255, 220, 220) if is_muted else (240, 245, 255)), (self.voice_mute_rect.x + 8, self.voice_mute_rect.y + 3))
+
+            is_deaf = self.bridge.voice_engine.is_deafened
+            _draw_cut_rect(canvas, self.voice_deafen_rect, (36, 18, 18) if is_deaf else (20, 28, 36), (255, 95, 95) if is_deaf else (110, 195, 255), cut=3, border_w=1)
+            canvas.blit(f_small_b.render("🔕" if is_deaf else "🎧", True, (255, 220, 220) if is_deaf else (240, 245, 255)), (self.voice_deafen_rect.x + 8, self.voice_deafen_rect.y + 3))
+
+            hud_on = self.hud_overlay_enabled
+            _draw_cut_rect(canvas, self.voice_hud_rect, (24, 44, 60) if hud_on else (20, 24, 30), (120, 215, 255) if hud_on else (90, 95, 110), cut=3, border_w=1)
+            canvas.blit(f_small_b.render("HUD", True, (240, 248, 255) if hud_on else (150, 155, 168)), (self.voice_hud_rect.x + 8, self.voice_hud_rect.y + 3))
+
+            _draw_cut_rect(canvas, self.voice_disconnect_rect, (55, 18, 18), (255, 90, 90), cut=3, border_w=1)
+            canvas.blit(f_small_b.render("SALIR", True, (255, 220, 220)), (self.voice_disconnect_rect.x + 6, self.voice_disconnect_rect.y + 3))
+
         # 4. Botón Go Live (Transmitir en Vivo juego o pantalla a 30 FPS)
         if self.is_streaming:
             _draw_cut_rect(canvas, self.stream_btn_rect, (62, 18, 18), (255, 85, 85), cut=4, border_w=1)
@@ -3636,6 +3723,10 @@ class CommunityViewState(BaseState):
         if self.sidebar_surface is not None and self.sidebar_font is not None:
             draw_sidebar(canvas, self.sidebar_surface, "community", self.sidebar_font)
 
+        # 9b. In-Game Voice HUD Overlay flotante (Discord Voice Overlay)
+        if self.active_voice and self.hud_overlay_enabled:
+            self._draw_voice_hud_overlay(canvas)
+
         # 10. Modal activo (Crear Canal / Sala de Voz / Invitar con Código y Link)
         if self.modal_mode is not None:
             self._draw_community_modal(canvas, grp)
@@ -3644,6 +3735,60 @@ class CommunityViewState(BaseState):
             pygame.transform.smoothscale(canvas, screen.get_size(), screen)
         else:
             screen.blit(canvas, (0, 0))
+
+    def _draw_voice_hud_overlay(self, canvas: pygame.Surface) -> None:
+        """Renderiza el In-Game Voice HUD Overlay flotante estilo Discord."""
+        if not self.active_voice or not self.hud_overlay_enabled:
+            return
+
+        participants = self.bridge.list_voice_room_participants()
+        if not participants:
+            return
+
+        f_small = _PACK.fonts["small"]
+        f_small_b = _PACK.fonts["small_bold"]
+
+        hud_w = 236
+        hud_h = 30 + len(participants) * 32
+        hud_r = pygame.Rect(self.hud_overlay_rect.x, self.hud_overlay_rect.y, hud_w, hud_h)
+
+        _draw_cut_rect(canvas, hud_r, (12, 15, 22), (90, 195, 255), cut=6, border_w=1)
+
+        # Barra superior del HUD
+        canvas.blit(
+            f_small_b.render(f"VOZ // #{self.active_voice.upper()}", True, (130, 215, 255)),
+            (hud_r.x + 8, hud_r.y + 6),
+        )
+        canvas.blit(f_small.render("[F8: Ocultar]", True, (140, 148, 162)), (hud_r.right - 68, hud_r.y + 6))
+
+        cur_y = hud_r.y + 26
+        for p in participants:
+            av_center = (hud_r.x + 20, cur_y + 12)
+            is_spk = p.get("is_speaking", False)
+            is_mut = p.get("is_muted", False)
+            if is_spk:
+                pygame.draw.circle(canvas, (75, 255, 130), av_center, 12, 2)
+                pygame.draw.circle(canvas, (28, 80, 44), av_center, 10)
+            else:
+                pygame.draw.circle(canvas, (24, 28, 38), av_center, 10)
+                pygame.draw.circle(canvas, (90, 96, 112), av_center, 10, 1)
+
+            ini = p.get("username", "U")[:1].upper()
+            ini_s = f_small_b.render(ini, True, (255, 255, 255) if is_spk else (190, 196, 208))
+            canvas.blit(ini_s, (av_center[0] - ini_s.get_width() // 2, av_center[1] - ini_s.get_height() // 2))
+
+            # Nombre de usuario y estado
+            u_color = (240, 255, 245) if is_spk else (225, 230, 240)
+            canvas.blit(f_small_b.render(p.get("username", "User")[:12], True, u_color), (hud_r.x + 38, cur_y + 3))
+
+            if is_mut:
+                canvas.blit(f_small.render("🔇 Silenciado", True, (245, 110, 110)), (hud_r.x + 38, cur_y + 17))
+            elif is_spk:
+                canvas.blit(f_small.render("🔊 Hablando...", True, (95, 245, 145)), (hud_r.x + 38, cur_y + 17))
+            else:
+                canvas.blit(f_small.render("Conectado", True, (140, 148, 162)), (hud_r.x + 38, cur_y + 17))
+
+            cur_y += 32
 
     def _draw_community_modal(self, surface: pygame.Surface, grp: Dict[str, Any]) -> None:
         overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
