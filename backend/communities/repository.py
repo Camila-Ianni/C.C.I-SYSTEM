@@ -949,6 +949,47 @@ class CommunitiesRepository:
         res["is_pinned"] = bool(res["is_pinned"])
         return res
 
+    def add_message_attachment(
+        self,
+        attachment_id: str,
+        message_id: str,
+        storage_key: str,
+        filename: str,
+        content_type: str = "image/png",
+        size_bytes: int = 0,
+        checksum_sha256: str = "",
+    ) -> Dict[str, Any]:
+        """Registra un archivo o captura adjunta vinculada a un mensaje en SQLite WAL."""
+        conn = self._get_connection()
+        now = time.time()
+        with self._tx_lock, conn:
+            conn.execute(
+                """
+                INSERT INTO message_attachments (id, message_id, storage_key, filename, content_type, size_bytes, checksum_sha256, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (attachment_id, message_id, storage_key, filename, content_type, size_bytes, checksum_sha256, now),
+            )
+        return {
+            "id": attachment_id,
+            "message_id": message_id,
+            "storage_key": storage_key,
+            "filename": filename,
+            "content_type": content_type,
+            "size_bytes": size_bytes,
+            "checksum_sha256": checksum_sha256,
+            "created_at": now,
+        }
+
+    def list_message_attachments(self, message_id: str) -> List[Dict[str, Any]]:
+        """Recupera los archivos o capturas adjuntas asociadas a un mensaje."""
+        conn = self._get_connection()
+        rows = conn.execute(
+            "SELECT * FROM message_attachments WHERE message_id = ? ORDER BY created_at ASC",
+            (message_id,),
+        ).fetchall()
+        return [dict(r) for r in rows]
+
     def list_messages(
         self,
         channel_id: str,

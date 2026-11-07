@@ -308,6 +308,48 @@ def play_soundboard_tone(sound_name: str) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Gestor de capturas F12 y adjuntos para chat
+# ---------------------------------------------------------------------------
+
+_THUMB_CACHE: Dict[str, pygame.Surface] = {}
+
+def get_screenshot_thumbnail(file_path: str, width: int = 140, height: int = 80) -> Optional[pygame.Surface]:
+    """Carga y genera miniatura escalada de una captura F12 con caché en memoria."""
+    key = f"{file_path}_{width}x{height}"
+    if key in _THUMB_CACHE:
+        return _THUMB_CACHE[key]
+    try:
+        p = Path(file_path)
+        if not p.is_file():
+            return None
+        orig = pygame.image.load(str(p))
+        scaled = pygame.transform.smoothscale(orig, (width, height))
+        _THUMB_CACHE[key] = scaled
+        return scaled
+    except Exception:
+        return None
+
+def list_available_screenshots(limit: int = 6) -> List[Dict[str, Any]]:
+    """Obtiene las capturas F12 más recientes guardadas en la carpeta capturas/."""
+    from screenshot_manager import CAPTURAS_DIR
+    CAPTURAS_DIR.mkdir(parents=True, exist_ok=True)
+    files = sorted(CAPTURAS_DIR.glob("*.png"), key=lambda p: p.stat().st_mtime, reverse=True)
+    out: List[Dict[str, Any]] = []
+    for p in files[:limit]:
+        stat = p.stat()
+        mtime_str = time.strftime("%d/%m %H:%M", time.localtime(stat.st_mtime))
+        size_kb = round(stat.st_size / 1024, 1)
+        out.append({
+            "filename": p.name,
+            "path": str(p),
+            "size_str": f"{size_kb} KB",
+            "time_str": mtime_str,
+            "size_bytes": stat.st_size,
+        })
+    return out
+
+
+# ---------------------------------------------------------------------------
 # Caché de bases limpias y sprites Photoroom recortados
 # ---------------------------------------------------------------------------
 
@@ -1093,12 +1135,19 @@ class CommunitiesUIBridge:
                 time_str = time.strftime("Hoy %H:%M", time.localtime(ts))
             else:
                 time_str = "Hoy"
-            persisted.append({
+            m_dict: Dict[str, Any] = {
                 "id": m["id"],
                 "author": "ALEX" if m["author_id"] == self.user_id else str(m["author_id"]).replace("u_", "").upper(),
                 "time": time_str,
                 "text": m["content"],
-            })
+            }
+            atts = self.repo.list_message_attachments(m["id"])
+            if atts:
+                m_dict["attachment"] = {
+                    "filename": atts[0]["filename"],
+                    "path": atts[0]["storage_key"],
+                }
+            persisted.append(m_dict)
 
         # Solo las comunidades plantilla usan mensajes semilla; los grupos creados por usuarios muestran solo sus mensajes reales
         is_preset_comm = comm["slug"] in COMMUNITY_CHANNEL_TEMPLATES
@@ -1111,6 +1160,7 @@ class CommunitiesUIBridge:
         community_slug_or_id: str,
         channel_name: str,
         text: str,
+        attachment: Optional[Dict[str, Any]] = None,
     ) -> Optional[Dict[str, Any]]:
         comm = self._resolve_community(community_slug_or_id)
         if not comm:
@@ -1124,11 +1174,13 @@ class CommunitiesUIBridge:
                 channel_type="text",
                 topic=f"Canal #{channel_name}",
             )
+        atts_list = [attachment] if attachment else None
         return self.service.send_message(
             community_id=comm["id"],
             channel_id=target_ch["id"],
             author_id=self.user_id,
             content=text,
+            attachments=atts_list,
         )
 
     def toggle_voice_channel(
@@ -2374,9 +2426,23 @@ class CommunityViewState(BaseState):
         self.add_voice_ch_rect = pygame.Rect(416, 420, 22, 22)
         self.invite_btn_rect = pygame.Rect(916, 92, 82, 28)
         self.chat_viewport = pygame.Rect(460, 186, 574, 386)
+        self.attach_btn_rect = pygame.Rect(462, 580, 32, 36)
         self.input_rect = pygame.Rect(500, 580, 535, 36)
         self.heart_rect = pygame.Rect(528, 502, 46, 22)
         self.fire_rect = pygame.Rect(578, 502, 46, 22)
+
+        # Estado de adjuntos y capturas F12
+        self.pending_attachment: Optional[Dict[str, Any]] = None
+        self.pending_chip_cancel_rect = pygame.Rect(738, 554, 20, 20)
+        self.preview_image_path: Optional[str] = None
+        self.screenshot_picker_rects: List[Tuple[pygame.Rect, Dict[str, Any]]] = []
+        self.attachment_preview_rects: List[Tuple[pygame.Rect, str]] = []
+
+        # Estado de menciones (@mentions) y autocompletado
+        self.autocomplete_active: bool = False
+        self.autocomplete_candidates: List[str] = []
+        self.autocomplete_selected_idx: int = 0
+        self.autocomplete_rects: List[Tuple[pygame.Rect, str]] = []
 
     def _active_group_dict(self) -> Dict[str, Any]:
         if not self.groups:
@@ -2474,18 +2540,37 @@ class CommunityViewState(BaseState):
                     continue
 
                 if self.input_focused:
+                    if self.autocomplete_active and self.autocomplete_candidates:
+                        if e.key == pygame.K_TAB:
+                            cand = self.autocomplete_candidates[self.autocomplete_selected_idx]
+                            self._apply_autocomplete(cand)
+                            continue
+                        elif e.key == pygame.K_UP:
+                            self.autocomplete_selected_idx = (self.autocomplete_selected_idx - 1) % len(self.autocomplete_candidates)
+                            continue
+                        elif e.key == pygame.K_DOWN:
+                            self.autocomplete_selected_idx = (self.autocomplete_selected_idx + 1) % len(self.autocomplete_candidates)
+                            continue
+                        elif e.key == pygame.K_ESCAPE:
+                            self.autocomplete_active = False
+                            continue
+
                     if e.key == pygame.K_ESCAPE:
                         self.input_focused = False
+                        self.autocomplete_active = False
                     elif e.key == pygame.K_RETURN:
                         self._send_message()
                     elif e.key == pygame.K_v and (e.mod & (pygame.KMOD_CTRL | pygame.KMOD_META)):
                         pasted = paste_from_clipboard()
                         if pasted:
                             self.input_text = (self.input_text + pasted)[:72]
+                            self._update_mention_autocomplete()
                     elif e.key == pygame.K_BACKSPACE:
                         self.input_text = self.input_text[:-1]
+                        self._update_mention_autocomplete()
                     elif e.unicode and e.unicode.isprintable() and len(self.input_text) < 72:
                         self.input_text += e.unicode
+                        self._update_mention_autocomplete()
                     continue
 
                 if e.key == pygame.K_ESCAPE:
@@ -2610,18 +2695,48 @@ class CommunityViewState(BaseState):
                         self.reaction_fire += 1 if self.user_fired else -1
                         return
 
+                # 8b. Clic en miniatura de adjunto en el historial de chat para ampliar a pantalla completa
+                for thumb_r, img_path in self.attachment_preview_rects:
+                    if thumb_r.collidepoint(pos):
+                        self.modal_mode = "image_preview"
+                        self.preview_image_path = img_path
+                        return
+
+                # 8c. Clic en botón [📎] para abrir selector de capturas F12
+                if self.attach_btn_rect.collidepoint(pos):
+                    self.modal_mode = "attach_picker"
+                    return
+
+                # 8d. Clic en [x] del chip de adjunto pendiente
+                if self.pending_attachment and self.pending_chip_cancel_rect.collidepoint(pos):
+                    self.pending_attachment = None
+                    return
+
+                # 8e. Clic en item de autocompletado de mención
+                if self.autocomplete_active:
+                    for cand_r, cand_name in self.autocomplete_rects:
+                        if cand_r.collidepoint(pos):
+                            self._apply_autocomplete(cand_name)
+                            return
+
                 # 9. Barra de entrada de mensaje
                 if self.input_rect.collidepoint(pos):
                     self.input_focused = True
-                    if pos[0] >= self.input_rect.right - 36 and self.input_text.strip():
+                    self._update_mention_autocomplete()
+                    if pos[0] >= self.input_rect.right - 36 and (self.input_text.strip() or self.pending_attachment):
                         self._send_message()
                     return
                 self.input_focused = False
+                self.autocomplete_active = False
 
     def _handle_modal_key(self, e: pygame.event.Event) -> None:
         if e.key == pygame.K_ESCAPE:
             self.modal_mode = None
             return
+        if self.modal_mode in ("attach_picker", "image_preview"):
+            if e.key in (pygame.K_ESCAPE, pygame.K_RETURN, pygame.K_SPACE):
+                self.modal_mode = None
+                return
         if self.modal_mode == "soundboard":
             if e.key in (pygame.K_RETURN, pygame.K_SPACE):
                 self.modal_mode = None
@@ -2671,6 +2786,24 @@ class CommunityViewState(BaseState):
                     return
             close_rect = pygame.Rect(580, 470, 120, 34)
             if close_rect.collidepoint(pos):
+                self.modal_mode = None
+            return
+
+        if self.modal_mode == "attach_picker":
+            for card_r, snap_dict in self.screenshot_picker_rects:
+                if card_r.collidepoint(pos):
+                    self.pending_attachment = snap_dict
+                    self.modal_mode = None
+                    self.status_toast = f"Captura '{snap_dict['filename']}' adjuntada"
+                    return
+            close_btn = pygame.Rect(580, 505, 120, 32)
+            if close_btn.collidepoint(pos):
+                self.modal_mode = None
+            return
+
+        if self.modal_mode == "image_preview":
+            close_btn = pygame.Rect(580, 620, 120, 32)
+            if close_btn.collidepoint(pos) or not pygame.Rect(160, 60, 960, 600).collidepoint(pos):
                 self.modal_mode = None
             return
 
@@ -2764,15 +2897,68 @@ class CommunityViewState(BaseState):
             return pos
         return int(pos[0] * SCREEN_WIDTH / sw), int(pos[1] * SCREEN_HEIGHT / sh)
 
+    def _update_mention_autocomplete(self) -> None:
+        """Detecta si el usuario está escribiendo una mención con @ para sugerir miembros."""
+        if not self.input_focused:
+            self.autocomplete_active = False
+            return
+        words = self.input_text.split()
+        last_word = words[-1] if words and not self.input_text.endswith(" ") else (self.input_text if self.input_text.startswith("@") else "")
+        if last_word.startswith("@"):
+            query = last_word[1:].upper()
+            grp = self._active_group_dict()
+            members = self.bridge.list_community_members_display(grp["id"])
+            all_candidates = ["EVERYONE"] + [m[0].upper() for m in members]
+            unique_cands: List[str] = []
+            for c in all_candidates:
+                if c not in unique_cands:
+                    unique_cands.append(c)
+            matches = [f"@{c}" for c in unique_cands if query in c]
+            if matches:
+                self.autocomplete_active = True
+                self.autocomplete_candidates = matches[:5]
+                self.autocomplete_selected_idx = max(0, min(self.autocomplete_selected_idx, len(matches) - 1))
+                return
+        self.autocomplete_active = False
+
+    def _apply_autocomplete(self, mention_str: str) -> None:
+        """Aplica la sugerencia elegida de mención en la barra de texto."""
+        words = self.input_text.split()
+        if words and not self.input_text.endswith(" "):
+            words[-1] = mention_str
+            self.input_text = " ".join(words) + " "
+        elif self.input_text.startswith("@"):
+            self.input_text = mention_str + " "
+        else:
+            self.input_text += mention_str + " "
+        self.autocomplete_active = False
+
     def _send_message(self) -> None:
         txt = self.input_text.strip()
-        if not txt:
+        att = self.pending_attachment
+        if not txt and not att:
             return
+        if not txt and att:
+            txt = f"📎 [Captura adjunta: {att['filename']}]"
+
         grp = self._active_group_dict()
-        self.bridge.send_channel_message(grp["id"], self.current_channel, txt)
+        self.bridge.send_channel_message(grp["id"], self.current_channel, txt, attachment=att)
         now_str = time.strftime("Hoy %H:%M")
-        self.chat_messages.append({"author": "ALEX", "time": now_str, "text": txt})
+        msg_payload: Dict[str, Any] = {"author": "ALEX", "time": now_str, "text": txt}
+        if att:
+            msg_payload["attachment"] = dict(att)
+        self.chat_messages.append(msg_payload)
+
+        # Si el mensaje incluye mención a otro miembro, mostrar toast
+        if "@" in txt:
+            for part in txt.split():
+                if part.startswith("@"):
+                    self.status_toast = f"Mencionaste a {part}"
+                    break
+
         self.input_text = ""
+        self.pending_attachment = None
+        self.autocomplete_active = False
         self.scroll_offset = 999999
 
     def update(self, dt: float) -> None:
@@ -3060,12 +3246,16 @@ class CommunityViewState(BaseState):
             for msg in self.chat_messages[len(self.DEFAULT_GENERAL_MESSAGES) :]:
                 wrapped = _wrap_lines(msg.get("text", ""), f_body, 455)
                 h = max(50, 32 + len(wrapped) * 18)
+                if msg.get("attachment"):
+                    h += 92
                 items_heights.append(("msg", (msg, wrapped), h))
         else:
             items_heights.append(("welcome", (self.current_channel, ch_desc), 54))
             for msg in self.chat_messages:
                 wrapped = _wrap_lines(msg.get("text", ""), f_body, 455)
                 h = max(52, 32 + len(wrapped) * 18)
+                if msg.get("attachment"):
+                    h += 92
                 items_heights.append(("msg", (msg, wrapped), h))
 
         gap = 8
@@ -3076,6 +3266,7 @@ class CommunityViewState(BaseState):
         old_clip = canvas.get_clip()
         canvas.set_clip(vp)
 
+        self.attachment_preview_rects.clear()
         cur_y = vp.y + 8 - self.scroll_offset
         for kind, payload, h in items_heights:
             if cur_y + h >= vp.y and cur_y <= vp.bottom:
@@ -3111,8 +3302,15 @@ class CommunityViewState(BaseState):
                     canvas.blit(f_sub.render(ch_sub[:64], True, (175, 180, 192)), (484, cur_y + 28))
                 elif kind == "msg":
                     msg_dict, wrapped_lines = payload
+                    txt = msg_dict.get("text", "")
+                    is_mentioned = ("@ALEX" in txt.upper()) or ("@EVERYONE" in txt.upper())
                     m_rect = pygame.Rect(470, cur_y, 536, h)
-                    _draw_cut_rect(canvas, m_rect, (18, 20, 26), (72, 78, 90), cut=5, border_w=1)
+                    if is_mentioned:
+                        _draw_cut_rect(canvas, m_rect, (28, 25, 18), (245, 195, 65), cut=5, border_w=1)
+                        pygame.draw.rect(canvas, (245, 195, 65), pygame.Rect(m_rect.x, m_rect.y, 4, m_rect.height), border_radius=2)
+                    else:
+                        _draw_cut_rect(canvas, m_rect, (18, 20, 26), (72, 78, 90), cut=5, border_w=1)
+
                     author = msg_dict.get("author", "ALEX").upper()
                     av_key = "av_mira.png" if "MIRA" in author else ("av_kai.png" if "KAI" in author else "av_alex.png")
                     av_sp = _PACK.sprites.get(av_key)
@@ -3121,8 +3319,41 @@ class CommunityViewState(BaseState):
                     canvas.blit(f_body_b.render(author, True, (244, 246, 250)), (526, cur_y + 7))
                     t_x = 526 + f_body_b.size(author)[0] + 12
                     canvas.blit(f_small.render(msg_dict.get("time", "Hoy"), True, (150, 156, 168)), (t_x, cur_y + 9))
-                    for li, line in enumerate(wrapped_lines):
-                        canvas.blit(f_body.render(line, True, (226, 230, 238)), (526, cur_y + 26 + li * 18))
+
+                    line_y = cur_y + 26
+                    for line in wrapped_lines:
+                        if "@" in line:
+                            words = line.split(" ")
+                            cur_x = 526
+                            for w in words:
+                                if w.startswith("@") and len(w) > 1:
+                                    w_surf = f_body_b.render(w, True, (255, 220, 100) if "EVERYONE" in w.upper() else (125, 210, 255))
+                                    w_w, w_h = w_surf.get_size()
+                                    badge_bg = (60, 48, 16) if "EVERYONE" in w.upper() else (24, 44, 68)
+                                    pygame.draw.rect(canvas, badge_bg, pygame.Rect(cur_x - 2, line_y - 1, w_w + 4, w_h + 2), border_radius=3)
+                                    canvas.blit(w_surf, (cur_x, line_y))
+                                    cur_x += w_w + 6
+                                else:
+                                    w_surf = f_body.render(w, True, (226, 230, 238))
+                                    canvas.blit(w_surf, (cur_x, line_y))
+                                    cur_x += w_surf.get_width() + 6
+                        else:
+                            canvas.blit(f_body.render(line, True, (226, 230, 238)), (526, line_y))
+                        line_y += 18
+
+                    # Miniatura de captura adjunta si existe
+                    if msg_dict.get("attachment"):
+                        att = msg_dict["attachment"]
+                        thumb_r = pygame.Rect(526, line_y + 4, 140, 78)
+                        self.attachment_preview_rects.append((thumb_r, att.get("path", "")))
+                        _draw_cut_rect(canvas, thumb_r, (12, 14, 18), (110, 195, 255), cut=4, border_w=1)
+                        th = get_screenshot_thumbnail(att.get("path", ""), width=136, height=74)
+                        if th is not None:
+                            canvas.blit(th, (thumb_r.x + 2, thumb_r.y + 2))
+                        else:
+                            canvas.blit(f_small_b.render("📸 FOTO", True, (180, 205, 235)), (thumb_r.x + 40, thumb_r.centery - 8))
+                        canvas.blit(f_small_b.render(f"📎 {att.get('filename', 'captura.png')[:22]}", True, (215, 235, 255)), (thumb_r.right + 12, thumb_r.y + 16))
+                        canvas.blit(f_small.render("[Clic para ampliar]", True, (140, 148, 162)), (thumb_r.right + 12, thumb_r.y + 38))
             cur_y += h + gap
 
         canvas.set_clip(old_clip)
@@ -3138,11 +3369,48 @@ class CommunityViewState(BaseState):
             thumb_y = track_top
         pygame.draw.rect(canvas, (170, 176, 188), pygame.Rect(1030, thumb_y, 6, thumb_h), border_radius=3)
 
-        # 7. Barra de entrada de texto inferior
+        # 7. Botón [📎] para adjuntar capturas F12
+        _draw_cut_rect(
+            canvas,
+            self.attach_btn_rect,
+            (32, 58, 86) if self.pending_attachment else (22, 26, 36),
+            (110, 195, 255) if self.pending_attachment else (85, 92, 108),
+            cut=4,
+            border_w=1,
+        )
+        canvas.blit(f_body_b.render("📎", True, (245, 248, 255)), (self.attach_btn_rect.x + 8, self.attach_btn_rect.y + 8))
+
+        # Chip de captura F12 adjunta pendiente
+        if self.pending_attachment:
+            chip_r = pygame.Rect(500, 552, 280, 22)
+            self.pending_chip_cancel_rect = pygame.Rect(chip_r.right - 20, chip_r.y + 2, 18, 18)
+            _draw_cut_rect(canvas, chip_r, (20, 36, 52), (110, 195, 255), cut=4, border_w=1)
+            canvas.blit(f_small.render(f"📎 {self.pending_attachment['filename'][:26]}", True, (235, 242, 255)), (chip_r.x + 8, chip_r.y + 3))
+            canvas.blit(f_small_b.render("×", True, (245, 120, 120)), (self.pending_chip_cancel_rect.x + 4, self.pending_chip_cancel_rect.y + 1))
+
+        # Popup flotante de autocompletado de menciones
+        if self.autocomplete_active and self.autocomplete_candidates:
+            pop_w = 210
+            pop_h = 24 + len(self.autocomplete_candidates) * 26
+            pop_rect = pygame.Rect(500, 580 - pop_h - 4, pop_w, pop_h)
+            _draw_cut_rect(canvas, pop_rect, (16, 20, 28), (110, 195, 255), cut=6, border_w=1)
+            canvas.blit(f_small_b.render("MIEMBROS // MENCIONES (TAB)", True, (160, 190, 230)), (pop_rect.x + 10, pop_rect.y + 5))
+            self.autocomplete_rects.clear()
+            for ci, cand in enumerate(self.autocomplete_candidates):
+                item_r = pygame.Rect(pop_rect.x + 6, pop_rect.y + 22 + ci * 26, pop_w - 12, 22)
+                self.autocomplete_rects.append((item_r, cand))
+                is_cur = ci == self.autocomplete_selected_idx
+                if is_cur:
+                    pygame.draw.rect(canvas, (35, 55, 80), item_r, border_radius=4)
+                    pygame.draw.rect(canvas, (110, 195, 255), item_r, 1, border_radius=4)
+                c_col = (255, 215, 90) if "EVERYONE" in cand else (240, 245, 252)
+                canvas.blit(f_body_b.render(cand, True, c_col), (item_r.x + 8, item_r.y + 3))
+
+        # 8. Barra de entrada de texto inferior
         if self.input_focused or self.input_text:
             pygame.draw.rect(canvas, (14, 16, 20), pygame.Rect(504, 586, 480, 24))
             if self.input_focused:
-                pygame.draw.rect(canvas, (240, 242, 248), pygame.Rect(460, 579, 578, 38), 1, border_radius=5)
+                pygame.draw.rect(canvas, (240, 242, 248), pygame.Rect(500, 580, 535, 36), 1, border_radius=5)
             txt = self.input_text + ("|" if self.input_focused else "")
             canvas.blit(
                 f_body.render(txt or f"Enviar un mensaje a #{self.current_channel}...", True, (242, 244, 248)),
@@ -3221,6 +3489,83 @@ class CommunityViewState(BaseState):
             close_rect = pygame.Rect(580, 470, 120, 34)
             _draw_cut_rect(surface, close_rect, (238, 240, 246), (255, 255, 255), cut=5, border_w=1)
             surface.blit(_PACK.fonts["tab"].render("Cerrar", True, (12, 14, 18)), (close_rect.x + 36, close_rect.y + 9))
+            return
+
+        if self.modal_mode == "attach_picker":
+            box = pygame.Rect(330, 110, 620, 440)
+            _draw_cut_rect(surface, box, (15, 18, 24), (110, 195, 255), cut=10, border_w=2)
+            surface.blit(f_title.render("ADJUNTAR CAPTURA F12 // CAPTURAS/", True, (244, 246, 250)), (box.x + 24, box.y + 18))
+            surface.blit(
+                f_sub.render(f"Seleccioná una captura de pantalla guardada para enviar a {grp['name'][:14]}:", True, (185, 192, 206)),
+                (box.x + 24, box.y + 46),
+            )
+
+            self.screenshot_picker_rects.clear()
+            snaps = list_available_screenshots(limit=6)
+
+            if not snaps:
+                info_r = pygame.Rect(box.x + 24, box.y + 90, box.width - 48, 120)
+                _draw_cut_rect(surface, info_r, (18, 22, 30), (85, 95, 110), cut=6, border_w=1)
+                surface.blit(
+                    f_body_b.render("📸 No hay capturas en la carpeta capturas/", True, (240, 244, 252)),
+                    (info_r.x + 20, info_r.y + 30),
+                )
+                surface.blit(
+                    f_small.render("Presioná F12 en cualquier momento dentro de un juego o consola para tomar fotos.", True, (170, 178, 192)),
+                    (info_r.x + 20, info_r.y + 60),
+                )
+            else:
+                grid_xs = [box.x + 24, box.x + 316]
+                grid_ys = [box.y + 80, box.y + 175, box.y + 270]
+                for si, snap in enumerate(snaps):
+                    col = si % 2
+                    row = si // 2
+                    card_r = pygame.Rect(grid_xs[col], grid_ys[row], 280, 84)
+                    self.screenshot_picker_rects.append((card_r, snap))
+                    _draw_cut_rect(surface, card_r, (22, 26, 36), (90, 105, 128), cut=6, border_w=1)
+
+                    th = get_screenshot_thumbnail(snap["path"], width=96, height=60)
+                    if th is not None:
+                        surface.blit(th, (card_r.x + 10, card_r.y + 12))
+                    else:
+                        pygame.draw.rect(surface, (12, 14, 18), pygame.Rect(card_r.x + 10, card_r.y + 12, 96, 60))
+                        surface.blit(f_small_b.render("PNG", True, (140, 150, 168)), (card_r.x + 44, card_r.y + 32))
+
+                    surface.blit(f_small_b.render(snap["filename"][:18], True, (242, 246, 252)), (card_r.x + 114, card_r.y + 14))
+                    surface.blit(f_small.render(snap["size_str"], True, (160, 168, 180)), (card_r.x + 114, card_r.y + 36))
+                    surface.blit(f_small.render(snap["time_str"], True, (130, 138, 150)), (card_r.x + 114, card_r.y + 54))
+
+            close_btn = pygame.Rect(580, 505, 120, 32)
+            _draw_cut_rect(surface, close_btn, (238, 240, 246), (255, 255, 255), cut=5, border_w=1)
+            surface.blit(_PACK.fonts["tab"].render("Cerrar", True, (12, 14, 18)), (close_btn.x + 36, close_btn.y + 8))
+            return
+
+        if self.modal_mode == "image_preview":
+            overlay_dark = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
+            overlay_dark.fill((0, 0, 0, 235))
+            surface.blit(overlay_dark, (0, 0))
+
+            fn = os.path.basename(self.preview_image_path or "captura.png")
+            surface.blit(f_title.render(f"VISTA PREVIA // {fn}", True, (244, 246, 250)), (180, 28))
+            surface.blit(f_small.render("Presioná ESC o Cerrar para volver al chat", True, (170, 175, 188)), (180, 56))
+
+            if self.preview_image_path and os.path.isfile(self.preview_image_path):
+                try:
+                    img = pygame.image.load(self.preview_image_path)
+                    iw, ih = img.get_size()
+                    max_w, max_h = 920, 520
+                    scale = min(max_w / max(1, iw), max_h / max(1, ih), 1.0)
+                    dw, dh = int(iw * scale), int(ih * scale)
+                    scaled_img = pygame.transform.smoothscale(img, (dw, dh))
+                    frame_r = pygame.Rect(SCREEN_WIDTH // 2 - dw // 2, 335 - dh // 2, dw, dh)
+                    pygame.draw.rect(surface, (110, 195, 255), frame_r.inflate(4, 4), 2, border_radius=4)
+                    surface.blit(scaled_img, frame_r)
+                except Exception:
+                    pass
+
+            close_btn = pygame.Rect(580, 620, 120, 32)
+            _draw_cut_rect(surface, close_btn, (238, 240, 246), (255, 255, 255), cut=5, border_w=1)
+            surface.blit(_PACK.fonts["tab"].render("Cerrar", True, (12, 14, 18)), (close_btn.x + 36, close_btn.y + 8))
             return
 
         if self.modal_mode == "invite":

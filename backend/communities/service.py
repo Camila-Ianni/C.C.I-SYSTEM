@@ -548,6 +548,7 @@ class CommunitiesService:
         author_id: str,
         content: str,
         reply_to_id: Optional[str] = None,
+        attachments: Optional[List[Dict[str, Any]]] = None,
     ) -> Dict[str, Any]:
         """Publica un mensaje en un canal de texto validando permiso messages.send y límites."""
         clean_content = content.strip()
@@ -579,6 +580,19 @@ class CommunitiesService:
             content=clean_content,
             reply_to_id=reply_to_id,
         )
+        if attachments:
+            msg["attachments"] = []
+            for att in attachments:
+                att_record = self.repo.add_message_attachment(
+                    attachment_id=str(uuid.uuid4()),
+                    message_id=msg["id"],
+                    storage_key=att.get("storage_key", att.get("path", "")),
+                    filename=att.get("filename", "captura.png"),
+                    content_type=att.get("content_type", "image/png"),
+                    size_bytes=att.get("size_bytes", 0),
+                    checksum_sha256=att.get("checksum_sha256", ""),
+                )
+                msg["attachments"].append(att_record)
         return msg
 
     def list_channel_messages(
@@ -598,7 +612,12 @@ class CommunitiesService:
             raise PermissionError("Acceso denegado: se requiere permiso messages.read")
 
         limit = max(1, min(100, limit))
-        return self.repo.list_messages(channel_id, limit=limit, before_id=before_id)
+        msgs = self.repo.list_messages(channel_id, limit=limit, before_id=before_id)
+        for m in msgs:
+            atts = self.repo.list_message_attachments(m["id"])
+            if atts:
+                m["attachments"] = atts
+        return msgs
 
     def edit_message(
         self,

@@ -232,6 +232,85 @@ class TestCommunitiesUI(unittest.TestCase):
         self.comm_state.handle_events([ev_esc])
         self.assertIsNone(self.comm_state.modal_mode)
 
+    def test_09_screenshot_attachments_and_mentions(self):
+        """Verifica adjuntar capturas F12 de capturas/ y el sistema de @menciones en chat."""
+        from screenshot_manager import CAPTURAS_DIR
+        screen = pygame.display.get_surface()
+        self.sm.change_state("COMMUNITY", community_id="night_raid")
+
+        # 1. Autocompletado interactivo de menciones (@mentions)
+        self.comm_state.input_focused = True
+        self.comm_state.input_text = "Atención @ev"
+        self.comm_state._update_mention_autocomplete()
+        self.assertTrue(self.comm_state.autocomplete_active)
+        self.assertIn("@EVERYONE", self.comm_state.autocomplete_candidates)
+
+        # TAB autocompleta la mención
+        ev_tab = pygame.event.Event(pygame.KEYDOWN, key=pygame.K_TAB)
+        self.comm_state.handle_events([ev_tab])
+        self.assertEqual(self.comm_state.input_text, "Atención @EVERYONE ")
+        self.assertFalse(self.comm_state.autocomplete_active)
+
+        # Enviar mensaje con mención
+        self.comm_state._send_message()
+        self.assertIn("Mencionaste a @EVERYONE", self.comm_state.status_toast)
+        last_msg = self.comm_state.chat_messages[-1]
+        self.assertIn("@EVERYONE", last_msg["text"])
+
+        # 2. Adjuntos de capturas F12
+        CAPTURAS_DIR.mkdir(parents=True, exist_ok=True)
+        test_snap = CAPTURAS_DIR / "captura_test_f12.png"
+        dummy_surf = pygame.Surface((320, 180))
+        dummy_surf.fill((30, 90, 150))
+        pygame.image.save(dummy_surf, str(test_snap))
+
+        try:
+            # Clic en botón [📎] para abrir selector de capturas
+            attach_btn_center = self.comm_state.attach_btn_rect.center
+            ev_attach = pygame.event.Event(pygame.MOUSEBUTTONDOWN, pos=attach_btn_center, button=1)
+            self.comm_state.handle_events([ev_attach])
+            self.assertEqual(self.comm_state.modal_mode, "attach_picker")
+
+            # Renderizar modal de capturas y verificar que detecta el archivo
+            self.comm_state.draw(screen)
+            self.assertGreaterEqual(len(self.comm_state.screenshot_picker_rects), 1)
+
+            # Clic en la tarjeta de captura para adjuntarla
+            card_r, snap_meta = self.comm_state.screenshot_picker_rects[0]
+            ev_pick = pygame.event.Event(pygame.MOUSEBUTTONDOWN, pos=card_r.center, button=1)
+            self.comm_state.handle_events([ev_pick])
+            self.assertIsNone(self.comm_state.modal_mode)
+            self.assertIsNotNone(self.comm_state.pending_attachment)
+
+            # Enviar mensaje con la captura adjunta
+            self.comm_state.input_text = "¡Miren mi récord de Metal Slug!"
+            self.comm_state._send_message()
+
+            sent_attached_msg = self.comm_state.chat_messages[-1]
+            self.assertIn("attachment", sent_attached_msg)
+            self.assertTrue(sent_attached_msg["attachment"]["filename"].endswith(".png"))
+
+            # Renderizar chat para verificar miniatura interactiva
+            self.comm_state.draw(screen)
+            self.assertGreaterEqual(len(self.comm_state.attachment_preview_rects), 1)
+
+            # Clic en la miniatura de chat abre vista previa a pantalla completa
+            thumb_r, img_path = self.comm_state.attachment_preview_rects[0]
+            ev_thumb = pygame.event.Event(pygame.MOUSEBUTTONDOWN, pos=thumb_r.center, button=1)
+            self.comm_state.handle_events([ev_thumb])
+            self.assertEqual(self.comm_state.modal_mode, "image_preview")
+            self.assertEqual(self.comm_state.preview_image_path, img_path)
+
+            # Renderizar modal de pantalla completa
+            self.comm_state.draw(screen)
+
+            # Cerrar visor de imagen con ESC
+            self.comm_state.handle_events([pygame.event.Event(pygame.KEYDOWN, key=pygame.K_ESCAPE)])
+            self.assertIsNone(self.comm_state.modal_mode)
+        finally:
+            if test_snap.exists():
+                test_snap.unlink()
+
 
 if __name__ == "__main__":
     unittest.main()
