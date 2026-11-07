@@ -1077,43 +1077,40 @@ class CCIConsoleState:
         name = str(self.user_data.data.get("player_name", "ALEX"))[:16]
         avatar_index = int(self.user_data.data.get("avatar", 0)) % 6
 
-        # Gran retrato de avatar cuando no es el 0
-        if avatar_index != 0:
-            p_big = ROOT / "assets_ui" / "profile" / "avatars" / f"avatar_big_{avatar_index}.png"
-            if p_big.exists():
-                try:
-                    b_surf = pygame.image.load(str(p_big)).convert()
-                    self.canvas.blit(b_surf, (269, 164))
-                except Exception:
-                    pass
+        # Gran retrato de avatar en el marco principal (para cualquier avatar 0..5)
+        p_big = ROOT / "assets_ui" / "profile" / "avatars" / f"avatar_big_{avatar_index}.png"
+        if p_big.exists():
+            try:
+                b_surf = pygame.image.load(str(p_big)).convert()
+                self.canvas.blit(b_surf, (269, 164))
+            except Exception:
+                pass
 
-            # Deseleccionar avatar 0 thumbnail en el carrusel
-            p_unsel = ROOT / "assets_ui" / "profile" / "avatars" / "thumb_alex_normal.png"
-            if p_unsel.exists():
-                try:
-                    u_surf = pygame.image.load(str(p_unsel)).convert()
-                    self.canvas.blit(u_surf, (298, 447))
-                except Exception:
-                    pass
+        # Thumbnail activo en color + marco brillante de selección
+        thumb_xs = [297, 375, 453, 531, 609, 687]
+        p_thumb = ROOT / "assets_ui" / "profile" / "avatars" / f"avatar_thumb_{avatar_index}.png"
+        if p_thumb.exists():
+            try:
+                t_surf = pygame.image.load(str(p_thumb)).convert()
+                self.canvas.blit(t_surf, (thumb_xs[avatar_index] + 1, 447))
+            except Exception:
+                pass
 
-            # Marco brillante de selección sobre el thumbnail activo
-            p_frame = ROOT / "assets_ui" / "profile" / "avatars" / "glow_frame_alpha.png"
-            if p_frame.exists():
-                try:
-                    f_surf = pygame.image.load(str(p_frame)).convert_alpha()
-                    thumb_xs = [297, 375, 453, 531, 609, 687]
-                    self.canvas.blit(f_surf, (thumb_xs[avatar_index], 446))
-                except Exception:
-                    pass
+        p_frame = ROOT / "assets_ui" / "profile" / "avatars" / "glow_frame_alpha.png"
+        if p_frame.exists():
+            try:
+                f_surf = pygame.image.load(str(p_frame)).convert_alpha()
+                self.canvas.blit(f_surf, (thumb_xs[avatar_index], 446))
+            except Exception:
+                pass
 
-        # Entrada de texto / edición de nombre interactiva
+        # Entrada de texto / edición de nombre interactiva (limpia, sin parche negro)
         if self.text_input_active:
             pygame.draw.rect(self.canvas, (18, 20, 24), (418, 178, 180, 42), border_radius=4)
             pygame.draw.rect(self.canvas, (100, 110, 130), (418, 178, 180, 42), 1, border_radius=4)
             cursor = "|" if int(time.time() * 2) % 2 == 0 else ""
             self._text(self.name_buffer + cursor, 422, 182, 26, WHITE, True, 170)
-        elif name != "ALEX":
-            pygame.draw.rect(self.canvas, (18, 20, 24), (418, 178, 180, 42), border_radius=4)
+        else:
             self._text(name, 422, 182, 26, WHITE, True, 170)
 
     def _achievement_game_for_row(self, item):
@@ -1934,8 +1931,8 @@ class CCIConsoleState:
 
     def _handle_click(self, pos):
         x, y = pos
-        # Navegación lateral compartida por todas las pantallas.
-        if x < SIDEBAR_W:
+        # Navegación lateral compartida para pantallas clásicas (excepto Profile que usa su layout scifi)
+        if self.page != "profile" and x < SIDEBAR_W:
             destination = sidebar_destination(pos)
             if destination == "QUIT":
                 pygame.event.post(pygame.event.Event(pygame.QUIT))
@@ -1986,15 +1983,16 @@ class CCIConsoleState:
                 self._launch_selected()
         elif self.page == "profile":
             mx, my = pos
-            # 1. Barra lateral izquierda
+            # 1. Barra lateral izquierda (5 ítems Sci-Fi)
             if 18 <= mx <= 185:
                 if 125 <= my <= 170:
                     self.state_machine.change_state("MENU")
                     return
                 elif 175 <= my <= 230:
-                    self.state_machine.change_state("MENU")
+                    self.state_machine.change_state("LIBRARY")
                     return
                 elif 235 <= my <= 285:
+                    self._feedback()
                     return
                 elif 345 <= my <= 395:
                     self.state_machine.change_state("SETTINGS")
@@ -2019,19 +2017,19 @@ class CCIConsoleState:
                 return
 
             # 4. Carrusel de avatares
-            if 245 <= mx <= 285 and 460 <= my <= 500:
+            if 245 <= mx <= 285 and 440 <= my <= 530:
                 cur = int(self.user_data.data.get("avatar", 0))
                 self.user_data.data["avatar"] = (cur - 1) % 6
                 self.user_data.save()
                 return
-            if 755 <= mx <= 795 and 460 <= my <= 500:
+            if 755 <= mx <= 795 and 440 <= my <= 530:
                 cur = int(self.user_data.data.get("avatar", 0))
                 self.user_data.data["avatar"] = (cur + 1) % 6
                 self.user_data.save()
                 return
             for i in range(6):
                 ax = 290 + i * 78
-                if ax <= mx <= ax + 74 and 465 <= my <= 550:
+                if ax <= mx <= ax + 74 and 440 <= my <= 530:
                     self.user_data.data["avatar"] = i
                     self.user_data.save()
                     return
