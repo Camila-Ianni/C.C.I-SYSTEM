@@ -658,8 +658,9 @@ class MenuState(BaseState):
                         self._play_beep(650)
                         return
                     elif 175 <= my <= 230:
-                        # Juegos (ya activo)
+                        # Juegos -> Biblioteca de juegos
                         self._play_beep(700)
+                        self.state_machine.change_state("LIBRARY")
                         return
                     elif 235 <= my <= 285:
                         # Perfil
@@ -841,7 +842,7 @@ class ScreenPreviewState(BaseState):
                 self.state_machine.change_state("MENU")
                 return
             if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
-                destination = MenuState._sidebar_destination(event.pos)
+                destination = sidebar_destination(event.pos)
                 if destination == "QUIT":
                     pygame.event.post(pygame.event.Event(pygame.QUIT))
                 elif destination == "MENU":
