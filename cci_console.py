@@ -449,12 +449,25 @@ class CCIConsoleState:
         self.scaled_size = None
         self.font_cache = {}
         self.ui_sound = self._make_ui_sound()
-        self.profile_overlay = None
+        self.profile_sidebar = None
+        self.profile_header = None
+        self.profile_top_right = None
+        self.profile_panel_left = None
+        self.profile_panel_right = None
+        self.profile_bottom_bar = None
+        self.profile_glow_frame = None
         if page == "profile":
-            p_ov = ROOT / "assets_ui" / "profile" / "profile_diff_overlay.png"
-            if p_ov.exists():
+            p_dir = ROOT / "assets_ui" / "profile"
+            self.profile_sidebar = self._load_img_asset(p_dir / "sidebar_full.png")
+            self.profile_header = self._load_img_asset(p_dir / "header_full.png")
+            self.profile_top_right = self._load_img_asset(p_dir / "top_right_full.png")
+            self.profile_panel_left = self._load_img_asset(p_dir / "panel_profile_clean.png")
+            self.profile_panel_right = self._load_img_asset(p_dir / "panel_saves_right.png")
+            self.profile_bottom_bar = self._load_img_asset(p_dir / "bottom_bar_full.png")
+            f_p = p_dir / "avatars" / "glow_frame_alpha.png"
+            if f_p.exists():
                 try:
-                    self.profile_overlay = pygame.image.load(str(p_ov)).convert_alpha()
+                    self.profile_glow_frame = pygame.image.load(str(f_p)).convert_alpha()
                 except Exception:
                     pass
         self.avatar_surfaces = self._load_avatars() if page == "profile" else []
@@ -493,6 +506,15 @@ class CCIConsoleState:
         self.last_drawn_size = None
         self.fanfare_sound = self._make_fanfare_sound() if page == "achievements" else None
         self.awarding_trophy = None
+
+    @staticmethod
+    def _load_img_asset(path):
+        if path.exists():
+            try:
+                return pygame.image.load(str(path)).convert()
+            except Exception:
+                return None
+        return None
 
     def _selected_game_art(self, game_id=None):
         gid = game_id or self.selected_game_id
@@ -1071,13 +1093,24 @@ class CCIConsoleState:
         return True
 
     def _draw_profile(self):
-        if self.profile_overlay:
-            self.canvas.blit(self.profile_overlay, (0, 0))
+        # 1. Paneles base completos y limpios (sin agujeros de diff ni artefactos de wireframe)
+        if self.profile_sidebar:
+            self.canvas.blit(self.profile_sidebar, (18, 25))
+        if self.profile_header:
+            self.canvas.blit(self.profile_header, (240, 42))
+        if self.profile_top_right:
+            self.canvas.blit(self.profile_top_right, (1020, 26))
+        if self.profile_panel_left:
+            self.canvas.blit(self.profile_panel_left, (232, 138))
+        if self.profile_panel_right:
+            self.canvas.blit(self.profile_panel_right, (805, 138))
+        if self.profile_bottom_bar:
+            self.canvas.blit(self.profile_bottom_bar, (18, 585))
 
         name = str(self.user_data.data.get("player_name", "ALEX"))[:16]
         avatar_index = int(self.user_data.data.get("avatar", 0)) % 6
 
-        # Gran retrato de avatar en el marco principal (para cualquier avatar 0..5)
+        # 2. Gran retrato de avatar en el marco principal (x=269, y=164)
         p_big = ROOT / "assets_ui" / "profile" / "avatars" / f"avatar_big_{avatar_index}.png"
         if p_big.exists():
             try:
@@ -1086,25 +1119,12 @@ class CCIConsoleState:
             except Exception:
                 pass
 
-        # Thumbnail activo en color + marco brillante de selección
-        thumb_xs = [297, 375, 453, 531, 609, 687]
-        p_thumb = ROOT / "assets_ui" / "profile" / "avatars" / f"avatar_thumb_{avatar_index}.png"
-        if p_thumb.exists():
-            try:
-                t_surf = pygame.image.load(str(p_thumb)).convert()
-                self.canvas.blit(t_surf, (thumb_xs[avatar_index] + 1, 447))
-            except Exception:
-                pass
+        # 3. Marco brillante de selección sobre el thumbnail activo en el carrusel
+        if self.profile_glow_frame:
+            thumb_xs = [297, 375, 453, 531, 609, 687]
+            self.canvas.blit(self.profile_glow_frame, (thumb_xs[avatar_index], 446))
 
-        p_frame = ROOT / "assets_ui" / "profile" / "avatars" / "glow_frame_alpha.png"
-        if p_frame.exists():
-            try:
-                f_surf = pygame.image.load(str(p_frame)).convert_alpha()
-                self.canvas.blit(f_surf, (thumb_xs[avatar_index], 446))
-            except Exception:
-                pass
-
-        # Entrada de texto / edición de nombre interactiva (limpia, sin parche negro)
+        # 4. Entrada de texto / edición de nombre interactiva (render limpio sobre vidrio)
         if self.text_input_active:
             pygame.draw.rect(self.canvas, (18, 20, 24), (418, 178, 180, 42), border_radius=4)
             pygame.draw.rect(self.canvas, (100, 110, 130), (418, 178, 180, 42), 1, border_radius=4)
