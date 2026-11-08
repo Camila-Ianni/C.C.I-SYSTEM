@@ -1525,16 +1525,16 @@ class GroupsHubState(BaseState):
             return gi, fr, si
         return (
             [
-                GroupInviteItem("inv_0", "NIGHT RAID", "Kai", "sol_group_0.png"),
-                GroupInviteItem("inv_1", "SAKURA CLUB", "Martina", "sol_group_1.png"),
-                GroupInviteItem("inv_2", "PIXEL SQUAD", "Ren", "sol_group_2.png"),
+                GroupInviteItem("inv_0", "Minecraft", "Lunaria", "sol_group_0.png"),
+                GroupInviteItem("inv_1", "Ghostbusters", "Rox", "sol_group_1.png"),
+                GroupInviteItem("inv_2", "Cyberpunk", "Vex", "sol_group_2.png"),
             ],
             [
-                FriendRequestItem("fr_0", "Luca", "sol_friend_0.png"),
-                FriendRequestItem("fr_1", "Sofía", "sol_friend_1.png"),
+                FriendRequestItem("fr_0", "Lunaria", "sol_friend_0.png"),
+                FriendRequestItem("fr_1", "Vex", "sol_friend_1.png"),
             ],
             [
-                FriendRequestItem("sent_0", "Tomás", "sol_sent_0.png"),
+                FriendRequestItem("sent_0", "Minecraft", "sol_sent_0.png"),
             ],
         )
 
@@ -1989,11 +1989,20 @@ class GroupsHubState(BaseState):
                 else:
                     canvas.fill((8, 9, 12))
         else:
-            base_surf = _PACK.bases.get("base_solicitudes.png")
-            if base_surf is not None:
-                canvas.blit(base_surf, (0, 0))
+            full_surf = _PACK.sprites.get("full_solicitudes.png")
+            if (
+                full_surf is not None
+                and len(self.group_invites) == 3
+                and len(self.friend_requests) == 2
+                and len(self.sent_invites) == 1
+            ):
+                canvas.blit(full_surf, (0, 0))
             else:
-                canvas.fill((8, 9, 12))
+                base_surf = _PACK.bases.get("base_solicitudes.png")
+                if base_surf is not None:
+                    canvas.blit(base_surf, (0, 0))
+                else:
+                    canvas.fill((8, 9, 12))
 
         # 2. Dibujar los elementos sobre los contenedores de la base
         if self.active_tab == 0:
@@ -2310,39 +2319,44 @@ class GroupsHubState(BaseState):
     def _draw_tab_solicitudes(self, surface: pygame.Surface) -> None:
         self.sol_action_rects.clear()
 
-        # 1. Invitaciones a grupos en el contenedor izquierdo con margen interno (x=265..777, y=252..576)
-        gy = 252
+        # 1. Invitaciones a grupos en el contenedor izquierdo (x=228..820, y=225..475)
+        gy = 225
         for inv in self.group_invites:
             sp = _PACK.sprites.get(inv.sprite_name)
             if sp is not None:
-                surface.blit(sp, (265, gy))
-            acc_rect = pygame.Rect(265 + 324, gy + 54, 86, 32)
-            rej_rect = pygame.Rect(265 + 416, gy + 54, 90, 32)
+                surface.blit(sp, (228, gy))
+            acc_rect = pygame.Rect(610, gy + 15, 95, 36)
+            rej_rect = pygame.Rect(715, gy + 15, 100, 36)
             self.sol_action_rects.append((acc_rect, inv.req_id, "accept"))
             self.sol_action_rects.append((rej_rect, inv.req_id, "reject"))
-            gy += 108
+            gy += 85
 
-        # 2. Solicitudes de amistad en el contenedor superior derecho con margen (x=832..1244, y=248..362)
-        fy = 248
+        # 2. Solicitudes de amistad en el contenedor superior derecho (x=860..1235, y=205..322)
+        fy = 205
         for fr in self.friend_requests:
             sp = _PACK.sprites.get(fr.sprite_name)
             if sp is not None:
-                surface.blit(sp, (832, fy))
-            acc_rect = pygame.Rect(832 + 236, fy + 10, 82, 32)
-            rej_rect = pygame.Rect(832 + 322, fy + 10, 86, 32)
+                surface.blit(sp, (860, fy))
+            acc_rect = pygame.Rect(1155, fy + 13, 36, 32)
+            rej_rect = pygame.Rect(1195, fy + 13, 36, 32)
             self.sol_action_rects.append((acc_rect, fr.req_id, "accept"))
             self.sol_action_rects.append((rej_rect, fr.req_id, "reject"))
-            fy += 58
+            fy += 60
 
-        # 3. Invitaciones enviadas en el contenedor medio derecho con margen (x=832..1244, y=446..508)
-        sy = 446
+        # 3. Invitaciones enviadas en el contenedor medio derecho (x=860..1235, y=400..465)
+        sy = 400
         for st in self.sent_invites:
             sp = _PACK.sprites.get(st.sprite_name)
             if sp is not None:
-                surface.blit(sp, (832, sy))
-            can_rect = pygame.Rect(832 + 306, sy + 10, 98, 32)
+                surface.blit(sp, (860, sy))
+            can_rect = pygame.Rect(1140, sy + 20, 88, 30)
             self.sol_action_rects.append((can_rect, st.req_id, "cancel"))
-            sy += 58
+            sy += 65
+
+        if self.status_banner:
+            f_small_b = _PACK.fonts["small_bold"]
+            ban_s = f_small_b.render(f"✓ {self.status_banner}", True, (115, 235, 165))
+            surface.blit(ban_s, (254, 650))
 
     def _draw_modal(self, surface: pygame.Surface) -> None:
         overlay = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT), pygame.SRCALPHA)
