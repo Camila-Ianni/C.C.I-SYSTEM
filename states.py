@@ -495,9 +495,9 @@ class VideoState(BaseState):
 
 
 class BootState(VideoState):
-    """ESTADO 'BOOT': Reproduce CCI_INTRO.mp4 con audio y pasa a INTRO_AVATAR al terminar."""
+    """ESTADO 'BOOT': Reproduce CCI_INTRO.mp4 con audio y pasa a USER_SELECT al terminar."""
     def __init__(self, state_machine):
-        super().__init__(state_machine, video_path="CCI_INTRO.mp4", next_state_name="INTRO_AVATAR", allow_skip=True)
+        super().__init__(state_machine, video_path="CCI_INTRO.mp4", next_state_name="USER_SELECT", allow_skip=True)
 
 
 class IntroAvatarState(VideoState):

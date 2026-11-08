@@ -95,7 +95,7 @@ def main():
                 st.set_user_data(new_user_data)
         apply_display(new_user_data.settings)
 
-    # Flujo de inicio: BOOT -> INTRO_AVATAR -> USER_SELECT -> MENU
+    # Flujo de inicio: BOOT (CCI_INTRO) -> USER_SELECT -> MENU
     state_machine.register_state("BOOT", BootState(state_machine))
     state_machine.register_state("INTRO_AVATAR", IntroAvatarState(state_machine))
     state_machine.register_state("USER_SELECT", UserSelectState(state_machine, on_user_selected=apply_user))
