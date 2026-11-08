@@ -32,97 +32,114 @@ COMMUNITIES_CATALOG: List[Dict[str, Any]] = [
     {
         "id": "night_raid",
         "group_id": "grp_night_raid",
-        "name": "NIGHT RAID",
-        "subtitle": "COMUNIDAD DE JUEGOS • 24 MIEMBROS",
-        "description": "Comunidad enfocada en juegos competitivos, eventos y proyectos de C.C.I.",
-        "privacy": "Grupo privado",
-        "members_count": 24,
-        "online_count": 5,
+        "alias_id": "minecraft",
+        "name": "Minecraft",
+        "category": "Juego",
+        "subtitle": "JUEGO • 128 MIEMBROS",
+        "description": "Comunidad para jugar, compartir builds, mods y organizar partidas.",
+        "privacy": "Grupo público",
+        "members_count": 128,
+        "online_count": 32,
         "channels_count": 12,
         "voice_count": 3,
         "is_owner": True,
-        "card_sprite": "card_0_night_raid.png",
+        "card_sprite": "emblem_grp_minecraft.png",
         "banner_idx": 0,
         "emblem_idx": 0,
         "recent_rank": 0,
+        "created_at": "12 / 04 / 2025",
     },
     {
         "id": "sakura_club",
         "group_id": "grp_sakura_club",
-        "name": "SAKURA CLUB",
-        "subtitle": "ARTE Y CULTURA • 18 MIEMBROS",
-        "description": "Espacio de ilustración pixel art, estética japonesa, música lo-fi y charlas.",
+        "alias_id": "ghostbusters",
+        "name": "Ghostbusters",
+        "category": "Comunidad",
+        "subtitle": "COMUNIDAD • 54 MIEMBROS",
+        "description": "Caza de fantasmas, estrategias de equipo y eventos de la comunidad.",
         "privacy": "Grupo público",
-        "members_count": 18,
-        "online_count": 3,
+        "members_count": 54,
+        "online_count": 8,
         "channels_count": 8,
         "voice_count": 2,
         "is_owner": False,
-        "card_sprite": "card_1_sakura_club.png",
+        "card_sprite": "emblem_grp_ghostbusters.png",
         "banner_idx": 1,
         "emblem_idx": 1,
         "recent_rank": 1,
+        "created_at": "10 / 04 / 2025",
     },
     {
         "id": "da_vinci_team",
         "group_id": "grp_davinci_team",
-        "name": "DA VINCI TEAM",
-        "subtitle": "DESARROLLO C.C.I. • 12 MIEMBROS",
-        "description": "Equipo de desarrollo de videojuegos indie, motores gráficos y torneos.",
-        "privacy": "Grupo privado",
-        "members_count": 12,
-        "online_count": 2,
+        "alias_id": "dino",
+        "name": "Dino",
+        "category": "Juego",
+        "subtitle": "JUEGO • 37 MIEMBROS",
+        "description": "Torneos y récords de Dino en el desierto pixelado.",
+        "privacy": "Grupo público",
+        "members_count": 37,
+        "online_count": 0,
         "channels_count": 10,
         "voice_count": 2,
         "is_owner": True,
-        "card_sprite": "card_2_davinci_team.png",
+        "card_sprite": "emblem_grp_dino.png",
         "banner_idx": 2,
         "emblem_idx": 2,
         "recent_rank": 2,
+        "created_at": "08 / 04 / 2025",
     },
     {
         "id": "pixel_squad",
         "group_id": "grp_pixel_squad",
-        "name": "PIXEL SQUAD",
-        "subtitle": "ARCADE & RETRO • 30 MIEMBROS",
-        "description": "Comunidad de speedruns, retos semanales de arcade y récords cooperativos.",
+        "alias_id": "flappy_bird",
+        "name": "Flappy Bird",
+        "category": "Juego",
+        "subtitle": "JUEGO • 76 MIEMBROS",
+        "description": "Comunidad de saltos precisos, puntuaciones altas y desafíos semanales.",
         "privacy": "Grupo público",
-        "members_count": 30,
-        "online_count": 9,
+        "members_count": 76,
+        "online_count": 18,
         "channels_count": 14,
         "voice_count": 4,
         "is_owner": False,
-        "card_sprite": "card_3_pixel_squad.png",
+        "card_sprite": "emblem_grp_flappy.png",
         "banner_idx": 3,
         "emblem_idx": 3,
         "recent_rank": 3,
+        "created_at": "05 / 04 / 2025",
     },
     {
         "id": "kpop_zone",
         "group_id": "grp_kpop_zone",
-        "name": "K-POP ZONE",
-        "subtitle": "MÚSICA Y RITMO • 56 MIEMBROS",
-        "description": "Eventos de juegos de ritmo, watch parties en vivo y listas colaborativas.",
-        "privacy": "Grupo público",
-        "members_count": 56,
-        "online_count": 14,
+        "alias_id": "cyberpunk",
+        "name": "Cyberpunk",
+        "category": "Comunidad",
+        "subtitle": "COMUNIDAD • 92 MIEMBROS",
+        "description": "Clan cyberpunk, partidas nocturnas, mods y torneos competitivos.",
+        "privacy": "Grupo privado",
+        "members_count": 92,
+        "online_count": 21,
         "channels_count": 16,
         "voice_count": 5,
         "is_owner": False,
-        "card_sprite": "card_4_kpop_zone.png",
+        "card_sprite": "emblem_grp_cyberpunk.png",
         "banner_idx": 4,
         "emblem_idx": 4,
         "recent_rank": 4,
+        "created_at": "01 / 04 / 2025",
     },
     {
         "id": "cosmos",
         "group_id": "grp_cosmos",
+        "alias_id": "cosmos",
         "name": "COSMOS",
-        "subtitle": "EXPLORACIÓN SCI-FI • 20 MIEMBROS",
-        "description": "Simuladores espaciales, lore sci-fi y misiones nocturnas de escuadrón.",
+        "category": "Comunidad",
+        "subtitle": "COMUNIDAD • 45 MIEMBROS",
+        "description": "Exploración espacial, simulación y misiones estelares.",
         "privacy": "Grupo privado",
-        "members_count": 20,
-        "online_count": 4,
+        "members_count": 45,
+        "online_count": 12,
         "channels_count": 9,
         "voice_count": 2,
         "is_owner": False,
@@ -130,6 +147,7 @@ COMMUNITIES_CATALOG: List[Dict[str, Any]] = [
         "banner_idx": 5,
         "emblem_idx": 5,
         "recent_rank": 5,
+        "created_at": "28 / 03 / 2025",
     },
 ]
 
@@ -1938,7 +1956,23 @@ class GroupsHubState(BaseState):
         canvas = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
 
         # 1. Seleccionar la base limpia correspondiente a la pestaña activa
-        if self.active_tab == 1:
+        if self.active_tab == 0:
+            full_surf = _PACK.sprites.get("full_mis_grupos.png")
+            if (
+                full_surf is not None
+                and self.selected_index == 0
+                and not self.search_focused
+                and not self.search_query
+                and self.sort_idx == 0
+            ):
+                canvas.blit(full_surf, (0, 0))
+            else:
+                base_surf = _PACK.bases.get("base_mis_grupos.png")
+                if base_surf is not None:
+                    canvas.blit(base_surf, (0, 0))
+                else:
+                    canvas.fill((8, 9, 12))
+        elif self.active_tab == 1:
             full_surf = _PACK.sprites.get("full_chats_privados.png")
             if (
                 full_surf is not None
@@ -1955,12 +1989,7 @@ class GroupsHubState(BaseState):
                 else:
                     canvas.fill((8, 9, 12))
         else:
-            base_key = (
-                "base_mis_grupos.png"
-                if self.active_tab == 0
-                else "base_solicitudes.png"
-            )
-            base_surf = _PACK.bases.get(base_key)
+            base_surf = _PACK.bases.get("base_solicitudes.png")
             if base_surf is not None:
                 canvas.blit(base_surf, (0, 0))
             else:
@@ -2045,150 +2074,114 @@ class GroupsHubState(BaseState):
         f_small = _PACK.fonts["small"]
         f_small_b = _PACK.fonts["small_bold"]
 
-        if self.search_focused or self.search_query:
-            pygame.draw.rect(surface, (14, 16, 20), pygame.Rect(268, 202, 196, 21))
-            if self.search_focused:
-                pygame.draw.rect(surface, (235, 238, 245), self.search_rect, 1, border_radius=4)
-            q_txt = self.search_query + ("|" if self.search_focused else "")
-            s_surf = f_sub.render(q_txt or "Buscar grupo...", True, (238, 240, 246))
-            surface.blit(s_surf, (270, 205))
-
-        if self.sort_idx != 0:
-            pygame.draw.rect(surface, (14, 16, 20), pygame.Rect(562, 202, 106, 21))
-            m_surf = f_small.render(f"{self.SORT_MODES[self.sort_idx]} v", True, (220, 224, 232))
-            surface.blit(m_surf, (565, 206))
-
-        # Botón adicional en la barra inferior: Compartir Código / Link
-        _draw_cut_rect(surface, self.share_btn_rect, (18, 21, 27), (160, 168, 184), cut=5, border_w=1)
-        sh_lbl = f_sub.render("🔗 Compartir código / link", True, (236, 240, 248))
-        surface.blit(
-            sh_lbl,
-            (
-                self.share_btn_rect.centerx - sh_lbl.get_width() // 2,
-                self.share_btn_rect.centery - sh_lbl.get_height() // 2,
-            ),
-        )
-
-        if self.status_banner:
-            ban_s = f_small_b.render(f"✓ {self.status_banner}", True, (115, 235, 165))
-            surface.blit(ban_s, (254, 650))
-
         groups = self._filtered_groups()
         self.card_rects.clear()
         if groups:
             self.selected_index = max(0, min(self.selected_index, len(groups) - 1))
 
-        # Paginación automática de a 6 tarjetas según selected_index
-        page_start = (self.selected_index // 6) * 6 if groups else 0
-        visible_groups = groups[page_start : page_start + 6]
-        default_ids = {g["id"] for g in COMMUNITIES_CATALOG}
+        # Registrar card_rects para navegación y clics
+        # Filas de grupos: y=225, 294, 363, 432, 501 (h=58)
+        page_start = (self.selected_index // 5) * 5 if groups else 0
+        visible_groups = groups[page_start : page_start + 5]
+        for local_i, grp in enumerate(visible_groups):
+            abs_i = page_start + local_i
+            rect = pygame.Rect(220, 225 + local_i * 69, 610, 58)
+            self.card_rects.append((rect, abs_i))
 
-        if self.view_mode == "grid":
-            col_x = [262, 578]
-            row_y = [248, 353, 458]
-            for local_i, grp in enumerate(visible_groups):
-                abs_i = page_start + local_i
-                c = local_i % 2
-                r = local_i // 2
-                x, y = col_x[c], row_y[r]
-                rect = pygame.Rect(x, y, 298, 92)
-                self.card_rects.append((rect, abs_i))
+        is_default = (
+            self.selected_index == 0
+            and not self.search_focused
+            and not self.search_query
+            and self.sort_idx == 0
+        )
+        if is_default:
+            return
 
-                sp = _PACK.sprites.get(grp.get("card_sprite", "")) if grp["id"] in default_ids else None
-                if sp is not None:
-                    surface.blit(sp, (x, y))
-                else:
-                    self._draw_custom_group_card(surface, rect, grp)
+        # Render dinámico si se seleccionó otro grupo o se busca/ordena:
+        # 1. Buscador
+        if self.search_focused or self.search_query:
+            pygame.draw.rect(surface, (14, 16, 20), pygame.Rect(268, 174, 220, 26))
+            if self.search_focused:
+                pygame.draw.rect(surface, (235, 238, 245), self.search_rect, 1, border_radius=4)
+            q_txt = self.search_query + ("|" if self.search_focused else "")
+            s_surf = f_sub.render(q_txt or "Buscar grupo...", True, (238, 240, 246))
+            surface.blit(s_surf, (270, 178))
 
-                if abs_i == self.selected_index:
-                    pts = [
-                        (rect.x + 6, rect.y),
-                        (rect.right - 6, rect.y),
-                        (rect.right, rect.y + 6),
-                        (rect.right, rect.bottom - 6),
-                        (rect.right - 6, rect.bottom),
-                        (rect.x + 6, rect.bottom),
-                        (rect.x, rect.bottom - 6),
-                        (rect.x, rect.y + 6),
-                    ]
-                    pygame.draw.polygon(surface, (245, 247, 252), pts, 2)
-        else:
-            for local_i, grp in enumerate(visible_groups):
-                abs_i = page_start + local_i
-                y = 248 + local_i * 50
-                rect = pygame.Rect(262, y, 614, 44)
-                self.card_rects.append((rect, abs_i))
-                sel = abs_i == self.selected_index
-                _draw_cut_rect(
-                    surface,
-                    rect,
-                    (22, 25, 31) if sel else (14, 16, 20),
-                    (242, 244, 248) if sel else (75, 80, 92),
-                    cut=5,
-                    border_w=2 if sel else 1,
-                )
-                emb = _PACK.sprites.get(f"emblem_{grp['emblem_idx']}.png")
-                if emb is not None:
-                    emb_sm = pygame.transform.smoothscale(emb, (34, 34))
-                    surface.blit(emb_sm, (rect.x + 8, rect.y + 5))
-                t_s = f_title.render(grp["name"], True, (244, 246, 250))
-                m_s = f_sub.render(
-                    f"{grp['members_count']} miembros • {grp['channels_count']} canales • Código: {grp.get('invite_code', 'CCI')}",
-                    True,
-                    (175, 180, 190),
-                )
-                surface.blit(t_s, (rect.x + 52, rect.y + 6))
-                surface.blit(m_s, (rect.x + 52, rect.y + 24))
+        # 2. Lista de grupos izquierda
+        for local_i, grp in enumerate(visible_groups):
+            abs_i = page_start + local_i
+            rect = self.card_rects[local_i][0]
+            sel = abs_i == self.selected_index
+            if sel:
+                pygame.draw.rect(surface, (28, 32, 42), rect, border_radius=12)
+                pygame.draw.rect(surface, (245, 245, 250), rect, 2, border_radius=12)
+            else:
+                pygame.draw.rect(surface, (16, 18, 24), rect, border_radius=12)
+                pygame.draw.rect(surface, (40, 44, 55), rect, 1, border_radius=12)
 
-        # Panel derecho de detalle sobre la base limpia (x=913..1262, y=188..588)
+            slug = grp.get("alias_id", grp["id"])
+            emb = _PACK.sprites.get(f"emblem_grp_{slug}.png")
+            if emb is not None:
+                surface.blit(emb, (rect.x + 10, rect.y + 7))
+
+            t_s = f_title.render(grp["name"], True, (245, 248, 255) if sel else (210, 215, 225))
+            surface.blit(t_s, (rect.x + 72, rect.y + 10))
+
+            m_s = f_small.render(f"{grp['members_count']} miembros", True, (150, 158, 172))
+            surface.blit(m_s, (rect.x + 72, rect.y + 32))
+
+            pygame.draw.circle(surface, (46, 204, 113), (rect.x + 236, rect.y + 38), 3)
+            o_s = f_small.render(f"En línea: {grp['online_count']}", True, (150, 158, 172))
+            surface.blit(o_s, (rect.x + 244, rect.y + 32))
+
+            cat = grp.get("category", "Comunidad")
+            b_color = (90, 160, 255) if cat == "Juego" else (175, 120, 255)
+            badge_rect = pygame.Rect(rect.right - 95, rect.y + 16, 80, 26)
+            pygame.draw.rect(surface, (24, 28, 36), badge_rect, border_radius=6)
+            pygame.draw.rect(surface, b_color, badge_rect, 1, border_radius=6)
+            cat_s = f_small_b.render(cat, True, b_color)
+            surface.blit(cat_s, (badge_rect.centerx - cat_s.get_width() // 2, badge_rect.centery - cat_s.get_height() // 2))
+
+        # 3. Panel derecho de detalle
         if groups:
             sel_grp = groups[self.selected_index]
-            inv = self.bridge.get_or_create_invite(sel_grp["id"])
-            ban = _PACK.sprites.get(f"banner_{sel_grp['banner_idx'] % 6}.png")
-            if ban is not None:
-                surface.blit(ban, (925, 188))
-            emb = _PACK.sprites.get(f"emblem_{sel_grp['emblem_idx'] % 6}.png")
-            if emb is not None and not sel_grp.get("is_custom"):
-                surface.blit(emb, (928, 252))
+            slug = sel_grp.get("alias_id", sel_grp["id"])
+            if slug == "minecraft":
+                det_emb = _PACK.sprites.get("detail_grp_minecraft.png")
+                if det_emb is not None:
+                    surface.blit(det_emb, (980, 175))
             else:
-                emb_box = pygame.Rect(928, 252, 54, 54)
-                _draw_cut_rect(surface, emb_box, (20, 26, 36), (110, 190, 255), cut=6, border_w=2)
-                ini = sel_grp["name"][:2].upper()
-                ini_s = _PACK.fonts["title"].render(ini, True, (245, 247, 252))
-                surface.blit(
-                    ini_s,
-                    (emb_box.centerx - ini_s.get_width() // 2, emb_box.centery - ini_s.get_height() // 2),
-                )
+                emb = _PACK.sprites.get(f"emblem_grp_{slug}.png")
+                if emb is not None:
+                    emb_scaled = pygame.transform.smoothscale(emb, (80, 80))
+                    surface.blit(emb_scaled, (1040, 185))
 
-            n_s = _PACK.fonts["title"].render(sel_grp["name"][:18], True, (245, 247, 252))
-            surface.blit(n_s, (996, 264))
-            p_s = f_sub.render(f"🔒 {sel_grp['privacy']} • Cód: {inv['code']}", True, (175, 185, 200))
-            surface.blit(p_s, (996, 288))
+            n_s = _PACK.fonts["title"].render(sel_grp["name"], True, (245, 248, 255))
+            surface.blit(n_s, (1080 - n_s.get_width() // 2, 298))
 
-            lines = _wrap_lines(sel_grp["description"], f_sub, 316)
-            for li, line in enumerate(lines[:2]):
-                l_s = f_sub.render(line, True, (205, 210, 220))
-                surface.blit(l_s, (928, 322 + li * 17))
+            cat = sel_grp.get("category", "Comunidad")
+            b_color = (90, 160, 255) if cat == "Juego" else (175, 120, 255)
+            b_rect = pygame.Rect(1040, 328, 80, 22)
+            pygame.draw.rect(surface, (24, 28, 36), b_rect, border_radius=5)
+            pygame.draw.rect(surface, b_color, b_rect, 1, border_radius=5)
+            b_s = f_small_b.render(cat, True, b_color)
+            surface.blit(b_s, (b_rect.centerx - b_s.get_width() // 2, b_rect.centery - b_s.get_height() // 2))
 
-            stats = [
-                ("Miembros", str(sel_grp["members_count"]), 368),
-                ("En línea", str(sel_grp["online_count"]), 399),
-                ("# Canales propios", str(sel_grp["channels_count"]), 431),
-                ("Salas de voz", str(sel_grp["voice_count"]), 463),
-            ]
-            for lbl, val, sy in stats:
-                ls = f_body.render(lbl, True, (205, 210, 220))
-                vs = f_small_b.render(val, True, (244, 246, 250))
-                surface.blit(ls, (946, sy))
-                surface.blit(vs, (1244 - vs.get_width(), sy))
+            lines = _wrap_lines(sel_grp["description"], f_sub, 300)
+            for li, line in enumerate(lines[:3]):
+                l_s = f_sub.render(line, True, (175, 182, 195))
+                surface.blit(l_s, (930, 362 + li * 18))
 
-            # Botones rápidos para copiar código o link directamente desde el panel derecho
-            _draw_cut_rect(surface, self.copy_code_detail_rect, (20, 24, 32), (120, 130, 148), cut=4, border_w=1)
-            _draw_cut_rect(surface, self.copy_link_detail_rect, (20, 24, 32), (120, 130, 148), cut=4, border_w=1)
-            cc_s = f_small_b.render(f"📋 Código: {inv['code'][:8]}", True, (235, 240, 248))
-            cl_s = f_small_b.render("🔗 Copiar Link", True, (235, 240, 248))
-            surface.blit(cc_s, (self.copy_code_detail_rect.x + 10, self.copy_code_detail_rect.y + 5))
-            surface.blit(cl_s, (self.copy_link_detail_rect.x + 28, self.copy_link_detail_rect.y + 5))
+            surface.blit(f_small.render(f"👥  {sel_grp['members_count']} miembros", True, (200, 206, 218)), (950, 424))
+            surface.blit(f_small.render(f"🟢  {sel_grp['online_count']} en línea", True, (200, 206, 218)), (950, 450))
+            surface.blit(f_small.render(f"📅  Creado el {sel_grp.get('created_at', '12 / 04 / 2025')}", True, (200, 206, 218)), (950, 476))
+
+            # Botón [Entrar al grupo >]
+            ent_rect = pygame.Rect(950, 526, 260, 42)
+            pygame.draw.rect(surface, (28, 32, 44), ent_rect, border_radius=8)
+            pygame.draw.rect(surface, (240, 244, 252), ent_rect, 2, border_radius=8)
+            ent_s = f_title.render("Entrar al grupo  >", True, (245, 248, 255))
+            surface.blit(ent_s, (ent_rect.centerx - ent_s.get_width() // 2, ent_rect.centery - ent_s.get_height() // 2))
 
     def _draw_tab_chats_privados(self, surface: pygame.Surface) -> None:
         f_title = _PACK.fonts["card_title"]
