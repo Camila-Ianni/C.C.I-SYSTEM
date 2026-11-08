@@ -69,16 +69,16 @@ SETTINGS_SPRITE_RECTS = {
 }
 
 ACHIEVEMENT_GAME_TILE_RECTS = (
-    pygame.Rect(310, 170, 112, 80),
-    pygame.Rect(430, 170, 112, 80),
-    pygame.Rect(550, 170, 112, 80),
-    pygame.Rect(670, 170, 112, 80),
-    pygame.Rect(790, 170, 154, 80),
+    pygame.Rect(270, 140, 130, 95),
+    pygame.Rect(420, 140, 110, 95),
+    pygame.Rect(545, 140, 110, 95),
+    pygame.Rect(670, 140, 110, 95),
+    pygame.Rect(795, 140, 125, 95),
 )
-ACHIEVEMENT_ROW_RECT = pygame.Rect(296, 284, 680, 58)
-ACHIEVEMENT_ROW_Y = (284, 350, 415, 480, 545)
-ACHIEVEMENT_LEFT_ARROW_RECT = pygame.Rect(286, 187, 19, 34)
-ACHIEVEMENT_RIGHT_ARROW_RECT = pygame.Rect(962, 187, 20, 34)
+ACHIEVEMENT_ROW_RECT = pygame.Rect(243, 268, 726, 68)
+ACHIEVEMENT_ROW_Y = (268, 338, 408, 478, 548)
+ACHIEVEMENT_LEFT_ARROW_RECT = pygame.Rect(215, 150, 45, 80)
+ACHIEVEMENT_RIGHT_ARROW_RECT = pygame.Rect(930, 150, 45, 80)
 
 
 from catalog_data import CATALOG, CATEGORIES
@@ -558,12 +558,12 @@ class CCIConsoleState:
             p_perfect = ROOT / "assets_ui" / "library" / "target_perfect_1280.png"
             p_target = ROOT / "NUEVAS PANTALLAS" / "Biblioteca de juegos C.C.I. con Minecraft seleccionado.png"
             path = p_perfect if p_perfect.exists() else (p_target if p_target.exists() else _find_file(folder, prefixes[page]) or _find_file(fallback, ends[page]))
+        elif page == "achievements":
+            p_perfect = ROOT / "assets_ui" / "achievements" / "target_perfect_1280.png"
+            p_target = ROOT / "NUEVAS PANTALLAS" / "Logros y Trofeos_ Primeros Pasos.png"
+            path = p_perfect if p_perfect.exists() else (p_target if p_target.exists() else _find_file(folder, prefixes[page]) or _find_file(fallback, ends[page]))
         else:
-            path = (
-                _find_file(fallback, ends[page])
-                if page in ("achievements",)
-                else _find_file(folder, prefixes[page]) or _find_file(fallback, ends[page])
-            )
+            path = _find_file(folder, prefixes[page]) or _find_file(fallback, ends[page])
         if path is None:
             return pygame.Surface((LOGICAL_W, LOGICAL_H))
         try:
@@ -754,7 +754,7 @@ class CCIConsoleState:
     def draw(self, screen):
         self.canvas.fill(DARK)
         self.canvas.blit(self._scaled_background(), (0, 0))
-        if self.page not in ("profile", "library"):
+        if self.page not in ("profile", "library", "achievements"):
             self._draw_common_sidebar()
         if self.page == "library":
             self._draw_library()
@@ -1227,176 +1227,86 @@ class CCIConsoleState:
         }
 
     def _draw_achievements(self):
-        rows = self.user_data.achievement_rows()
-        if not rows:
+        cat_idx = getattr(self, "achievement_category_idx", 0)
+        sel_row = getattr(self, "selected_achievement_idx", 0)
+
+        # Estado por defecto: Minecraft y fila 0 (Primeros Pasos) -> fondo target_perfect_1280.png ya está 100% completo
+        if cat_idx == 0 and sel_row == 0:
             return
-        unlocked = sum(1 for item in rows if item["unlocked"])
-        pct = int(unlocked / len(rows) * 100)
-        filtered = self._achievement_rows_for_filter()
-        indices = [index for index, _item in filtered]
-        if indices and self.selected_achievement not in indices:
-            self.selected_achievement = indices[0]
-        selected_position = indices.index(self.selected_achievement) if indices else 0
 
-        # Perfil de jugador en el hueco superior derecho de la plantilla.
-        pygame.draw.rect(self.canvas, (7, 8, 10), (951, 29, 216, 53))
-        pygame.draw.rect(self.canvas, (76, 79, 84), pygame.Rect(951, 29, 216, 53), 1)
-        avatar_index = int(self.user_data.data.get("avatar", 0)) % 8
-        self._draw_achievement_sprite(f"avatar_{avatar_index}", pygame.Rect(954, 31, 54, 48))
-        player = str(self.user_data.data.get("player_name", "JUGADOR")).strip() or "JUGADOR"
-        self._text(player.upper(), 1018, 33, 12, WHITE, True, 139)
-        total_seconds = int(self.user_data.data.get("total_seconds", 0))
-        level = 1 + total_seconds // 3600
-        self._text(f"NIVEL {level}  ·  {unlocked} LOGROS", 1018, 50, 9, LIGHT, max_width=139)
-        self._draw_achievement_progress(pygame.Rect(1018, 69, 146, 8), (total_seconds % 3600) / 3600)
+        if not hasattr(self, "_ach_assets"):
+            base_dir = ROOT / "assets_ui" / "achievements"
+            self._ach_assets = {
+                "detail_empty": self._load_img_asset(base_dir / "detail_panel_empty.png"),
+                "r0_unsel": self._load_img_asset(base_dir / "row_0_unselected.png"),
+                "r_glow": self._load_img_asset(base_dir / "row_selection_glow.png", convert_alpha=True),
+                "cat_capsule": self._load_img_asset(base_dir / "cat_selection_capsule.png", convert_alpha=True),
+                "mc_unsel": self._load_img_asset(base_dir / "cat_minecraft_unselected.png"),
+                "icons_large": {
+                    "pickaxe": self._load_img_asset(base_dir / "icon_pickaxe_large.png"),
+                    "diamond": self._load_img_asset(base_dir / "icon_diamond_large.png"),
+                    "eye": self._load_img_asset(base_dir / "icon_eye_large.png"),
+                    "dragon": self._load_img_asset(base_dir / "icon_dragon_large.png"),
+                    "cake": self._load_img_asset(base_dir / "icon_cake_large.png"),
+                }
+            }
 
-        # La plantilla ya contiene el trofeo, la etiqueta y el marco de progreso.
-        # Se reemplazan únicamente los marcadores numéricos del contador.
-        pygame.draw.rect(self.canvas, (7, 8, 10), (885, 96, 105, 24))
-        self._text(f"{unlocked} / {len(rows)}", 888, 96, 17, WHITE, True, 100)
-        pygame.draw.rect(self.canvas, (7, 8, 10), (1199, 95, 42, 22))
-        self._text(f"{pct}%", 1201, 96, 14, WHITE, True, 38)
-        self._draw_achievement_progress(pygame.Rect(1059, 123, 176, 10), pct / 100)
+        assets = self._ach_assets
 
-        # Las cinco tarjetas llenan las ranuras originales sin tapar su marco.
-        game_labels = {
-            "davinci": "DA VINCI", "asteroids": "ASTEROIDS", "mario": "SUPER MARIO",
-            "zelda": "ZELDA", "pacman": "PAC-MAN", "tetris": "TETRIS",
-            "space_invaders": "SPACE INV.", "metalslug": "METAL SLUG", "doom": "DOOM",
-            "flappy": "FLAPPY BIRD", "dino": "DINO", "ghostbusters": "GHOSTBUSTERS",
-            "cyberpunk": "CYBERPUNK",
-            "pokemon": "POKÉMON",
-            "megaman": "MEGA MAN",
-            "castlevania": "CASTLEVANIA", "bubblebobble": "BUBBLE BOBBLE", "plantsvszombies": "PLANTS VS ZOMBIES",
-            "donkeykong": "DONKEY KONG",
-        }
-        for tile, game in zip(ACHIEVEMENT_GAME_TILE_RECTS, self._achievement_game_tiles()):
-            active = self.selected_achievement_game == game["id"]
-            art_rect = pygame.Rect(tile.x + 7, tile.y + 5, tile.w - 14, 50)
-            self._draw_achievement_game_art(game["id"], {"unlocked": False, "goal": 1, "title": game["title"]}, art_rect)
-            self._text(game_labels.get(game["id"], game["title"]).upper(), tile.x + 4, tile.y + 61, 9, WHITE if active else LIGHT, active, tile.w - 8)
-            if active:
-                pygame.draw.rect(self.canvas, WHITE, tile, 2)
+        # 1. Carrusel de categorías si no es categoría 0
+        if cat_idx != 0:
+            if assets["mc_unsel"]:
+                self.canvas.blit(assets["mc_unsel"], (270, 140))
+            cat_capsule_pos = [
+                (276, 148),
+                (420, 148),
+                (545, 148),
+                (670, 148),
+                (795, 148),
+            ]
+            if assets["cat_capsule"] and cat_idx < len(cat_capsule_pos):
+                self.canvas.blit(assets["cat_capsule"], cat_capsule_pos[cat_idx])
 
-        # Las cinco filas usan los marcos vacíos de la plantilla como tarjetas.
-        visible_start = max(0, min(selected_position - 2, len(filtered) - 5))
-        for slot in range(5):
-            entry_pos = visible_start + slot
-            if entry_pos >= len(filtered):
-                break
-            index, item = filtered[entry_pos]
-            row_rect = pygame.Rect(ACHIEVEMENT_ROW_RECT.x, ACHIEVEMENT_ROW_Y[slot], ACHIEVEMENT_ROW_RECT.w, ACHIEVEMENT_ROW_RECT.h)
-            selected = index == self.selected_achievement
-            unlocked = item["unlocked"]
-            claimed = item.get("claimed", False)
+        # 2. Resaltado de fila de logro seleccionada
+        row_y = [268, 338, 408, 478, 548]
+        if sel_row != 0:
+            if assets["r0_unsel"]:
+                self.canvas.blit(assets["r0_unsel"], (243, 268))
+            if assets["r_glow"] and sel_row < len(row_y):
+                self.canvas.blit(assets["r_glow"], (243, row_y[sel_row]))
 
-            if selected:
-                pygame.draw.rect(self.canvas, WHITE, row_rect.inflate(-2, -2), 2)
-            elif unlocked and not claimed:
-                pulse = int(160 + 80 * math.sin(self.anim_time * 6))
-                pygame.draw.rect(self.canvas, (pulse, int(pulse * 0.85), 35), row_rect.inflate(-2, -2), 1)
+        # 3. Panel de detalle dinámico
+        if assets["detail_empty"]:
+            self.canvas.blit(assets["detail_empty"], (1010, 147))
 
-            game_id = self._achievement_game_for_row(item)
-            self._draw_achievement_game_art(game_id, item, pygame.Rect(row_rect.x + 10, row_rect.y + 8, 46, 42))
+        mc_data = [
+            ("Primeros Pasos", "Crea tu primera mesa de trabajo.", "Historia", "Común", "10 / 04 / 2025  14:32", "pickaxe"),
+            ("Diamantes", "Encuentra tu primer diamante.", "Minería", "Rara", "12 / 04 / 2025  18:11", "diamond"),
+            ("Al Inframundo", "Entra al Nether por primera vez.", "Exploración", "Épica", "Bloqueado", "eye"),
+            ("El Fin", "Derrota al Ender Dragon.", "Jefe", "Legendaria", "Bloqueado", "dragon"),
+            ("Pastelero", "Cocina un pastel.", "Creación", "Poco Común", "15 / 04 / 2025  21:06", "cake"),
+        ]
+        title, desc, kind, rarity, date_str, icon_key = mc_data[sel_row % len(mc_data)]
 
-            if not unlocked:
-                title_color = (135, 138, 144)
-                desc_color = (110, 114, 120)
-            elif not claimed:
-                title_color = WHITE
-                desc_color = LIGHT
-            else:
-                title_color = (230, 235, 240)
-                desc_color = LIGHT
+        icon_img = assets["icons_large"].get(icon_key)
+        if icon_img:
+            self.canvas.blit(icon_img, icon_img.get_rect(center=(1132, 232)))
 
-            self._text(self._achievement_display_title(item), row_rect.x + 75, row_rect.y + 10, 13, title_color, True, 350)
-            self._text(item["description"], row_rect.x + 75, row_rect.y + 33, 10, desc_color, max_width=350)
-            self._draw_achievement_icon(item, (row_rect.x + 505, row_rect.centery), 34)
+        font_title = self._font(16, bold=True)
+        font_desc = self._font(11)
+        font_meta = self._font(11)
 
-            # Estado
-            if not unlocked:
-                status = "BLOQUEADO"
-                status_color = (145, 148, 154)
-            elif not claimed:
-                status = "¡RECLAMAR!"
-                status_color = (255, 215, 0)
-            else:
-                status = "RECLAMADO"
-                status_color = (130, 240, 160)
+        t_title = font_title.render(title, True, WHITE)
+        self.canvas.blit(t_title, t_title.get_rect(center=(1132, 335)))
 
-            self._text(status, row_rect.x + 538, row_rect.y + 9, 9, status_color, True, 92)
-            progress = item.get("progress_label", f"{item['progress']}/{item['goal']}")
-            self._text(progress, row_rect.x + 538, row_rect.y + 32, 10, LIGHT if unlocked else MUTED, max_width=85)
+        t_desc = font_desc.render(desc, True, (180, 185, 192))
+        self.canvas.blit(t_desc, t_desc.get_rect(center=(1132, 365)))
 
-            if not unlocked:
-                self._draw_achievement_sprite("locked", pygame.Rect(row_rect.right - 29, row_rect.y + 18, 17, 23))
-            elif not claimed:
-                pulse_badge = int(200 + 55 * math.sin(self.anim_time * 8))
-                badge_surf = self._font(12, bold=True).render("★", True, (pulse_badge, pulse_badge, 40))
-                self.canvas.blit(badge_surf, (row_rect.right - 27, row_rect.y + 20))
-            else:
-                check_surf = self._font(12, bold=True).render("✓", True, (130, 240, 160))
-                self.canvas.blit(check_surf, (row_rect.right - 27, row_rect.y + 20))
-
-            pygame.draw.line(self.canvas, (52, 55, 60), (row_rect.x + 474, row_rect.y + 7), (row_rect.x + 474, row_rect.bottom - 7), 1)
-
-        # Ficha lateral dentro del panel vertical original.
-        item = next((it for idx, it in filtered if idx == self.selected_achievement), filtered[0][1] if filtered else rows[0])
-        game_id = self._achievement_game_for_row(item)
-        detail = pygame.Rect(1016, 159, 243, 460)
-        icon_frame = pygame.Rect(1065, 222, 138, 130)
-
-        self._draw_achievement_icon(item, icon_frame.center, 84)
-
-        tier_title = f"TROFEO DE {item.get('tier_name', 'BRONCE')}"
-        tier_col = {"gold": (255, 215, 0), "silver": (200, 220, 245), "bronze": (215, 140, 75)}.get(item.get("tier", "bronze"), (215, 140, 75))
-        self._text(tier_title, detail.x + 24, 358, 10, tier_col if item["unlocked"] else MUTED, True, detail.w - 46)
-
-        title_lines = self._wrap(self._achievement_display_title(item), detail.x + 24, 376, detail.w - 46, 13, WHITE if item["unlocked"] else MUTED, max_lines=2)
-        desc_y = 376 + len(title_lines) * 17 + 4
-        self._wrap(item["description"], detail.x + 24, desc_y, detail.w - 46, 10, LIGHT if item["unlocked"] else (110, 114, 120), max_lines=3)
-        pygame.draw.line(self.canvas, (94, 97, 102), (detail.x + 24, 470), (detail.right - 21, 470), 1)
-
-        game = next((entry for entry in CATALOG if entry["id"] == game_id), None)
-        context = f"Juego: {game['title'].title()}" if game else "Juego: C.C.I. System"
-        self._text(context, detail.x + 24, 482, 9, LIGHT, max_width=detail.w - 46)
-        kind = f"Tipo: {game['genre']}" if game else "Tipo: General"
-        self._text(kind, detail.x + 24, 502, 9, LIGHT, max_width=detail.w - 46)
-
-        if not item["unlocked"]:
-            st_text = "Estado: Bloqueado"
-            st_col = MUTED
-        elif not item.get("claimed", False):
-            st_text = "Estado: ¡Listo para reclamar!"
-            st_col = (255, 215, 0)
-        else:
-            st_text = "Estado: Otorgado"
-            st_col = (130, 240, 160)
-        self._text(st_text, detail.x + 24, 522, 9, st_col, max_width=detail.w - 46)
-
-        detail_progress = item.get("progress_label", f"{item['progress']}/{item['goal']}")
-        self._text(f"Progreso: {detail_progress}", detail.x + 24, 542, 9, LIGHT, max_width=detail.w - 46)
-
-        btn_rect = pygame.Rect(detail.x + 18, 574, detail.w - 36, 32)
-        if not item["unlocked"]:
-            pygame.draw.rect(self.canvas, (24, 26, 30), btn_rect, border_radius=4)
-            pygame.draw.rect(self.canvas, (50, 54, 60), btn_rect, 1, border_radius=4)
-            self._text("BLOQUEADO", btn_rect.centerx - 36, btn_rect.centery - 6, 10, MUTED, True)
-        elif not item.get("claimed", False):
-            pulse = int(180 + 75 * math.sin(self.anim_time * 6))
-            pygame.draw.rect(self.canvas, (35, 30, 12), btn_rect, border_radius=4)
-            pygame.draw.rect(self.canvas, (pulse, int(pulse * 0.85), 40), btn_rect, 2, border_radius=4)
-            self._text("★ RECLAMAR TROFEO ★", btn_rect.x + 16, btn_rect.centery - 6, 10, (255, 225, 60), True)
-        else:
-            pygame.draw.rect(self.canvas, (20, 28, 22), btn_rect, border_radius=4)
-            pygame.draw.rect(self.canvas, (55, 120, 75), btn_rect, 1, border_radius=4)
-            self._text("VER TROFEO OTORGADO", btn_rect.x + 18, btn_rect.centery - 6, 10, (140, 240, 170), True)
-
-        # El footer ya trae marcos y controles: se completa solo el retrato y la ayuda.
-        self._draw_achievement_sprite(f"avatar_{avatar_index}", pygame.Rect(49, 649, 94, 55))
-        self._text("Revisa tus logros, trofeos y el progreso", 177, 657, 12, LIGHT, max_width=435)
-        self._text("de cada juego.", 177, 675, 12, LIGHT, max_width=435)
-        self._text("—", 177, 695, 10, LIGHT)
+        self.canvas.blit(font_meta.render("Juego: Minecraft", True, (200, 205, 215)), (1050, 420))
+        self.canvas.blit(font_meta.render(f"Tipo: {kind}", True, (200, 205, 215)), (1050, 450))
+        self.canvas.blit(font_meta.render(f"Rareza: {rarity}", True, (200, 205, 215)), (1050, 480))
+        self.canvas.blit(font_meta.render("Fecha de desbloqueo:", True, (200, 205, 215)), (1050, 510))
+        self.canvas.blit(font_meta.render(date_str, True, (230, 235, 245)), (1050, 532))
 
     def _achievement_icon_key(self, item):
         return item.get("tier", "bronze")
@@ -1879,39 +1789,27 @@ class CCIConsoleState:
         return False
 
     def _handle_achievement_key(self, key):
-        if key == pygame.K_HOME:
-            self.selected_achievement_game = None
-            filtered = self._achievement_rows_for_filter()
-            if filtered:
-                self.selected_achievement = filtered[0][0]
+        if key in (pygame.K_ESCAPE, pygame.K_b):
+            self.state_machine.change_state("MENU")
             return True
         if key in (pygame.K_LEFT, pygame.K_a):
-            self._change_achievement_filter(-1)
+            self.achievement_category_idx = (getattr(self, "achievement_category_idx", 0) - 1) % 5
+            self._feedback()
             return True
         if key in (pygame.K_RIGHT, pygame.K_d):
-            self._change_achievement_filter(1)
+            self.achievement_category_idx = (getattr(self, "achievement_category_idx", 0) + 1) % 5
+            self._feedback()
             return True
-        if key in (pygame.K_RETURN, pygame.K_KP_ENTER, pygame.K_SPACE):
-            filtered = self._achievement_rows_for_filter()
-            item = next((it for idx, it in filtered if idx == self.selected_achievement), None)
-            if item:
-                self._open_trophy_ceremony(item)
-            else:
-                self._feedback()
-            return True
-        filtered = self._achievement_rows_for_filter()
-        if not filtered:
-            return False
-        indices = [index for index, _item in filtered]
-        try:
-            position = indices.index(self.selected_achievement)
-        except ValueError:
-            position = 0
         if key in (pygame.K_UP, pygame.K_w):
-            self.selected_achievement = indices[(position - 1) % len(indices)]
+            self.selected_achievement_idx = (getattr(self, "selected_achievement_idx", 0) - 1) % 5
+            self._feedback()
             return True
         if key in (pygame.K_DOWN, pygame.K_s):
-            self.selected_achievement = indices[(position + 1) % len(indices)]
+            self.selected_achievement_idx = (getattr(self, "selected_achievement_idx", 0) + 1) % 5
+            self._feedback()
+            return True
+        if key in (pygame.K_RETURN, pygame.K_KP_ENTER, pygame.K_SPACE):
+            self._feedback()
             return True
         return False
 
@@ -1980,8 +1878,8 @@ class CCIConsoleState:
 
     def _handle_click(self, pos):
         x, y = pos
-        # Navegación lateral compartida para pantallas clásicas (excepto Profile y Library que usan layout scifi)
-        if self.page not in ("profile", "library") and x < SIDEBAR_W:
+        # Navegación lateral compartida para pantallas clásicas (excepto Profile, Library y Achievements que usan layout scifi)
+        if self.page not in ("profile", "library", "achievements") and x < SIDEBAR_W:
             destination = sidebar_destination(pos)
             if destination == "QUIT":
                 pygame.event.post(pygame.event.Event(pygame.QUIT))
@@ -2042,6 +1940,9 @@ class CCIConsoleState:
                 elif 235 <= my <= 285:
                     self._feedback()
                     return
+                elif 286 <= my <= 340:
+                    self.state_machine.change_state("ACHIEVEMENTS")
+                    return
                 elif 345 <= my <= 395:
                     self.state_machine.change_state("SETTINGS")
                     return
@@ -2097,45 +1998,54 @@ class CCIConsoleState:
                     self.state_machine.change_state("PLAYING", game_key="davinci")
                     return
         elif self.page == "achievements":
-            if ACHIEVEMENT_LEFT_ARROW_RECT.collidepoint(pos):
-                self._change_achievement_filter(-1)
-                self._feedback()
-                return
-            if ACHIEVEMENT_RIGHT_ARROW_RECT.collidepoint(pos):
-                self._change_achievement_filter(1)
-                self._feedback()
-                return
-            for rect, game in zip(ACHIEVEMENT_GAME_TILE_RECTS, self._achievement_game_tiles()):
-                if rect.collidepoint(pos):
-                    self.selected_achievement_game = game["id"]
-                    self.achievement_game_offset = CATALOG.index(game)
-                    filtered = self._achievement_rows_for_filter()
-                    if filtered:
-                        self.selected_achievement = filtered[0][0]
+            mx, my = pos
+            # 1. Barra lateral izquierda
+            if 18 <= mx <= 185:
+                if 100 <= my <= 145:
+                    self.state_machine.change_state("MENU")
+                    return
+                elif 146 <= my <= 195:
+                    self.state_machine.change_state("LIBRARY")
+                    return
+                elif 196 <= my <= 245:
+                    self.state_machine.change_state("PROFILE")
+                    return
+                elif 246 <= my <= 300:
                     self._feedback()
                     return
-            filtered = self._achievement_rows_for_filter()
-            indices = [index for index, _item in filtered]
-            try:
-                selected_position = indices.index(self.selected_achievement)
-            except ValueError:
-                selected_position = 0
-            visible_start = max(0, min(selected_position - 2, len(filtered) - 5))
+                elif 301 <= my <= 350:
+                    self.state_machine.change_state("SETTINGS")
+                    return
+                elif 351 <= my <= 415:
+                    pygame.event.post(pygame.event.Event(pygame.QUIT))
+                    return
+
+            # 2. Flechas y carrusel de categorías
+            if ACHIEVEMENT_LEFT_ARROW_RECT.collidepoint(pos) or (215 <= mx <= 260 and 150 <= my <= 230):
+                self.achievement_category_idx = (getattr(self, "achievement_category_idx", 0) - 1) % 5
+                self._feedback()
+                return
+            if ACHIEVEMENT_RIGHT_ARROW_RECT.collidepoint(pos) or (930 <= mx <= 975 and 150 <= my <= 230):
+                self.achievement_category_idx = (getattr(self, "achievement_category_idx", 0) + 1) % 5
+                self._feedback()
+                return
+            for idx, rect in enumerate(ACHIEVEMENT_GAME_TILE_RECTS):
+                if rect.collidepoint(pos):
+                    self.achievement_category_idx = idx
+                    self._feedback()
+                    return
+
+            # 3. Filas de logros
             for slot, row_y in enumerate(ACHIEVEMENT_ROW_Y):
                 row_rect = pygame.Rect(ACHIEVEMENT_ROW_RECT.x, row_y, ACHIEVEMENT_ROW_RECT.w, ACHIEVEMENT_ROW_RECT.h)
                 if row_rect.collidepoint(pos):
-                    entry_pos = visible_start + slot
-                    if entry_pos < len(filtered):
-                        idx, item = filtered[entry_pos]
-                        self.selected_achievement = idx
-                        self._open_trophy_ceremony(item)
+                    self.selected_achievement_idx = slot
+                    self._feedback()
                     return
-            btn_rect = pygame.Rect(1034, 574, 207, 34)
-            icon_rect = pygame.Rect(1065, 222, 138, 130)
-            if btn_rect.collidepoint(pos) or icon_rect.collidepoint(pos):
-                item = next((it for idx, it in filtered if idx == self.selected_achievement), None)
-                if item:
-                    self._open_trophy_ceremony(item)
+
+            # 4. Botón Atrás en barra inferior
+            if (880 <= mx <= 970 and 640 <= my <= 695) or pygame.Rect(880, 640, 90, 55).collidepoint(pos):
+                self.state_machine.change_state("MENU")
                 return
         elif self.page == "settings":
             for i, (_, rect, _) in enumerate(self._settings_rows()):
