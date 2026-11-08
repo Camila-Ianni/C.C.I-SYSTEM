@@ -576,7 +576,7 @@ class MenuState(BaseState):
 
         # Cargar assets de UI futuristas
         assets_dir = "assets_ui/menu"
-        self.ui_sidebar = self._load_asset(os.path.join(assets_dir, "sidebar_block.png"), convert_alpha=False)
+        self.ui_sidebar = self._load_asset("assets_ui/achievements/sidebar_perfect_home.png", convert_alpha=False) or self._load_asset(os.path.join(assets_dir, "sidebar_block.png"), convert_alpha=False)
         self.ui_header = self._load_asset(os.path.join(assets_dir, "select_game_header.png"), convert_alpha=False)
         self.ui_top_right = self._load_asset(os.path.join(assets_dir, "top_right.png"), convert_alpha=False)
         self.ui_nav_l = self._load_asset(os.path.join(assets_dir, "nav_left.png"), convert_alpha=False)
@@ -651,33 +651,30 @@ class MenuState(BaseState):
                 mx, my = event.pos
 
                 # 1. Navegación barra lateral (Sidebar)
-                if 18 <= mx <= 185:
-                    if 125 <= my <= 170:
-                        # Inicio
-                        self.selected_index = 0
-                        self._play_beep(650)
-                        return
-                    elif 175 <= my <= 230:
-                        # Juegos -> Biblioteca de juegos
-                        self._play_beep(700)
-                        self.state_machine.change_state("LIBRARY")
-                        return
-                    elif 235 <= my <= 285:
-                        # Perfil
-                        self.state_machine.change_state("PROFILE")
-                        return
-                    elif 290 <= my <= 340:
-                        # Logros
-                        self.state_machine.change_state("ACHIEVEMENTS")
-                        return
-                    elif 345 <= my <= 395:
-                        # Configuración
-                        self.state_machine.change_state("SETTINGS")
-                        return
-                    elif 400 <= my <= 455:
-                        # Apagar
-                        pygame.event.post(pygame.event.Event(pygame.QUIT))
-                        return
+                dest = sidebar_destination((mx, my), max_x=190)
+                if dest == "MENU":
+                    self.selected_index = 0
+                    self._play_beep(650)
+                    return
+                elif dest == "LIBRARY":
+                    self._play_beep(700)
+                    self.state_machine.change_state("LIBRARY")
+                    return
+                elif dest == "GROUPS":
+                    self.state_machine.change_state("GROUPS")
+                    return
+                elif dest == "PROFILE":
+                    self.state_machine.change_state("PROFILE")
+                    return
+                elif dest == "ACHIEVEMENTS":
+                    self.state_machine.change_state("ACHIEVEMENTS")
+                    return
+                elif dest == "SETTINGS":
+                    self.state_machine.change_state("SETTINGS")
+                    return
+                elif dest == "QUIT":
+                    pygame.event.post(pygame.event.Event(pygame.QUIT))
+                    return
 
                 # 2. Flechas carrusel
                 if 205 <= mx <= 260 and 295 <= my <= 360:
@@ -765,9 +762,9 @@ class MenuState(BaseState):
         if self.bg_image:
             screen.blit(self.bg_image, (0, 0))
 
-        # 2. Barra lateral completa (Logo C.C.I SYSTEM + Inicio, Juegos, Perfil, Logros, Config, Apagar)
+        # 2. Barra lateral completa (Logo C.C.I SYSTEM + Inicio, Juegos, Grupos, Perfil, Logros, Config, Apagar)
         if self.ui_sidebar:
-            screen.blit(self.ui_sidebar, (18, 25))
+            screen.blit(self.ui_sidebar, (0, 0))
 
         # 3. Cabecera superior 'Select Game'
         if self.ui_header:
