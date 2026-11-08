@@ -626,6 +626,10 @@ class CCIConsoleState:
             p_perfect = ROOT / "assets_ui" / "achievements" / "target_perfect_1280.png"
             p_target = ROOT / "NUEVAS PANTALLAS" / "Logros y Trofeos_ Primeros Pasos.png"
             path = p_perfect if p_perfect.exists() else (p_target if p_target.exists() else _find_file(folder, prefixes[page]) or _find_file(fallback, ends[page]))
+        elif page == "settings":
+            p_perfect = ROOT / "assets_ui" / "settings_full_1280.png"
+            p_target = ROOT / "NUEVAS PANTALLAS" / "Configuración C.C.I. System.png"
+            path = p_perfect if p_perfect.exists() else (p_target if p_target.exists() else _find_file(folder, prefixes[page]) or _find_file(fallback, ends[page]))
         else:
             path = _find_file(folder, prefixes[page]) or _find_file(fallback, ends[page])
         if path is None:
@@ -1554,80 +1558,107 @@ class CCIConsoleState:
 
     def _settings_rows(self):
         return [
-            ("resolution", pygame.Rect(292, 173, 485, 25), "Resolución"),
-            ("fullscreen", pygame.Rect(292, 200, 485, 25), "Modo de visualización"),
-            ("crt_filter", pygame.Rect(292, 227, 485, 25), "Filtro retro (CRT)"),
-            ("crt_intensity", pygame.Rect(292, 254, 485, 25), "Intensidad CRT"),
-            ("volume_menu", pygame.Rect(292, 327, 485, 24), "Volumen del menú"),
-            ("volume_game", pygame.Rect(292, 354, 485, 24), "Volumen del juego"),
-            ("volume_fx", pygame.Rect(292, 381, 485, 24), "Efectos de sonido"),
-            ("vibration", pygame.Rect(292, 455, 485, 24), "Vibración"),
-            ("sensitivity", pygame.Rect(292, 482, 485, 24), "Sensibilidad de control"),
-            ("network_enabled", pygame.Rect(292, 557, 485, 26), "Estado de conexión"),
+            ("resolution", pygame.Rect(250, 117, 482, 26), "Resolución", "selector", ["1280 x 720", "1600 x 900", "1920 x 1080"]),
+            ("fullscreen", pygame.Rect(250, 144, 482, 26), "Modo de visualización", "selector", ["Ventana", "Pantalla completa"]),
+            ("crt_filter", pygame.Rect(250, 171, 482, 26), "Filtro retro (CRT)", "toggle", None),
+            ("crt_intensity", pygame.Rect(250, 198, 482, 26), "Intensidad CRT", "slider", None),
+            ("image_scale", pygame.Rect(250, 225, 482, 26), "Escala de imagen", "selector", ["Original (1x)", "Escalado (2x)", "Ajustar (Fit)"]),
+            ("volume_menu", pygame.Rect(250, 299, 482, 26), "Volumen del menú", "slider", None),
+            ("volume_game", pygame.Rect(250, 324, 482, 26), "Volumen del juego", "slider", None),
+            ("volume_fx", pygame.Rect(250, 349, 482, 26), "Efectos de sonido", "slider", None),
+            ("device", pygame.Rect(250, 413, 482, 26), "Dispositivo", "selector", ["Gamepad (Xbox)", "Teclado + Mouse", "Gamepad (PlayStation)"]),
+            ("button_config", pygame.Rect(250, 438, 482, 26), "Configuración de botones", "button", "Editar"),
+            ("vibration", pygame.Rect(250, 463, 482, 26), "Vibración", "selector", ["Desactivada", "Activada"]),
+            ("sensitivity", pygame.Rect(250, 488, 482, 26), "Sensibilidad (juegos 3D)", "slider", None),
+            ("network_status", pygame.Rect(250, 553, 482, 26), "Estado de conexión", "status", "Conectado"),
+            ("network_config", pygame.Rect(250, 578, 482, 26), "Conectar (opcional)", "button", "Configurar"),
         ]
 
     def _draw_settings(self):
         settings = self.user_data.settings
         rows = self._settings_rows()
-        preview = pygame.Rect(820, 172, 418, 172)
-        preview_sprite = self.settings_sprites.get("preview_panel")
-        if preview_sprite:
-            self.canvas.blit(pygame.transform.scale(preview_sprite, preview.size), preview)
-        self._text("VISTA ACTUAL DEL SISTEMA", preview.x + 18, preview.y + 19, 11, LIGHT, True, 310)
-        resolution = str(settings.get("resolution", "1280 x 720"))
-        self._text(resolution, preview.x + 22, preview.y + 52, 21, WHITE, True, preview.w - 44)
-        mode = "PANTALLA COMPLETA" if settings.get("fullscreen") else "MODO VENTANA"
-        crt = "CRT ACTIVADO" if settings.get("crt_filter") else "CRT DESACTIVADO"
-        self._text(mode, preview.x + 22, preview.y + 91, 11, LIGHT, max_width=170)
-        self._text(crt, preview.x + 208, preview.y + 91, 11, LIGHT, max_width=174)
-        self._text(f"INTENSIDAD CRT  {int(settings.get('crt_intensity', 50))}%", preview.x + 22, preview.y + 117, 10, MUTED, max_width=260)
-        display_values = {
-            "resolution": str(settings.get("resolution", "1280 x 720")),
-            "fullscreen": "Pantalla completa" if settings.get("fullscreen") else "Ventana",
-            "crt_filter": "Activado" if settings.get("crt_filter") else "Desactivado",
-            "crt_intensity": f"{int(settings.get('crt_intensity', 50))}%",
-            "volume_menu": f"{int(settings.get('volume_menu', 80))}%",
-            "volume_game": f"{int(settings.get('volume_game', 75))}%",
-            "volume_fx": f"{int(settings.get('volume_fx', 70))}%",
-            "vibration": "Activada" if settings.get("vibration") else "Desactivada",
-            "sensitivity": f"{int(settings.get('sensitivity', 50))}%",
-            "network_enabled": "Desconectado",
-        }
-        for i, (key, rect, label) in enumerate(rows):
-            pygame.draw.rect(self.canvas, (19, 20, 23) if i == self.selected_setting else (8, 9, 11), rect)
-            if i == self.selected_setting:
-                pygame.draw.rect(self.canvas, (190, 193, 198), rect, 1)
-            self._text(label, rect.x + 10, rect.y + 5, 12, WHITE if i == self.selected_setting else LIGHT, max_width=235)
-            if key in {"crt_intensity", "volume_menu", "volume_game", "volume_fx", "sensitivity"}:
-                value = int(settings.get(key, 50))
-                slider = pygame.Rect(rect.x + 285, rect.y + 6, 145, 12)
-                self._draw_settings_slider(slider, value)
-                self._text(display_values[key], rect.x + 439, rect.y + 3, 12, WHITE, True)
-            elif key in {"fullscreen", "crt_filter", "vibration"}:
-                self._text(display_values[key], rect.x + 285, rect.y + 4, 12, WHITE, True, 135)
-                switch_name = "switch_on" if settings.get(key) else "switch_off"
-                switch = self.settings_sprites.get(switch_name)
-                if switch:
-                    switch_rect = pygame.Rect(rect.right - 55, rect.y + 1, 52, 22)
-                    self.canvas.blit(pygame.transform.scale(switch, switch_rect.size), switch_rect)
-            elif key == "network_enabled":
-                pygame.draw.rect(self.canvas, (8, 9, 11), (rect.x + 275, rect.y + 1, 118, 24))
-                network = self.settings_sprites.get("network_off")
-                if network:
-                    network_rect = pygame.Rect(rect.right - 100, rect.y + 1, 96, 24)
-                    self.canvas.blit(pygame.transform.scale(network, network_rect.size), network_rect)
+        self.selected_setting = getattr(self, "selected_setting", 0) % len(rows)
+
+        if not hasattr(self, "_settings_fonts"):
+            self._settings_fonts = {
+                "lbl": pygame.font.SysFont("Arial", 13) if pygame.font.get_init() else None,
+                "val": pygame.font.SysFont("Arial", 12) if pygame.font.get_init() else None,
+                "bold": pygame.font.SysFont("Arial", 12, bold=True) if pygame.font.get_init() else None,
+            }
+        fonts = self._settings_fonts
+
+        for idx, (key, row_rect, label, kind, extra) in enumerate(rows):
+            is_sel = (idx == self.selected_setting)
+            y_text = row_rect.y + 6
+
+            # Fondo cápsula de la fila
+            if is_sel:
+                pygame.draw.rect(self.canvas, (36, 38, 44), row_rect, border_radius=12)
+                pygame.draw.rect(self.canvas, (255, 255, 255, 70), row_rect.inflate(2, 2), width=3, border_radius=13)
+                pygame.draw.rect(self.canvas, (255, 255, 255, 230), row_rect, width=1, border_radius=12)
             else:
-                self._text(display_values[key], rect.x + 285, rect.y + 4, 12, WHITE, True, 190)
-        pygame.draw.rect(self.canvas, (15, 16, 18), (292, 584, 485, 29))
-        self._text("Conectar (opcional)", 302, 591, 11, LIGHT)
-        self._text("Configurar", 625, 591, 11, WHITE, True)
-        ctrl = self.settings_sprites.get("controller_panel")
-        if ctrl:
-            ctrl_rect = pygame.Rect(812, 350, 436, 216)
-            self.canvas.blit(pygame.transform.smoothscale(ctrl, ctrl_rect.size), ctrl_rect)
-        self._draw_settings_button("button_primary", pygame.Rect(815, 574, 170, 40), "RESTABLECER", LIGHT)
-        self._draw_settings_button("button_secondary", pygame.Rect(1065, 574, 170, 40), "GUARDAR", WHITE)
-        self._text("↑↓ ELEGIR   ←→ AJUSTAR   ENTER CONFIRMAR   F PANTALLA COMPLETA", 192, 665, 11, MUTED, max_width=650)
+                pygame.draw.rect(self.canvas, (12, 12, 12), row_rect, border_radius=12)
+
+            # Etiqueta
+            if fonts["lbl"]:
+                col_lbl = (255, 255, 255) if is_sel else (180, 185, 195)
+                t_lbl = fonts["lbl"].render(label, True, col_lbl)
+                self.canvas.blit(t_lbl, (275, y_text - 5))
+
+            # Control interactivo a la derecha
+            if kind == "slider":
+                val = int(settings.get(key, 50))
+                track_x, track_w = 512, 160
+                track_y = y_text + 4
+                pygame.draw.rect(self.canvas, (40, 43, 50), (track_x, track_y, track_w, 4), border_radius=2)
+                fill_w = int((val / 100.0) * track_w)
+                if fill_w > 0:
+                    pygame.draw.rect(self.canvas, (190, 195, 205), (track_x, track_y, fill_w, 4), border_radius=2)
+                knob_x = track_x + fill_w
+                pygame.draw.circle(self.canvas, (255, 255, 255), (knob_x, track_y + 2), 6)
+                if fonts["val"]:
+                    txt_val = fonts["val"].render(f"{val} %", True, (245, 246, 248))
+                    self.canvas.blit(txt_val, (685, y_text - 6))
+
+            elif kind == "selector":
+                curr_val = settings.get(key, extra[0] if extra else "")
+                if key == "fullscreen":
+                    curr_val = "Pantalla completa" if settings.get(key) else "Ventana"
+                elif key == "vibration":
+                    curr_val = "Activada" if settings.get(key) else "Desactivada"
+
+                if fonts["val"]:
+                    arr_l = fonts["val"].render("<", True, (160, 165, 175))
+                    self.canvas.blit(arr_l, (508, y_text - 6))
+                    t_val = fonts["val"].render(str(curr_val), True, (245, 246, 248))
+                    self.canvas.blit(t_val, t_val.get_rect(center=(610, y_text + 6)))
+                    arr_r = fonts["val"].render(">", True, (160, 165, 175))
+                    self.canvas.blit(arr_r, (712, y_text - 6))
+
+            elif kind == "toggle":
+                on = bool(settings.get(key, False))
+                pill_rect = pygame.Rect(670, y_text - 3, 40, 20)
+                pill_col = (75, 80, 92) if on else (35, 38, 44)
+                pygame.draw.rect(self.canvas, pill_col, pill_rect, border_radius=10)
+                circle_x = pill_rect.right - 10 if on else pill_rect.left + 10
+                circle_col = (255, 255, 255) if on else (120, 125, 135)
+                pygame.draw.circle(self.canvas, circle_col, (circle_x, pill_rect.centery), 7)
+
+            elif kind == "button":
+                btn_rect = pygame.Rect(525, y_text - 4, 195, 22)
+                pygame.draw.rect(self.canvas, (22, 24, 28), btn_rect, border_radius=8)
+                pygame.draw.rect(self.canvas, (60, 64, 72), btn_rect, 1, border_radius=8)
+                if fonts["val"]:
+                    t_btn = fonts["val"].render(extra, True, (240, 245, 255))
+                    self.canvas.blit(t_btn, t_btn.get_rect(center=(btn_rect.centerx - 8, btn_rect.centery)))
+                    arr_b = fonts["val"].render(">", True, (180, 185, 195))
+                    self.canvas.blit(arr_b, (btn_rect.right - 18, btn_rect.centery - 7))
+
+            elif kind == "status":
+                pygame.draw.circle(self.canvas, (70, 215, 95), (568, y_text + 6), 4)
+                if fonts["val"]:
+                    t_st = fonts["val"].render("Conectado", True, (245, 246, 248))
+                    self.canvas.blit(t_st, (582, y_text - 5))
 
     def _draw_settings_slider(self, rect, value):
         sprite = self.settings_sprites.get("slider_track")
@@ -1934,41 +1965,57 @@ class CCIConsoleState:
         return False
 
     def _adjust_setting(self, direction):
-        key, _, _ = self._settings_rows()[self.selected_setting]
+        rows = self._settings_rows()
+        if not (0 <= self.selected_setting < len(rows)):
+            return
+        key, _, _, kind, extra = rows[self.selected_setting]
         settings = self.user_data.settings
-        if key == "resolution":
-            values = ["1280 x 720", "1600 x 900", "1920 x 1080"]
-            try:
-                index = values.index(settings.get(key, values[0]))
-            except ValueError:
-                index = 0
-            settings[key] = values[(index + direction) % len(values)]
-        elif key in {"fullscreen", "crt_filter", "vibration"}:
+
+        if kind == "selector":
+            if key == "fullscreen":
+                settings["fullscreen"] = not bool(settings.get("fullscreen", False))
+                self._apply_settings()
+            elif key == "vibration":
+                settings["vibration"] = not bool(settings.get("vibration", True))
+            elif extra:
+                cur = settings.get(key, extra[0])
+                try:
+                    idx = extra.index(cur)
+                except ValueError:
+                    idx = 0
+                settings[key] = extra[(idx + direction) % len(extra)]
+                if key == "resolution":
+                    self._apply_settings()
+        elif kind == "toggle":
             settings[key] = not bool(settings.get(key, False))
-        elif key == "network_enabled":
-            settings[key] = False
-            self.toast = "RED LOCAL NO CONFIGURADA"
-            self.toast_until = time.monotonic() + 2.0
-        elif key in {"crt_intensity", "volume_menu", "volume_game", "volume_fx", "sensitivity"}:
+        elif kind == "slider":
             settings[key] = max(0, min(100, int(settings.get(key, 50)) + direction * 5))
+            if key == "volume_menu":
+                BGMManager.get_instance().set_volume(int(settings["volume_menu"]) / 100.0)
+            elif key == "volume_game" and pygame.mixer.get_init():
+                pygame.mixer.music.set_volume(int(settings[key]) / 100)
+            elif key == "volume_fx" and pygame.mixer.get_init():
+                for ch in range(pygame.mixer.get_num_channels()):
+                    pygame.mixer.Channel(ch).set_volume(int(settings[key]) / 100)
+            elif key == "sensitivity":
+                try:
+                    pygame.key.set_repeat(350, max(30, 150 - int(settings[key])))
+                except pygame.error:
+                    pass
+        elif kind == "button":
+            if key == "button_config":
+                self.toast = "MAPEO PREDETERMINADO ACTIVO"
+                self.toast_until = time.monotonic() + 1.8
+            elif key == "network_config":
+                self.toast = "RED LOCAL NO CONFIGURADA"
+                self.toast_until = time.monotonic() + 2.0
+        elif kind == "status":
+            self.toast = "CONECTADO A LA RED"
+            self.toast_until = time.monotonic() + 1.8
+
         self.user_data.save()
         if key in {"volume_menu", "volume_fx"}:
             self._feedback()
-            if key == "volume_menu":
-                BGMManager.get_instance().set_volume(int(settings["volume_menu"]) / 100.0)
-        if key in {"resolution", "fullscreen"}:
-            self._apply_settings()
-        elif key in {"volume_game", "volume_fx"} and pygame.mixer.get_init():
-            if key == "volume_game":
-                pygame.mixer.music.set_volume(int(settings[key]) / 100)
-            else:
-                for channel_id in range(pygame.mixer.get_num_channels()):
-                    pygame.mixer.Channel(channel_id).set_volume(int(settings[key]) / 100)
-        elif key == "sensitivity":
-            try:
-                pygame.key.set_repeat(350, max(30, 150 - int(settings[key])))
-            except pygame.error:
-                pass
 
     def _apply_settings(self):
         if self.apply_display:
@@ -2110,24 +2157,36 @@ class CCIConsoleState:
                 self.state_machine.change_state("MENU")
                 return
         elif self.page == "settings":
-            for i, (_, rect, _) in enumerate(self._settings_rows()):
+            for i, (_, rect, _, _, _) in enumerate(self._settings_rows()):
                 if rect.collidepoint(pos):
                     self.selected_setting = i
-                    self._adjust_setting(1)
+                    mx, my = pos
+                    if mx > 650:
+                        self._adjust_setting(1)
+                    elif mx > 500:
+                        self._adjust_setting(-1 if mx < 530 else 1)
+                    else:
+                        self._feedback()
                     return
-            if pygame.Rect(815, 574, 170, 40).collidepoint(pos):
+            if pygame.Rect(793, 563, 178, 38).collidepoint(pos) or pygame.Rect(815, 574, 170, 40).collidepoint(pos):
                 self.user_data.data["settings"] = _deep_default()["settings"]
                 self.user_data.save()
                 self._apply_settings()
                 self.toast = "AJUSTES RESTABLECIDOS"
                 self.toast_until = time.monotonic() + 1.8
-            elif pygame.Rect(292, 584, 485, 29).collidepoint(pos):
-                self.toast = "RED LOCAL NO CONFIGURADA"
-                self.toast_until = time.monotonic() + 2.0
-            elif pygame.Rect(1065, 574, 170, 40).collidepoint(pos):
+                self._feedback()
+            elif pygame.Rect(1003, 563, 238, 38).collidepoint(pos) or pygame.Rect(1065, 574, 170, 40).collidepoint(pos):
                 self.user_data.save()
                 self.toast = "AJUSTES GUARDADOS"
                 self.toast_until = time.monotonic() + 1.8
+                self._feedback()
+            elif pygame.Rect(250, 578, 482, 26).collidepoint(pos) or pygame.Rect(292, 584, 485, 29).collidepoint(pos):
+                self.toast = "RED LOCAL NO CONFIGURADA"
+                self.toast_until = time.monotonic() + 2.0
+                self._feedback()
+            elif (880 <= pos[0] <= 970 and 640 <= pos[1] <= 695) or pygame.Rect(880, 640, 90, 55).collidepoint(pos):
+                self.state_machine.change_state("MENU")
+                return
 
     def _handle_text_input(self, event):
         if self.text_input_active and event.type == pygame.TEXTINPUT:
