@@ -1710,6 +1710,10 @@ class PlayingState(BaseState):
                     sys.modules.pop(mod, None)
                 os.chdir(original_cwd)
 
+        elif self.game_key == "minecraft":
+            print("[PlayingState] Conectando al Mundo Principal de Minecraft...")
+            self._show_notice(screen, "MINECRAFT: Conectando al Mundo Principal...", seconds=2.0)
+
         elif self.game_key in EXTERNAL_GAMES:
             folder, entry, requires = EXTERNAL_GAMES[self.game_key]
             game_dir = os.path.join(root_dir, folder)

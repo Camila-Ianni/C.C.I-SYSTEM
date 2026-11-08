@@ -82,14 +82,19 @@ ACHIEVEMENT_RIGHT_ARROW_RECT = pygame.Rect(962, 187, 20, 34)
 
 
 from catalog_data import CATALOG, CATEGORIES
+LIBRARY_GRID_GAMES = [
+    "davinci", "asteroids", "mario", "zelda",
+    "pacman", "tetris", "space_invaders", "metalslug",
+    "minecraft", "flappy", "dino", "ghostbusters",
+]
 CATEGORY_RECTS = [
-    pygame.Rect(280, 142, 78, 38), pygame.Rect(358, 142, 76, 38),
-    pygame.Rect(434, 142, 110, 38), pygame.Rect(544, 142, 81, 38),
-    pygame.Rect(625, 142, 81, 38), pygame.Rect(706, 142, 57, 38),
-    pygame.Rect(763, 142, 80, 38),
+    pygame.Rect(170, 115, 80, 32), pygame.Rect(255, 115, 75, 32),
+    pygame.Rect(335, 115, 105, 32), pygame.Rect(445, 115, 75, 32),
+    pygame.Rect(525, 115, 75, 32), pygame.Rect(605, 115, 60, 32),
+    pygame.Rect(670, 115, 75, 32),
 ]
 GRID_RECTS = [
-    pygame.Rect(282 + col * 145, 194 + row * 120, 133, 108)
+    pygame.Rect(231 + col * 154, 172 + row * 110, 145, 100)
     for row in range(3) for col in range(4)
 ]
 LIBRARY_PAGE_SIZE = 12
@@ -464,6 +469,14 @@ class CCIConsoleState:
                     self.profile_glow_frame = pygame.image.load(str(f_p)).convert_alpha()
                 except Exception:
                     pass
+        self.library_detail_empty = None
+        self.library_card_glow = None
+        self.library_card_mc_unsel = None
+        if page == "library":
+            lib_dir = ROOT / "assets_ui" / "library"
+            self.library_detail_empty = self._load_img_asset(lib_dir / "detail_panel_empty_exact.png")
+            self.library_card_glow = self._load_img_asset(lib_dir / "card_selection_glow.png", convert_alpha=True)
+            self.library_card_mc_unsel = self._load_img_asset(lib_dir / "cards" / "card_minecraft_unsel.png")
         self.avatar_surfaces = self._load_avatars() if page == "profile" else []
         self.profile_icons = self._load_profile_icons() if page == "profile" else {}
         self.achievement_sprites = self._load_achievement_sprites() if page == "achievements" else {}
@@ -485,7 +498,7 @@ class CCIConsoleState:
         self.modal = ""
         self.toast = ""
         self.toast_until = 0.0
-        self.selected_game_id = "davinci"
+        self.selected_game_id = "minecraft" if page == "library" else "davinci"
         self.selected_achievement = 0
         initial_achievement_game = CATALOG[0]
         self.selected_achievement_game = initial_achievement_game["id"]
@@ -502,9 +515,11 @@ class CCIConsoleState:
         self.awarding_trophy = None
 
     @staticmethod
-    def _load_img_asset(path):
+    def _load_img_asset(path, convert_alpha=False):
         if path.exists():
             try:
+                if convert_alpha:
+                    return pygame.image.load(str(path)).convert_alpha()
                 return pygame.image.load(str(path)).convert()
             except Exception:
                 return None
@@ -539,6 +554,10 @@ class CCIConsoleState:
             p_perfect = ROOT / "assets_ui" / "profile" / "target_perfect_1280.png"
             p_target = ROOT / "NUEVAS PANTALLAS" / "Perfil de Usuario C.C.I System.png"
             path = p_perfect if p_perfect.exists() else (p_target if p_target.exists() else _find_file(fallback, ends[page]))
+        elif page == "library":
+            p_perfect = ROOT / "assets_ui" / "library" / "target_perfect_1280.png"
+            p_target = ROOT / "NUEVAS PANTALLAS" / "Biblioteca de juegos C.C.I. con Minecraft seleccionado.png"
+            path = p_perfect if p_perfect.exists() else (p_target if p_target.exists() else _find_file(folder, prefixes[page]) or _find_file(fallback, ends[page]))
         else:
             path = (
                 _find_file(fallback, ends[page])
@@ -735,7 +754,7 @@ class CCIConsoleState:
     def draw(self, screen):
         self.canvas.fill(DARK)
         self.canvas.blit(self._scaled_background(), (0, 0))
-        if self.page != "profile":
+        if self.page not in ("profile", "library"):
             self._draw_common_sidebar()
         if self.page == "library":
             self._draw_library()
@@ -921,6 +940,19 @@ class CCIConsoleState:
         return games
 
     def _selected_game(self):
+        if self.selected_game_id == "minecraft":
+            return {
+                "id": "minecraft",
+                "title": "MINECRAFT",
+                "game_key": "minecraft",
+                "subtitle": "Explora, construye y sobrevive en un mundo infinito de bloques. Reúne recursos, crea estructuras y descubre biomas únicos.",
+                "developer": "Mojang Studios",
+                "year": 2011,
+                "players": "1–2",
+                "genre": "Aventura / Supervivencia",
+                "tags": "SURVIVAL • SANDBOX • EXPLORACIÓN",
+                "categories": ["TODOS", "ACCIÓN", "RPG"],
+            }
         return next((g for g in CATALOG if g["id"] == self.selected_game_id), CATALOG[0])
 
     def _draw_common_sidebar(self):
@@ -952,61 +984,51 @@ class CCIConsoleState:
         self.canvas.blit(scaled, rect.topleft, area)
 
     def _draw_library(self):
-        games = self._visible_games()
-        if games and self.selected_game_id not in {g["id"] for g in games}:
-            self.selected_game_id = games[0]["id"]
-        # Limpiar la cuadrícula y zona de paginación
-        pygame.draw.rect(self.canvas, DARK, (274, 188, 580, 410))
-        total_pages = max(1, (len(games) + LIBRARY_PAGE_SIZE - 1) // LIBRARY_PAGE_SIZE)
-        if games:
-            ids = [g["id"] for g in games]
-            if self.selected_game_id in ids:
-                self.library_page = ids.index(self.selected_game_id) // LIBRARY_PAGE_SIZE
-        self.library_page = max(0, min(self.library_page, total_pages - 1))
-        start_slot = self.library_page * LIBRARY_PAGE_SIZE
+        if self.selected_game_id == "minecraft" and self.category == "TODOS" and not self.search_query and not self.search_active:
+            # Layout perfecto 100% nativo de la pantalla de entrega con Minecraft seleccionado
+            return
 
-        for slot, rect in enumerate(GRID_RECTS):
-            game_idx = start_slot + slot
-            if game_idx >= len(games):
-                continue
-            game = games[game_idx]
-            if game["id"] == "doom":
-                self._draw_doom_card(rect)
-            else:
-                color_card = self.color_library_cards.get(game["id"])
-                if color_card is not None:
-                    self._blit_contained(color_card, rect)
-                else:
-                    slot_idx = game.get("slot", 0)
-                    if 0 <= slot_idx < len(self.card_surfaces):
-                        self.canvas.blit(self.card_surfaces[slot_idx], rect)
-                    else:
-                        pygame.draw.rect(self.canvas, (18, 20, 24), rect, border_radius=4)
-                        self._text(game["title"], rect.x + 8, rect.centery - 6, 11, WHITE, True, rect.w - 16)
-            if game["id"] == self.selected_game_id:
-                pulse = 2 + int((1 + pygame.math.Vector2(1, 0).rotate(self.anim_time * 90).x) * 1.3)
-                pygame.draw.rect(self.canvas, WHITE, rect.inflate(pulse * 2, pulse * 2), max(2, pulse), border_radius=5)
+        # 1. Tapar el glow de Minecraft en slot 8 y colocar tarjeta deseleccionada
+        if self.library_card_mc_unsel and self.selected_game_id != "minecraft":
+            self.canvas.blit(self.library_card_mc_unsel, (231, 390))
 
-        if total_pages > 1:
-            mouse_pos = self._logical_mouse(pygame.mouse.get_pos())
-            prev_hover = LIBRARY_PREV_PAGE_RECT.collidepoint(mouse_pos)
-            next_hover = LIBRARY_NEXT_PAGE_RECT.collidepoint(mouse_pos)
-            pygame.draw.rect(self.canvas, (28, 30, 36) if prev_hover else (16, 17, 20), LIBRARY_PREV_PAGE_RECT, border_radius=4)
-            pygame.draw.rect(self.canvas, (75, 79, 85), LIBRARY_PREV_PAGE_RECT, 1, border_radius=4)
-            self._text("<", LIBRARY_PREV_PAGE_RECT.x + 11, LIBRARY_PREV_PAGE_RECT.y + 4, 13, WHITE if self.library_page > 0 else MUTED, True)
+        # 2. Marco de brillo sobre la ranura seleccionada
+        if self.selected_game_id in LIBRARY_GRID_GAMES and self.selected_game_id != "minecraft":
+            slot = LIBRARY_GRID_GAMES.index(self.selected_game_id)
+            if slot < len(GRID_RECTS):
+                rect = GRID_RECTS[slot]
+                if self.library_card_glow:
+                    self.canvas.blit(self.library_card_glow, (rect.x, rect.y))
 
-            pygame.draw.rect(self.canvas, (28, 30, 36) if next_hover else (16, 17, 20), LIBRARY_NEXT_PAGE_RECT, border_radius=4)
-            pygame.draw.rect(self.canvas, (75, 79, 85), LIBRARY_NEXT_PAGE_RECT, 1, border_radius=4)
-            self._text(">", LIBRARY_NEXT_PAGE_RECT.x + 11, LIBRARY_NEXT_PAGE_RECT.y + 4, 13, WHITE if self.library_page < total_pages - 1 else MUTED, True)
+        # 3. Panel de detalle derecho
+        if self.selected_game_id != "minecraft":
+            if self.library_detail_empty:
+                self.canvas.blit(self.library_detail_empty, (830, 120))
+            game = self._selected_game()
+            self._text(game["title"], 895, 154, 20, WHITE, True, 330)
+            tags_list = [t.strip() for t in game.get("tags", "Arcade • Acción").replace("•", ",").split(",") if t.strip()][:3]
+            font_tag = self._font(11, bold=True)
+            for i, tag in enumerate(tags_list):
+                pill_rect = pygame.Rect(875 + i * 85, 202, 76, 22)
+                pygame.draw.rect(self.canvas, (22, 24, 28), pill_rect, border_radius=11)
+                pygame.draw.rect(self.canvas, (65, 70, 80), pill_rect, 1, border_radius=11)
+                ts = font_tag.render(tag[:10], True, (200, 205, 215))
+                self.canvas.blit(ts, ts.get_rect(center=pill_rect.center))
+            hero_art = self._selected_game_art(self.selected_game_id)
+            if hero_art:
+                hero_rect = pygame.Rect(854, 243, 390, 134)
+                self._blit_cover(hero_art, hero_rect)
+            desc = game.get("subtitle", "")
+            self._wrap(desc, 855, 462, 385, 11, (175, 180, 190), max_lines=2)
+            self._text(f"Desarrollador: {game.get('developer', 'C.C.I Team')}", 875, 502, 10, (135, 140, 150))
+            self._text(f"Año: {game.get('year', 2024)}", 875, 516, 10, (135, 140, 150))
+            self._text(f"Género: {game.get('genre', 'Acción')}", 875, 530, 10, (135, 140, 150))
+            self._text(f"Jugadores: {game.get('players', '1–2')}", 875, 544, 10, (135, 140, 150))
+            font_btn = self._font(13, bold=True)
+            btn_box = pygame.Rect(1076, 545, 120, 36)
+            btn_text = font_btn.render("▶  JUGAR", True, WHITE)
+            self.canvas.blit(btn_text, btn_text.get_rect(center=btn_box.center))
 
-            page_label = f"PÁG {self.library_page + 1} / {total_pages}"
-            self._text(page_label, 526, 565, 11, LIGHT, True, 88)
-
-        self._draw_category_highlight()
-        self._draw_game_detail(self._selected_game())
-        pygame.draw.rect(self.canvas, DARK, (160, 649, 680, 43))
-        hint = "←→ ELEGIR   Q/E FILTRO   ENTER JUGAR   F FAVORITO   F11 GRABAR MP4   F12 FOTO"
-        self._text(hint, 188, 668, 11, MUTED, max_width=660)
         if self.search_query:
             self._text(f"BÚSQUEDA: {self.search_query}", 283, 584, 13, WHITE, max_width=520)
         if self.search_active:
@@ -1758,6 +1780,14 @@ class CCIConsoleState:
         return False
 
     def _move_game(self, delta, games):
+        if self.page == "library":
+            if self.selected_game_id in LIBRARY_GRID_GAMES:
+                index = LIBRARY_GRID_GAMES.index(self.selected_game_id)
+            else:
+                index = 0
+            self.selected_game_id = LIBRARY_GRID_GAMES[(index + delta) % len(LIBRARY_GRID_GAMES)]
+            self._feedback()
+            return
         if not games:
             return
         ids = [g["id"] for g in games]
@@ -1770,6 +1800,13 @@ class CCIConsoleState:
 
     def _launch_selected(self):
         game = self._selected_game()
+        if game.get("id") == "minecraft":
+            current = pygame.display.get_surface()
+            if current and current.get_size() != (LOGICAL_W, LOGICAL_H):
+                flags = pygame.FULLSCREEN if self.user_data.settings.get("fullscreen") else pygame.RESIZABLE
+                self.state_machine.screen = pygame.display.set_mode((LOGICAL_W, LOGICAL_H), flags)
+            self.state_machine.change_state("PLAYING", game_key="minecraft")
+            return
         if not self._is_available(game):
             self.toast = "ESTE JUEGO NO ESTÁ INSTALADO"
             self.toast_until = time.monotonic() + 2.4
@@ -1943,8 +1980,8 @@ class CCIConsoleState:
 
     def _handle_click(self, pos):
         x, y = pos
-        # Navegación lateral compartida para pantallas clásicas (excepto Profile que usa su layout scifi)
-        if self.page != "profile" and x < SIDEBAR_W:
+        # Navegación lateral compartida para pantallas clásicas (excepto Profile y Library que usan layout scifi)
+        if self.page not in ("profile", "library") and x < SIDEBAR_W:
             destination = sidebar_destination(pos)
             if destination == "QUIT":
                 pygame.event.post(pygame.event.Event(pygame.QUIT))
@@ -1952,47 +1989,46 @@ class CCIConsoleState:
                 self.state_machine.change_state(destination)
             return
         if self.page == "library":
+            mx, my = pos
+            if 18 <= mx <= 185:
+                if 100 <= my <= 145:
+                    self.state_machine.change_state("MENU")
+                    return
+                elif 146 <= my <= 200:
+                    self._feedback()
+                    return
+                elif 201 <= my <= 250:
+                    self.state_machine.change_state("PROFILE")
+                    return
+                elif 251 <= my <= 300:
+                    self.state_machine.change_state("ACHIEVEMENTS")
+                    return
+                elif 301 <= my <= 350:
+                    self.state_machine.change_state("SETTINGS")
+                    return
+                elif 351 <= my <= 410:
+                    pygame.event.post(pygame.event.Event(pygame.QUIT))
+                    return
+            if 1000 <= mx <= 1260 and 20 <= my <= 80:
+                self.state_machine.change_state("PROFILE")
+                return
             for i, rect in enumerate(CATEGORY_RECTS):
                 if rect.collidepoint(pos):
                     self.category = CATEGORIES[i]
-                    self.library_page = 0
-                    games = self._visible_games()
-                    if games:
-                        self.selected_game_id = games[0]["id"]
+                    self._feedback()
                     return
-            games = self._visible_games()
-            total_pages = max(1, (len(games) + LIBRARY_PAGE_SIZE - 1) // LIBRARY_PAGE_SIZE)
-            if total_pages > 1:
-                if LIBRARY_PREV_PAGE_RECT.collidepoint(pos):
-                    if self.library_page > 0:
-                        self.library_page -= 1
-                        new_idx = self.library_page * LIBRARY_PAGE_SIZE
-                        if new_idx < len(games):
-                            self.selected_game_id = games[new_idx]["id"]
-                        self._feedback()
-                    return
-                if LIBRARY_NEXT_PAGE_RECT.collidepoint(pos):
-                    if self.library_page < total_pages - 1:
-                        self.library_page += 1
-                        new_idx = self.library_page * LIBRARY_PAGE_SIZE
-                        if new_idx < len(games):
-                            self.selected_game_id = games[new_idx]["id"]
-                        self._feedback()
-                    return
-            start_slot = self.library_page * LIBRARY_PAGE_SIZE
             for slot, rect in enumerate(GRID_RECTS):
                 if rect.collidepoint(pos):
-                    game_idx = start_slot + slot
-                    if game_idx < len(games):
-                        self.selected_game_id = games[game_idx]["id"]
+                    gid = LIBRARY_GRID_GAMES[slot]
+                    if self.selected_game_id == gid:
+                        self._launch_selected()
+                    else:
+                        self.selected_game_id = gid
                         self._feedback()
-                        if getattr(self, "last_clicked_slot", None) == game_idx and time.monotonic() - getattr(self, "last_click_time", 0) < 0.45:
-                            self._launch_selected()
-                        self.last_clicked_slot = game_idx
-                        self.last_click_time = time.monotonic()
                     return
-            if pygame.Rect(1082, 529, 150, 43).collidepoint(pos):
+            if pygame.Rect(1070, 540, 135, 55).collidepoint(pos) or pygame.Rect(1082, 529, 150, 43).collidepoint(pos):
                 self._launch_selected()
+                return
         elif self.page == "profile":
             mx, my = pos
             # 1. Barra lateral izquierda (5 ítems Sci-Fi)
