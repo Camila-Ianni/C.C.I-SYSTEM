@@ -165,94 +165,90 @@ class FriendRequestItem:
 
 DEFAULT_DMS: List[DirectChatContact] = [
     DirectChatContact(
-        contact_id="dm_tomas",
-        name="Tomás",
-        handle="@tomas_dev",
+        contact_id="dm_lunaria",
+        name="Lunaria",
+        handle="@lunaria",
         status="En línea",
-        activity="Jugando: Da Vinci Fighters",
-        last_message="Yo llevo soporte, tranqui.",
-        last_time="22:18",
-        unread=0,
-        contact_sprite="dm_contact_0.png",
+        activity="En línea",
+        last_message="¿Te sumás a la partida?",
+        last_time="18:47",
+        unread=2,
+        contact_sprite="contact_row_0.png",
         messages=[
-            ("Tomás", "22:14", "¿Entrás al torneo de esta noche en Night Raid?"),
-            ("ALEX", "22:15", "Sí, ya casi termino de configurar el control."),
-            ("Tomás", "22:16", "Joya, nos falta uno para completar el squad."),
-            ("ALEX", "22:17", "Ahí le aviso a Mira que estaba conectada."),
-            ("Tomás", "22:18", "Yo llevo soporte, tranqui."),
+            ("Lunaria", "18:32", "¡Hola! 👋"),
+            ("ALEX", "18:35", "¡Hola! 👋"),
+            ("Lunaria", "18:47", "¿Te sumás a la partida?"),
+            ("ALEX", "18:48", "Dale, en un rato me conecto."),
         ],
     ),
     DirectChatContact(
-        contact_id="dm_martina",
-        name="Martina",
-        handle="@marti_px",
+        contact_id="dm_rox",
+        name="Rox",
+        handle="@rox",
         status="En línea",
-        activity="En Sakura Club",
-        last_message="Te pasé los nuevos sprites del menú.",
-        last_time="21:40",
-        unread=2,
-        contact_sprite="dm_contact_1.png",
+        activity="En línea",
+        last_message="Ahí te paso el archivo.",
+        last_time="17:20",
+        unread=0,
+        contact_sprite="contact_row_1.png",
         messages=[
-            ("Martina", "21:38", "¡Hola Alex! ¿Pudiste ver los bocetos del club?"),
-            ("Martina", "21:40", "Te pasé los nuevos sprites del menú."),
+            ("Rox", "17:20", "Ahí te paso el archivo."),
+        ],
+    ),
+    DirectChatContact(
+        contact_id="dm_neko",
+        name="Neko",
+        handle="@neko",
+        status="En línea",
+        activity="En línea",
+        last_message="¡Gracias!",
+        last_time="15:03",
+        unread=0,
+        contact_sprite="contact_row_2.png",
+        messages=[
+            ("Neko", "15:03", "¡Gracias!"),
+        ],
+    ),
+    DirectChatContact(
+        contact_id="dm_vex",
+        name="Vex",
+        handle="@vex",
+        status="En línea",
+        activity="En línea",
+        last_message="Nos vemos más tarde.",
+        last_time="Ayer",
+        unread=0,
+        contact_sprite="contact_row_3.png",
+        messages=[
+            ("Vex", "Ayer", "Nos vemos más tarde."),
         ],
     ),
     DirectChatContact(
         contact_id="dm_kai",
         name="Kai",
-        handle="@kai_nr",
+        handle="@kai",
         status="En línea",
-        activity="En sala de voz: Gaming",
-        last_message="Estamos en sala Gaming, sumate.",
-        last_time="20:55",
-        unread=0,
-        contact_sprite="dm_contact_2.png",
-        messages=[
-            ("Kai", "20:50", "¿Sale partida rápida antes del evento?"),
-            ("ALEX", "20:52", "Dame 5 minutos y entro."),
-            ("Kai", "20:55", "Estamos en sala Gaming, sumate."),
-        ],
-    ),
-    DirectChatContact(
-        contact_id="dm_luna",
-        name="Luna",
-        handle="@luna_craft",
-        status="En línea",
-        activity="Jugando: Minecraft",
-        last_message="Mirá cómo quedó la base del servidor.",
-        last_time="19:12",
-        unread=1,
-        contact_sprite="dm_contact_3.png",
-        messages=[
-            ("Luna", "19:12", "Mirá cómo quedó la base del servidor."),
-        ],
-    ),
-    DirectChatContact(
-        contact_id="dm_ren",
-        name="Ren",
-        handle="@ren_arcade",
-        status="Ausente",
-        activity="Ausente",
-        last_message="Mañana intento superar tu récord.",
+        activity="En línea",
+        last_message="¿Seguimos mañana?",
         last_time="Ayer",
         unread=0,
-        contact_sprite="dm_contact_4.png",
+        contact_sprite="contact_row_4.png",
         messages=[
-            ("Ren", "Ayer", "Mañana intento superar tu récord."),
+            ("Kai", "Ayer", "¿Seguimos mañana?"),
         ],
     ),
     DirectChatContact(
-        contact_id="dm_sofia",
-        name="Sofía",
-        handle="@sofi_kpop",
-        status="Sin conexión",
-        activity="Desconectada",
-        last_message="¡Gracias por la invitación al grupo!",
-        last_time="Lun",
+        contact_id="dm_mitsu",
+        name="Mitsu",
+        handle="@mitsu",
+        status="En línea",
+        activity="En línea",
+        last_message="Listo, ya está.",
+        last_time="12/04",
         unread=0,
-        contact_sprite="dm_contact_5.png",
+        contact_sprite="contact_row_5.png",
         messages=[
-            ("Sofía", "Lun", "¡Gracias por la invitación al grupo!"),
+            ("Mitsu", "12/04", "Listo, ya está."),
         ],
     ),
 ]
@@ -1409,11 +1405,11 @@ class GroupsHubState(BaseState):
 
         # Rects interactivos en 1280x720 (alineados al píxel exacto de las 3 bases limpias)
         self.tab_rects = [
-            pygame.Rect(262, 134, 200, 42),  # MIS GRUPOS (x=264..459, y=135..174)
-            pygame.Rect(468, 134, 204, 42),  # CHATS PRIVADOS (x=470..669, y=135..174)
-            pygame.Rect(678, 134, 192, 42),  # SOLICITUDES (x=680..867, y=135..174)
+            pygame.Rect(200, 90, 230, 85),  # MIS GRUPOS
+            pygame.Rect(440, 90, 235, 85),  # CHATS PRIVADOS
+            pygame.Rect(685, 90, 220, 85),  # SOLICITUDES
         ]
-        self.search_rect = pygame.Rect(256, 196, 286, 32)
+        self.search_rect = pygame.Rect(238, 168, 310, 38)
         self.sort_rect = pygame.Rect(656, 196, 136, 32)
         self.grid_btn_rect = pygame.Rect(809, 196, 36, 32)
         self.list_btn_rect = pygame.Rect(852, 196, 36, 32)
@@ -1426,12 +1422,31 @@ class GroupsHubState(BaseState):
 
         self.card_rects: List[Tuple[pygame.Rect, int]] = []
         self.dm_contact_rects: List[Tuple[pygame.Rect, int]] = []
-        self.dm_input_rect = pygame.Rect(620, 550, 620, 44)
+        self.dm_input_rect = pygame.Rect(650, 530, 590, 56)
         self.sol_action_rects: List[Tuple[pygame.Rect, str, str]] = []
 
     def _load_persisted_dms(self) -> List[DirectChatContact]:
         saved = self.bridge.load_ui_state("dms")
         if isinstance(saved, list) and saved:
+            if any(item.get("contact_id") == "dm_lunaria" for item in saved) or any(
+                "SQLite" in item.get("last_message", "") or "Hola Tomás" in item.get("last_message", "")
+                for item in saved
+            ):
+                return [
+                    DirectChatContact(
+                        contact_id=item["contact_id"],
+                        name=item["name"],
+                        handle=item["handle"],
+                        status=item["status"],
+                        activity=item["activity"],
+                        last_message=item["last_message"],
+                        last_time=item["last_time"],
+                        unread=int(item.get("unread", 0)),
+                        contact_sprite=item.get("contact_sprite", ""),
+                        messages=[tuple(m) for m in item.get("messages", [])],
+                    )
+                    for item in saved
+                ]
             return [
                 DirectChatContact(
                     contact_id=item["contact_id"],
@@ -1923,16 +1938,33 @@ class GroupsHubState(BaseState):
         canvas = pygame.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
 
         # 1. Seleccionar la base limpia correspondiente a la pestaña activa
-        base_key = (
-            "base_mis_grupos.png"
-            if self.active_tab == 0
-            else ("base_chats_privados.png" if self.active_tab == 1 else "base_solicitudes.png")
-        )
-        base_surf = _PACK.bases.get(base_key)
-        if base_surf is not None:
-            canvas.blit(base_surf, (0, 0))
+        if self.active_tab == 1:
+            full_surf = _PACK.sprites.get("full_chats_privados.png")
+            if (
+                full_surf is not None
+                and self.selected_index == 0
+                and len(self.dms[0].messages) == 4
+                and not self.dm_input_focused
+                and not self.dm_input_text
+            ):
+                canvas.blit(full_surf, (0, 0))
+            else:
+                base_surf = _PACK.bases.get("base_chats_privados.png")
+                if base_surf is not None:
+                    canvas.blit(base_surf, (0, 0))
+                else:
+                    canvas.fill((8, 9, 12))
         else:
-            canvas.fill((8, 9, 12))
+            base_key = (
+                "base_mis_grupos.png"
+                if self.active_tab == 0
+                else "base_solicitudes.png"
+            )
+            base_surf = _PACK.bases.get(base_key)
+            if base_surf is not None:
+                canvas.blit(base_surf, (0, 0))
+            else:
+                canvas.fill((8, 9, 12))
 
         # 2. Dibujar los elementos sobre los contenedores de la base
         if self.active_tab == 0:
@@ -2162,85 +2194,125 @@ class GroupsHubState(BaseState):
         f_title = _PACK.fonts["card_title"]
         f_body = _PACK.fonts["body"]
         f_small = _PACK.fonts["small"]
+        f_small_b = _PACK.fonts["small_bold"]
 
-        # 1. Lista izquierda de contactos recortados con aire (x=259..569, y=242..598)
         self.dm_contact_rects.clear()
         self.selected_index = max(0, min(self.selected_index, len(self.dms) - 1))
-
-        cur_y = 242
-        for i, dm in enumerate(self.dms):
-            sp = _PACK.sprites.get(dm.contact_sprite)
-            h = sp.get_height() if sp is not None else 52
-            rect = pygame.Rect(259, cur_y, 310, h)
-            self.dm_contact_rects.append((rect, i))
-
-            if sp is not None:
-                surface.blit(sp, (259, cur_y))
-
-            if i == self.selected_index:
-                pygame.draw.rect(surface, (242, 244, 248), rect, 2, border_radius=5)
-
-            cur_y += h + 7
-
-        # 2. Panel derecho de conversación con márgenes amplios (x=620..1240, y=194..596)
         active_dm = self.dms[self.selected_index]
 
-        if active_dm.contact_id == "dm_tomas" and len(active_dm.messages) == 5:
-            hdr = _PACK.sprites.get("dm_header_tomas.png")
-            msgs = _PACK.sprites.get("dm_messages_tomas.png")
-            inp = _PACK.sprites.get("dm_input_bar.png")
-            if hdr is not None:
-                surface.blit(hdr, (620, 194))
-            if msgs is not None:
-                surface.blit(msgs, (620, 252))
-            if inp is not None:
-                surface.blit(inp, (620, 550))
-        else:
-            hdr = _PACK.sprites.get("dm_header_tomas.png")
-            if hdr is not None:
-                surface.blit(hdr, (620, 194))
-                pygame.draw.rect(surface, (14, 16, 20), pygame.Rect(674, 198, 280, 40))
-                n_s = f_title.render(f"{active_dm.name}   {active_dm.handle}", True, (242, 244, 248))
-                s_s = f_small.render(f"● {active_dm.status} • {active_dm.activity}", True, (175, 185, 195))
-                surface.blit(n_s, (678, 200))
-                surface.blit(s_s, (678, 219))
+        # 1. Registrar rects interactivos de contactos (x=238..616, y=220..567)
+        for i in range(len(self.dms)):
+            rect = pygame.Rect(238, 220 + i * 58, 380, 56)
+            self.dm_contact_rects.append((rect, i))
 
-            msg_y = 256
-            for sender, ts, text in active_dm.messages[-5:]:
-                is_me = sender.upper() == "ALEX"
-                bw = min(450, max(190, f_body.size(text)[0] + 36))
-                bx = 1230 - bw if is_me else 630
-                brect = pygame.Rect(bx, msg_y, bw, 46)
-                _draw_cut_rect(
-                    surface,
-                    brect,
-                    (28, 31, 38) if is_me else (18, 20, 25),
-                    (150, 156, 170) if is_me else (80, 85, 98),
-                    cut=6,
-                    border_w=1,
+        # Si estamos en el estado exacto inicial de Lunaria sin cambios, ya está todo en full_chats_privados
+        is_default_lunaria = (
+            self.selected_index == 0
+            and len(self.dms[0].messages) == 4
+            and not self.dm_input_focused
+            and not self.dm_input_text
+        )
+        if is_default_lunaria:
+            return
+
+        # 2. Renderizado dinámico de la lista de contactos
+        for i, dm in enumerate(self.dms):
+            rect = self.dm_contact_rects[i][0]
+            if i == self.selected_index:
+                pygame.draw.rect(surface, (28, 32, 42), rect, border_radius=10)
+                pygame.draw.rect(surface, (245, 245, 250), rect, 2, border_radius=10)
+            else:
+                pygame.draw.rect(surface, (16, 18, 24), rect, border_radius=10)
+                pygame.draw.rect(surface, (40, 44, 55), rect, 1, border_radius=10)
+
+            av_key = f"dm_{dm.contact_id[3:]}.png" if dm.contact_id.startswith("dm_") else f"{dm.contact_id}.png"
+            av_surf = _PACK.sprites.get(av_key)
+            if av_surf is not None:
+                surface.blit(av_surf, (rect.x + 8, rect.y + 7))
+
+            n_color = (250, 250, 252) if i == self.selected_index else (210, 215, 225)
+            n_surf = f_title.render(dm.name, True, n_color)
+            surface.blit(n_surf, (rect.x + 70, rect.y + 10))
+
+            m_txt = dm.last_message if len(dm.last_message) <= 28 else dm.last_message[:26] + "..."
+            m_surf = f_small.render(m_txt, True, (150, 158, 172))
+            surface.blit(m_surf, (rect.x + 70, rect.y + 31))
+
+            t_surf = f_small.render(dm.last_time, True, (140, 145, 158))
+            surface.blit(t_surf, (rect.right - 58, rect.y + 11))
+
+            if dm.unread > 0:
+                badge_center = (rect.right - 24, rect.y + 36)
+                pygame.draw.circle(surface, (245, 245, 250), badge_center, 9)
+                b_surf = f_small_b.render(str(dm.unread), True, (15, 18, 24))
+                surface.blit(
+                    b_surf,
+                    (badge_center[0] - b_surf.get_width() // 2, badge_center[1] - b_surf.get_height() // 2),
                 )
-                meta = f_small.render(f"{sender}   {ts}", True, (165, 170, 182))
-                body = f_body.render(text, True, (242, 244, 248))
-                surface.blit(meta, (brect.x + 12, brect.y + 6))
-                surface.blit(body, (brect.x + 12, brect.y + 23))
-                msg_y += 56
 
-            inp = _PACK.sprites.get("dm_input_bar.png")
-            if inp is not None:
-                surface.blit(inp, (620, 550))
+        # 3. Cabecera del chat activo (x=650..1240, y=160..225)
+        hdr_bg = pygame.Rect(650, 160, 590, 65)
+        pygame.draw.rect(surface, (16, 18, 24), hdr_bg, border_radius=10)
+        pygame.draw.rect(surface, (40, 44, 55), hdr_bg, 1, border_radius=10)
+
+        av_hdr_key = f"dm_{active_dm.contact_id[3:]}.png" if active_dm.contact_id.startswith("dm_") else f"{active_dm.contact_id}.png"
+        av_hdr = _PACK.sprites.get(av_hdr_key)
+        if av_hdr is not None:
+            surface.blit(av_hdr, (665, 172))
+
+        hn_surf = f_title.render(active_dm.name, True, (245, 248, 255))
+        surface.blit(hn_surf, (726, 173))
+        pygame.draw.circle(surface, (46, 204, 113), (732, 202), 4)
+        hs_surf = f_small.render(active_dm.status, True, (160, 170, 185))
+        surface.blit(hs_surf, (742, 195))
+
+        header_lunaria = _PACK.sprites.get("dm_header_lunaria.png")
+        if header_lunaria is not None:
+            surface.blit(header_lunaria, (1080, 168), area=pygame.Rect(430, 8, 160, 48))
+
+        # 4. Mensajes del chat activo
+        msg_y = 240
+        for sender, ts, text in active_dm.messages[-5:]:
+            is_me = sender.upper() == "ALEX"
+            bw = min(380, max(90, f_body.size(text)[0] + 28))
+            if is_me:
+                bx = 1170 - bw
+                brect = pygame.Rect(bx, msg_y, bw, 38)
+                pygame.draw.rect(surface, (34, 38, 48), brect, border_radius=12)
+                pygame.draw.rect(surface, (70, 78, 95), brect, 1, border_radius=12)
+                b_surf = f_body.render(text, True, (245, 248, 255))
+                surface.blit(b_surf, (brect.x + 14, brect.y + 9))
+                m_surf = f_small.render(f"{ts} ✓✓", True, (90, 200, 250))
+                surface.blit(m_surf, (brect.left - m_surf.get_width() - 8, brect.centery - 6))
+            else:
+                av_m = _PACK.sprites.get(av_hdr_key)
+                if av_m is not None:
+                    surface.blit(av_m, (665, msg_y))
+                bx = 724
+                brect = pygame.Rect(bx, msg_y, bw, 38)
+                pygame.draw.rect(surface, (24, 28, 36), brect, border_radius=12)
+                pygame.draw.rect(surface, (55, 62, 75), brect, 1, border_radius=12)
+                b_surf = f_body.render(text, True, (245, 248, 255))
+                surface.blit(b_surf, (brect.x + 14, brect.y + 9))
+                m_surf = f_small.render(ts, True, (150, 155, 168))
+                surface.blit(m_surf, (brect.right + 10, brect.centery - 6))
+            msg_y += 56
+
+        # 5. Barra inferior de input de texto
+        inp_sprite = _PACK.sprites.get("dm_input_bar.png")
+        if inp_sprite is not None:
+            surface.blit(inp_sprite, (650, 530))
+        else:
+            pygame.draw.rect(surface, (20, 22, 28), self.dm_input_rect, border_radius=12)
+            pygame.draw.rect(surface, (60, 68, 82), self.dm_input_rect, 1, border_radius=12)
 
         if self.dm_input_focused or self.dm_input_text:
-            pygame.draw.rect(surface, (14, 16, 20), pygame.Rect(660, 558, 440, 28))
+            pygame.draw.rect(surface, (18, 20, 26), pygame.Rect(722, 542, 420, 28))
             if self.dm_input_focused:
-                pygame.draw.rect(surface, (238, 240, 248), self.dm_input_rect, 1, border_radius=5)
+                pygame.draw.rect(surface, (238, 240, 248), pygame.Rect(716, 536, 436, 40), 1, border_radius=8)
             txt = self.dm_input_text + ("|" if self.dm_input_focused else "")
-            t_s = f_body.render(txt or f"Escribir mensaje a {active_dm.name}...", True, (240, 242, 248))
-            surface.blit(t_s, (666, 564))
-
-        # 3. Asistente inferior recortado de la hoja Photoroom
-        ast = _PACK.sprites.get("dm_assistant_bar.png")
-        if ast is not None:
-            surface.blit(ast, (38, 636))
+            t_s = f_body.render(txt or f"Escribe un mensaje...", True, (240, 242, 248))
+            surface.blit(t_s, (726, 547))
 
     def _draw_tab_solicitudes(self, surface: pygame.Surface) -> None:
         self.sol_action_rects.clear()
