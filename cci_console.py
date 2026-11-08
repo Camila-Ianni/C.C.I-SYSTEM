@@ -96,44 +96,48 @@ ACHIEVEMENTS_BY_GAME = {
         "id": "flappy",
         "title": "FLAPPY BIRD",
         "achievements": [
-            {"title": "Primer Aleteo", "desc": "Supera la primera tubería con éxito.", "game": "Flappy Bird", "kind": "Habilidad", "rarity": "Común", "unlocked": True, "date": "11 / 04 / 2025", "time": "16:20", "icon": "flappy_wing"},
-            {"title": "Medalla de Bronce", "desc": "Alcanza 10 puntos sin chocar.", "game": "Flappy Bird", "kind": "Puntuación", "rarity": "Común", "unlocked": True, "date": "13 / 04 / 2025", "time": "19:45", "icon": "flappy_bronze"},
-            {"title": "Medalla de Plata", "desc": "Alcanza 25 puntos sin chocar.", "game": "Flappy Bird", "kind": "Puntuación", "rarity": "Rara", "unlocked": True, "date": "14 / 04 / 2025", "time": "20:10", "icon": "flappy_silver"},
-            {"title": "Medalla de Oro", "desc": "Alcanza 50 puntos en una sola partida.", "game": "Flappy Bird", "kind": "Puntuación", "rarity": "Épica", "unlocked": False, "date": "Bloqueado", "time": "", "icon": "flappy_gold"},
-            {"title": "As de los Cielos", "desc": "Supera la barrera mítica de 100 puntos.", "game": "Flappy Bird", "kind": "Leyenda", "rarity": "Legendaria", "unlocked": False, "date": "Bloqueado", "time": "", "icon": "flappy_ace"},
+            {"title": "Primer Vuelo", "desc": "Juega tu primera partida.", "game": "Flappy Bird", "kind": "Progreso", "rarity": "Común", "unlocked": True, "date": "09 / 04 / 2025", "time": "16:20", "icon": "flappy_wing"},
+            {"title": "Puntaje Decente", "desc": "Alcanza 10 puntos en una partida.", "game": "Flappy Bird", "kind": "Progreso", "rarity": "Común", "unlocked": True, "date": "09 / 04 / 2025", "time": "16:37", "icon": "flappy_bronze"},
+            {"title": "Experto del Vuelo", "desc": "Alcanza 50 puntos en una partida.", "game": "Flappy Bird", "kind": "Progreso", "rarity": "Rara", "unlocked": True, "date": "10 / 04 / 2025", "time": "18:02", "icon": "flappy_silver"},
+            {"title": "Maestro de las Tuberías", "desc": "Alcanza 100 puntos en una partida.", "game": "Flappy Bird", "kind": "Habilidad", "rarity": "Épica", "unlocked": True, "date": "12 / 04 / 2025", "time": "20:11", "icon": "flappy_gold"},
+            {"title": "Récord Personal", "desc": "Supera tu mejor puntaje.", "game": "Flappy Bird", "kind": "Progreso", "rarity": "Rara", "unlocked": True, "date": "13 / 04 / 2025", "time": "21:44", "icon": "flappy_ace"},
+            {"title": "Sin Caídas", "desc": "Completa una partida sin chocar.", "game": "Flappy Bird", "kind": "Desafío", "rarity": "Legendaria", "unlocked": False, "date": "Bloqueado", "time": "", "icon": "flappy_wing"},
         ]
     },
     2: {  # Dino
         "id": "dino",
         "title": "DINO",
         "achievements": [
-            {"title": "Primer Salto", "desc": "Esquiva tu primer cactus en el desierto.", "game": "Dino", "kind": "Supervivencia", "rarity": "Común", "unlocked": True, "date": "09 / 04 / 2025", "time": "12:15", "icon": "dino_cactus"},
-            {"title": "Cazador de Pterodáctilos", "desc": "Agáchate bajo 10 pterodáctilos en vuelo.", "game": "Dino", "kind": "Habilidad", "rarity": "Común", "unlocked": True, "date": "11 / 04 / 2025", "time": "15:30", "icon": "dino_ptero"},
-            {"title": "Noche en el Desierto", "desc": "Sobrevive hasta que el cielo cambie a noche.", "game": "Dino", "kind": "Tiempo", "rarity": "Rara", "unlocked": True, "date": "13 / 04 / 2025", "time": "22:04", "icon": "dino_moon"},
-            {"title": "Velocidad Extrema", "desc": "Alcanza la velocidad máxima del juego.", "game": "Dino", "kind": "Velocidad", "rarity": "Épica", "unlocked": False, "date": "Bloqueado", "time": "", "icon": "dino_speed"},
-            {"title": "Fósil Milenario", "desc": "Alcanza 2000 puntos en una sola carrera.", "game": "Dino", "kind": "Récord", "rarity": "Legendaria", "unlocked": False, "date": "Bloqueado", "time": "", "icon": "dino_fossil"},
+            {"title": "Primeros Pasos", "desc": "Corre tus primeros 100 metros.", "game": "Dino", "kind": "Progreso", "rarity": "Común", "unlocked": True, "date": "09 / 04 / 2025", "time": "15:47", "icon": "dino_cactus"},
+            {"title": "Corredor Constante", "desc": "Alcanza 500 metros en una partida.", "game": "Dino", "kind": "Distancia", "rarity": "Común", "unlocked": True, "date": "09 / 04 / 2025", "time": "16:22", "icon": "dino_ptero"},
+            {"title": "Resistencia", "desc": "Alcanza 1.000 metros en una partida.", "game": "Dino", "kind": "Distancia", "rarity": "Rara", "unlocked": True, "date": "10 / 04 / 2025", "time": "17:03", "icon": "dino_moon"},
+            {"title": "Reflejos Rápidos", "desc": "Esquiva 50 obstáculos en total.", "game": "Dino", "kind": "Habilidad", "rarity": "Rara", "unlocked": True, "date": "11 / 04 / 2025", "time": "18:37", "icon": "dino_speed"},
+            {"title": "Sin Distraerse", "desc": "Corre 3.000 metros sin chocar.", "game": "Dino", "kind": "Concentración", "rarity": "Épica", "unlocked": True, "date": "12 / 04 / 2025", "time": "20:55", "icon": "dino_fossil"},
+            {"title": "Leyenda del Desierto", "desc": "Alcanza 5.000 metros en una partida.", "game": "Dino", "kind": "Récord", "rarity": "Legendaria", "unlocked": False, "date": "Bloqueado", "time": "", "icon": "dino_cactus"},
         ]
     },
     3: {  # Ghostbusters
         "id": "ghostbusters",
         "title": "GHOSTBUSTERS",
         "achievements": [
-            {"title": "Primera Llamada", "desc": "Responde a tu primera alerta en la estación.", "game": "Ghostbusters", "kind": "Misión", "rarity": "Común", "unlocked": True, "date": "08 / 04 / 2025", "time": "11:00", "icon": "ghost_phone"},
-            {"title": "Pegajoso Neutralizado", "desc": "Atrapa a Slimer en el Gran Hotel Sedgewick.", "game": "Ghostbusters", "kind": "Combate", "rarity": "Rara", "unlocked": True, "date": "10 / 04 / 2025", "time": "17:35", "icon": "ghost_slimer"},
-            {"title": "Rayo de Protones", "desc": "Dispara el acelerador de protones sin sobrecalentar.", "game": "Ghostbusters", "kind": "Equipo", "rarity": "Rara", "unlocked": True, "date": "12 / 04 / 2025", "time": "19:12", "icon": "ghost_proton"},
-            {"title": "Hombre de Malvavisco", "desc": "Enfréntate a Stay Puft en las calles de N.Y.", "game": "Ghostbusters", "kind": "Jefe", "rarity": "Épica", "unlocked": False, "date": "Bloqueado", "time": "", "icon": "ghost_staypuft"},
-            {"title": "No Cruces los Rayos", "desc": "Derrota a Gozer cruzando los haces cuánticos.", "game": "Ghostbusters", "kind": "Historia", "rarity": "Legendaria", "unlocked": False, "date": "Bloqueado", "time": "", "icon": "ghost_gozer"},
+            {"title": "Primer Chupafantasmas", "desc": "Completa tu primera misión.", "game": "Ghostbusters", "kind": "Progreso", "rarity": "Común", "unlocked": True, "date": "09 / 04 / 2025", "time": "15:47", "icon": "ghost_phone"},
+            {"title": "Cazafantasmas Novato", "desc": "Atrapa 10 fantasmas.", "game": "Ghostbusters", "kind": "Misión", "rarity": "Común", "unlocked": True, "date": "09 / 04 / 2025", "time": "16:22", "icon": "ghost_slimer"},
+            {"title": "En la Ecto-1", "desc": "Completa una misión usando la Ecto-1.", "game": "Ghostbusters", "kind": "Vehículo", "rarity": "Rara", "unlocked": True, "date": "10 / 04 / 2025", "time": "17:03", "icon": "ghost_proton"},
+            {"title": "Miembros Oficiales", "desc": "Desbloquea al equipo completo.", "game": "Ghostbusters", "kind": "Equipo", "rarity": "Rara", "unlocked": True, "date": "11 / 04 / 2025", "time": "18:37", "icon": "ghost_gozer"},
+            {"title": "¡Es Stay Puft!", "desc": "Derrota al Hombre de Malvavisco.", "game": "Ghostbusters", "kind": "Jefe", "rarity": "Épica", "unlocked": True, "date": "12 / 04 / 2025", "time": "20:55", "icon": "ghost_staypuft"},
+            {"title": "Salva la Ciudad", "desc": "Completa todas las misiones del juego.", "game": "Ghostbusters", "kind": "Final", "rarity": "Legendaria", "unlocked": False, "date": "Bloqueado", "time": "", "icon": "ghost_proton"},
         ]
     },
     4: {  # Cyberpunk
         "id": "cyberpunk",
         "title": "CYBERPUNK",
         "achievements": [
-            {"title": "Despertar Neuronal", "desc": "Escapa de los laboratorios clandestinos de Neo-Kanto.", "game": "Cyberpunk", "kind": "Historia", "rarity": "Común", "unlocked": True, "date": "07 / 04 / 2025", "time": "23:50", "icon": "cyber_wake"},
-            {"title": "Ciber-Implante", "desc": "Instala tu primer acelerador de reflejos.", "game": "Cyberpunk", "kind": "Mejora", "rarity": "Común", "unlocked": True, "date": "09 / 04 / 2025", "time": "18:22", "icon": "cyber_chip"},
-            {"title": "Filo de Neón", "desc": "Derrota a 20 agentes con la katana mono-molecular.", "game": "Cyberpunk", "kind": "Combate", "rarity": "Rara", "unlocked": True, "date": "11 / 04 / 2025", "time": "21:40", "icon": "cyber_blade"},
-            {"title": "Protocolo Fantasma", "desc": "Infíltrate en la Torre Arasaka sin activar alarmas.", "game": "Cyberpunk", "kind": "Sigilo", "rarity": "Épica", "unlocked": False, "date": "Bloqueado", "time": "", "icon": "cyber_ghost"},
-            {"title": "Sobrecarga Total", "desc": "Derrota al mecha titán corporativo en el helipuerto.", "game": "Cyberpunk", "kind": "Jefe", "rarity": "Legendaria", "unlocked": False, "date": "Bloqueado", "time": "", "icon": "cyber_boss"},
+            {"title": "Netrunner", "desc": "Completa tu primera misión de hackeo.", "game": "Cyberpunk", "kind": "Historia", "rarity": "Común", "unlocked": True, "date": "09 / 04 / 2025", "time": "15:47", "icon": "cyber_wake"},
+            {"title": "Estilo de Night City", "desc": "Personaliza tu personaje por primera vez.", "game": "Cyberpunk", "kind": "Personalización", "rarity": "Común", "unlocked": True, "date": "09 / 04 / 2025", "time": "16:22", "icon": "cyber_chip"},
+            {"title": "Mejora de Implante", "desc": "Instala tu primer ciberimplante.", "game": "Cyberpunk", "kind": "Mejora", "rarity": "Rara", "unlocked": True, "date": "10 / 04 / 2025", "time": "17:03", "icon": "cyber_blade"},
+            {"title": "Contrato Completado", "desc": "Finaliza 10 encargos secundarios.", "game": "Cyberpunk", "kind": "Misiones", "rarity": "Rara", "unlocked": True, "date": "11 / 04 / 2025", "time": "18:37", "icon": "cyber_ghost"},
+            {"title": "Ciudad sin Límites", "desc": "Explora todos los distritos de Night City.", "game": "Cyberpunk", "kind": "Exploración", "rarity": "Épica", "unlocked": True, "date": "12 / 04 / 2025", "time": "20:55", "icon": "cyber_boss"},
+            {"title": "Leyenda de Night City", "desc": "Completa la historia principal.", "game": "Cyberpunk", "kind": "Historia", "rarity": "Legendaria", "unlocked": False, "date": "Bloqueado", "time": "", "icon": "cyber_wake"},
         ]
     },
 }
@@ -558,6 +562,8 @@ class CCIConsoleState:
         self.toast_until = 0.0
         self.selected_game_id = "minecraft" if page == "library" else "davinci"
         self.selected_achievement = 0
+        self.achievement_category_idx = 0
+        self.selected_achievement_idx = 0
         initial_achievement_game = CATALOG[0]
         self.selected_achievement_game = initial_achievement_game["id"]
         self.achievement_game_offset = 0
@@ -1285,22 +1291,41 @@ class CCIConsoleState:
 
     def _draw_achievements(self):
         cat_idx = getattr(self, "achievement_category_idx", 0) % 5
-        sel_row = getattr(self, "selected_achievement_idx", 0) % 5
+        game_data = ACHIEVEMENTS_BY_GAME.get(cat_idx, ACHIEVEMENTS_BY_GAME[0])
+        game_achievements = game_data["achievements"]
+        sel_row = getattr(self, "selected_achievement_idx", 0) % len(game_achievements)
 
         base_dir = ROOT / "assets_ui" / "achievements"
+        if not hasattr(self, "_ach_backgrounds"):
+            mapping = {
+                0: (base_dir / "screen_mc_1280.png", ROOT / "NUEVAS PANTALLAS" / "Logros y Trofeos_ Primeros Pasos.png"),
+                1: (base_dir / "screen_flappy_1280.png", ROOT / "NUEVAS PANTALLAS" / "Logros de Flappy Bird.png"),
+                2: (base_dir / "screen_dino_1280.png", ROOT / "NUEVAS PANTALLAS" / "Logros de Dino en el desierto pixelado.png"),
+                3: (base_dir / "screen_ghost_1280.png", ROOT / "NUEVAS PANTALLAS" / "Pantalla de logros de Ghostbusters.png"),
+                4: (base_dir / "screen_cyber_1280.png", ROOT / "NUEVAS PANTALLAS" / "Panel de logros Cyberpunk neon.png"),
+            }
+            self._ach_backgrounds = {}
+            for idx, (p_scaled, p_orig) in mapping.items():
+                if p_scaled.exists():
+                    self._ach_backgrounds[idx] = self._load_img_asset(p_scaled)
+                elif p_orig.exists():
+                    surf = self._load_img_asset(p_orig)
+                    if surf:
+                        self._ach_backgrounds[idx] = pygame.transform.smoothscale(surf, (LOGICAL_W, LOGICAL_H))
+                else:
+                    self._ach_backgrounds[idx] = self._scaled_background()
+
+        # Blit fondo completo del juego activo
+        bg_surf = self._ach_backgrounds.get(cat_idx)
+        if bg_surf:
+            self.canvas.blit(bg_surf, (0, 0))
+
+        # Barra lateral unificada en (0, 0)
+        self._draw_common_sidebar()
+
         if not hasattr(self, "_ach_assets"):
             self._ach_assets = {
-                "base_row": self._load_img_asset(base_dir / "scratch_r0_base.png"),
                 "base_detail": self._load_img_asset(base_dir / "detail_panel_clean.png"),
-                "trophy_silver": self._load_img_asset(base_dir / "status_trophy_silver.png"),
-                "trophy_locked": self._load_img_asset(base_dir / "status_trophy_locked.png"),
-                "padlock": self._load_img_asset(base_dir / "status_padlock.png"),
-                "cal_clock": self._load_img_asset(base_dir / "status_cal_clock.png"),
-                "glow": self._load_img_asset(base_dir / "row_selection_glow.png", convert_alpha=True),
-                "mc_unsel": self._load_img_asset(base_dir / "cat_minecraft_unselected_clean.png"),
-                "font_title": pygame.font.SysFont("Arial", 14, bold=True) if pygame.font.get_init() else None,
-                "font_desc": pygame.font.SysFont("Arial", 11) if pygame.font.get_init() else None,
-                "font_date": pygame.font.SysFont("Arial", 10) if pygame.font.get_init() else None,
                 "font_det_title": pygame.font.SysFont("Arial", 16, bold=True) if pygame.font.get_init() else None,
                 "font_det_desc": pygame.font.SysFont("Arial", 12) if pygame.font.get_init() else None,
                 "font_det_meta": pygame.font.SysFont("Arial", 12) if pygame.font.get_init() else None,
@@ -1309,94 +1334,61 @@ class CCIConsoleState:
 
         assets = self._ach_assets
 
-        # 1. Carrusel de categorías (Juegos)
-        if cat_idx != 0:
-            if assets["mc_unsel"]:
-                self.canvas.blit(assets["mc_unsel"], (270, 140))
-            cat_capsule_pos = [
-                (276, 145, 118),
-                (425, 145, 100),
-                (550, 145, 100),
-                (675, 145, 100),
-                (800, 145, 115),
-            ]
-            x_cap, y_cap, w_cap = cat_capsule_pos[cat_idx]
-            cap_surf = pygame.Surface((w_cap, 86), pygame.SRCALPHA)
-            pygame.draw.rect(cap_surf, (255, 255, 255, 255), (0, 0, w_cap, 86), width=2, border_radius=12)
-            pygame.draw.rect(cap_surf, (255, 255, 255, 80), (1, 1, w_cap - 2, 84), width=1, border_radius=11)
-            self.canvas.blit(cap_surf, (x_cap, y_cap))
+        # Si una fila distinta a la 0 está seleccionada, deseleccionar fila 0 y resaltar fila activa
+        if sel_row > 0:
+            if cat_idx == 0:
+                row_ys = [268, 338, 408, 478, 548]
+                h = 68
+            else:
+                row_ys = [268, 324, 380, 436, 492, 548]
+                h = 54
 
-        # Obtenemos los 5 logros del juego seleccionado
-        game_data = ACHIEVEMENTS_BY_GAME.get(cat_idx, ACHIEVEMENTS_BY_GAME[0])
-        game_achievements = game_data["achievements"]
+            # 1. Cubrir brillo de fila 0 con borde oscuro
+            r0 = pygame.Rect(230, row_ys[0], 740, h)
+            pygame.draw.rect(self.canvas, (15, 15, 17), r0, width=3, border_radius=8)
+            pygame.draw.rect(self.canvas, (35, 38, 44), r0, width=1, border_radius=8)
 
-        # Si no es estado inicial de Minecraft con fila 0, renderizar filas dinámicas y panel limpio
-        if cat_idx != 0 or sel_row != 0:
-            # 2. Filas de logros (5 filas limpias sin ghost text)
-            row_y = [268, 338, 408, 478, 548]
-            for idx, ach in enumerate(game_achievements):
-                card = assets["base_row"].copy() if assets["base_row"] else pygame.Surface((726, 68))
-                
-                # Icono del logro
-                icon_path = base_dir / f"icon_{ach['icon']}.png"
-                if icon_path.exists():
-                    icon_surf = self._load_img_asset(icon_path)
-                    if icon_surf:
-                        card.blit(icon_surf, (18, 12))
-                
-                # Título y descripción
-                unl = ach["unlocked"]
-                if assets["font_title"]:
-                    t_surf = assets["font_title"].render(ach["title"], True, WHITE if unl else (180, 185, 195))
-                    card.blit(t_surf, (75, 15))
-                if assets["font_desc"]:
-                    d_surf = assets["font_desc"].render(ach["desc"], True, (170, 175, 185) if unl else (120, 125, 135))
-                    card.blit(d_surf, (75, 38))
-                
-                # Trofeo
-                trophy = assets["trophy_silver"] if unl else assets["trophy_locked"]
-                if trophy:
-                    card.blit(trophy, (520, 14))
-                
-                # Línea divisoria
-                pygame.draw.line(card, (50, 54, 62), (565, 14), (565, 54), 1)
-                
-                # Fecha o candado
-                if unl:
-                    if assets["cal_clock"]:
-                        card.blit(assets["cal_clock"], (578, 15))
-                    if assets["font_date"]:
-                        card.blit(assets["font_date"].render(ach["date"], True, (200, 205, 215)), (606, 17))
-                        card.blit(assets["font_date"].render(ach.get("time", ""), True, (200, 205, 215)), (606, 36))
-                else:
-                    if assets["padlock"]:
-                        card.blit(assets["padlock"], (608, 20))
-                
-                # Resaltado si está seleccionado
-                if idx == sel_row and assets["glow"]:
-                    card.blit(assets["glow"], (0, 0))
-                
-                self.canvas.blit(card, (243, row_y[idx]))
+            # 2. Dibujar marco de brillo en fila seleccionada
+            if sel_row < len(row_ys):
+                rt = pygame.Rect(230, row_ys[sel_row], 740, h)
+                pygame.draw.rect(self.canvas, (255, 255, 255, 80), rt.inflate(2, 2), width=3, border_radius=10)
+                pygame.draw.rect(self.canvas, (255, 255, 255, 240), rt, width=2, border_radius=9)
 
-            # 3. Panel de detalle dinámico limpio (sin píldoras grises)
+            # 3. Panel de detalle dinámico limpio
             cur_ach = game_achievements[sel_row]
             panel = assets["base_detail"].copy() if assets["base_detail"] else pygame.Surface((245, 455))
-            
+
             icon_l_path = base_dir / f"icon_{cur_ach['icon']}_large.png"
             if icon_l_path.exists():
                 icon_large = self._load_img_asset(icon_l_path)
                 if icon_large:
                     panel.blit(icon_large, icon_large.get_rect(center=(122, 85)))
-            
+
             if assets["font_det_title"]:
                 t_s = assets["font_det_title"].render(cur_ach["title"], True, WHITE)
                 panel.blit(t_s, t_s.get_rect(center=(122, 180)))
             if assets["font_det_desc"]:
-                d_s = assets["font_det_desc"].render(cur_ach["desc"], True, (175, 180, 190))
-                panel.blit(d_s, d_s.get_rect(center=(122, 210)))
-            
-            pygame.draw.line(panel, (45, 48, 55), (25, 240), (panel.get_width() - 25, 240), 1)
-            
+                words = cur_ach["desc"].split(" ")
+                lines = []
+                curr_line = ""
+                for w in words:
+                    test_l = (curr_line + " " + w).strip()
+                    if assets["font_det_desc"].size(test_l)[0] <= 210:
+                        curr_line = test_l
+                    else:
+                        if curr_line:
+                            lines.append(curr_line)
+                        curr_line = w
+                if curr_line:
+                    lines.append(curr_line)
+
+                start_y = 210 if len(lines) == 1 else 202
+                for i_l, line_str in enumerate(lines[:3]):
+                    d_s = assets["font_det_desc"].render(line_str, True, (175, 180, 190))
+                    panel.blit(d_s, d_s.get_rect(center=(122, start_y + i_l * 15)))
+
+            pygame.draw.line(panel, (45, 48, 55), (25, 245), (panel.get_width() - 25, 245), 1)
+
             if assets["font_det_meta"]:
                 panel.blit(assets["font_det_meta"].render(f"Juego: {cur_ach['game']}", True, (200, 205, 215)), (35, 260))
                 panel.blit(assets["font_det_meta"].render(f"Tipo: {cur_ach['kind']}", True, (200, 205, 215)), (35, 290))
@@ -1406,7 +1398,7 @@ class CCIConsoleState:
                 date_full = f"{cur_ach['date']}  {cur_ach.get('time', '')}".strip()
                 col_d = (240, 245, 255) if cur_ach["unlocked"] else (130, 135, 145)
                 panel.blit(assets["font_det_date"].render(date_full, True, col_d), (35, 372))
-            
+
             self.canvas.blit(panel, (1010, 147))
 
     def _achievement_icon_key(self, item):
@@ -1895,18 +1887,25 @@ class CCIConsoleState:
             return True
         if key in (pygame.K_LEFT, pygame.K_a):
             self.achievement_category_idx = (getattr(self, "achievement_category_idx", 0) - 1) % 5
+            self.selected_achievement_idx = 0
             self._feedback()
             return True
         if key in (pygame.K_RIGHT, pygame.K_d):
             self.achievement_category_idx = (getattr(self, "achievement_category_idx", 0) + 1) % 5
+            self.selected_achievement_idx = 0
             self._feedback()
             return True
+
+        cat_idx = getattr(self, "achievement_category_idx", 0) % 5
+        game_data = ACHIEVEMENTS_BY_GAME.get(cat_idx, ACHIEVEMENTS_BY_GAME[0])
+        max_rows = len(game_data["achievements"])
+
         if key in (pygame.K_UP, pygame.K_w):
-            self.selected_achievement_idx = (getattr(self, "selected_achievement_idx", 0) - 1) % 5
+            self.selected_achievement_idx = (getattr(self, "selected_achievement_idx", 0) - 1) % max_rows
             self._feedback()
             return True
         if key in (pygame.K_DOWN, pygame.K_s):
-            self.selected_achievement_idx = (getattr(self, "selected_achievement_idx", 0) + 1) % 5
+            self.selected_achievement_idx = (getattr(self, "selected_achievement_idx", 0) + 1) % max_rows
             self._feedback()
             return True
         if key in (pygame.K_RETURN, pygame.K_KP_ENTER, pygame.K_SPACE):
@@ -2071,27 +2070,42 @@ class CCIConsoleState:
             # 1. Flechas y carrusel de categorías
             if ACHIEVEMENT_LEFT_ARROW_RECT.collidepoint(pos) or (215 <= mx <= 260 and 150 <= my <= 230):
                 self.achievement_category_idx = (getattr(self, "achievement_category_idx", 0) - 1) % 5
+                self.selected_achievement_idx = 0
                 self._feedback()
                 return
             if ACHIEVEMENT_RIGHT_ARROW_RECT.collidepoint(pos) or (930 <= mx <= 975 and 150 <= my <= 230):
                 self.achievement_category_idx = (getattr(self, "achievement_category_idx", 0) + 1) % 5
+                self.selected_achievement_idx = 0
                 self._feedback()
                 return
             for idx, rect in enumerate(ACHIEVEMENT_GAME_TILE_RECTS):
                 if rect.collidepoint(pos):
-                    self.achievement_category_idx = idx
-                    self._feedback()
+                    if getattr(self, "achievement_category_idx", 0) != idx:
+                        self.achievement_category_idx = idx
+                        self.selected_achievement_idx = 0
+                        self._feedback()
                     return
 
-            # 3. Filas de logros
-            for slot, row_y in enumerate(ACHIEVEMENT_ROW_Y):
-                row_rect = pygame.Rect(ACHIEVEMENT_ROW_RECT.x, row_y, ACHIEVEMENT_ROW_RECT.w, ACHIEVEMENT_ROW_RECT.h)
+            # 2. Filas de logros
+            cat_idx = getattr(self, "achievement_category_idx", 0) % 5
+            game_data = ACHIEVEMENTS_BY_GAME.get(cat_idx, ACHIEVEMENTS_BY_GAME[0])
+            total_rows = len(game_data["achievements"])
+
+            if cat_idx == 0:
+                row_ys = (268, 338, 408, 478, 548)
+                row_h = 68
+            else:
+                row_ys = (268, 324, 380, 436, 492, 548)
+                row_h = 54
+
+            for slot in range(min(total_rows, len(row_ys))):
+                row_rect = pygame.Rect(230, row_ys[slot], 740, row_h)
                 if row_rect.collidepoint(pos):
                     self.selected_achievement_idx = slot
                     self._feedback()
                     return
 
-            # 4. Botón Atrás en barra inferior
+            # 3. Botón Atrás en barra inferior
             if (880 <= mx <= 970 and 640 <= my <= 695) or pygame.Rect(880, 640, 90, 55).collidepoint(pos):
                 self.state_machine.change_state("MENU")
                 return
