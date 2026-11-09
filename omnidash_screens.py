@@ -1,15 +1,19 @@
-"""omnidash_screens.py - Pantallas Auténticas del Sistema OmniDash para C.C.I. SYSTEM.
+"""omnidash_screens.py - Suite Completa de Pantallas Frutiger Aero de OmniDash para C.C.I. SYSTEM.
 100% Python puro con Pygame-CE.
-Implementa el diseño oficial de OmniDash:
-- Home: Tarjeta Hero grande a la izquierda + Cuadrícula de tarjetas de cristal brillante y tarjetas de utilidad a la derecha.
-- Game Details: Ficha técnica con carátula grande, lista de ROMs y botón directo de lanzamiento Libretro a 60 FPS.
-- Settings: Panel de 8 categorías estándar OmniDash.
-- Profile: Perfil de usuario con Gamerscore y trofeos.
+Flujo Completo de Pantallas de OmniDash Aero:
+1. OmniDashHomeView: Isla soleada Frutiger Aero, Hero Card grande, tarjetas de consolas y 4 tarjetas de servicio (Biblioteca, Amigos, Comunidad, Logros).
+2. OmniDashLibraryView: Biblioteca completa con pestañas de consolas (Todas, SNES, Arcade, PS1, N64, NDS, Neo-Geo, Wii), buscador y cuadrícula de carátulas.
+3. OmniDashGameDetailsView: Ficha técnica con carátula grande, especificaciones, lista de ROMs y botón 'JUGAR AHORA'.
+4. OmniDashLaunchScreenView: Pantalla cinemática de arranque oficial ("rises the game's logo over its key art") antes del emulador.
+5. OmniDashSettingsView: Panel de Ajustes de 8 categorías en cristal esmerilado.
+6. OmniDashProfileView: Perfil de usuario con Gamerscore (18,450 G), trofeos y avatares.
 Autora: Camila Carolina Ianni
 """
 from __future__ import annotations
 
+import math
 import os
+import time
 from pathlib import Path
 import pygame
 
@@ -17,12 +21,12 @@ from omnidash_engine import OmniDashEngine, THEMES
 
 ROOT = Path(__file__).resolve().parent
 
-# Catálogo oficial de Consolas de OmniDash para C.C.I. SYSTEM
+# Catálogo oficial de Consolas de OmniDash
 CONSOLES = [
     {
         "id": "snes",
         "title": "Super Nintendo",
-        "subtitle": "16-BIT // 21 ROMS DISPONIBLES",
+        "subtitle": "16-BIT // 21 ROMS PRESERVADAS",
         "badge": "SNES",
         "cover": "start.png",
         "developer": "Nintendo EAD",
@@ -58,7 +62,7 @@ CONSOLES = [
     {
         "id": "n64",
         "title": "Nintendo 64",
-        "subtitle": "64-BIT 3D // 5 ROMS PRESERVADAS",
+        "subtitle": "64-BIT 3D // MARIO 64 & ZELDA",
         "badge": "N64",
         "cover": "elden.png",
         "developer": "Nintendo",
@@ -114,7 +118,7 @@ CONSOLES = [
         "developer": "Nintendo",
         "year": "2004",
         "core": "cores/melonds_libretro.dylib",
-        "desc": "Doble pantalla y aventuras inolvidables.",
+        "desc": "Doble pantalla y aventuras portátiles inolvidables.",
         "roms": [
             {"name": "Pokémon White Version 2", "file": "Pokemon White Version 2.nds", "region": "USA"},
             {"name": "Mario Kart DS", "file": "0168 - Mario Kart DS (U)(SCZ).nds", "region": "USA"},
@@ -130,7 +134,7 @@ CONSOLES = [
         "developer": "Nintendo",
         "year": "2006",
         "core": "cores/dolphin_libretro.dylib",
-        "desc": "Innovación y diversión en familia a 60 FPS.",
+        "desc": "Innovación y diversión por movimiento a 60 FPS.",
         "roms": [
             {"name": "Wii Sports", "file": "Wii Sports (USA).wbfs", "region": "USA"},
             {"name": "Super Mario Galaxy", "file": "Super Mario Galaxy (USA).wbfs", "region": "USA"},
@@ -138,9 +142,43 @@ CONSOLES = [
     },
 ]
 
+# Catálogo Completo de Juegos Individuales para la Biblioteca OmniDash
+ALL_GAMES = [
+    # SNES
+    {"id": "smw", "title": "Super Mario World", "console": "SNES", "core": "cores/snes9x_libretro.dylib", "rom": "roms/snes/Super Mario World (USA).sfc", "cover": "start.png", "region": "USA", "year": "1990"},
+    {"id": "smetroid", "title": "Super Metroid", "console": "SNES", "core": "cores/snes9x_libretro.dylib", "rom": "roms/snes/Super Metroid (JU) [!].smc", "cover": "start.png", "region": "USA", "year": "1994"},
+    {"id": "zelda_alttp", "title": "Zelda: A Link to the Past", "console": "SNES", "core": "cores/snes9x_libretro.dylib", "rom": "roms/snes/Legend of Zelda, The - A Link to the Past (USA).sfc", "cover": "start.png", "region": "USA", "year": "1991"},
+    {"id": "dkc", "title": "Donkey Kong Country", "console": "SNES", "core": "cores/snes9x_libretro.dylib", "rom": "roms/snes/Donkey Kong Country (USA) (Rev 2).sfc", "cover": "start.png", "region": "USA", "year": "1994"},
+    {"id": "sf2t", "title": "Street Fighter II Turbo", "console": "SNES", "core": "cores/snes9x_libretro.dylib", "rom": "roms/snes/Street Fighter II Turbo (USA).sfc", "cover": "start.png", "region": "USA", "year": "1993"},
+    # Arcade
+    {"id": "mslug2", "title": "Metal Slug 2", "console": "ARCADE", "core": "cores/fbneo_libretro.dylib", "rom": "roms/mame/mslug2.zip", "cover": "battle.png", "region": "ARCADE", "year": "1998"},
+    {"id": "mvsc", "title": "Marvel vs. Capcom", "console": "ARCADE", "core": "cores/fbneo_libretro.dylib", "rom": "roms/mame/mvsc.zip", "cover": "battle.png", "region": "ARCADE", "year": "1998"},
+    {"id": "pacman", "title": "Pac-Man Classic", "console": "ARCADE", "core": "cores/fbneo_libretro.dylib", "rom": "roms/mame/pacman.zip", "cover": "battle.png", "region": "ARCADE", "year": "1980"},
+    {"id": "ffight", "title": "Final Fight", "console": "ARCADE", "core": "cores/fbneo_libretro.dylib", "rom": "roms/mame/ffight.zip", "cover": "battle.png", "region": "ARCADE", "year": "1989"},
+    # PS1
+    {"id": "crash3", "title": "Crash Bandicoot 3: Warped", "console": "PS1", "core": "cores/pcsx_rearmed_libretro.dylib", "rom": "roms/ps1/Crash Bandicoot - Warped (USA).7z", "cover": "ps.png", "region": "USA", "year": "1998"},
+    {"id": "re3", "title": "Resident Evil 3: Nemesis", "console": "PS1", "core": "cores/pcsx_rearmed_libretro.dylib", "rom": "roms/ps1/Resident Evil 3 - Nemesis (E) [SLES-02529].7z", "cover": "ps.png", "region": "EUR", "year": "1999"},
+    {"id": "sotn", "title": "Castlevania: Symphony of the Night", "console": "PS1", "core": "cores/pcsx_rearmed_libretro.dylib", "rom": "roms/ps1/Castlevania - Symphony of the Night (USA).7z", "cover": "ps.png", "region": "USA", "year": "1997"},
+    {"id": "mslugx", "title": "Metal Slug X", "console": "PS1", "core": "cores/pcsx_rearmed_libretro.dylib", "rom": "roms/ps1/Metal Slug X (USA).7z", "cover": "ps.png", "region": "USA", "year": "2000"},
+    # N64
+    {"id": "sm64", "title": "Super Mario 64", "console": "N64", "core": "cores/mupen64plus_next_libretro.dylib", "rom": "roms/n64/Super Mario 64 (USA).z64", "cover": "elden.png", "region": "USA", "year": "1996"},
+    {"id": "oot", "title": "Zelda: Ocarina of Time", "console": "N64", "core": "cores/mupen64plus_next_libretro.dylib", "rom": "roms/n64/Legend of Zelda, The - Ocarina of Time (USA).z64", "cover": "elden.png", "region": "USA", "year": "1998"},
+    {"id": "smash64", "title": "Super Smash Bros.", "console": "N64", "core": "cores/mupen64plus_next_libretro.dylib", "rom": "roms/n64/Super Smash Bros. (USA).z64", "cover": "elden.png", "region": "USA", "year": "1999"},
+    # NDS
+    {"id": "pokewhite2", "title": "Pokémon White Version 2", "console": "NDS", "core": "cores/melonds_libretro.dylib", "rom": "roms/nds/Pokemon White Version 2.nds", "cover": "destiny.png", "region": "USA", "year": "2012"},
+    {"id": "mkds", "title": "Mario Kart DS", "console": "NDS", "core": "cores/melonds_libretro.dylib", "rom": "roms/nds/0168 - Mario Kart DS (U)(SCZ).nds", "cover": "destiny.png", "region": "USA", "year": "2005"},
+    {"id": "acww", "title": "Animal Crossing: Wild World", "console": "NDS", "core": "cores/melonds_libretro.dylib", "rom": "roms/nds/0389 - Animal Crossing - Wild World (E)(Legacy).nds", "cover": "destiny.png", "region": "EUR", "year": "2005"},
+    # Neo-Geo
+    {"id": "kof2002", "title": "The King of Fighters 2002", "console": "NEO-GEO", "core": "cores/fbneo_libretro.dylib", "rom": "roms/mame/kof2002.zip", "cover": "red.png", "region": "ARCADE", "year": "2002"},
+    {"id": "samsho2", "title": "Samurai Shodown II", "console": "NEO-GEO", "core": "cores/fbneo_libretro.dylib", "rom": "roms/mame/samsho2.zip", "cover": "red.png", "region": "ARCADE", "year": "1994"},
+    # Wii
+    {"id": "wiisports", "title": "Wii Sports", "console": "WII", "core": "cores/dolphin_libretro.dylib", "rom": "roms/wii/Wii Sports (USA).wbfs", "cover": "detroit.png", "region": "USA", "year": "2006"},
+    {"id": "mariogalaxy", "title": "Super Mario Galaxy", "console": "WII", "core": "cores/dolphin_libretro.dylib", "rom": "roms/wii/Super Mario Galaxy (USA).wbfs", "cover": "detroit.png", "region": "USA", "year": "2007"},
+]
+
 
 # ==============================================================================
-# 1. VISTA HOME OMNIDASH (Hero Card + Grid de Cristal Frutiger Aero)
+# 1. VISTA HOME OMNIDASH AERO (OmniDashHomeView)
 # ==============================================================================
 class OmniDashHomeView:
     def __init__(self, engine: OmniDashEngine):
@@ -148,7 +186,6 @@ class OmniDashHomeView:
         self.w, self.h = engine.w, engine.h
         self.selected_console_idx = 0
 
-        # Cargar carátulas
         self.covers = {}
         for c in CONSOLES:
             cname = c.get("cover")
@@ -160,7 +197,6 @@ class OmniDashHomeView:
                     except Exception:
                         pass
 
-        # Rectángulos clickeables
         self.hero_rect = pygame.Rect(36, 120, 330, 460)
         self.hero_btn_rect = pygame.Rect(56, 500, 290, 48)
         self.grid_rects: list[pygame.Rect] = []
@@ -169,7 +205,6 @@ class OmniDashHomeView:
     def handle_event(self, event: pygame.event.Event) -> dict | None:
         if event.type == pygame.MOUSEMOTION:
             mx, my = event.pos
-            # Hover sobre las tarjetas de la cuadrícula superior
             for idx, r in enumerate(self.grid_rects):
                 if r.collidepoint(mx, my):
                     if self.selected_console_idx != idx:
@@ -179,25 +214,16 @@ class OmniDashHomeView:
 
         elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
             mx, my = event.pos
-
-            # Clic en botón Iniciar de la tarjeta Hero
-            if self.hero_btn_rect.collidepoint(mx, my):
+            if self.hero_btn_rect.collidepoint(mx, my) or self.hero_rect.collidepoint(mx, my):
                 self.engine.play_sound("reward")
-                return {"action": "OPEN_DETAILS", "item": CONSOLES[self.selected_console_idx]}
+                return {"action": "LAUNCH_DIRECT", "item": CONSOLES[self.selected_console_idx]}
 
-            # Clic en tarjeta Hero
-            if self.hero_rect.collidepoint(mx, my):
-                self.engine.play_sound("reward")
-                return {"action": "OPEN_DETAILS", "item": CONSOLES[self.selected_console_idx]}
-
-            # Clic en tarjetas de la cuadrícula
             for idx, r in enumerate(self.grid_rects):
                 if r.collidepoint(mx, my):
                     self.selected_console_idx = idx
                     self.engine.play_sound("reward")
                     return {"action": "OPEN_DETAILS", "item": CONSOLES[idx]}
 
-            # Clic en tarjetas de utilidad (Amigos, Comunidad, Logros)
             for u in self.util_rects:
                 if u["rect"].collidepoint(mx, my):
                     self.engine.play_sound("reward")
@@ -214,7 +240,7 @@ class OmniDashHomeView:
                     self.engine.play_sound("navigate")
             elif event.key in (pygame.K_RETURN, pygame.K_SPACE):
                 self.engine.play_sound("reward")
-                return {"action": "OPEN_DETAILS", "item": CONSOLES[self.selected_console_idx]}
+                return {"action": "LAUNCH_DIRECT", "item": CONSOLES[self.selected_console_idx]}
 
         return None
 
@@ -222,25 +248,19 @@ class OmniDashHomeView:
         t = self.engine.theme
         cur_console = CONSOLES[self.selected_console_idx]
 
-        # ----------------------------------------------------------------------
-        # 1. TARJETA HERO GRANDE (Izquierda - Diseño OmniDash Oficial)
-        # ----------------------------------------------------------------------
+        # 1. Tarjeta Hero Grande (Izquierda)
         hx, hy, hw, hh = self.hero_rect.x, self.hero_rect.y, self.hero_rect.width, self.hero_rect.height
-
-        # Panel de cristal esmerilado de fondo
         h_surf = pygame.Surface((hw, hh), pygame.SRCALPHA)
         pygame.draw.rect(h_surf, t["panel_glass"], (0, 0, hw, hh), border_radius=16)
         pygame.draw.rect(h_surf, t["border_glass"], (0, 0, hw, hh), width=2, border_radius=16)
         surface.blit(h_surf, (hx, hy))
 
-        # Carátula destacada del Hero
         cov = self.covers.get(cur_console.get("cover"))
         if cov:
             scaled_cov = pygame.transform.smoothscale(cov, (hw - 24, 250))
             surface.blit(scaled_cov, (hx + 12, hy + 12))
             pygame.draw.rect(surface, (255, 255, 255, 120), (hx + 12, hy + 12, hw - 24, 250), width=1, border_radius=8)
 
-        # Información del Hero
         ht = self.engine.font_hero.render(cur_console["title"], True, t["text_primary"])
         surface.blit(ht, (hx + 16, hy + 276))
 
@@ -250,20 +270,14 @@ class OmniDashHomeView:
         meta_t = self.engine.font_badge.render(f"LISTO PARA JUGAR • {len(cur_console['roms'])} ROMS", True, t["accent"])
         surface.blit(meta_t, (hx + 18, hy + 342))
 
-        # Botón 'INICIAR' grande
         is_btn_hov = self.hero_btn_rect.collidepoint(pygame.mouse.get_pos())
         pygame.draw.rect(surface, (255, 255, 255) if is_btn_hov else t["accent"], self.hero_btn_rect, border_radius=12)
         btn_txt_col = (10, 20, 35) if is_btn_hov else (255, 255, 255)
         bt = self.engine.font_body.render("▶  INICIAR CONSOLA", True, btn_txt_col)
         surface.blit(bt, bt.get_rect(center=self.hero_btn_rect.center))
 
-        # ----------------------------------------------------------------------
-        # 2. CUADRÍCULA DE CRISTAL DERECHA (OmniDash Frutiger Aero)
-        # ----------------------------------------------------------------------
-        gx = 390
-        gy = 120
-
-        # Fila 1: Tarjetas Cuadradas de Consolas (145x145 px)
+        # 2. Cuadrícula de Cristal Derecha
+        gx, gy = 390, 120
         self.grid_rects = []
         card_size = 145
         spacing_x = 18
@@ -280,28 +294,24 @@ class OmniDashHomeView:
             pygame.draw.rect(c_surf, bg_col, (0, 0, card_size, card_size), border_radius=12)
             pygame.draw.rect(c_surf, t["focus_glow"] if is_sel else t["border_glass"], (0, 0, card_size, card_size), width=2 if is_sel else 1, border_radius=12)
 
-            # Arte de la tarjeta
             c_cov = self.covers.get(con.get("cover"))
             if c_cov:
                 scaled = pygame.transform.smoothscale(c_cov, (card_size - 16, 92))
                 c_surf.blit(scaled, (8, 8))
 
-            # Título de la tarjeta
             lbl = self.engine.font_badge.render(con["badge"], True, t["text_primary"])
             c_surf.blit(lbl, lbl.get_rect(center=(card_size // 2, card_size - 22)))
-
             surface.blit(c_surf, (cx, cy))
 
-        # Fila 2: Tarjetas de Utilidad y Servicios (Frosted Glass Cards, 250x180 px)
+        # 3. Tarjetas de Utilidad OmniDash Frutiger Aero (Amigos, Biblioteca, Logros)
         self.util_rects = []
         u_y = gy + card_size + 24
-        uw = 250
-        uh = 160
+        uw, uh = 250, 160
         u_spacing = 24
 
         utils = [
+            {"id": "library", "title": "Mi Biblioteca", "sub": "27 juegos preservados en 7 consolas", "icon": "📚", "action": "LIBRARY"},
             {"id": "friends", "title": "Amigos en Línea", "sub": "3 amigos conectados en C.C.I.", "icon": "👥", "action": "GROUPS"},
-            {"id": "library", "title": "Game Pass / Biblioteca", "sub": "27 ROMs preservadas a 60 FPS", "icon": "🎮", "action": "LIBRARY"},
             {"id": "achievements", "title": "Gamerscore & Trofeos", "sub": "18,450 G • 110 Trofeos ganados", "icon": "🏆", "action": "PROFILE"},
         ]
 
@@ -316,7 +326,6 @@ class OmniDashHomeView:
             pygame.draw.rect(u_surf, u_bg, (0, 0, uw, uh), border_radius=14)
             pygame.draw.rect(u_surf, t["focus_glow"] if is_hov else t["border_glass"], (0, 0, uw, uh), width=2 if is_hov else 1, border_radius=14)
 
-            # Icono + Título
             ico_t = self.engine.font_hero.render(u["icon"], True, t["text_primary"])
             u_surf.blit(ico_t, (16, 16))
 
@@ -330,7 +339,255 @@ class OmniDashHomeView:
 
 
 # ==============================================================================
-# 2. VISTA DETALLES DE JUEGO / CONSOLA (OmniDashGameDetailsView)
+# 2. VISTA BIBLIOTECA COMPLETA OMNIDASH (OmniDashLibraryView)
+# ==============================================================================
+class OmniDashLibraryView:
+    """Pantalla de Biblioteca Frutiger Aero con filtros por plataforma, buscador y cuadrícula de carátulas."""
+
+    def __init__(self, engine: OmniDashEngine):
+        self.engine = engine
+        self.w, self.h = engine.w, engine.h
+        self.selected_filter = "TODAS"
+        self.selected_game_idx = 0
+        self.search_query = ""
+
+        self.covers = {}
+        for g in ALL_GAMES:
+            cname = g.get("cover")
+            if cname and cname not in self.covers:
+                cp = ROOT / "assets_ps4" / "img" / cname
+                if cp.exists():
+                    try:
+                        self.covers[cname] = pygame.image.load(str(cp)).convert_alpha()
+                    except Exception:
+                        pass
+
+        self.filters = ["TODAS", "SNES", "ARCADE", "PS1", "N64", "NDS", "NEO-GEO", "WII"]
+        self.filter_rects: list[pygame.Rect] = []
+        self.game_card_rects: list[pygame.Rect] = []
+        self.back_btn_rect = pygame.Rect(36, 24, 110, 36)
+
+    def _filtered_games(self) -> list[dict]:
+        res = ALL_GAMES
+        if self.selected_filter != "TODAS":
+            res = [g for g in res if g["console"] == self.selected_filter]
+        if self.search_query:
+            q = self.search_query.lower()
+            res = [g for g in res if q in g["title"].lower()]
+        return res
+
+    def handle_event(self, event: pygame.event.Event) -> dict | None:
+        filtered = self._filtered_games()
+
+        if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+            mx, my = event.pos
+            if self.back_btn_rect.collidepoint(mx, my):
+                self.engine.play_sound("navigate")
+                return {"action": "BACK"}
+
+            # Clic en filtros
+            for idx, r in enumerate(self.filter_rects):
+                if r.collidepoint(mx, my):
+                    self.selected_filter = self.filters[idx]
+                    self.selected_game_idx = 0
+                    self.engine.play_sound("navigate")
+                    return None
+
+            # Clic en tarjeta de juego
+            for idx, r in enumerate(self.game_card_rects):
+                if r.collidepoint(mx, my):
+                    if idx < len(filtered):
+                        self.engine.play_sound("reward")
+                        game = filtered[idx]
+                        return {"action": "LAUNCH_GAME", "game": game}
+
+        elif event.type == pygame.KEYDOWN:
+            if event.key in (pygame.K_ESCAPE, pygame.K_BACKSPACE):
+                self.engine.play_sound("navigate")
+                return {"action": "BACK"}
+
+            elif event.key in (pygame.K_RIGHT, pygame.K_d):
+                if self.selected_game_idx < len(filtered) - 1:
+                    self.selected_game_idx += 1
+                    self.engine.play_sound("navigate")
+            elif event.key in (pygame.K_LEFT, pygame.K_a):
+                if self.selected_game_idx > 0:
+                    self.selected_game_idx -= 1
+                    self.engine.play_sound("navigate")
+            elif event.key in (pygame.K_DOWN, pygame.K_s):
+                if self.selected_game_idx + 6 < len(filtered):
+                    self.selected_game_idx += 6
+                    self.engine.play_sound("navigate")
+            elif event.key in (pygame.K_UP, pygame.K_w):
+                if self.selected_game_idx - 6 >= 0:
+                    self.selected_game_idx -= 6
+                    self.engine.play_sound("navigate")
+            elif event.key in (pygame.K_RETURN, pygame.K_SPACE):
+                if filtered and self.selected_game_idx < len(filtered):
+                    self.engine.play_sound("reward")
+                    return {"action": "LAUNCH_GAME", "game": filtered[self.selected_game_idx]}
+
+        return None
+
+    def render(self, surface: pygame.Surface):
+        t = self.engine.theme
+
+        # Botón Volver
+        is_back_hov = self.back_btn_rect.collidepoint(pygame.mouse.get_pos())
+        pygame.draw.rect(surface, (255, 255, 255, 80 if is_back_hov else 35), self.back_btn_rect, border_radius=18)
+        pygame.draw.rect(surface, t["text_primary"], self.back_btn_rect, width=1, border_radius=18)
+        bt = self.engine.font_btn.render("⇦ VOLVER", True, t["text_primary"])
+        surface.blit(bt, bt.get_rect(center=self.back_btn_rect.center))
+
+        # Título de la Biblioteca
+        title_t = self.engine.font_hero.render("BIBLIOTECA DE JUEGOS Y CONSOLAS", True, t["text_primary"])
+        surface.blit(title_t, (170, 26))
+
+        # Pestañas de Filtros de Plataforma
+        self.filter_rects = []
+        fx = 36
+        fy = 78
+        for f in self.filters:
+            is_active = (f == self.selected_filter)
+            tw = len(f) * 10 + 26
+            f_rect = pygame.Rect(fx, fy, tw, 34)
+            self.filter_rects.append(f_rect)
+
+            bg_col = (255, 255, 255, 120) if is_active else (255, 255, 255, 30)
+            pygame.draw.rect(surface, bg_col, f_rect, border_radius=17)
+            if is_active:
+                pygame.draw.rect(surface, t["accent"], f_rect, width=2, border_radius=17)
+
+            f_txt = self.engine.font_badge.render(f, True, t["text_primary"])
+            surface.blit(f_txt, f_txt.get_rect(center=f_rect.center))
+            fx += tw + 10
+
+        # Cuadrícula de Juegos (6 columnas)
+        filtered = self._filtered_games()
+        self.game_card_rects = []
+        cols = 6
+        cw, ch = 185, 200
+        start_x = 36
+        start_y = 130
+        gap_x, gap_y = 18, 20
+
+        for idx, g in enumerate(filtered):
+            col = idx % cols
+            row = idx // cols
+            cx = start_x + col * (cw + gap_x)
+            cy = start_y + row * (ch + gap_y)
+
+            card_rect = pygame.Rect(cx, cy, cw, ch)
+            self.game_card_rects.append(card_rect)
+
+            is_sel = (idx == self.selected_game_idx)
+            c_surf = pygame.Surface((cw, ch), pygame.SRCALPHA)
+            bg_col = t["card_hover"] if is_sel else t["card_glass"]
+            pygame.draw.rect(c_surf, bg_col, (0, 0, cw, ch), border_radius=12)
+            pygame.draw.rect(c_surf, t["focus_glow"] if is_sel else t["border_glass"], (0, 0, cw, ch), width=2 if is_sel else 1, border_radius=12)
+
+            # Carátula
+            cov = self.covers.get(g.get("cover"))
+            if cov:
+                scaled = pygame.transform.smoothscale(cov, (cw - 16, 125))
+                c_surf.blit(scaled, (8, 8))
+
+            # Título y Plataforma
+            g_title = g["title"] if len(g["title"]) < 20 else g["title"][:18] + "..."
+            gt = self.engine.font_badge.render(g_title, True, t["text_primary"])
+            c_surf.blit(gt, (10, 142))
+
+            plat_t = self.engine.font_badge.render(f"{g['console']} • {g['region']}", True, t["accent"] if is_sel else t["text_secondary"])
+            c_surf.blit(plat_t, (10, 164))
+
+            surface.blit(c_surf, (cx, cy))
+
+
+# ==============================================================================
+# 3. VISTA PANTALLA CINEMÁTICA DE ARRANQUE (OmniDashLaunchScreenView)
+# ==============================================================================
+class OmniDashLaunchScreenView:
+    """Pantalla cinemática oficial de OmniDash que eleva el logo sobre el arte del juego antes de lanzar el emulador."""
+
+    def __init__(self, engine: OmniDashEngine, game_or_console: dict):
+        self.engine = engine
+        self.target = game_or_console
+        self.w, self.h = engine.w, engine.h
+        self.timer = 0.0
+        self.duration = 1.6  # 1.6 segundos de animación fluida
+
+        # Cargar arte
+        self.art_surf = None
+        cname = game_or_console.get("cover", "start.png")
+        cp = ROOT / "assets_ps4" / "img" / cname
+        if cp.exists():
+            try:
+                loaded = pygame.image.load(str(cp)).convert()
+                self.art_surf = pygame.transform.smoothscale(loaded, (self.w, self.h))
+            except Exception:
+                pass
+
+        # Reproducir sonido de arranque oficial
+        self.engine.play_sound("startup")
+
+    def update(self, dt: float) -> dict | None:
+        self.timer += dt
+        if self.timer >= self.duration:
+            return {"action": "LAUNCH_NOW", "target": self.target}
+        return None
+
+    def render(self, surface: pygame.Surface):
+        progress = min(1.0, self.timer / self.duration)
+        t = self.engine.theme
+
+        # 1. Zoom sutil del fondo
+        if self.art_surf:
+            zoom = 1.0 + progress * 0.08
+            zw, zh = int(self.w * zoom), int(self.h * zoom)
+            scaled = pygame.transform.smoothscale(self.art_surf, (zw, zh))
+            surface.blit(scaled, ((self.w - zw) // 2, (self.h - zh) // 2))
+
+            # Overlay oscurecedor para resaltar el logo
+            dim_surf = pygame.Surface((self.w, self.h), pygame.SRCALPHA)
+            dim_surf.fill((0, 0, 0, int(120 + progress * 70)))
+            surface.blit(dim_surf, (0, 0))
+        else:
+            surface.fill(t["bg_base"])
+
+        # 2. Elevación del Logo y Título desde abajo (Curva Easing)
+        ease_y = math.sin(progress * math.pi / 2)
+        start_y = self.h + 80
+        target_y = self.h // 2 - 60
+        cur_y = int(start_y - (start_y - target_y) * ease_y)
+
+        # Caja de cristal flotante
+        bw, bh = 480, 160
+        bx = (self.w - bw) // 2
+        box_surf = pygame.Surface((bw, bh), pygame.SRCALPHA)
+        pygame.draw.rect(box_surf, (255, 255, 255, 60), (0, 0, bw, bh), border_radius=20)
+        pygame.draw.rect(box_surf, (255, 255, 255, 180), (0, 0, bw, bh), width=2, border_radius=20)
+        surface.blit(box_surf, (bx, cur_y))
+
+        # Título del juego / consola
+        title_txt = self.target.get("title", "Juego Retro")
+        tt = self.engine.font_hero.render(title_txt, True, (255, 255, 255))
+        surface.blit(tt, tt.get_rect(center=(self.w // 2, cur_y + 45)))
+
+        badge_txt = self.target.get("console", self.target.get("badge", "C.C.I."))
+        bt = self.engine.font_sub.render(f"NÚCLEO LIBRETRO A 60 FPS • {badge_txt}", True, t["accent"])
+        surface.blit(bt, bt.get_rect(center=(self.w // 2, cur_y + 85)))
+
+        # Barra de progreso brillante inferior
+        bar_w = 340
+        bar_x = (self.w - bar_w) // 2
+        bar_y = cur_y + 115
+        pygame.draw.rect(surface, (255, 255, 255, 60), (bar_x, bar_y, bar_w, 8), border_radius=4)
+        fill_w = int(bar_w * progress)
+        pygame.draw.rect(surface, t["accent"], (bar_x, bar_y, fill_w, 8), border_radius=4)
+
+
+# ==============================================================================
+# 4. VISTAS DETALLES, AJUSTES Y PERFIL OMNIDASH
 # ==============================================================================
 class OmniDashGameDetailsView:
     def __init__(self, engine: OmniDashEngine, item: dict):
@@ -402,7 +659,6 @@ class OmniDashGameDetailsView:
         bt = self.engine.font_btn.render("⇦ VOLVER", True, t["text_primary"])
         surface.blit(bt, bt.get_rect(center=self.back_btn_rect.center))
 
-        # Panel de Cristal de Detalles
         px, py = 36, 80
         pw, ph = 1208, 600
         p_surf = pygame.Surface((pw, ph), pygame.SRCALPHA)
@@ -410,13 +666,11 @@ class OmniDashGameDetailsView:
         pygame.draw.rect(p_surf, t["border_glass"], (0, 0, pw, ph), width=2, border_radius=16)
         surface.blit(p_surf, (px, py))
 
-        # Carátula
         cx, cy = px + 36, py + 36
         if self.cover_surf:
             surface.blit(self.cover_surf, (cx, cy))
             pygame.draw.rect(surface, (255, 255, 255, 140), (cx, cy, 280, 280), width=2, border_radius=8)
 
-        # Especificaciones
         ix = px + 350
         title_t = self.engine.font_hero.render(self.item["title"], True, t["text_primary"])
         surface.blit(title_t, (ix, cy))
@@ -428,12 +682,10 @@ class OmniDashGameDetailsView:
         desc_t = self.engine.font_body.render(self.item.get("desc", ""), True, t["text_primary"])
         surface.blit(desc_t, (ix, cy + 74))
 
-        # Botón Lanzar
         pygame.draw.rect(surface, t["accent"], self.launch_btn_rect, border_radius=10)
         l_txt = self.engine.font_body.render("▶  INICIAR JUEGO (60 FPS)", True, (255, 255, 255))
         surface.blit(l_txt, l_txt.get_rect(center=self.launch_btn_rect.center))
 
-        # Lista de ROMs
         list_y = cy + 200
         lh_t = self.engine.font_body.render("ROMS Y TÍTULOS PRESERVADOS:", True, t["text_primary"])
         surface.blit(lh_t, (ix, list_y))
@@ -458,9 +710,6 @@ class OmniDashGameDetailsView:
             surface.blit(reg_t, (r_rect.right - 80, r_rect.y + 12))
 
 
-# ==============================================================================
-# 3. VISTA AJUSTES (OmniDashSettingsView)
-# ==============================================================================
 class OmniDashSettingsView:
     def __init__(self, engine: OmniDashEngine):
         from ps4_settings_ui import PS4SettingsUI
@@ -474,9 +723,6 @@ class OmniDashSettingsView:
         self.inner_ui.render(surface)
 
 
-# ==============================================================================
-# 4. VISTA PERFIL (OmniDashProfileView)
-# ==============================================================================
 class OmniDashProfileView:
     def __init__(self, engine: OmniDashEngine):
         from ps4_profile_ui import PS4ProfileUI
@@ -517,7 +763,6 @@ class OmniDashHomeState:
 
     def handle_events(self, events):
         for event in events:
-            # 1. Shell global
             shell_res = self.engine.handle_shell_event(event)
             if shell_res:
                 if shell_res.get("action") == "QUIT":
@@ -529,10 +774,12 @@ class OmniDashHomeState:
                         self.state_machine.change_state(dest)
                         return
 
-            # 2. Vista Home
             res = self.home_view.handle_event(event)
             if res:
-                if res.get("action") == "OPEN_DETAILS":
+                if res.get("action") == "LAUNCH_DIRECT":
+                    item = res["item"]
+                    self.state_machine.change_state("LAUNCH_ANIM", target=item)
+                elif res.get("action") == "OPEN_DETAILS":
                     self.state_machine.change_state("DETAILS", item=res["item"])
                 elif res.get("action") == "NAVIGATE_UTIL":
                     dest = res["destination"]
@@ -546,6 +793,89 @@ class OmniDashHomeState:
         self.home_view.render(screen)
         self.engine.render_top_bar(screen)
         self.engine.render_bottom_dock(screen)
+
+
+class OmniDashLibraryState:
+    def __init__(self, state_machine):
+        self.state_machine = state_machine
+        self.engine = get_shared_engine()
+        self.library_view = OmniDashLibraryView(self.engine)
+
+    def enter(self, **kwargs):
+        pass
+
+    def exit(self):
+        pass
+
+    def handle_events(self, events):
+        for event in events:
+            res = self.library_view.handle_event(event)
+            if res:
+                if res.get("action") == "BACK":
+                    self.state_machine.change_state("MENU")
+                    return
+                elif res.get("action") == "LAUNCH_GAME":
+                    game = res["game"]
+                    self.state_machine.change_state("LAUNCH_ANIM", target=game)
+                    return
+
+    def update(self, dt):
+        pass
+
+    def draw(self, screen):
+        self.engine.render_background(screen)
+        self.library_view.render(screen)
+        self.engine.render_bottom_dock(screen)
+
+
+class OmniDashLaunchAnimState:
+    """Estado 'LAUNCH_ANIM' cinemático de OmniDash Aero antes de arrancar Libretro."""
+    def __init__(self, state_machine):
+        self.state_machine = state_machine
+        self.engine = get_shared_engine()
+        self.launch_view = None
+
+    def enter(self, target=None, **kwargs):
+        if target:
+            self.launch_view = OmniDashLaunchScreenView(self.engine, target)
+
+    def exit(self):
+        pass
+
+    def handle_events(self, events):
+        for event in events:
+            if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+                self.state_machine.change_state("MENU")
+                return
+
+    def update(self, dt):
+        if self.launch_view:
+            res = self.launch_view.update(dt)
+            if res and res.get("action") == "LAUNCH_NOW":
+                target = res["target"]
+                # Determinar core y rom
+                if "core" in target and "rom" in target:
+                    core_path = target["core"]
+                    rom_path = target["rom"]
+                    game_title = target["title"]
+                elif "roms" in target and target["roms"]:
+                    core_path = target["core"]
+                    rom_path = f"roms/{target['id']}/{target['roms'][0]['file']}"
+                    game_title = target["roms"][0]["name"]
+                else:
+                    self.state_machine.change_state("MENU")
+                    return
+
+                self.state_machine.change_state(
+                    "PLAYING",
+                    game_key=game_title,
+                    rom_path=rom_path,
+                    core_path=core_path
+                )
+
+    def draw(self, screen):
+        if self.launch_view:
+            self.launch_view.render(screen)
 
 
 class OmniDashDetailsState:
@@ -577,14 +907,14 @@ class OmniDashDetailsState:
                 item = res["item"]
                 rom = res.get("rom")
                 if item.get("core") and rom:
-                    rom_path = f"roms/{item['id']}/{rom['file']}"
-                    core_path = item["core"]
-                    self.state_machine.change_state(
-                        "PLAYING",
-                        game_key=rom["name"],
-                        rom_path=rom_path,
-                        core_path=core_path
-                    )
+                    game_data = {
+                        "title": rom["name"],
+                        "console": item["badge"],
+                        "core": item["core"],
+                        "rom": f"roms/{item['id']}/{rom['file']}",
+                        "cover": item.get("cover", "start.png")
+                    }
+                    self.state_machine.change_state("LAUNCH_ANIM", target=game_data)
                     return
 
     def update(self, dt):
