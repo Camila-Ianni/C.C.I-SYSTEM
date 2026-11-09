@@ -113,7 +113,9 @@ def main():
             except Exception:
                 pass
 
-    state_machine.register_state("MENU", MenuState(state_machine, on_game_launch=record_game_launch))
+    from ps4_dashboard_ui import PS4DashboardState
+    state_machine.register_state("MENU", PS4DashboardState(state_machine, on_game_launch=record_game_launch))
+    state_machine.register_state("ARCADE_MENU", MenuState(state_machine, on_game_launch=record_game_launch))
     from console_selector_ui import ConsoleSelectorState
     state_machine.register_state("LIBRARY", ConsoleSelectorState(state_machine))
     from groups_ui import GroupsHubState, CommunityViewState

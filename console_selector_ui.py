@@ -465,7 +465,13 @@ class ConsoleSelectorState:
         self.sidebar_font = make_sidebar_font()
 
     def enter(self, **kwargs):
-        pass
+        def_con = kwargs.get("default_console")
+        if def_con:
+            for idx, c in enumerate(self.ui.consoles):
+                if c["id"] == def_con:
+                    self.ui.selected_console_idx = idx
+                    self.ui.selected_game_idx = 0
+                    break
 
     def exit(self):
         pass
