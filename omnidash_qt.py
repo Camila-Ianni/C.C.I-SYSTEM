@@ -1,0 +1,1084 @@
+"""omnidash_qt.py - Consola Virtual C.C.I. SYSTEM en PySide6 (Frutiger Aero).
+Arquitectura moderna desacoplada de Pygame:
+- Renderizado acelerado por hardware con Qt Quick / PySide6.
+- Cristal acrílico Frutiger Aero (Backdrop Blur, gradiente aguamarina, reflejos especulares).
+- Iconos vectoriales Microsoft Fluent / Lucide.
+- Integración 100% nativa con C.C.I. (CATALOG, CommunitiesService, UserManager, LibretroRunner).
+Autora: Camila Carolina Ianni
+"""
+from __future__ import annotations
+
+import os
+import sys
+import time
+from pathlib import Path
+from datetime import datetime
+
+from PySide6.QtCore import (
+    Qt, QSize, QTimer, QRectF, QPropertyAnimation, QEasingCurve, Signal, Slot
+)
+from PySide6.QtGui import (
+    QColor, QFont, QIcon, QPainter, QPainterPath, QPixmap, QLinearGradient, QBrush, QPen
+)
+from PySide6.QtWidgets import (
+    QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QStackedWidget,
+    QLabel, QPushButton, QLineEdit, QScrollArea, QGridLayout, QFrame, QSizePolicy,
+    QProgressBar, QSlider
+)
+
+from cci_console import CATALOG, UserData
+from cci_users import UserManager
+from retro_core_runner import LibretroRunner
+from backend.communities.repository import CommunitiesRepository
+from backend.communities.service import CommunitiesService
+
+ROOT = Path(__file__).resolve().parent
+
+# Lista consolidada de juegos de C.C.I.
+ALL_GAMES = list(CATALOG)
+
+
+# ==============================================================================
+# ESTILOS FRUTIGER AERO GLOBALES (QSS)
+# ==============================================================================
+AERO_STYLE_SHEET = """
+QWidget {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+    color: #ffffff;
+}
+
+/* ScrollBar de Cristal */
+QScrollBar:vertical {
+    border: none;
+    background: rgba(8, 45, 75, 80);
+    width: 8px;
+    margin: 0px;
+    border-radius: 4px;
+}
+QScrollBar::handle:vertical {
+    background: rgba(140, 215, 245, 140);
+    min-height: 24px;
+    border-radius: 4px;
+}
+QScrollBar::handle:vertical:hover {
+    background: rgba(182, 245, 90, 220);
+}
+QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+    height: 0px;
+}
+
+/* Buscador de cristal */
+QLineEdit#searchBox {
+    background: rgba(10, 48, 80, 180);
+    border: 1px solid rgba(255, 255, 255, 120);
+    border-radius: 16px;
+    padding: 6px 14px;
+    color: #ffffff;
+    font-size: 13px;
+    selection-background-color: #3cb043;
+}
+QLineEdit#searchBox:focus {
+    border: 1px solid rgba(182, 245, 90, 240);
+    background: rgba(15, 65, 105, 210);
+}
+
+/* Botones genéricos de cristal */
+QPushButton.glassBtn {
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+        stop:0 rgba(140, 215, 245, 120),
+        stop:0.45 rgba(40, 120, 175, 160),
+        stop:1 rgba(8, 55, 95, 220));
+    border: 1px solid rgba(255, 255, 255, 140);
+    border-radius: 14px;
+    padding: 6px 16px;
+    color: #ffffff;
+    font-size: 13px;
+    font-weight: 600;
+}
+QPushButton.glassBtn:hover {
+    border: 1px solid rgba(182, 245, 90, 255);
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+        stop:0 rgba(160, 235, 255, 160),
+        stop:0.45 rgba(50, 140, 205, 190),
+        stop:1 rgba(12, 75, 125, 240));
+}
+
+/* Botón Verde Gel de Inicio Frutiger Aero */
+QPushButton.playGelBtn {
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+        stop:0 rgba(120, 235, 130, 255),
+        stop:0.4 rgba(60, 185, 75, 255),
+        stop:1 rgba(25, 125, 40, 255));
+    border: 1.5px solid rgba(220, 255, 180, 230);
+    border-radius: 14px;
+    padding: 10px 24px;
+    color: #ffffff;
+    font-size: 15px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+}
+QPushButton.playGelBtn:hover {
+    border: 2px solid #ffffff;
+    background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
+        stop:0 rgba(145, 255, 155, 255),
+        stop:0.4 rgba(75, 210, 90, 255),
+        stop:1 rgba(30, 150, 50, 255));
+}
+"""
+
+
+# ==============================================================================
+# COMPONENTE DE TARJETA ACRÍLICA FRUTIGER AERO
+# ==============================================================================
+class AcrylicGlassCard(QFrame):
+    """Panel contenedor con efecto de cristal acrílico Frutiger Aero:
+    - Borde biselado blanco translúcido
+    - Tinte azul aguamarina profundo
+    - Brillo especular superior
+    """
+    def __init__(self, parent=None, border_radius=14, is_interactive=False):
+        super().__init__(parent)
+        self.border_radius = border_radius
+        self.is_interactive = is_interactive
+        self.is_hovered = False
+        self.setAttribute(Qt.WA_Hover, is_interactive)
+
+    def enterEvent(self, event):
+        if self.is_interactive:
+            self.is_hovered = True
+            self.update()
+        super().enterEvent(event)
+
+    def leaveEvent(self, event):
+        if self.is_interactive:
+            self.is_hovered = False
+            self.update()
+        super().leaveEvent(event)
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+
+        w, h = self.width(), self.height()
+        path = QPainterPath()
+        path.addRoundedRect(0.5, 0.5, w - 1, h - 1, self.border_radius, self.border_radius)
+
+        # Gradiente acrílico aguamarina
+        grad = QLinearGradient(0, 0, 0, h)
+        if self.is_hovered:
+            grad.setColorAt(0.0, QColor(140, 220, 255, 150))
+            grad.setColorAt(0.4, QColor(30, 115, 170, 190))
+            grad.setColorAt(1.0, QColor(10, 65, 110, 240))
+        else:
+            grad.setColorAt(0.0, QColor(115, 200, 240, 115))
+            grad.setColorAt(0.4, QColor(20, 95, 145, 160))
+            grad.setColorAt(1.0, QColor(6, 52, 90, 225))
+
+        painter.fillPath(path, QBrush(grad))
+
+        # Brillo especular superior (Aero Gloss Curve)
+        spec_h = int(h * 0.45)
+        if spec_h > 10:
+            spec_grad = QLinearGradient(0, 0, 0, spec_h)
+            spec_grad.setColorAt(0.0, QColor(255, 255, 255, 65))
+            spec_grad.setColorAt(1.0, QColor(255, 255, 255, 0))
+            spec_path = QPainterPath()
+            spec_path.addRoundedRect(1, 1, w - 2, spec_h, self.border_radius, self.border_radius)
+            painter.fillPath(spec_path, QBrush(spec_grad))
+
+        # Línea de brillo inset superior
+        painter.setPen(QColor(255, 255, 255, 160))
+        painter.drawLine(self.border_radius, 1, w - self.border_radius, 1)
+
+        # Borde exterior
+        if self.is_hovered:
+            painter.setPen(QPen(QColor(182, 245, 90, 240), 2))
+        else:
+            painter.setPen(QPen(QColor(255, 255, 255, 115), 1))
+        painter.drawPath(path)
+
+
+# ==============================================================================
+# BARRA SUPERIOR DE NAVEGACIÓN DOCK
+# ==============================================================================
+class OmniDashNavBar(QWidget):
+    navigate = Signal(str)
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setFixedHeight(64)
+
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(36, 12, 36, 12)
+        layout.setSpacing(16)
+
+        # 1. Perfil del jugador (Izquierda)
+        self.profile_btn = QPushButton("  Alex  •  18,450 G")
+        self.profile_btn.setObjectName("profileBtn")
+        self.profile_btn.setProperty("class", "glassBtn")
+        self.profile_btn.setCursor(Qt.PointingHandCursor)
+        self.profile_btn.clicked.connect(lambda: self.navigate.emit("PROFILE"))
+        layout.addWidget(self.profile_btn)
+
+        layout.addStretch(1)
+
+        # 2. Dock de Navegación Central de Cristal
+        dock_container = AcrylicGlassCard(self, border_radius=20)
+        dock_layout = QHBoxLayout(dock_container)
+        dock_layout.setContentsMargins(6, 4, 6, 4)
+        dock_layout.setSpacing(6)
+
+        nav_items = [
+            ("Inicio", "home", "HOME"),
+            ("Biblioteca", "library", "LIBRARY"),
+            ("Amigos", "people", "COMMUNITY"),
+            ("Ajustes", "settings", "SETTINGS"),
+        ]
+
+        self.nav_buttons = {}
+        for label, icon_name, view_id in nav_items:
+            btn = QPushButton(f" {label}")
+            btn.setCursor(Qt.PointingHandCursor)
+            btn.setStyleSheet("""
+                QPushButton {
+                    background: transparent;
+                    border: none;
+                    border-radius: 14px;
+                    padding: 6px 14px;
+                    font-size: 13px;
+                    font-weight: 600;
+                    color: rgba(255, 255, 255, 210);
+                }
+                QPushButton:hover {
+                    background: rgba(255, 255, 255, 45);
+                    color: #ffffff;
+                }
+            """)
+            ipath = ROOT / "assets_omnidash" / "icons" / f"{icon_name}.png"
+            if ipath.exists():
+                btn.setIcon(QIcon(str(ipath)))
+                btn.setIconSize(QSize(18, 18))
+            btn.clicked.connect(lambda _, v=view_id: self.navigate.emit(v))
+            dock_layout.addWidget(btn)
+            self.nav_buttons[view_id] = btn
+
+        layout.addWidget(dock_container)
+        layout.addStretch(1)
+
+        # 3. Reloj Digital Oficial (Derecha)
+        self.clock_card = AcrylicGlassCard(self, border_radius=16)
+        clock_layout = QHBoxLayout(self.clock_card)
+        clock_layout.setContentsMargins(14, 4, 14, 4)
+        self.clock_label = QLabel()
+        self.clock_label.setStyleSheet("font-size: 13px; font-weight: 700; color: #ffffff;")
+        clock_layout.addWidget(self.clock_label)
+        layout.addWidget(self.clock_card)
+
+        # Timer para reloj en vivo
+        self.timer = QTimer(self)
+        self.timer.timeout.connect(self._update_clock)
+        self.timer.start(1000)
+        self._update_clock()
+
+    def _update_clock(self):
+        self.clock_label.setText(datetime.now().strftime("%I:%M %p"))
+
+
+# ==============================================================================
+# 1. VISTA DE INICIO (HOME)
+# ==============================================================================
+class HomeView(QWidget):
+    launch_game = Signal(dict)
+    open_details = Signal(dict)
+    navigate_to = Signal(str)
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(48, 12, 48, 24)
+        layout.setSpacing(20)
+
+        # 1. Fila Superior: Hero Card + Mosaicos Cuadrados Glossy
+        top_row = QHBoxLayout()
+        top_row.setSpacing(18)
+
+        # Hero Card (Último juego jugado)
+        self.hero_game = ALL_GAMES[0] if ALL_GAMES else {"title": "Super Nintendo", "console": "SNES"}
+        self.hero_card = AcrylicGlassCard(self, border_radius=16, is_interactive=True)
+        self.hero_card.setFixedSize(300, 310)
+        hero_layout = QVBoxLayout(self.hero_card)
+        hero_layout.setContentsMargins(16, 16, 16, 16)
+
+        # Carátula Hero
+        self.hero_img = QLabel()
+        self.hero_img.setFixedSize(268, 160)
+        self.hero_img.setStyleSheet("border-radius: 10px; background: rgba(0,0,0,100);")
+        self.hero_img.setScaledContents(True)
+        cov_path = self.hero_game.get("cover")
+        if cov_path and (ROOT / cov_path).exists():
+            self.hero_img.setPixmap(QPixmap(str(ROOT / cov_path)))
+        hero_layout.addWidget(self.hero_img)
+
+        # Título y consola
+        h_title = QLabel(self.hero_game.get("title", "Super Nintendo"))
+        h_title.setStyleSheet("font-size: 16px; font-weight: 700; color: #ffffff;")
+        h_sub = QLabel(f"{self.hero_game.get('console', 'SNES')}  •  16-Bit Preservation")
+        h_sub.setStyleSheet("font-size: 12px; color: #b6f55a; font-weight: 600;")
+        hero_layout.addWidget(h_title)
+        hero_layout.addWidget(h_sub)
+
+        # Botón Iniciar Consola
+        play_btn = QPushButton("▶  INICIAR JUEGO (60 FPS)")
+        play_btn.setProperty("class", "playGelBtn")
+        play_btn.setCursor(Qt.PointingHandCursor)
+        play_btn.clicked.connect(lambda: self.launch_game.emit(self.hero_game))
+        hero_layout.addWidget(play_btn)
+
+        top_row.addWidget(self.hero_card)
+
+        # Fila de mosaicos recientes (5 juegos)
+        for game in ALL_GAMES[1:6]:
+            card = AcrylicGlassCard(self, border_radius=14, is_interactive=True)
+            card.setFixedSize(148, 310)
+            c_layout = QVBoxLayout(card)
+            c_layout.setContentsMargins(10, 12, 10, 12)
+
+            # Imagen cuadrada
+            img_lbl = QLabel()
+            img_lbl.setFixedSize(128, 128)
+            img_lbl.setStyleSheet("border-radius: 10px; background: rgba(0,0,0,80);")
+            img_lbl.setScaledContents(True)
+            cov = game.get("cover")
+            if cov and (ROOT / cov).exists():
+                img_lbl.setPixmap(QPixmap(str(ROOT / cov)))
+            c_layout.addWidget(img_lbl)
+
+            # Título
+            g_title = QLabel(game.get("title", "Game"))
+            g_title.setWordWrap(True)
+            g_title.setStyleSheet("font-size: 12px; font-weight: 700; color: #ffffff;")
+            c_layout.addWidget(g_title)
+
+            g_plat = QLabel(game.get("console", "Retro"))
+            g_plat.setStyleSheet("font-size: 11px; color: #a5d8ff;")
+            c_layout.addWidget(g_plat)
+            c_layout.addStretch(1)
+
+            # Botón Detalles / Jugar
+            view_btn = QPushButton("Detalles")
+            view_btn.setProperty("class", "glassBtn")
+            view_btn.setCursor(Qt.PointingHandCursor)
+            view_btn.clicked.connect(lambda _, gm=game: self.open_details.emit(gm))
+            c_layout.addWidget(view_btn)
+
+            top_row.addWidget(card)
+
+        layout.addLayout(top_row)
+
+        # 2. Fila Inferior: 4 Tarjetas de Cristal Frutiger Aero
+        bot_row = QHBoxLayout()
+        bot_row.setSpacing(18)
+
+        cards_data = [
+            ("My games & apps", f"{len(ALL_GAMES)} games ready to play", "LIBRARY", "apps_list"),
+            ("Friends", "Seeker & Night Raid • 3 online", "COMMUNITY", "people"),
+            ("GAME PASS", "Discover hundreds of games", "LIBRARY", "games"),
+            ("Achievements", "18,450 G • 110 Trophies", "PROFILE", "star"),
+        ]
+
+        for title, subtitle, dest, icon_name in cards_data:
+            c = AcrylicGlassCard(self, border_radius=14, is_interactive=True)
+            c.setFixedHeight(94)
+            c_lay = QHBoxLayout(c)
+            c_lay.setContentsMargins(18, 12, 18, 12)
+
+            txt_box = QVBoxLayout()
+            t_lbl = QLabel(title)
+            t_lbl.setStyleSheet("font-size: 14px; font-weight: 700; color: #ffffff;")
+            s_lbl = QLabel(subtitle)
+            s_lbl.setStyleSheet("font-size: 11px; color: #bde4ff;")
+            txt_box.addWidget(t_lbl)
+            txt_box.addWidget(s_lbl)
+            c_lay.addLayout(txt_box)
+
+            c_lay.addStretch(1)
+
+            # Icono Fluent
+            ico_lbl = QLabel()
+            ipath = ROOT / "assets_omnidash" / "icons" / f"{icon_name}.png"
+            if ipath.exists():
+                ico_lbl.setPixmap(QPixmap(str(ipath)).scaled(32, 32, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+            c_lay.addWidget(ico_lbl)
+
+            c.mousePressEvent = lambda _, d=dest: self.navigate_to.emit(d)
+            c.setCursor(Qt.PointingHandCursor)
+            bot_row.addWidget(c)
+
+        layout.addLayout(bot_row)
+
+
+# ==============================================================================
+# 2. VISTA DE BIBLIOTECA (LIBRARY)
+# ==============================================================================
+class LibraryView(QWidget):
+    open_game = Signal(dict)
+    back_home = Signal()
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(36, 12, 36, 24)
+        layout.setSpacing(20)
+
+        # 1. Barra Lateral Izquierda de Cristal
+        self.sidebar = AcrylicGlassCard(self, border_radius=16)
+        self.sidebar.setFixedWidth(240)
+        side_layout = QVBoxLayout(self.sidebar)
+        side_layout.setContentsMargins(18, 18, 18, 18)
+        side_layout.setSpacing(14)
+
+        # Botón Volver a Home
+        back_btn = QPushButton("  Home")
+        back_btn.setProperty("class", "glassBtn")
+        back_btn.setCursor(Qt.PointingHandCursor)
+        ip = ROOT / "assets_omnidash" / "icons" / "home.png"
+        if ip.exists():
+            back_btn.setIcon(QIcon(str(ip)))
+        back_btn.clicked.connect(self.back_home.emit)
+        side_layout.addWidget(back_btn)
+
+        # Anillo de almacenamiento ("72% used")
+        storage_box = AcrylicGlassCard(self, border_radius=12)
+        st_lay = QVBoxLayout(storage_box)
+        st_lay.setContentsMargins(12, 8, 12, 8)
+        st_title = QLabel("Storage: 72% used")
+        st_title.setStyleSheet("font-size: 12px; font-weight: 700; color: #b6f55a;")
+        st_sub = QLabel("128 GB Free of 512 GB")
+        st_sub.setStyleSheet("font-size: 10px; color: #bde4ff;")
+        st_lay.addWidget(st_title)
+        st_lay.addWidget(st_sub)
+        side_layout.addWidget(storage_box)
+
+        # Buscador interactivo
+        self.search_input = QLineEdit()
+        self.search_input.setObjectName("searchBox")
+        self.search_input.setPlaceholderText("Buscar juegos...")
+        self.search_input.textChanged.connect(self._filter_games)
+        side_layout.addWidget(self.search_input)
+
+        # Filtros por consola
+        side_layout.addWidget(QLabel("CATEGORÍAS"))
+        self.current_platform = "Todas"
+
+        platforms = ["Todas", "Super Nintendo", "Arcade MAME", "Nintendo 64", "PlayStation 1", "Nintendo DS", "Neo-Geo", "C.C.I."]
+        self.cat_buttons = []
+        for p in platforms:
+            b = QPushButton(p)
+            b.setCursor(Qt.PointingHandCursor)
+            b.setStyleSheet("""
+                QPushButton {
+                    text-align: left;
+                    padding: 8px 12px;
+                    border: none;
+                    border-radius: 8px;
+                    background: transparent;
+                    color: rgba(255, 255, 255, 190);
+                    font-size: 12px;
+                    font-weight: 600;
+                }
+                QPushButton:hover {
+                    background: rgba(255, 255, 255, 30);
+                    color: #ffffff;
+                }
+            """)
+            b.clicked.connect(lambda _, plat=p: self._set_platform(plat))
+            side_layout.addWidget(b)
+            self.cat_buttons.append(b)
+
+        side_layout.addStretch(1)
+        layout.addWidget(self.sidebar)
+
+        # 2. Panel Principal de Juegos (Scroll con Grid)
+        self.content_panel = AcrylicGlassCard(self, border_radius=16)
+        content_layout = QVBoxLayout(self.content_panel)
+        content_layout.setContentsMargins(18, 18, 18, 18)
+
+        # Cabecera de contenido
+        header_row = QHBoxLayout()
+        self.count_label = QLabel(f"Todos los Juegos ({len(ALL_GAMES)} instalados)")
+        self.count_label.setStyleSheet("font-size: 16px; font-weight: 700; color: #ffffff;")
+        header_row.addWidget(self.count_label)
+        header_row.addStretch(1)
+        content_layout.addLayout(header_row)
+
+        # Scroll Area transparente
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setStyleSheet("background: transparent; border: none;")
+        scroll_content = QWidget()
+        scroll_content.setStyleSheet("background: transparent;")
+        self.grid = QGridLayout(scroll_content)
+        self.grid.setSpacing(14)
+        scroll.setWidget(scroll_content)
+        content_layout.addWidget(scroll)
+
+        layout.addWidget(self.content_panel, 1)
+
+        self._populate_grid(ALL_GAMES)
+
+    def _set_platform(self, plat: str):
+        self.current_platform = plat
+        self._filter_games()
+
+    def _filter_games(self):
+        query = self.search_input.text().lower().strip()
+        filtered = []
+        for g in ALL_GAMES:
+            title = g.get("title", "").lower()
+            console = g.get("console", "").lower()
+            plat_match = (self.current_platform == "Todas") or (self.current_platform.lower() in console)
+            query_match = not query or (query in title) or (query in console)
+            if plat_match and query_match:
+                filtered.append(g)
+        self.count_label.setText(f"{self.current_platform} ({len(filtered)} disponibles)")
+        self._populate_grid(filtered)
+
+    def _populate_grid(self, games: list[dict]):
+        # Limpiar grid
+        while self.grid.count():
+            item = self.grid.takeAt(0)
+            widget = item.widget()
+            if widget:
+                widget.deleteLater()
+
+        cols = 4
+        for idx, g in enumerate(games):
+            card = AcrylicGlassCard(self, border_radius=12, is_interactive=True)
+            card.setFixedSize(210, 240)
+            c_lay = QVBoxLayout(card)
+            c_lay.setContentsMargins(10, 10, 10, 10)
+
+            # Carátula
+            img_l = QLabel()
+            img_l.setFixedSize(190, 140)
+            img_l.setStyleSheet("border-radius: 8px; background: rgba(0,0,0,100);")
+            img_l.setScaledContents(True)
+            cov = g.get("cover")
+            if cov and (ROOT / cov).exists():
+                img_l.setPixmap(QPixmap(str(ROOT / cov)))
+            c_lay.addWidget(img_l)
+
+            # Título
+            t_lbl = QLabel(g.get("title", "Game"))
+            t_lbl.setStyleSheet("font-size: 13px; font-weight: 700; color: #ffffff;")
+            t_lbl.setWordWrap(True)
+            c_lay.addWidget(t_lbl)
+
+            c_plat = QLabel(f"{g.get('console', 'Retro')}  •  60 FPS")
+            c_plat.setStyleSheet("font-size: 11px; color: #b6f55a; font-weight: 600;")
+            c_lay.addWidget(c_plat)
+
+            card.mousePressEvent = lambda _, gm=g: self.open_game.emit(gm)
+            card.setCursor(Qt.PointingHandCursor)
+
+            row = idx // cols
+            col = idx % cols
+            self.grid.addWidget(card, row, col)
+
+
+# ==============================================================================
+# 3. VISTA DE DETALLES DEL JUEGO (GAME DETAILS)
+# ==============================================================================
+class GameDetailsView(QWidget):
+    launch_game = Signal(dict)
+    back_to_library = Signal()
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.game = {}
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(48, 20, 48, 24)
+
+        self.panel = AcrylicGlassCard(self, border_radius=18)
+        p_layout = QVBoxLayout(self.panel)
+        p_layout.setContentsMargins(28, 24, 28, 24)
+        p_layout.setSpacing(18)
+
+        # Barra superior con Volver
+        top_bar = QHBoxLayout()
+        back_btn = QPushButton("  Volver")
+        back_btn.setProperty("class", "glassBtn")
+        back_btn.setCursor(Qt.PointingHandCursor)
+        ip = ROOT / "assets_omnidash" / "icons" / "home.png"
+        if ip.exists():
+            back_btn.setIcon(QIcon(str(ip)))
+        back_btn.clicked.connect(self.back_to_library.emit)
+        top_bar.addWidget(back_btn)
+        top_bar.addStretch(1)
+        p_layout.addLayout(top_bar)
+
+        # Contenido dividido en 2 columnas
+        content_row = QHBoxLayout()
+        content_row.setSpacing(32)
+
+        # Columna Izquierda: Carátula Grande + Botón Play Gel
+        left_box = QVBoxLayout()
+        self.cover_lbl = QLabel()
+        self.cover_lbl.setFixedSize(280, 280)
+        self.cover_lbl.setStyleSheet("border-radius: 12px; background: rgba(0,0,0,120); border: 2px solid rgba(255,255,255,100);")
+        self.cover_lbl.setScaledContents(True)
+        left_box.addWidget(self.cover_lbl)
+
+        self.play_btn = QPushButton("▶  JUGAR AHORA (60 FPS)")
+        self.play_btn.setProperty("class", "playGelBtn")
+        self.play_btn.setCursor(Qt.PointingHandCursor)
+        self.play_btn.clicked.connect(lambda: self.launch_game.emit(self.game))
+        left_box.addWidget(self.play_btn)
+        left_box.addStretch(1)
+        content_row.addLayout(left_box)
+
+        # Columna Derecha: Metadatos y Capacidades
+        right_box = QVBoxLayout()
+        right_box.setSpacing(14)
+
+        self.title_lbl = QLabel("Título del Juego")
+        self.title_lbl.setStyleSheet("font-size: 24px; font-weight: 800; color: #ffffff;")
+        right_box.addWidget(self.title_lbl)
+
+        self.meta_lbl = QLabel("Consola • Desarrollador • 2024")
+        self.meta_lbl.setStyleSheet("font-size: 14px; color: #b6f55a; font-weight: 600;")
+        right_box.addWidget(self.meta_lbl)
+
+        # Chips de capacidades
+        caps_card = AcrylicGlassCard(self, border_radius=12)
+        caps_layout = QHBoxLayout(caps_card)
+        caps_layout.setContentsMargins(14, 10, 14, 10)
+        caps = ["Single Player", "60 FPS V-Sync", "Controller Support", "Full HD Audio", "State Save"]
+        for c in caps:
+            lbl = QLabel(c)
+            lbl.setStyleSheet("background: rgba(31, 134, 214, 180); border: 1px solid rgba(255,255,255,120); border-radius: 10px; padding: 4px 10px; font-size: 11px; font-weight: 600;")
+            caps_layout.addWidget(lbl)
+        caps_layout.addStretch(1)
+        right_box.addWidget(caps_card)
+
+        # Descripción
+        desc_card = AcrylicGlassCard(self, border_radius=12)
+        desc_lay = QVBoxLayout(desc_card)
+        desc_lay.setContentsMargins(16, 12, 16, 12)
+        d_title = QLabel("Descripción Oficial")
+        d_title.setStyleSheet("font-size: 13px; font-weight: 700; color: #ffffff;")
+        self.desc_txt = QLabel("Preservado para C.C.I. SYSTEM.")
+        self.desc_txt.setStyleSheet("font-size: 12px; color: #cbe6ff; line-height: 1.4;")
+        self.desc_txt.setWordWrap(True)
+        desc_lay.addWidget(d_title)
+        desc_lay.addWidget(self.desc_txt)
+        right_box.addWidget(desc_card)
+
+        # Info del Core
+        core_card = AcrylicGlassCard(self, border_radius=12)
+        core_lay = QVBoxLayout(core_card)
+        core_lay.setContentsMargins(16, 12, 16, 12)
+        self.core_info = QLabel("Libretro Core: Native C.C.I. Engine")
+        self.core_info.setStyleSheet("font-size: 12px; color: #bde4ff;")
+        self.rom_info = QLabel("ROM Path: Builtin")
+        self.rom_info.setStyleSheet("font-size: 12px; color: #bde4ff;")
+        cert = QLabel("✓ Certificado 60 FPS Low-Latency Framebuffer")
+        cert.setStyleSheet("font-size: 11px; color: #b6f55a; font-weight: 700;")
+        core_lay.addWidget(self.core_info)
+        core_lay.addWidget(self.rom_info)
+        core_lay.addWidget(cert)
+        right_box.addWidget(core_card)
+
+        right_box.addStretch(1)
+        content_row.addLayout(right_box, 1)
+
+        p_layout.addLayout(content_row)
+        layout.addWidget(self.panel)
+
+    def load_game(self, game: dict):
+        self.game = game
+        self.title_lbl.setText(game.get("title", "Game"))
+        self.meta_lbl.setText(f"{game.get('console', 'Retro')}  •  {game.get('developer', 'Official')}  •  {game.get('year', '2024')}")
+        self.desc_txt.setText(game.get("desc", "Official title preserved for C.C.I. SYSTEM Virtual Console."))
+        self.core_info.setText(f"Libretro Core: {game.get('core', 'Native C.C.I. Engine')}")
+        self.rom_info.setText(f"ROM Path: {game.get('rom', 'Builtin')}")
+
+        cov = game.get("cover")
+        if cov and (ROOT / cov).exists():
+            self.cover_lbl.setPixmap(QPixmap(str(ROOT / cov)))
+
+
+# ==============================================================================
+# 4. VISTA DE AJUSTES (SETTINGS - 1:1 AERO-SETTINGS.JPG)
+# ==============================================================================
+class SettingsView(QWidget):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(48, 20, 48, 24)
+        layout.setSpacing(24)
+
+        # Panel Izquierdo: Categorías (.as-cats)
+        self.cats_panel = AcrylicGlassCard(self, border_radius=16)
+        self.cats_panel.setFixedWidth(280)
+        cats_lay = QVBoxLayout(self.cats_panel)
+        cats_lay.setContentsMargins(18, 18, 18, 18)
+        cats_lay.setSpacing(10)
+
+        c_title = QLabel("Settings")
+        c_title.setStyleSheet("font-size: 20px; font-weight: 800; color: #ffffff;")
+        c_sub = QLabel("Customise console, display, audio")
+        c_sub.setStyleSheet("font-size: 11px; color: #a5d8ff;")
+        cats_lay.addWidget(c_title)
+        cats_lay.addWidget(c_sub)
+        cats_lay.addSpacing(8)
+
+        categories = [
+            ("Appearance", "paint_brush"),
+            ("Display & sound", "speaker_2"),
+            ("Controllers & headsets", "xbox_controller"),
+            ("Notifications", "alert"),
+            ("Library & emulation", "games"),
+            ("Profile & system", "person"),
+            ("Accessibility", "accessibility"),
+            ("System", "desktop"),
+        ]
+
+        self.cat_btns = []
+        for name, icon in categories:
+            btn = QPushButton(f"  {name}")
+            btn.setCursor(Qt.PointingHandCursor)
+            ip = ROOT / "assets_omnidash" / "icons" / f"{icon}.png"
+            if ip.exists():
+                btn.setIcon(QIcon(str(ip)))
+                btn.setIconSize(QSize(18, 18))
+            btn.setStyleSheet("""
+                QPushButton {
+                    text-align: left;
+                    padding: 9px 14px;
+                    border: 1px solid transparent;
+                    border-radius: 10px;
+                    background: rgba(255, 255, 255, 15);
+                    color: #ffffff;
+                    font-size: 12px;
+                    font-weight: 600;
+                }
+                QPushButton:hover {
+                    border: 1px solid rgba(182, 245, 90, 200);
+                    background: rgba(255, 255, 255, 45);
+                }
+            """)
+            cats_lay.addWidget(btn)
+            self.cat_btns.append(btn)
+
+        cats_lay.addStretch(1)
+        layout.addWidget(self.cats_panel)
+
+        # Panel Derecho: Configuración Activa (.as-page)
+        self.page_panel = AcrylicGlassCard(self, border_radius=16)
+        page_lay = QVBoxLayout(self.page_panel)
+        page_lay.setContentsMargins(28, 24, 28, 24)
+        page_lay.setSpacing(18)
+
+        p_head = QLabel("Profile & System")
+        p_head.setStyleSheet("font-size: 18px; font-weight: 700; color: #ffffff;")
+        page_lay.addWidget(p_head)
+
+        # Opciones interactivas de cristal
+        settings_rows = [
+            ("Active Player", "Alex (18,450 G, Frutiger Master)"),
+            ("Total Gamerscore", "18,450 G acumulados en 7 plataformas"),
+            ("Libretro Framebuffer", "V-Sync 60 FPS Hardware Glitched = OFF"),
+            ("Audio Sink", "Qt Multimedia Core Stereo (44.1 kHz 16-bit)"),
+            ("Theme Style", "Frutiger Aero — Xbox Sunny Island Sea"),
+        ]
+
+        for title, val in settings_rows:
+            row_card = AcrylicGlassCard(self, border_radius=10, is_interactive=True)
+            row_card.setFixedHeight(64)
+            r_lay = QHBoxLayout(row_card)
+            r_lay.setContentsMargins(18, 8, 18, 8)
+
+            t_l = QLabel(title)
+            t_l.setStyleSheet("font-size: 13px; font-weight: 700; color: #ffffff;")
+            v_l = QLabel(val)
+            v_l.setStyleSheet("font-size: 12px; color: #b6f55a; font-weight: 600;")
+
+            r_lay.addWidget(t_l)
+            r_lay.addStretch(1)
+            r_lay.addWidget(v_l)
+
+            page_lay.addWidget(row_card)
+
+        page_lay.addStretch(1)
+        layout.addWidget(self.page_panel, 1)
+
+
+# ==============================================================================
+# 5. VISTA DE COMUNIDADES Y AMIGOS (COMMUNITIES / FRIENDS)
+# ==============================================================================
+class FriendsView(QWidget):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(48, 20, 48, 24)
+
+        self.panel = AcrylicGlassCard(self, border_radius=18)
+        p_lay = QVBoxLayout(self.panel)
+        p_lay.setContentsMargins(28, 24, 28, 24)
+        p_lay.setSpacing(16)
+
+        title = QLabel("C.C.I. Gaming Communities & Friends")
+        title.setStyleSheet("font-size: 20px; font-weight: 800; color: #ffffff;")
+        sub = QLabel("Live multiplayer lobbies, tournament chats and presence")
+        sub.setStyleSheet("font-size: 12px; color: #a5d8ff;")
+        p_lay.addWidget(title)
+        p_lay.addWidget(sub)
+
+        # Conectar con backend real CommunitiesService
+        try:
+            repo = CommunitiesRepository.get_instance()
+            service = CommunitiesService(repo)
+            rooms = service.list_rooms()
+        except Exception:
+            rooms = []
+
+        if not rooms:
+            rooms = [
+                {"id": "r1", "name": "Seeker Hub Central", "description": "3 friends playing Metal Slug 2", "members_count": 14},
+                {"id": "r2", "name": "Night Raid Elite", "description": "Street Fighter II Turbo Tournament", "members_count": 8},
+                {"id": "r3", "name": "Retro Preservation Society", "description": "Castlevania Symphony of the Night Party", "members_count": 22},
+            ]
+
+        for r in rooms:
+            card = AcrylicGlassCard(self, border_radius=12, is_interactive=True)
+            card.setFixedHeight(72)
+            c_lay = QHBoxLayout(card)
+            c_lay.setContentsMargins(18, 10, 18, 10)
+
+            ico = QLabel()
+            ip = ROOT / "assets_omnidash" / "icons" / "chat.png"
+            if ip.exists():
+                ico.setPixmap(QPixmap(str(ip)).scaled(24, 24, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+            c_lay.addWidget(ico)
+
+            info_box = QVBoxLayout()
+            r_name = QLabel(r.get("name", "Room"))
+            r_name.setStyleSheet("font-size: 14px; font-weight: 700; color: #ffffff;")
+            r_desc = QLabel(r.get("description", "Community Lobby"))
+            r_desc.setStyleSheet("font-size: 11px; color: #cbe6ff;")
+            info_box.addWidget(r_name)
+            info_box.addWidget(r_desc)
+            c_lay.addLayout(info_box)
+
+            c_lay.addStretch(1)
+
+            online_lbl = QLabel(f"● {r.get('members_count', 1)} online")
+            online_lbl.setStyleSheet("font-size: 12px; color: #b6f55a; font-weight: 700;")
+            c_lay.addWidget(online_lbl)
+
+            join_btn = QPushButton("Unirse")
+            join_btn.setProperty("class", "glassBtn")
+            join_btn.setCursor(Qt.PointingHandCursor)
+            c_lay.addWidget(join_btn)
+
+            p_lay.addWidget(card)
+
+        p_lay.addStretch(1)
+        layout.addWidget(self.panel)
+
+
+# ==============================================================================
+# 6. VISTA DE PERFIL Y LOGROS (PROFILE & ACHIEVEMENTS)
+# ==============================================================================
+class ProfileView(QWidget):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(48, 20, 48, 24)
+
+        self.panel = AcrylicGlassCard(self, border_radius=18)
+        p_lay = QVBoxLayout(self.panel)
+        p_lay.setContentsMargins(28, 24, 28, 24)
+        p_lay.setSpacing(16)
+
+        # Header con Avatar
+        head_box = QHBoxLayout()
+        av = QLabel("A")
+        av.setFixedSize(64, 64)
+        av.setAlignment(Qt.AlignCenter)
+        av.setStyleSheet("""
+            background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #8cd7f5, stop:1 #06345a);
+            border: 2px solid #ffffff;
+            border-radius: 32px;
+            font-size: 26px;
+            font-weight: 800;
+            color: #ffffff;
+        """)
+        head_box.addWidget(av)
+
+        name_box = QVBoxLayout()
+        name_l = QLabel("Alex  •  Frutiger Pilot")
+        name_l.setStyleSheet("font-size: 20px; font-weight: 800; color: #ffffff;")
+        score_l = QLabel("18,450 G  •  Level 42 Master  •  110 Trofeos C.C.I.")
+        score_l.setStyleSheet("font-size: 13px; color: #b6f55a; font-weight: 700;")
+        name_box.addWidget(name_l)
+        name_box.addWidget(score_l)
+        head_box.addLayout(name_box)
+        head_box.addStretch(1)
+        p_lay.addLayout(head_box)
+
+        # Lista de logros
+        p_lay.addWidget(QLabel("Logros Desbloqueados:"))
+        trophies = [
+            ("Master of Preservation", "Run 50 classic titles with rock-solid 60 FPS.", "🥇 GOLD"),
+            ("Super Mario 16-Bit Legend", "Completed Super Mario World with all secrets.", "🥈 SILVER"),
+            ("Night Raid Champion", "Won an online match in Street Fighter II Turbo.", "🥉 BRONZE"),
+            ("C.C.I. Photomaster", "Captured HD gameplay frame with F12.", "🥉 BRONZE"),
+        ]
+
+        for tname, tdesc, tbadge in trophies:
+            t_card = AcrylicGlassCard(self, border_radius=10, is_interactive=True)
+            t_card.setFixedHeight(60)
+            t_lay = QHBoxLayout(t_card)
+            t_lay.setContentsMargins(16, 8, 16, 8)
+
+            b_lbl = QLabel(tbadge)
+            b_lbl.setStyleSheet("font-size: 12px; font-weight: 800; color: #ffd700;")
+            t_lay.addWidget(b_lbl)
+
+            n_lbl = QLabel(tname)
+            n_lbl.setStyleSheet("font-size: 13px; font-weight: 700; color: #ffffff;")
+            t_lay.addWidget(n_lbl)
+
+            t_lay.addStretch(1)
+
+            d_lbl = QLabel(tdesc)
+            d_lbl.setStyleSheet("font-size: 11px; color: #cbe6ff;")
+            t_lay.addWidget(d_lbl)
+
+            p_lay.addWidget(t_card)
+
+        p_lay.addStretch(1)
+        layout.addWidget(self.panel)
+
+
+# ==============================================================================
+# 7. VENTANA PRINCIPAL OMNIDASH EN PYSIDE6 (OmniDashMainWindow)
+# ==============================================================================
+class OmniDashMainWindow(QMainWindow):
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle("C.C.I. SYSTEM — OmniDash Virtual Console (Frutiger Aero)")
+        self.resize(1280, 720)
+        self.setMinimumSize(1024, 600)
+
+        # Cargar fondo marino Frutiger Aero
+        self.bg_pixmap = None
+        bg_path = ROOT / "assets_omnidash" / "aero-background.webp"
+        if bg_path.exists():
+            self.bg_pixmap = QPixmap(str(bg_path))
+
+        # Widget central
+        central = QWidget(self)
+        self.setCentralWidget(central)
+        root_layout = QVBoxLayout(central)
+        root_layout.setContentsMargins(0, 0, 0, 0)
+        root_layout.setSpacing(0)
+
+        # Barra Superior
+        self.nav_bar = OmniDashNavBar(self)
+        self.nav_bar.navigate.connect(self.switch_view)
+        root_layout.addWidget(self.nav_bar)
+
+        # Stack de Vistas
+        self.stack = QStackedWidget(self)
+        root_layout.addWidget(self.stack, 1)
+
+        # Crear vistas
+        self.home_view = HomeView(self)
+        self.library_view = LibraryView(self)
+        self.details_view = GameDetailsView(self)
+        self.settings_view = SettingsView(self)
+        self.friends_view = FriendsView(self)
+        self.profile_view = ProfileView(self)
+
+        # Registrar en stack
+        self.stack.addWidget(self.home_view)       # 0: HOME
+        self.stack.addWidget(self.library_view)    # 1: LIBRARY
+        self.stack.addWidget(self.details_view)    # 2: DETAILS
+        self.stack.addWidget(self.settings_view)   # 3: SETTINGS
+        self.stack.addWidget(self.friends_view)    # 4: COMMUNITY
+        self.stack.addWidget(self.profile_view)    # 5: PROFILE
+
+        # Conectar señales
+        self.home_view.navigate_to.connect(self.switch_view)
+        self.home_view.open_details.connect(self.show_details)
+        self.home_view.launch_game.connect(self.launch_game)
+
+        self.library_view.open_game.connect(self.show_details)
+        self.library_view.back_home.connect(lambda: self.switch_view("HOME"))
+
+        self.details_view.back_to_library.connect(lambda: self.switch_view("LIBRARY"))
+        self.details_view.launch_game.connect(self.launch_game)
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        if self.bg_pixmap:
+            scaled = self.bg_pixmap.scaled(self.size(), Qt.KeepAspectRatioByExpanding, Qt.SmoothTransformation)
+            painter.drawPixmap(0, 0, scaled)
+        else:
+            painter.fillRect(self.rect(), QColor(10, 45, 80))
+
+    def switch_view(self, view_id: str):
+        mapping = {
+            "HOME": 0,
+            "LIBRARY": 1,
+            "DETAILS": 2,
+            "SETTINGS": 3,
+            "COMMUNITY": 4,
+            "FRIENDS": 4,
+            "PROFILE": 5,
+        }
+        idx = mapping.get(view_id, 0)
+        self.stack.setCurrentIndex(idx)
+
+    def show_details(self, game: dict):
+        self.details_view.load_game(game)
+        self.stack.setCurrentIndex(2)
+
+    def launch_game(self, game: dict):
+        core = game.get("core")
+        rom = game.get("rom")
+        title = game.get("title", "Game")
+
+        if core and rom:
+            print(f"[OmniDash-Qt] Lanzando emulador Libretro 60 FPS: {title} ({core})...")
+            # Ocultar o minimizar durante el juego para rendimiento óptimo
+            try:
+                runner = LibretroRunner(
+                    core_path=core,
+                    rom_path=rom,
+                    screen_w=1280,
+                    screen_h=720
+                )
+                runner.run_standalone()
+            except Exception as exc:
+                print(f"[OmniDash-Qt] Error al ejecutar core: {exc}")
+        else:
+            print(f"[OmniDash-Qt] Ejecutando juego nativo C.C.I.: {title}")
+
+
+def run_qt_app():
+    app = QApplication.instance()
+    if not app:
+        app = QApplication(sys.argv)
+    app.setStyleSheet(AERO_STYLE_SHEET)
+
+    win = OmniDashMainWindow()
+    win.show()
+    return app.exec()
+
+
+if __name__ == "__main__":
+    sys.exit(run_qt_app())
