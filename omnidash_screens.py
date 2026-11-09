@@ -44,6 +44,46 @@ def draw_glass_rect(surface: pygame.Surface, rect: pygame.Rect, bg_rgba: tuple, 
     surface.blit(g_surf, rect.topleft)
 
 
+def draw_aero_glass_panel(surface: pygame.Surface, rect: pygame.Rect, border_radius: int = 14):
+    """Renderiza el panel de cristal aguamarina translúcido oficial de OmniDash Aero
+    (garrison-theme-aero.css: linear-gradient(180deg, rgba(150, 220, 245, .46), rgba(18, 100, 145, .62) 30%, rgba(5, 52, 88, .82))).
+    Fidelidad absoluta a las capturas oficiales aero-settings.jpg y aero-library.jpg.
+    """
+    w, h = rect.width, rect.height
+    if w <= 0 or h <= 0:
+        return
+    p_surf = pygame.Surface((w, h), pygame.SRCALPHA)
+
+    # Gradiente vertical de cristal aguamarina auténtico Frutiger Aero
+    for y in range(h):
+        prog = y / float(h)
+        if prog < 0.3:
+            p_sub = prog / 0.3
+            r = int(140 * (1 - p_sub) + 20 * p_sub)
+            g = int(210 * (1 - p_sub) + 105 * p_sub)
+            b = int(240 * (1 - p_sub) + 150 * p_sub)
+            a = int(120 * (1 - p_sub) + 165 * p_sub)
+        else:
+            p_sub = (prog - 0.3) / 0.7
+            r = int(20 * (1 - p_sub) + 6 * p_sub)
+            g = int(105 * (1 - p_sub) + 52 * p_sub)
+            b = int(150 * (1 - p_sub) + 90 * p_sub)
+            a = int(165 * (1 - p_sub) + 215 * p_sub)
+        pygame.draw.line(p_surf, (r, g, b, a), (0, y), (w, y))
+
+    # Máscara de esquinas redondeadas
+    mask_surf = pygame.Surface((w, h), pygame.SRCALPHA)
+    pygame.draw.rect(mask_surf, (255, 255, 255, 255), (0, 0, w, h), border_radius=border_radius)
+    p_surf.blit(mask_surf, (0, 0), special_flags=pygame.BLEND_RGBA_MIN)
+
+    # Brillo blanco superior (inset 0 1px 0 rgba(255, 255, 255, .6))
+    pygame.draw.line(p_surf, (255, 255, 255, 170), (border_radius, 1), (w - border_radius, 1))
+    # Borde de cristal translúcido
+    pygame.draw.rect(p_surf, (255, 255, 255, 125), (0, 0, w, h), width=1, border_radius=border_radius)
+
+    surface.blit(p_surf, rect.topleft)
+
+
 # ==============================================================================
 # CARGADOR DE IMÁGENES EN COLOR DE ALTA DEFINICIÓN
 # ==============================================================================
@@ -1072,90 +1112,151 @@ class OmniDashSettingsView:
             self.settings["reduced_motion"] = not self.settings["reduced_motion"]
 
     def render(self, surface: pygame.Surface):
-        pr = self.panel_rect
-        draw_glass_rect(surface, pr, (12, 22, 38, 235), (255, 255, 255, 90), border_radius=18)
+        # 1. Overlay atmosférico Frutiger Aero sobre el mar turquesa
+        # (linear-gradient(180deg, rgba(0, 40, 90, .55), rgba(0, 50, 80, .35) 40%, rgba(0, 40, 70, .6)))
+        overlay = pygame.Surface((self.w, self.h), pygame.SRCALPHA)
+        for y in range(self.h):
+            prog = y / float(self.h)
+            a = int(90 + 35 * math.sin(prog * math.pi))
+            pygame.draw.line(overlay, (0, 35, 75, a), (0, y), (self.w, y))
+        surface.blit(overlay, (0, 0))
 
-        # Encabezado
+        # 2. Encabezado Oficial (.as-head de aero-settings.jpg)
         t_head = self.engine.font_hero.render("Settings", True, (255, 255, 255))
-        surface.blit(t_head, (pr.x + 32, pr.y + 20))
+        sh_head = self.engine.font_hero.render("Settings", True, (0, 25, 60))
+        surface.blit(sh_head, (66, 33))
+        surface.blit(t_head, (64, 32))
 
-        t_sub = self.engine.font_sub.render("Customise your console, display, audio and accounts", True, (185, 215, 240))
-        surface.blit(t_sub, (pr.x + 34, pr.y + 54))
+        t_sub = self.engine.font_sub.render("Change how OmniDash looks, sounds and plays.", True, (215, 240, 255))
+        surface.blit(t_sub, (65, 66))
 
-        # Botón Cerrar
+        # Botón Cerrar Oficial (.as-close) en esquina superior derecha
         is_close_hov = self.back_btn_rect.collidepoint(pygame.mouse.get_pos())
-        draw_glass_rect(surface, self.back_btn_rect, (8, 48, 80, 220 if is_close_hov else 160), (182, 245, 90) if is_close_hov else (255, 255, 255, 140), border_radius=18)
-        bt = self.engine.font_btn.render("Ⓑ / Esc  Close", True, (255, 255, 255))
-        surface.blit(bt, bt.get_rect(center=self.back_btn_rect.center))
+        draw_glass_rect(surface, self.back_btn_rect, (8, 45, 75, 220 if is_close_hov else 160), (182, 245, 90) if is_close_hov else (255, 255, 255, 140), border_radius=18)
+        # Badge circular rojo "B" de Xbox
+        kbd_center = (self.back_btn_rect.x + 20, self.back_btn_rect.centery)
+        pygame.draw.circle(surface, (208, 56, 58), kbd_center, 10)
+        b_txt = self.engine.font_badge.render("B", True, (255, 255, 255))
+        surface.blit(b_txt, b_txt.get_rect(center=kbd_center))
+        c_txt = self.engine.font_btn.render("Close", True, (255, 255, 255))
+        surface.blit(c_txt, (self.back_btn_rect.x + 38, self.back_btn_rect.centery - 7))
 
-        # Barra Lateral con Orbes de Color
-        side_x = pr.x + 28
-        side_y = pr.y + 92
-        side_w = 320
+        # 3. Dos Paneles de Cristal Independientes idénticos a aero-settings.jpg
+        # Panel Izquierdo: Categorías (.as-cats)
+        cats_rect = pygame.Rect(64, 96, 350, 564)
+        draw_aero_glass_panel(surface, cats_rect, border_radius=14)
+
+        # Panel Derecho: Ajustes de la Categoría (.as-page)
+        page_rect = pygame.Rect(434, 96, 782, 564)
+        draw_aero_glass_panel(surface, page_rect, border_radius=14)
+
+        # Renderizar filas de categorías en Panel Izquierdo
         self.cat_rects = []
-
+        cy = cats_rect.y + 14
         for idx, cat in enumerate(self.categories):
-            cy = side_y + idx * 56
-            r = pygame.Rect(side_x, cy, side_w, 48)
+            r = pygame.Rect(cats_rect.x + 12, cy, cats_rect.width - 24, 62)
             self.cat_rects.append(r)
 
             is_sel = (idx == self.selected_cat_idx)
-            if is_sel:
-                draw_glass_rect(surface, r, (31, 134, 214, 180), (182, 245, 90), border_radius=10, border_width=2)
-            else:
-                draw_glass_rect(surface, r, (15, 45, 75, 120), (255, 255, 255, 40), border_radius=10, border_width=1)
+            is_hov = r.collidepoint(pygame.mouse.get_pos())
 
-            orb_center = (side_x + 24, cy + 24)
-            pygame.draw.circle(surface, cat["color"], orb_center, 15)
-            pygame.draw.circle(surface, (255, 255, 255, 180), orb_center, 15, width=1)
+            if is_sel:
+                draw_glass_rect(surface, r, (31, 134, 214, 195), (182, 245, 90), border_radius=10, border_width=2)
+            elif is_hov:
+                draw_glass_rect(surface, r, (255, 255, 255, 45), (255, 255, 255, 120), border_radius=10, border_width=1)
+            else:
+                draw_glass_rect(surface, r, (255, 255, 255, 18), (255, 255, 255, 40), border_radius=10, border_width=1)
+
+            # Orbe de color redondo con brillo
+            orb_center = (r.x + 28, r.centery)
+            pygame.draw.circle(surface, cat["color"], orb_center, 18)
+            pygame.draw.circle(surface, (255, 255, 255, 190), orb_center, 18, width=1)
+            # Brillo superior del orbe
+            pygame.draw.circle(surface, (255, 255, 255, 120), (orb_center[0], orb_center[1] - 5), 8)
             ico_t = self.engine.font_badge.render(cat["icon"], True, (255, 255, 255))
             surface.blit(ico_t, ico_t.get_rect(center=orb_center))
 
             c_lbl = self.engine.font_body.render(cat["name"], True, (255, 255, 255))
-            surface.blit(c_lbl, (side_x + 50, cy + 14))
+            surface.blit(c_lbl, (r.x + 58, r.y + 10))
 
-        # Panel Derecho de Opciones Agrupadas
+            sub_lbl = self.engine.font_badge.render(cat["desc"][:42] + ("..." if len(cat["desc"]) > 42 else ""), True, (200, 230, 255))
+            surface.blit(sub_lbl, (r.x + 58, r.y + 34))
+
+            cy += 68
+
+        # Renderizar Contenido en Panel Derecho (.as-page)
         cur_cat = self.categories[self.selected_cat_idx]
-        rx = side_x + side_w + 24
-        ry = side_y
-        rw = pr.width - side_w - 76
-        rh = pr.height - 116
 
-        draw_glass_rect(surface, pygame.Rect(rx, ry, rw, rh), (16, 28, 45, 220), (255, 255, 255, 50), border_radius=14)
-
-        head_orb = (rx + 34, ry + 32)
-        pygame.draw.circle(surface, cur_cat["color"], head_orb, 20)
+        # Encabezado del panel derecho (.as-page-head)
+        head_orb = (page_rect.x + 44, page_rect.y + 44)
+        pygame.draw.circle(surface, cur_cat["color"], head_orb, 24)
+        pygame.draw.circle(surface, (255, 255, 255, 200), head_orb, 24, width=2)
+        pygame.draw.circle(surface, (255, 255, 255, 140), (head_orb[0], head_orb[1] - 7), 10)
         h_ico = self.engine.font_title.render(cur_cat["icon"], True, (255, 255, 255))
         surface.blit(h_ico, h_ico.get_rect(center=head_orb))
 
         st_title = self.engine.font_title.render(cur_cat["name"], True, (255, 255, 255))
-        surface.blit(st_title, (rx + 68, ry + 18))
+        surface.blit(st_title, (page_rect.x + 82, page_rect.y + 22))
 
-        st_desc = self.engine.font_sub.render(cur_cat["desc"], True, (170, 200, 230))
-        surface.blit(st_desc, (rx + 70, ry + 44))
+        st_desc = self.engine.font_sub.render(cur_cat["desc"], True, (215, 240, 255))
+        surface.blit(st_desc, (page_rect.x + 84, page_rect.y + 50))
 
+        # Lista de filas de ajustes (.as-rows)
         rows = self._get_rows()
         self.row_rects = []
-        row_y = ry + 80
+        row_y = page_rect.y + 92
 
         for idx, row in enumerate(rows):
-            r = pygame.Rect(rx + 16, row_y + idx * 68, rw - 32, 58)
+            r = pygame.Rect(page_rect.x + 18, row_y + idx * 72, page_rect.width - 36, 62)
             self.row_rects.append(r)
 
             is_sel = (idx == self.selected_row_idx)
             if is_sel:
-                draw_glass_rect(surface, r, (25, 60, 95, 220), (182, 245, 90), border_radius=10, border_width=2)
+                draw_glass_rect(surface, r, (31, 134, 214, 180), (182, 245, 90), border_radius=10, border_width=2)
             else:
-                draw_glass_rect(surface, r, (12, 38, 65, 140), (255, 255, 255, 40), border_radius=10, border_width=1)
+                draw_glass_rect(surface, r, (255, 255, 255, 25), (255, 255, 255, 55), border_radius=10, border_width=1)
+
+            # Brillo superior blanco en cada fila
+            pygame.draw.line(surface, (255, 255, 255, 110), (r.x + 10, r.y + 1), (r.right - 10, r.y + 1))
 
             l_lbl = self.engine.font_body.render(row["label"], True, (255, 255, 255))
-            surface.blit(l_lbl, (r.x + 16, r.y + 10))
+            surface.blit(l_lbl, (r.x + 18, r.y + 12))
 
-            s_lbl = self.engine.font_badge.render(row["sub"], True, (160, 190, 220))
-            surface.blit(s_lbl, (r.x + 16, r.y + 32))
+            s_lbl = self.engine.font_badge.render(row["sub"], True, (190, 220, 245))
+            surface.blit(s_lbl, (r.x + 18, r.y + 36))
 
-            v_lbl = self.engine.font_body.render(str(row["val"]), True, (182, 245, 90) if is_sel else (255, 255, 255))
-            surface.blit(v_lbl, (r.right - v_lbl.get_width() - 16, r.y + 18))
+            # Controles oficiales OmniDash (switch pill, slider o choice)
+            val_str = str(row["val"])
+            if val_str in ("ON", "OFF"):
+                # Interruptor de pastilla deslizante Frutiger Aero
+                sw_w, sw_h = 50, 26
+                sw_r = pygame.Rect(r.right - sw_w - 20, r.centery - sw_h // 2, sw_w, sw_h)
+                is_on = (val_str == "ON")
+                sw_bg = (47, 174, 75, 230) if is_on else (255, 255, 255, 45)
+                draw_glass_rect(surface, sw_r, sw_bg, (255, 255, 255, 140), border_radius=13)
+                thumb_x = sw_r.right - 14 if is_on else sw_r.x + 14
+                pygame.draw.circle(surface, (255, 255, 255), (thumb_x, sw_r.centery), 10)
+                v_lbl = self.engine.font_badge.render(val_str, True, (182, 245, 90) if is_on else (200, 225, 245))
+                surface.blit(v_lbl, (sw_r.x - v_lbl.get_width() - 10, r.centery - 6))
+            elif "%" in val_str:
+                # Barra deslizante con valor porcentual
+                val_num = int(val_str.replace("%", "").strip() or 50)
+                track_w, track_h = 130, 8
+                track_r = pygame.Rect(r.right - track_w - 70, r.centery - track_h // 2, track_w, track_h)
+                draw_glass_rect(surface, track_r, (255, 255, 255, 45), border_radius=4)
+                fill_w = int(track_w * (val_num / 100.0))
+                if fill_w > 0:
+                    fill_r = pygame.Rect(track_r.x, track_r.y, fill_w, track_h)
+                    draw_glass_rect(surface, fill_r, (182, 245, 90, 230), border_radius=4)
+                v_lbl = self.engine.font_body.render(val_str, True, (255, 255, 255))
+                surface.blit(v_lbl, (r.right - v_lbl.get_width() - 18, r.centery - 9))
+            else:
+                v_lbl = self.engine.font_body.render(val_str, True, (182, 245, 90) if is_sel else (255, 255, 255))
+                surface.blit(v_lbl, (r.right - v_lbl.get_width() - 18, r.centery - 9))
+
+        # 4. Pie de página con leyendas de botones (.as-hints)
+        hints_t = self.engine.font_sub.render("Ⓐ / Enter  Select    •     / 🠄 🠆  Change    •    Ⓑ / Esc  Back", True, (200, 230, 255))
+        surface.blit(hints_t, (page_rect.right - hints_t.get_width() - 10, self.h - 38))
 
 
 # ==============================================================================
@@ -1166,8 +1267,8 @@ class OmniDashProfileView:
         self.engine = engine
         self.w, self.h = engine.w, engine.h
         self.user_data = user_data
-        self.panel_rect = pygame.Rect(54, 40, self.w - 108, self.h - 80)
-        self.back_btn_rect = pygame.Rect(self.w - 190, 56, 120, 36)
+        self.panel_rect = pygame.Rect(80, 50, self.w - 160, self.h - 100)
+        self.back_btn_rect = pygame.Rect(self.panel_rect.right - 140, self.panel_rect.y + 24, 116, 36)
 
     def handle_event(self, event: pygame.event.Event) -> dict | None:
         if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
@@ -1180,25 +1281,33 @@ class OmniDashProfileView:
         return None
 
     def render(self, surface: pygame.Surface):
+        # Panel de cristal aguamarina translúcido oficial Frutiger Aero
         pr = self.panel_rect
-        draw_glass_rect(surface, pr, (12, 22, 38, 235), (255, 255, 255, 80), border_radius=18)
+        draw_aero_glass_panel(surface, pr, border_radius=16)
 
+        # Botón Cerrar oficial con badge rojo B
         is_close_hov = self.back_btn_rect.collidepoint(pygame.mouse.get_pos())
-        draw_glass_rect(surface, self.back_btn_rect, (8, 48, 80, 220 if is_close_hov else 160), (182, 245, 90) if is_close_hov else (255, 255, 255, 140), border_radius=18)
-        bt = self.engine.font_btn.render("Ⓑ / Esc  Close", True, (255, 255, 255))
-        surface.blit(bt, bt.get_rect(center=self.back_btn_rect.center))
+        draw_glass_rect(surface, self.back_btn_rect, (8, 45, 75, 220 if is_close_hov else 160), (182, 245, 90) if is_close_hov else (255, 255, 255, 140), border_radius=18)
+        kbd_center = (self.back_btn_rect.x + 20, self.back_btn_rect.centery)
+        pygame.draw.circle(surface, (208, 56, 58), kbd_center, 10)
+        b_txt = self.engine.font_badge.render("B", True, (255, 255, 255))
+        surface.blit(b_txt, b_txt.get_rect(center=kbd_center))
+        c_txt = self.engine.font_btn.render("Close", True, (255, 255, 255))
+        surface.blit(c_txt, (self.back_btn_rect.x + 38, self.back_btn_rect.centery - 7))
 
-        av_center = (pr.x + 80, pr.y + 70)
-        pygame.draw.circle(surface, (90, 166, 214), av_center, 40)
-        pygame.draw.circle(surface, (255, 255, 255), av_center, 40, width=2)
+        # Avatar circular con borde de cristal
+        av_center = (pr.x + 70, pr.y + 70)
+        pygame.draw.circle(surface, (90, 166, 214), av_center, 38)
+        pygame.draw.circle(surface, (255, 255, 255), av_center, 38, width=2)
+        pygame.draw.circle(surface, (255, 255, 255, 120), (av_center[0], av_center[1] - 8), 16)
         av_txt = self.engine.font_hero.render("A", True, (255, 255, 255))
         surface.blit(av_txt, av_txt.get_rect(center=av_center))
 
         name_t = self.engine.font_hero.render("Alex  •  Frutiger Pilot", True, (255, 255, 255))
-        surface.blit(name_t, (pr.x + 138, pr.y + 42))
+        surface.blit(name_t, (pr.x + 128, pr.y + 40))
 
         score_t = self.engine.font_title.render("18,450 G  •  Level 42 Master", True, (182, 245, 90))
-        surface.blit(score_t, (pr.x + 140, pr.y + 78))
+        surface.blit(score_t, (pr.x + 130, pr.y + 76))
 
         trophies = [
             ("Master of Preservation", "Run 50 classic titles with rock-solid 60 FPS.", "🥇 GOLD"),
@@ -1207,15 +1316,16 @@ class OmniDashProfileView:
             ("C.C.I. Photomaster", "Captured HD gameplay frame with F12.", "🥉 BRONZE"),
         ]
 
-        tx = pr.x + 40
-        ty = pr.y + 146
+        tx = pr.x + 36
+        ty = pr.y + 140
         st = self.engine.font_title.render("Unlocked Achievements", True, (255, 255, 255))
         surface.blit(st, (tx, ty))
 
         for idx, (tname, tdesc, tbadge) in enumerate(trophies):
             ry = ty + 38 + idx * 72
-            r = pygame.Rect(tx, ry, pr.width - 80, 60)
-            draw_glass_rect(surface, r, (16, 36, 60, 160), (255, 255, 255, 50), border_radius=10)
+            r = pygame.Rect(tx, ry, pr.width - 72, 60)
+            draw_glass_rect(surface, r, (255, 255, 255, 28), (255, 255, 255, 70), border_radius=10)
+            pygame.draw.line(surface, (255, 255, 255, 110), (r.x + 10, r.y + 1), (r.right - 10, r.y + 1))
 
             b_t = self.engine.font_badge.render(tbadge, True, (255, 220, 60))
             surface.blit(b_t, (r.x + 16, r.y + 12))
@@ -1223,19 +1333,19 @@ class OmniDashProfileView:
             n_t = self.engine.font_body.render(tname, True, (255, 255, 255))
             surface.blit(n_t, (r.x + 16, r.y + 32))
 
-            d_t = self.engine.font_sub.render(tdesc, True, (180, 205, 235))
+            d_t = self.engine.font_sub.render(tdesc, True, (215, 238, 255))
             surface.blit(d_t, (r.x + 320, r.y + 20))
 
 
 # ==============================================================================
-# 6. VISTA COMUNIDAD C.C.I. OMNIDASH AERO (OmniDashCommunityView)
+# 6. VISTA AMIGOS Y ACTIVIDAD SOCIAL OFICIAL OMNIDASH AERO (.g-friends-flyout)
 # ==============================================================================
 class OmniDashCommunityView:
     def __init__(self, engine: OmniDashEngine):
         self.engine = engine
         self.w, self.h = engine.w, engine.h
-        self.panel_rect = pygame.Rect(54, 40, self.w - 108, self.h - 80)
-        self.back_btn_rect = pygame.Rect(self.w - 190, 56, 120, 36)
+        self.panel_rect = pygame.Rect(80, 50, self.w - 160, self.h - 100)
+        self.back_btn_rect = pygame.Rect(self.panel_rect.right - 140, self.panel_rect.y + 24, 116, 36)
 
     def handle_event(self, event: pygame.event.Event) -> dict | None:
         if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
@@ -1248,44 +1358,53 @@ class OmniDashCommunityView:
         return None
 
     def render(self, surface: pygame.Surface):
+        # Panel de cristal aguamarina translúcido oficial Frutiger Aero
         pr = self.panel_rect
-        draw_glass_rect(surface, pr, (12, 22, 38, 235), (255, 255, 255, 80), border_radius=18)
+        draw_aero_glass_panel(surface, pr, border_radius=16)
 
+        # Botón Cerrar oficial con badge rojo B
         is_close_hov = self.back_btn_rect.collidepoint(pygame.mouse.get_pos())
-        draw_glass_rect(surface, self.back_btn_rect, (8, 48, 80, 220 if is_close_hov else 160), (182, 245, 90) if is_close_hov else (255, 255, 255, 140), border_radius=18)
-        bt = self.engine.font_btn.render("Ⓑ / Esc  Close", True, (255, 255, 255))
-        surface.blit(bt, bt.get_rect(center=self.back_btn_rect.center))
+        draw_glass_rect(surface, self.back_btn_rect, (8, 45, 75, 220 if is_close_hov else 160), (182, 245, 90) if is_close_hov else (255, 255, 255, 140), border_radius=18)
+        kbd_center = (self.back_btn_rect.x + 20, self.back_btn_rect.centery)
+        pygame.draw.circle(surface, (208, 56, 58), kbd_center, 10)
+        b_txt = self.engine.font_badge.render("B", True, (255, 255, 255))
+        surface.blit(b_txt, b_txt.get_rect(center=kbd_center))
+        c_txt = self.engine.font_btn.render("Close", True, (255, 255, 255))
+        surface.blit(c_txt, (self.back_btn_rect.x + 38, self.back_btn_rect.centery - 7))
 
-        title_t = self.engine.font_hero.render("C.C.I. Gaming Communities & Friends", True, (255, 255, 255))
+        title_t = self.engine.font_hero.render("👥  Friends & Live Activity", True, (255, 255, 255))
         surface.blit(title_t, (pr.x + 36, pr.y + 24))
 
-        sub_t = self.engine.font_sub.render("Live multiplayer lobbies, tournament chats and presence", True, (185, 215, 240))
-        surface.blit(sub_t, (pr.x + 38, pr.y + 56))
+        sub_t = self.engine.font_sub.render("Live multiplayer lobbies, tournament presence and voice chat", True, (215, 240, 255))
+        surface.blit(sub_t, (pr.x + 38, pr.y + 58))
 
-        groups = [
-            ("Seeker Hub Central", "3 friends playing Metal Slug 2", "● 14 online", (47, 124, 246)),
+        friends = [
+            ("Alex (You)", "Super Mario World • Star World 5", "● Online", (90, 166, 214)),
+            ("Seeker Hub Central", "Metal Slug 2 • 2-Player Co-op Lobby", "● 14 online", (47, 124, 246)),
             ("Night Raid Elite", "Street Fighter II Turbo Tournament", "● 8 online", (142, 92, 247)),
             ("Retro Preservation Society", "Castlevania Symphony of the Night Party", "● 22 online", (47, 174, 75)),
         ]
 
-        for idx, (gname, gactivity, gstatus, gcol) in enumerate(groups):
-            gy = pr.y + 110 + idx * 96
-            r = pygame.Rect(pr.x + 36, gy, pr.width - 72, 78)
-            draw_glass_rect(surface, r, (16, 36, 60, 160), (255, 255, 255, 60), border_radius=12)
+        for idx, (gname, gactivity, gstatus, gcol) in enumerate(friends):
+            gy = pr.y + 104 + idx * 88
+            r = pygame.Rect(pr.x + 36, gy, pr.width - 72, 74)
+            draw_glass_rect(surface, r, (255, 255, 255, 28), (255, 255, 255, 70), border_radius=12)
+            pygame.draw.line(surface, (255, 255, 255, 110), (r.x + 10, r.y + 1), (r.right - 10, r.y + 1))
 
-            orb = (r.x + 36, r.y + 39)
+            orb = (r.x + 36, r.centery)
             pygame.draw.circle(surface, gcol, orb, 20)
+            pygame.draw.circle(surface, (255, 255, 255, 190), orb, 20, width=1)
             ico = self.engine.font_body.render("👥", True, (255, 255, 255))
             surface.blit(ico, ico.get_rect(center=orb))
 
             gn = self.engine.font_body.render(gname, True, (255, 255, 255))
-            surface.blit(gn, (r.x + 72, r.y + 18))
+            surface.blit(gn, (r.x + 72, r.y + 16))
 
-            ga = self.engine.font_sub.render(gactivity, True, (185, 215, 240))
-            surface.blit(ga, (r.x + 74, r.y + 44))
+            ga = self.engine.font_sub.render(gactivity, True, (210, 235, 255))
+            surface.blit(ga, (r.x + 74, r.y + 42))
 
             gs = self.engine.font_badge.render(gstatus, True, (182, 245, 90))
-            surface.blit(gs, (r.right - gs.get_width() - 20, r.y + 30))
+            surface.blit(gs, (r.right - gs.get_width() - 20, r.centery - 8))
 
 
 # ==============================================================================
