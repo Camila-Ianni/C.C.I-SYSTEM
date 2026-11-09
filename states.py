@@ -576,7 +576,7 @@ class MenuState(BaseState):
 
         # Cargar assets de UI futuristas
         assets_dir = "assets_ui/menu"
-        self.ui_sidebar = self._load_asset("assets_ui/achievements/sidebar_perfect_home.png", convert_alpha=False) or self._load_asset(os.path.join(assets_dir, "sidebar_block.png"), convert_alpha=False)
+        self.ui_sidebar = self._load_asset("assets_ui/achievements/sidebar_perfect_home.png", convert_alpha=True) or self._load_asset(os.path.join(assets_dir, "sidebar_block.png"), convert_alpha=True)
         self.ui_header = self._load_asset(os.path.join(assets_dir, "select_game_header.png"), convert_alpha=False)
         self.ui_top_right = self._load_asset(os.path.join(assets_dir, "top_right.png"), convert_alpha=False)
         self.ui_nav_l = self._load_asset(os.path.join(assets_dir, "nav_left.png"), convert_alpha=False)

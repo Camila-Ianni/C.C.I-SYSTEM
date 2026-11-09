@@ -36,7 +36,7 @@ def get_perfect_sidebar(page: str) -> pygame.Surface | None:
         path = root / "assets_ui" / "achievements" / f"sidebar_perfect_{norm}.png"
         if path.exists():
             try:
-                _SIDEBAR_CACHE[norm] = pygame.image.load(str(path)).convert()
+                _SIDEBAR_CACHE[norm] = pygame.image.load(str(path)).convert_alpha()
             except Exception:
                 pass
     return _SIDEBAR_CACHE.get(norm)
@@ -48,7 +48,7 @@ def load_sidebar() -> pygame.Surface:
     path = root / "assets_ui" / "achievements" / "sidebar_perfect_achievements.png"
     if path.exists():
         try:
-            return pygame.image.load(str(path)).convert()
+            return pygame.image.load(str(path)).convert_alpha()
         except Exception:
             pass
     surface = pygame.Surface((SIDEBAR_W, SIDEBAR_H))
