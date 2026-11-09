@@ -929,7 +929,7 @@ class PlayingState(BaseState):
                 elif event.type == pygame.JOYBUTTONDOWN and event.button in (6, 8):
                     running = False
 
-            keys = {k: True for k, pressed in enumerate(pygame.key.get_pressed()) if pressed}
+            keys = pygame.key.get_pressed()
             joy = joysticks[0] if joysticks else None
             runner.update_input(keys, joy)
             runner.step_frame()

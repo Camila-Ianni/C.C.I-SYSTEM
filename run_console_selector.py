@@ -73,7 +73,7 @@ def main():
 
         if current_runner:
             # En juego
-            keys = {k: True for k, pressed in enumerate(pygame.key.get_pressed()) if pressed}
+            keys = pygame.key.get_pressed()
             joy = joysticks[0] if joysticks else None
             current_runner.update_input(keys, joy)
             current_runner.step_frame()

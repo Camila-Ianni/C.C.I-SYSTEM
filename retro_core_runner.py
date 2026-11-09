@@ -175,20 +175,26 @@ class LibretroRunner:
             self.running = True
         return success
 
-    def update_input(self, keys: dict, joystick=None):
-        self.joypad_state[RETRO_DEVICE_ID_JOYPAD_UP] = 1 if keys.get(pygame.K_UP) else 0
-        self.joypad_state[RETRO_DEVICE_ID_JOYPAD_DOWN] = 1 if keys.get(pygame.K_DOWN) else 0
-        self.joypad_state[RETRO_DEVICE_ID_JOYPAD_LEFT] = 1 if keys.get(pygame.K_LEFT) else 0
-        self.joypad_state[RETRO_DEVICE_ID_JOYPAD_RIGHT] = 1 if keys.get(pygame.K_RIGHT) else 0
+    def update_input(self, keys, joystick=None):
+        def is_down(k):
+            try:
+                return bool(keys[k])
+            except Exception:
+                return False
 
-        self.joypad_state[RETRO_DEVICE_ID_JOYPAD_A] = 1 if keys.get(pygame.K_x) or keys.get(pygame.K_RETURN) else 0
-        self.joypad_state[RETRO_DEVICE_ID_JOYPAD_B] = 1 if keys.get(pygame.K_z) else 0
-        self.joypad_state[RETRO_DEVICE_ID_JOYPAD_X] = 1 if keys.get(pygame.K_s) else 0
-        self.joypad_state[RETRO_DEVICE_ID_JOYPAD_Y] = 1 if keys.get(pygame.K_a) else 0
-        self.joypad_state[RETRO_DEVICE_ID_JOYPAD_START] = 1 if keys.get(pygame.K_RETURN) else 0
-        self.joypad_state[RETRO_DEVICE_ID_JOYPAD_SELECT] = 1 if keys.get(pygame.K_RSHIFT) or keys.get(pygame.K_LSHIFT) else 0
-        self.joypad_state[RETRO_DEVICE_ID_JOYPAD_L] = 1 if keys.get(pygame.K_q) else 0
-        self.joypad_state[RETRO_DEVICE_ID_JOYPAD_R] = 1 if keys.get(pygame.K_w) else 0
+        self.joypad_state[RETRO_DEVICE_ID_JOYPAD_UP] = 1 if is_down(pygame.K_UP) else 0
+        self.joypad_state[RETRO_DEVICE_ID_JOYPAD_DOWN] = 1 if is_down(pygame.K_DOWN) else 0
+        self.joypad_state[RETRO_DEVICE_ID_JOYPAD_LEFT] = 1 if is_down(pygame.K_LEFT) else 0
+        self.joypad_state[RETRO_DEVICE_ID_JOYPAD_RIGHT] = 1 if is_down(pygame.K_RIGHT) else 0
+
+        self.joypad_state[RETRO_DEVICE_ID_JOYPAD_A] = 1 if is_down(pygame.K_x) or is_down(pygame.K_RETURN) else 0
+        self.joypad_state[RETRO_DEVICE_ID_JOYPAD_B] = 1 if is_down(pygame.K_z) else 0
+        self.joypad_state[RETRO_DEVICE_ID_JOYPAD_X] = 1 if is_down(pygame.K_s) else 0
+        self.joypad_state[RETRO_DEVICE_ID_JOYPAD_Y] = 1 if is_down(pygame.K_a) else 0
+        self.joypad_state[RETRO_DEVICE_ID_JOYPAD_START] = 1 if is_down(pygame.K_RETURN) else 0
+        self.joypad_state[RETRO_DEVICE_ID_JOYPAD_SELECT] = 1 if is_down(pygame.K_RSHIFT) or is_down(pygame.K_LSHIFT) else 0
+        self.joypad_state[RETRO_DEVICE_ID_JOYPAD_L] = 1 if is_down(pygame.K_q) else 0
+        self.joypad_state[RETRO_DEVICE_ID_JOYPAD_R] = 1 if is_down(pygame.K_w) else 0
 
         if joystick and joystick.get_init():
             try:
