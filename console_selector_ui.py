@@ -1,6 +1,7 @@
-"""console_selector_ui.py - Selector Procedural de Consolas & Gestor de Plataformas para C.C.I. SYSTEM.
+"""console_selector_ui.py - Selector Procedural Multi-Consola & Gestor de Plataformas para C.C.I. SYSTEM.
 Renderizado 100% vectorial en código (Pygame puro, sin imágenes fijas recortadas).
-Estilo: Obsidian Dark Glass, cápsulas redondeadas, iluminación sutil, telemetría y respuesta táctil/gamepad.
+Soporta: Super Nintendo, Arcade Classics, SNK Neo-Geo, Nintendo 64, Nintendo DS, Sony PlayStation 1 y Nintendo Wii.
+Estilo: Obsidian Dark Glass, carrusel procedural fluido, iluminación sutil, telemetría y controles gamepad/teclado.
 Autora: Camila Carolina Ianni
 """
 from __future__ import annotations
@@ -41,13 +42,68 @@ CONSOLES = [
     {
         "id": "mame",
         "name": "Arcade Classics",
-        "badge": "COIN-OP // MAME & NEO-GEO",
-        "core": "fbneo_libretro.dylib",
+        "badge": "COIN-OP // MAME & CAPCOM",
+        "core": "mame2003_plus_libretro.dylib",
         "rom_dir": "roms/mame",
         "extensions": [".zip"],
-        "desc": "Obras maestras de salón recreativo: Capcom CPS-1/CPS-2, SNK Neo-Geo MVS y Midway.",
+        "desc": "Obras maestras de salón recreativo: Capcom CPS-1/CPS-2, Pac-Man y Midway.",
         "specs": "M68000 + Z80 · DUAL CPU · HARDWARE DEDICADO",
         "color_accent": (245, 245, 250),
+    },
+    {
+        "id": "neogeo",
+        "name": "SNK Neo-Geo",
+        "badge": "24-BIT // 330 MEGA PRO-GEAR",
+        "core": "fbneo_libretro.dylib",
+        "rom_dir": "roms/neogeo",
+        "extensions": [".zip"],
+        "desc": "El rey de los arcades y consolas de lujo: Puzzle Bobble, Snow Bros 2 y Super Sidekicks.",
+        "specs": "MOTOROLA 68000 @ 12MHz · YM2610 · 320x224",
+        "color_accent": (255, 200, 50),
+    },
+    {
+        "id": "n64",
+        "name": "Nintendo 64",
+        "badge": "64-BIT // REALITY IMMERSION",
+        "core": "mupen64plus_next_libretro.dylib",
+        "rom_dir": "roms/n64",
+        "extensions": [".z64", ".n64", ".v64"],
+        "desc": "Revolución 3D: Super Mario 64, Ocarina of Time, Smash Bros y Mario Kart 64.",
+        "specs": "VR4300 RISC 64-BIT @ 93.75MHz · 4MB RDRAM · RCP 3D",
+        "color_accent": (66, 133, 244),
+    },
+    {
+        "id": "nds",
+        "name": "Nintendo DS",
+        "badge": "DUAL SCREEN // TOUCH & 3D",
+        "core": "melonds_libretro.dylib",
+        "rom_dir": "roms/nds",
+        "extensions": [".nds"],
+        "desc": "Generación de doble pantalla: New Super Mario Bros, Pokémon Black/White y Mario Kart DS.",
+        "specs": "ARM946E-S @ 67MHz + ARM7TDMI · DOBLE PANTALLA TÁCTIL",
+        "color_accent": (230, 230, 235),
+    },
+    {
+        "id": "ps1",
+        "name": "Sony PlayStation",
+        "badge": "32-BIT // CD-ROM STEREO",
+        "core": "pcsx_rearmed_libretro.dylib",
+        "rom_dir": "roms/ps1",
+        "extensions": [".cue", ".bin", ".iso", ".chd", ".pbp", ".7z"],
+        "desc": "La era dorada de los 32-bits en CD-ROM: Crash Bandicoot, Resident Evil y Castlevania SOTN.",
+        "specs": "R3000A MIPS 32-BIT @ 33.8MHz · GTE 3D · CD-ROM 2X",
+        "color_accent": (0, 114, 206),
+    },
+    {
+        "id": "wii",
+        "name": "Nintendo Wii",
+        "badge": "MOTION CONTROL // DOLPHIN",
+        "core": "dolphin_libretro.dylib",
+        "rom_dir": "roms/wii",
+        "extensions": [".iso", ".wbfs", ".rvz"],
+        "desc": "Control por movimiento e interactividad revolucionaria: Wii Sports y clásicos de salón.",
+        "specs": "BROADWAY POWERPC @ 729MHz · HOLLYWOOD GPU · 88MB RAM",
+        "color_accent": (180, 190, 205),
     },
 ]
 
@@ -65,8 +121,11 @@ class ConsoleSelectorUI:
         self.selected_game_idx = 0
         self.anim_t = 0.0
 
+        # Posición suave de la cámara de carrusel (lerp)
+        self.scroll_x = 0.0
+
         # Zonas interactivas para clics del ratón
-        self.card_rects: list[pygame.Rect] = []
+        self.card_rects: list[tuple[pygame.Rect, int]] = []
         self.row_rects: list[tuple[pygame.Rect, int]] = []
 
         # Fuentes
@@ -93,6 +152,10 @@ class ConsoleSelectorUI:
                     .replace("(World)", "")
                     .replace("(JU)", "")
                     .replace("(J)", "")
+                    .replace("(E)", "")
+                    .replace("(EUR)", "")
+                    .replace("(SCZ)", "")
+                    .replace("(Legacy)", "")
                     .replace("_", " ")
                     .strip()
                 )
@@ -128,16 +191,18 @@ class ConsoleSelectorUI:
         elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
             mx, my = event.pos
             if mx < self.offset_x:
-                return None  # Pertenece a la barra lateral
+                return None
 
             if self.current_view == "CONSOLES":
-                for idx, r in enumerate(self.card_rects):
+                for r, idx in self.card_rects:
                     if r.collidepoint(mx, my):
-                        self._enter_console(idx)
+                        if self.selected_idx == idx:
+                            self._enter_console(idx)
+                        else:
+                            self.selected_idx = idx
                         break
             elif self.current_view == "GAMES":
-                # Botón volver breadcrumb
-                if 40 <= my <= 80 and self.offset_x + 30 <= mx <= self.offset_x + 150:
+                if 40 <= my <= 80 and self.offset_x + 30 <= mx <= self.offset_x + 160:
                     self.current_view = "CONSOLES"
                     return None
 
@@ -191,26 +256,36 @@ class ConsoleSelectorUI:
         # Header
         head_x = self.offset_x + 45
         head_txt = self.font_title.render("SISTEMAS Y PLATAFORMAS", True, COLOR_WHITE)
-        surface.blit(head_txt, (head_x, 48))
+        surface.blit(head_txt, (head_x, 46))
 
-        sub_txt = self.font_text.render("Selecciona una consola para explorar su biblioteca de títulos preservados a 60 FPS.", True, COLOR_MUTED)
-        surface.blit(sub_txt, (head_x, 86))
+        sub_txt = self.font_text.render("Explora consolas retro y arcade conectadas a núcleos Libretro nativos a 60 FPS.", True, COLOR_MUTED)
+        surface.blit(sub_txt, (head_x, 82))
 
-        # Tarjetas de consolas
-        card_w = 480
+        # Indicador de paginación
+        counter_txt = self.font_badge.render(f"CONSOLA {self.selected_idx + 1} DE {len(CONSOLES)}", True, COLOR_MUTED)
+        surface.blit(counter_txt, (self.w - 180, 52))
+
+        # Geometría de tarjetas en carrusel horizontal fluido
+        card_w = 460
         card_h = 420
-        spacing = 30
-        total_cards_w = len(CONSOLES) * card_w + (len(CONSOLES) - 1) * spacing
-        start_x = self.offset_x + max(45, (self.content_w - total_cards_w) // 2)
-        start_y = 135
+        spacing = 26
+        target_scroll = -self.selected_idx * (card_w + spacing)
+        self.scroll_x += (target_scroll - self.scroll_x) * 0.18
+
+        base_x = self.offset_x + 45 + int(self.scroll_x)
+        start_y = 125
 
         for idx, c in enumerate(CONSOLES):
-            cx = start_x + idx * (card_w + spacing)
+            cx = base_x + idx * (card_w + spacing)
             cy = start_y
             is_sel = (idx == self.selected_idx)
 
+            # Optimización de recorte: saltar tarjetas fuera de pantalla
+            if cx + card_w < self.offset_x - 50 or cx > self.w + 50:
+                continue
+
             card_rect = pygame.Rect(cx, cy, card_w, card_h)
-            self.card_rects.append(card_rect)
+            self.card_rects.append((card_rect, idx))
 
             card_surf = pygame.Surface((card_w, card_h), pygame.SRCALPHA)
             bg_col = COLOR_CARD_HOVER if is_sel else COLOR_CARD
@@ -243,7 +318,7 @@ class ConsoleSelectorUI:
             lines = []
             curr_l = ""
             for w in words:
-                if len(curr_l + " " + w) > 42:
+                if len(curr_l + " " + w) > 40:
                     lines.append(curr_l)
                     curr_l = w
                 else:
@@ -286,7 +361,7 @@ class ConsoleSelectorUI:
             surface.blit(card_surf, (cx, cy))
 
         # Barra inferior de ayuda
-        self._render_legend(surface, [("⌧ A / ENTER", "Seleccionar"), ("⇦ ⇨", "Cambiar Consola")])
+        self._render_legend(surface, [("⌧ A / ENTER", "Seleccionar"), ("⇦ ⇨", "Desplazar Consolas")])
 
     def _render_games_view(self, surface: pygame.Surface):
         self.row_rects.clear()
@@ -294,11 +369,11 @@ class ConsoleSelectorUI:
         head_x = self.offset_x + 45
 
         # Breadcrumb / Volver
-        back_pill = pygame.Surface((120, 26), pygame.SRCALPHA)
-        pygame.draw.rect(back_pill, COLOR_PILL_BG, (0, 0, 120, 26), border_radius=9999)
-        pygame.draw.rect(back_pill, COLOR_BORDER, (0, 0, 120, 26), width=1, border_radius=9999)
+        back_pill = pygame.Surface((130, 26), pygame.SRCALPHA)
+        pygame.draw.rect(back_pill, COLOR_PILL_BG, (0, 0, 130, 26), border_radius=9999)
+        pygame.draw.rect(back_pill, COLOR_BORDER, (0, 0, 130, 26), width=1, border_radius=9999)
         bt = self.font_badge.render("◯ B  CONSOLAS", True, COLOR_WHITE)
-        back_pill.blit(bt, bt.get_rect(center=(60, 13)))
+        back_pill.blit(bt, bt.get_rect(center=(65, 13)))
         surface.blit(back_pill, (head_x, 38))
 
         title_txt = self.font_title.render(f"BIBLIOTECA {self.selected_console['name'].upper()} ({len(self.game_list)})", True, COLOR_WHITE)
@@ -309,6 +384,12 @@ class ConsoleSelectorUI:
         visible_rows = 9
         row_h = 48
         row_w = self.content_w - 90
+
+        if not self.game_list:
+            empty_t = self.font_name.render("// Descargando títulos para este sistema... //", True, COLOR_MUTED)
+            surface.blit(empty_t, (head_x, 200))
+            self._render_legend(surface, [("◯ B / ESC", "Volver a Consolas")])
+            return
 
         start_idx = max(0, min(self.selected_game_idx - 4, max(0, len(self.game_list) - visible_rows)))
         end_idx = min(len(self.game_list), start_idx + visible_rows)
