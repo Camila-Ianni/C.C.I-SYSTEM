@@ -580,7 +580,7 @@ body {
 
 .profile-grid {
   display: grid;
-  grid-template-columns: 200px 1fr;
+  grid-template-columns: 220px 1fr;
   gap: 36px;
   align-items: center;
 }
@@ -593,18 +593,19 @@ body {
 }
 
 .profile-avatar-frame {
-  width: 170px;
-  height: 170px;
-  border-radius: 24px;
+  width: 200px;
+  height: 280px;
+  border-radius: 20px;
   border: 1px solid var(--cci-border-bright);
   overflow: hidden;
-  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.12);
 }
 
 .profile-avatar-frame img {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  object-position: center;
   display: block;
 }
 
