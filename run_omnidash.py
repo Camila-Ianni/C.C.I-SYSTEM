@@ -17,6 +17,7 @@ from omnidash_engine import OmniDashEngine
 from omnidash_screens import (
     OmniDashHomeView,
     OmniDashLibraryView,
+    OmniDashGameDetailsView,
     OmniDashSettingsView,
     OmniDashProfileView,
     OmniDashCommunityView,
@@ -41,9 +42,10 @@ def main():
     settings_view = OmniDashSettingsView(engine)
     profile_view = OmniDashProfileView(engine)
     community_view = OmniDashCommunityView(engine)
+    details_view = None
     launch_anim_view = None
 
-    current_view = "HOME"  # "HOME", "LIBRARY", "SETTINGS", "PROFILE", "COMMUNITY", "LAUNCH_ANIM"
+    current_view = "HOME"  # "HOME", "LIBRARY", "DETAILS", "SETTINGS", "PROFILE", "COMMUNITY", "LAUNCH_ANIM"
     pending_launch_target = None
 
     # Música de fondo
@@ -54,6 +56,11 @@ def main():
         pygame.mixer.music.play(-1)
     except Exception:
         pass
+
+    def open_game_details(game_item: dict):
+        nonlocal current_view, details_view
+        details_view = OmniDashGameDetailsView(engine, game_item)
+        current_view = "DETAILS"
 
     def start_launch_sequence(target: dict):
         nonlocal current_view, launch_anim_view, pending_launch_target
@@ -128,7 +135,9 @@ def main():
             if current_view == "HOME":
                 h_res = home_view.handle_event(event)
                 if h_res:
-                    if h_res.get("action") == "LAUNCH_DIRECT":
+                    if h_res.get("action") == "OPEN_DETAILS":
+                        open_game_details(h_res["item"])
+                    elif h_res.get("action") == "LAUNCH_DIRECT":
                         start_launch_sequence(h_res["item"])
                     elif h_res.get("action") == "NAVIGATE_UTIL":
                         dest = h_res["destination"]
@@ -146,8 +155,19 @@ def main():
                 if lib_res:
                     if lib_res.get("action") == "BACK":
                         current_view = "HOME"
+                    elif lib_res.get("action") == "OPEN_DETAILS":
+                        open_game_details(lib_res["item"])
                     elif lib_res.get("action") == "LAUNCH_GAME":
                         start_launch_sequence(lib_res["game"])
+
+            elif current_view == "DETAILS":
+                if details_view:
+                    d_res = details_view.handle_event(event)
+                    if d_res:
+                        if d_res.get("action") == "BACK":
+                            current_view = "LIBRARY"
+                        elif d_res.get("action") == "LAUNCH":
+                            start_launch_sequence(d_res["item"])
 
             elif current_view == "SETTINGS":
                 s_res = settings_view.handle_event(event)
@@ -185,6 +205,8 @@ def main():
         elif current_view == "LIBRARY":
             library_view.render(screen)
             engine.render_bottom_dock(screen)
+        elif current_view == "DETAILS" and details_view:
+            details_view.render(screen)
         elif current_view == "SETTINGS":
             settings_view.render(screen)
         elif current_view == "PROFILE":

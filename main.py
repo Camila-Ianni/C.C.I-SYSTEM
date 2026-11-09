@@ -120,6 +120,7 @@ def main():
         OmniDashDetailsState,
         OmniDashSettingsState,
         OmniDashProfileState,
+        OmniDashCommunityState,
     )
     state_machine.register_state("MENU", OmniDashHomeState(state_machine, on_game_launch=record_game_launch))
     state_machine.register_state("LIBRARY", OmniDashLibraryState(state_machine))
@@ -129,9 +130,8 @@ def main():
     state_machine.register_state("PROFILE", OmniDashProfileState(state_machine, user_data))
     state_machine.register_state("ACHIEVEMENTS", OmniDashProfileState(state_machine, user_data))
     state_machine.register_state("ARCADE_MENU", MenuState(state_machine, on_game_launch=record_game_launch))
-    from groups_ui import GroupsHubState, CommunityViewState
-    state_machine.register_state("GROUPS", GroupsHubState(state_machine))
-    state_machine.register_state("COMMUNITY", CommunityViewState(state_machine))
+    state_machine.register_state("GROUPS", OmniDashCommunityState(state_machine))
+    state_machine.register_state("COMMUNITY", OmniDashCommunityState(state_machine))
     state_machine.register_state("PLAYING", PlayingState(state_machine))
     state_machine.change_state("BOOT")
 

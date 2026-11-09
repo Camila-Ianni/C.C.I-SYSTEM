@@ -1,14 +1,17 @@
-"""omnidash_screens.py - Suite Oficial Frutiger Aero de OmniDash para C.C.I. SYSTEM.
+"""omnidash_screens.py - Suite Completa y Oficial Frutiger Aero de OmniDash para C.C.I. SYSTEM.
 100% Python puro con Pygame-CE y Libretro ctypes bridge.
-Fidelidad absoluta a las capturas y estilos del repositorio oficial OmniDash (aero-home.jpg, aero-library.jpg, aero-settings.jpg):
-- Home: Mosaico 1:1 cuadrado (Hero grande + 4 tarjetas cuadradas con arte en color + tarjeta 'My games & apps'),
-  reflejos cristalinos sobre el mar turquesa, y 4 tarjetas esmeriladas abajo (Biblioteca, Amigos, Game Pass, Logros).
-- Library: Barra lateral izquierda con anillo de almacenamiento y buscador, panel derecho con cuadrícula 1:1 de 5 columnas
-  con carátulas completas en color y resplandor neón verde #b6f55a.
-- Settings: Panel oficial aero-settings.jpg con 8 categorías con orbes de colores y filas agrupadas as-rows.
-- Profile: Ficha de usuario con Gamerscore (18,450 G) y trofeos.
-- Community: Grupos de emulación y amigos en línea.
-- LaunchAnim: Secuencia oficial 'rises the game logo over key art' con audio startup.mp3.
+Fidelidad absoluta a cada pantalla del repositorio oficial OmniDash:
+1. HOME: Mosaico 1:1 cuadrado (Hero grande + 4 tarjetas cuadradas con arte en color + tarjeta 'My games & apps'),
+   reflejos cristalinos en el agua, y 4 tarjetas esmeriladas inferiores (aero-home.jpg).
+2. LIBRARY: Barra lateral con anillo de almacenamiento (72% used), buscador, selector de plataformas,
+   panel derecho con SCROLL DOWN COMPLETO por rueda de ratón o teclado para los 68 juegos, cuadrícula 1:1 de 5 columnas,
+   y barra de desplazamiento lateral (aero-library.jpg).
+3. GAME DETAILS: Ficha técnica completa (garrison-details.js / screenshot-game-page.png) con carátula grande 1:1,
+   botón verde gel 'PLAY GAME (60 FPS)', chips de capacidades, especificaciones y descripción.
+4. SETTINGS: Panel oficial aero-settings.jpg con 8 categorías, orbes circulares de color y opciones agrupadas.
+5. PROFILE: Ficha de usuario con 18,450 G, selector de avatar y logros desbloqueados.
+6. COMMUNITY: Grupos de emulación C.C.I. (Seeker Hub, Night Raid) y jugadores en línea.
+7. LAUNCH_ANIM: Animación cinemática oficial 'rises the game logo over key art' con audio startup.mp3.
 Autora: Camila Carolina Ianni
 """
 from __future__ import annotations
@@ -25,10 +28,27 @@ from cci_console import CATALOG
 ROOT = Path(__file__).resolve().parent
 
 # ==============================================================================
-# CARGADOR DE IMÁGENES EN COLOR DE ALTA DEFINICIÓN (CERO PLACAS GRISES)
+# UTILIDADES DE RENDERIZADO DE CRISTAL TRANSLÚCIDO (ALTO CONTRASTE)
+# ==============================================================================
+def draw_glass_rect(surface: pygame.Surface, rect: pygame.Rect, bg_rgba: tuple, border_rgba: tuple | None = None, border_radius: int = 0, border_width: int = 1):
+    """Dibuja un rectángulo con translucidez alfa real en Pygame-CE.
+    Previene el error de renderizar botones como bloques blancos sólidos.
+    """
+    w, h = rect.width, rect.height
+    if w <= 0 or h <= 0:
+        return
+    g_surf = pygame.Surface((w, h), pygame.SRCALPHA)
+    pygame.draw.rect(g_surf, bg_rgba, (0, 0, w, h), border_radius=border_radius)
+    if border_rgba:
+        pygame.draw.rect(g_surf, border_rgba, (0, 0, w, h), width=border_width, border_radius=border_radius)
+    surface.blit(g_surf, rect.topleft)
+
+
+# ==============================================================================
+# CARGADOR DE IMÁGENES EN COLOR DE ALTA DEFINICIÓN
 # ==============================================================================
 COLOR_COVERS = {
-    # Clásicos Nintendo & Retro
+    # Nintendo & Retro
     "mario": "fotos web/super mario.jpg",
     "zelda": "fotos web/The_Legend_of_Zelda_film_logo.jpg",
     "pokemon": "fotos web/pokemon.webp",
@@ -57,7 +77,7 @@ COLOR_COVERS = {
     "needforspeed": "assets_omnidash/covers/need-for-speed.webp",
     "lego": "assets_omnidash/covers/lego.webp",
     "farcry": "assets_omnidash/covers/far-cry.webp",
-    # Colección PlayStation / Modern
+    # PlayStation / Colección Moderna
     "elden": "assets_ps4/img/elden.png",
     "red": "assets_ps4/img/red.png",
     "destiny": "assets_ps4/img/destiny.png",
@@ -89,6 +109,8 @@ def pick_color_cover(name: str, console: str) -> str:
         return "fotos web/metal slug.jpg"
     elif console == "NDS":
         return "fotos web/pokemon.webp"
+    elif console == "WII":
+        return "assets_omnidash/covers/far-cry.webp"
     elif console == "NEO-GEO":
         return "assets_omnidash/covers/sega.webp"
     else:
@@ -114,7 +136,7 @@ def load_all_games() -> list[dict]:
             "cover": cov,
             "year": "2024",
             "developer": "C.C.I. Studio",
-            "desc": g.get("desc", "Juego oficial C.C.I. SYSTEM.")
+            "desc": g.get("desc", "Juego nativo oficial desarrollado para la plataforma C.C.I. SYSTEM.")
         })
 
     # 2. ROMs SNES
@@ -135,7 +157,7 @@ def load_all_games() -> list[dict]:
                     "cover": cov,
                     "year": "1992",
                     "developer": "Nintendo EAD",
-                    "desc": f"16-Bit Super Nintendo: {clean_name}"
+                    "desc": f"Clásico legendario de 16-Bit Super Nintendo con gráficos Mode 7: {clean_name}"
                 })
 
     # 3. ROMs Arcade MAME
@@ -155,7 +177,7 @@ def load_all_games() -> list[dict]:
                 "cover": cov,
                 "year": "1996",
                 "developer": "SNK / Capcom / Midway",
-                "desc": f"Recreativa Arcade clásica: {clean_name}"
+                "desc": f"Cabina recreativa arcade clásica preservada a 60 FPS estables: {clean_name}"
             })
 
     # 4. ROMs N64
@@ -175,7 +197,7 @@ def load_all_games() -> list[dict]:
                 "cover": cov,
                 "year": "1996",
                 "developer": "Nintendo",
-                "desc": f"Aventura poligonal 64-Bit: {clean_name}"
+                "desc": f"Hito de la revolución poligonal en 3D de 64-Bit: {clean_name}"
             })
 
     # 5. ROMs PS1
@@ -195,7 +217,7 @@ def load_all_games() -> list[dict]:
                 "cover": cov,
                 "year": "1997",
                 "developer": "Sony / Konami / Capcom",
-                "desc": f"CD-ROM PlayStation 1: {clean_name}"
+                "desc": f"Aventura cinematográfica en formato CD-ROM PlayStation: {clean_name}"
             })
 
     # 6. ROMs NDS
@@ -219,7 +241,7 @@ def load_all_games() -> list[dict]:
                 "cover": cov,
                 "year": "2005",
                 "developer": "Nintendo",
-                "desc": f"Doble pantalla táctil Nintendo DS: {clean_name}"
+                "desc": f"Doble pantalla interactiva de Nintendo DS: {clean_name}"
             })
 
     # 7. ROMs Neo-Geo
@@ -239,7 +261,7 @@ def load_all_games() -> list[dict]:
                 "cover": cov,
                 "year": "1995",
                 "developer": "SNK Neo-Geo",
-                "desc": f"Arcade 24-Bit Neo-Geo: {clean_name}"
+                "desc": f"Arcade 24-Bit SNK Neo-Geo: {clean_name}"
             })
 
     # 8. ROMs Nintendo Wii
@@ -267,68 +289,82 @@ def load_all_games() -> list[dict]:
 
 ALL_GAMES = load_all_games()
 
-# Títulos destacados de la fila principal Home (aero-home.jpg)
 FEATURED_RECENT = [
     {
         "id": "hero_mario",
         "title": "Super Mario World",
-        "subtitle": "Super Nintendo • Jugado hoy",
+        "subtitle": "Super Nintendo • 16-Bit",
         "badge": "SNES",
         "cover": "fotos web/super mario.jpg",
         "core": "cores/snes9x_libretro.dylib",
         "rom": "roms/snes/Super Mario World 2 - Yoshi's Island (U) (V1.1).smc",
+        "desc": "El pináculo del género de plataformas 2D con Yoshi y los 96 niveles de Dinosaur Land.",
+        "developer": "Nintendo EAD",
+        "year": "1990",
     },
     {
         "id": "rec_zelda",
         "title": "The Legend of Zelda",
-        "subtitle": "N64 • 60 FPS",
+        "subtitle": "Nintendo 64 • 60 FPS",
         "badge": "N64",
         "cover": "fotos web/The_Legend_of_Zelda_film_logo.jpg",
         "core": "cores/mupen64plus_next_libretro.dylib",
         "rom": "roms/n64/Super Mario 64 (U) [!].z64",
+        "desc": "Aventura épica atemporal en las tierras de Hyrule.",
+        "developer": "Nintendo",
+        "year": "1996",
     },
     {
         "id": "rec_slug",
         "title": "Metal Slug 2",
-        "subtitle": "Arcade MAME",
+        "subtitle": "Arcade MAME • Neo-Geo",
         "badge": "ARCADE",
         "cover": "fotos web/metal slug.jpg",
         "core": "cores/mame2003_plus_libretro.dylib",
         "rom": "roms/mame/mslug2.zip",
+        "desc": "Acción frenética 'run and gun' con animaciones pixel art legendarias.",
+        "developer": "SNK",
+        "year": "1998",
     },
     {
         "id": "rec_pokemon",
         "title": "Pokémon White 2",
-        "subtitle": "Nintendo DS",
+        "subtitle": "Nintendo DS • DSi Enhanced",
         "badge": "NDS",
         "cover": "fotos web/pokemon.webp",
         "core": "cores/melonds_libretro.dylib",
         "rom": "roms/nds/Pokemon White Version 2/Pokemon White Version 2 (DSi Enhanced)(U)(frieNDS).nds",
+        "desc": "Regresa a la región de Teselia dos años después con nuevos líderes de gimnasio.",
+        "developer": "Game Freak",
+        "year": "2012",
     },
     {
         "id": "rec_castlevania",
         "title": "Castlevania: SotN",
-        "subtitle": "PlayStation 1",
+        "subtitle": "PlayStation 1 • CD Audio",
         "badge": "PS1",
         "cover": "fotos web/castlevania.webp",
         "core": "cores/mednafen_psx_hw_libretro.dylib",
         "rom": "roms/ps1/Castlevania - Symphony of the Night (USA).cue",
+        "desc": "La obra maestra de Koji Igarashi que definió el género Metroidvania.",
+        "developer": "Konami",
+        "year": "1997",
     },
     {
         "id": "rec_sonic",
         "title": "Sonic The Hedgehog",
-        "subtitle": "Sega / 16-Bit",
+        "subtitle": "Sega Genesis • 16-Bit",
         "badge": "SEGA",
         "cover": "assets_omnidash/covers/sonic.webp",
         "core": "cores/snes9x_libretro.dylib",
         "rom": "roms/snes/Doom (USA).sfc",
+        "desc": "Velocidad Supersónica a través de Green Hill Zone.",
+        "developer": "Sonic Team",
+        "year": "1991",
     },
 ]
 
-# Consolas para compatibilidad
 CONSOLES = FEATURED_RECENT
-
-# Cache de texturas
 _IMAGE_CACHE: dict[str, pygame.Surface] = {}
 
 
@@ -349,8 +385,8 @@ def get_image(rel_path: str, w: int, h: int) -> pygame.Surface | None:
     return None
 
 
-def draw_glossy_square_card(surface: pygame.Surface, rect: pygame.Rect, img_path: str, is_focused: bool, title: str | None = None, badge: str | None = None, draw_reflection: bool = True):
-    """Renderiza una tarjeta CUADRADA 1:1 con brillo de vidrio Frutiger Aero, resplandor verde #b6f55a y reflejo en el agua."""
+def draw_glossy_square_card(surface: pygame.Surface, rect: pygame.Rect, img_path: str, is_focused: bool, title: str | None = None, draw_reflection: bool = True):
+    """Renderiza una tarjeta CUADRADA 1:1 oficial de OmniDash Frutiger Aero."""
     w, h = rect.width, rect.height
     rx, ry = rect.x, rect.y
 
@@ -362,30 +398,22 @@ def draw_glossy_square_card(surface: pygame.Surface, rect: pygame.Rect, img_path
         pygame.draw.rect(surface, (18, 54, 85), rect, border_radius=8)
 
     # 2. Gradiente de Brillo de Cristal Frutiger Aero (Top Half Gloss)
-    # Exacto como en garrison-theme-aero.css::after
     gloss_surf = pygame.Surface((w, h // 2), pygame.SRCALPHA)
     for y in range(h // 2):
         alpha = int(75 * (1.0 - y / (h * 0.5)))
         pygame.draw.line(gloss_surf, (255, 255, 255, alpha), (0, y), (w, y))
     surface.blit(gloss_surf, (rx, ry))
-
-    # Línea blanca brillante de 1px en el borde superior
     pygame.draw.line(surface, (255, 255, 255, 180), (rx + 4, ry), (rx + w - 4, ry))
 
-    # 3. Estado de Foco o Borde Normal
+    # 3. Foco Neón Verde #b6f55a
     if is_focused:
-        # Resplandor neón verde oficial OmniDash (--a-glow: #b6f55a)
         glow_col = (182, 245, 90)
-        # Capa exterior translúcida
         glow_rect = rect.inflate(8, 8)
         glow_surf = pygame.Surface((glow_rect.width, glow_rect.height), pygame.SRCALPHA)
         pygame.draw.rect(glow_surf, (*glow_col, 80), (0, 0, glow_rect.width, glow_rect.height), width=3, border_radius=12)
         surface.blit(glow_surf, glow_rect.topleft)
-
-        # Borde interior nítido de 3px
         pygame.draw.rect(surface, glow_col, rect, width=3, border_radius=8)
 
-        # Scrim inferior oscuro con título
         if title:
             scrim_h = 42
             scrim_surf = pygame.Surface((w, scrim_h), pygame.SRCALPHA)
@@ -398,10 +426,9 @@ def draw_glossy_square_card(surface: pygame.Surface, rect: pygame.Rect, img_path
             tt = font.render(title[:22], True, (255, 255, 255))
             surface.blit(tt, (rx + 8, ry + h - 28))
     else:
-        # Borde sutil de cristal
         pygame.draw.rect(surface, (255, 255, 255, 90), rect, width=1, border_radius=8)
 
-    # 4. Reflejo cristalino sobre el mar debajo de la tarjeta (Home recent row)
+    # 4. Reflejo cristalino sobre el mar debajo de la tarjeta
     if draw_reflection and img:
         ref_h = int(h * 0.35)
         flipped = pygame.transform.flip(img, False, True)
@@ -422,25 +449,19 @@ def draw_glossy_square_card(surface: pygame.Surface, rect: pygame.Rect, img_path
 class OmniDashHomeView:
     def __init__(self, engine: OmniDashEngine):
         self.engine = engine
-        self.selected_idx = 0  # 0 es el Hero grande, 1-4 los pequeños, 5 My games & apps
+        self.selected_idx = 0
 
-        # Coordenadas exactas adaptadas de aero-home.jpg a 1280x720:
-        # Hero grande: 200x200
         self.hero_rect = pygame.Rect(110, 155, 204, 204)
-
-        # Fila de 4 tarjetas cuadradas pequeñas: 122x122 (alineadas abajo con el Hero)
         self.small_size = 122
-        self.small_y = 155 + (204 - self.small_size)  # 237
+        self.small_y = 155 + (204 - self.small_size)
         self.small_rects: list[pygame.Rect] = []
         for idx in range(4):
             sx = 330 + idx * (self.small_size + 14)
             self.small_rects.append(pygame.Rect(sx, self.small_y, self.small_size, self.small_size))
 
-        # Tarjeta 6: 'My games & apps' al final de la fila
         mx = 330 + 4 * (self.small_size + 14)
         self.my_games_rect = pygame.Rect(mx, self.small_y, self.small_size, self.small_size)
 
-        # 4 Tarjetas esmeriladas inferiores (aero-home.jpg)
         card_y = 405
         card_h = 135
         card_w = 252
@@ -454,25 +475,21 @@ class OmniDashHomeView:
         if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
             mx, my = event.pos
 
-            # Clic en Hero tile
             if self.hero_rect.collidepoint(mx, my):
                 self.selected_idx = 0
                 self.engine.play_sound("reward")
-                return {"action": "LAUNCH_DIRECT", "item": FEATURED_RECENT[0]}
+                return {"action": "OPEN_DETAILS", "item": FEATURED_RECENT[0]}
 
-            # Clic en pequeñas tarjetas
             for idx, r in enumerate(self.small_rects):
                 if r.collidepoint(mx, my):
                     self.selected_idx = idx + 1
                     self.engine.play_sound("reward")
-                    return {"action": "LAUNCH_DIRECT", "item": FEATURED_RECENT[idx + 1]}
+                    return {"action": "OPEN_DETAILS", "item": FEATURED_RECENT[idx + 1]}
 
-            # Clic en tarjeta My games & apps
             if self.my_games_rect.collidepoint(mx, my):
                 self.engine.play_sound("reward")
                 return {"action": "NAVIGATE_UTIL", "destination": "LIBRARY"}
 
-            # Clic en las 4 tarjetas de cristal inferiores
             if self.glass_card_rects[0].collidepoint(mx, my):
                 self.engine.play_sound("reward")
                 return {"action": "NAVIGATE_UTIL", "destination": "LIBRARY"}
@@ -498,53 +515,27 @@ class OmniDashHomeView:
             elif event.key in (pygame.K_RETURN, pygame.K_SPACE):
                 self.engine.play_sound("reward")
                 if self.selected_idx < 5:
-                    return {"action": "LAUNCH_DIRECT", "item": FEATURED_RECENT[self.selected_idx]}
+                    return {"action": "OPEN_DETAILS", "item": FEATURED_RECENT[self.selected_idx]}
                 else:
                     return {"action": "NAVIGATE_UTIL", "destination": "LIBRARY"}
 
         return None
 
     def render(self, surface: pygame.Surface):
-        # 1. Hero Card Grande Cuadrada (Izquierda)
+        # 1. Hero Card
         hero = FEATURED_RECENT[0]
-        draw_glossy_square_card(
-            surface,
-            self.hero_rect,
-            hero["cover"],
-            is_focused=(self.selected_idx == 0),
-            title=hero["title"],
-            draw_reflection=True
-        )
+        draw_glossy_square_card(surface, self.hero_rect, hero["cover"], is_focused=(self.selected_idx == 0), title=hero["title"], draw_reflection=True)
 
-        # 2. Tarjetas Cuadradas Pequeñas (Derecha)
+        # 2. Pequeñas tarjetas cuadradas
         for idx, r in enumerate(self.small_rects):
             item = FEATURED_RECENT[idx + 1]
-            draw_glossy_square_card(
-                surface,
-                r,
-                item["cover"],
-                is_focused=(self.selected_idx == (idx + 1)),
-                title=item["title"],
-                draw_reflection=True
-            )
+            draw_glossy_square_card(surface, r, item["cover"], is_focused=(self.selected_idx == (idx + 1)), title=item["title"], draw_reflection=True)
 
-        # 3. Tarjeta 'My games & apps' de la fila
+        # 3. My games & apps
         mr = self.my_games_rect
         is_m_sel = (self.selected_idx == 5)
-        # Fondo cristal azul turquesa oficial
-        m_surf = pygame.Surface((mr.width, mr.height), pygame.SRCALPHA)
-        pygame.draw.rect(m_surf, (15, 85, 125, 220), (0, 0, mr.width, mr.height), border_radius=8)
-        # Línea de brillo
-        pygame.draw.line(m_surf, (255, 255, 255, 180), (4, 0), (mr.width - 4, 0))
-        surface.blit(m_surf, mr.topleft)
+        draw_glass_rect(surface, mr, (15, 85, 125, 220), (182, 245, 90) if is_m_sel else (255, 255, 255, 90), border_radius=8, border_width=3 if is_m_sel else 1)
 
-        # Borde de foco o normal
-        if is_m_sel:
-            pygame.draw.rect(surface, (182, 245, 90), mr, width=3, border_radius=8)
-        else:
-            pygame.draw.rect(surface, (255, 255, 255, 90), mr, width=1, border_radius=8)
-
-        # Icono de biblioteca y texto
         lib_ico = self.engine.font_hero.render("📚", True, (255, 255, 255))
         surface.blit(lib_ico, lib_ico.get_rect(center=(mr.centerx, mr.centery - 18)))
 
@@ -554,55 +545,22 @@ class OmniDashHomeView:
         count_t = self.engine.font_badge.render(f"{len(ALL_GAMES)} games", True, (180, 225, 255))
         surface.blit(count_t, count_t.get_rect(center=(mr.centerx, mr.centery + 34)))
 
-        # 4. Cuatro Tarjetas Esmeriladas Inferiores Oficiales (aero-home.jpg)
+        # 4. Tarjetas esmeriladas inferiores
         glass_cards_data = [
-            {
-                "title": "My games & apps",
-                "sub": f"{len(ALL_GAMES)} games\nReady to play",
-                "badge": "LIBRARY",
-                "img_preview": "fotos web/donkeykong.jpg"
-            },
-            {
-                "title": "Friends",
-                "sub": "Seeker & Night Raid\n3 friends online right now",
-                "badge": "FRIENDS",
-                "img_preview": None
-            },
-            {
-                "title": "GAME PASS",
-                "sub": "Discover\nHundreds of great games",
-                "badge": "PASS",
-                "img_preview": "assets_omnidash/covers/battlefield.webp"
-            },
-            {
-                "title": "Achievements",
-                "sub": "18,450 G\nHorizon Superstar · 40G",
-                "badge": "18,450",
-                "img_preview": None
-            },
+            {"title": "My games & apps", "sub": f"{len(ALL_GAMES)} games\nReady to play", "badge": "LIBRARY", "img": "fotos web/donkeykong.jpg"},
+            {"title": "Friends", "sub": "Seeker & Night Raid\n3 friends online right now", "badge": "FRIENDS", "img": None},
+            {"title": "GAME PASS", "sub": "Discover\nHundreds of great games", "badge": "PASS", "img": "assets_omnidash/covers/battlefield.webp"},
+            {"title": "Achievements", "sub": "18,450 G\nHorizon Superstar · 40G", "badge": "18,450", "img": None},
         ]
 
         for idx, gc in enumerate(glass_cards_data):
             r = self.glass_card_rects[idx]
             is_hov = r.collidepoint(pygame.mouse.get_pos())
 
-            # Vidrio esmerilado con gradiente turquesa-azul oficial
-            g_surf = pygame.Surface((r.width, r.height), pygame.SRCALPHA)
-            if gc["badge"] == "PASS":
-                # Game Pass usa tinte verde esmeralda (#0d5a2a)
-                pygame.draw.rect(g_surf, (13, 90, 42, 210), (0, 0, r.width, r.height), border_radius=10)
-            else:
-                pygame.draw.rect(g_surf, (25, 110, 150, 180 if is_hov else 140), (0, 0, r.width, r.height), border_radius=10)
+            bg_col = (13, 90, 42, 210) if gc["badge"] == "PASS" else ((25, 110, 150, 200) if is_hov else (20, 95, 135, 150))
+            border_col = (182, 245, 90) if is_hov else (255, 255, 255, 120)
+            draw_glass_rect(surface, r, bg_col, border_col, border_radius=10, border_width=2 if is_hov else 1)
 
-            # Brillo superior
-            pygame.draw.line(g_surf, (255, 255, 255, 180), (4, 0), (r.width - 4, 0))
-            surface.blit(g_surf, r.topleft)
-
-            # Borde
-            b_col = (182, 245, 90) if is_hov else (255, 255, 255, 100)
-            pygame.draw.rect(surface, b_col, r, width=2 if is_hov else 1, border_radius=10)
-
-            # Textos
             t_t = self.engine.font_body.render(gc["title"], True, (255, 255, 255))
             surface.blit(t_t, (r.x + 16, r.y + 14))
 
@@ -611,47 +569,43 @@ class OmniDashHomeView:
                 st = self.engine.font_sub.render(line, True, (215, 240, 255))
                 surface.blit(st, (r.x + 16, r.y + 60 + l_idx * 18))
 
-            # Imagen de vista previa a la derecha si existe
-            if gc["img_preview"]:
-                prev_img = get_image(gc["img_preview"], 70, 70)
+            if gc["img"]:
+                prev_img = get_image(gc["img"], 70, 70)
                 if prev_img:
                     surface.blit(prev_img, (r.right - 84, r.y + 16))
                     pygame.draw.rect(surface, (255, 255, 255, 120), (r.right - 84, r.y + 16, 70, 70), width=1, border_radius=6)
 
 
 # ==============================================================================
-# 2. VISTA BIBLIOTECA OFICIAL OMNIDASH AERO (OmniDashLibraryView)
+# 2. VISTA BIBLIOTECA OFICIAL CON SCROLL DOWN COMPLETO (OmniDashLibraryView)
 # ==============================================================================
 class OmniDashLibraryView:
-    """Pantalla exacta a aero-library.jpg:
-    - Barra lateral izquierda con anillo de almacenamiento, buscador y pestañas.
-    - Panel derecho de vidrio con título 'Games' y cuadrícula 1:1 de 5 columnas.
-    """
     def __init__(self, engine: OmniDashEngine):
         self.engine = engine
         self.w, self.h = engine.w, engine.h
         self.selected_category = "Games"
         self.selected_game_idx = 0
         self.search_query = ""
+        self.scroll_y = 0.0
 
-        # Rectángulos estructurales oficiales
         self.sidebar_rect = pygame.Rect(32, 24, 250, 672)
         self.content_rect = pygame.Rect(298, 24, 950, 672)
-        self.back_btn_rect = pygame.Rect(48, 38, 90, 32)
+        self.back_btn_rect = pygame.Rect(48, 38, 100, 34)
         self.search_rect = pygame.Rect(48, 140, 218, 34)
 
         self.categories = [
             {"id": "Games", "label": "Games", "count": len(ALL_GAMES)},
-            {"id": "SNES", "label": "Super Nintendo", "count": 15},
-            {"id": "ARCADE", "label": "Arcade MAME", "count": 6},
-            {"id": "N64", "label": "Nintendo 64", "count": 5},
-            {"id": "PS1", "label": "PlayStation 1", "count": 6},
-            {"id": "NDS", "label": "Nintendo DS", "count": 6},
-            {"id": "NEO-GEO", "label": "Neo-Geo", "count": 3},
+            {"id": "SNES", "label": "Super Nintendo", "count": 21},
             {"id": "CCI", "label": "Juegos C.C.I.", "count": 19},
+            {"id": "PS1", "label": "PlayStation 1", "count": 7},
+            {"id": "ARCADE", "label": "Arcade MAME", "count": 6},
+            {"id": "NDS", "label": "Nintendo DS", "count": 6},
+            {"id": "N64", "label": "Nintendo 64", "count": 5},
+            {"id": "NEO-GEO", "label": "Neo-Geo", "count": 3},
+            {"id": "WII", "label": "Nintendo Wii", "count": 1},
         ]
         self.cat_rects: list[pygame.Rect] = []
-        self.game_card_rects: list[pygame.Rect] = []
+        self.game_card_rects: list[tuple[pygame.Rect, dict]] = []
 
     def _filtered_games(self) -> list[dict]:
         res = ALL_GAMES
@@ -664,28 +618,49 @@ class OmniDashLibraryView:
 
     def handle_event(self, event: pygame.event.Event) -> dict | None:
         filtered = self._filtered_games()
+        cols = 5
+        card_w, card_h = 166, 166
+        gap_y = 18
+        total_rows = math.ceil(len(filtered) / cols) if filtered else 1
+        total_height = total_rows * (card_h + gap_y)
+        visible_h = self.content_rect.height - 110
+        max_scroll = max(0, total_height - visible_h + 30)
 
-        if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+        # 1. SCROLL DOWN CON RUEDA DE RATÓN (MOUSEWHEEL)
+        if event.type == pygame.MOUSEWHEEL:
+            self.scroll_y = max(0.0, min(float(max_scroll), self.scroll_y - event.y * 60.0))
+            return None
+
+        elif event.type == pygame.MOUSEBUTTONDOWN:
             mx, my = event.pos
-            if self.back_btn_rect.collidepoint(mx, my):
-                self.engine.play_sound("navigate")
-                return {"action": "BACK"}
-
-            # Clic en categorías del sidebar
-            for idx, r in enumerate(self.cat_rects):
-                if r.collidepoint(mx, my):
-                    self.selected_category = self.categories[idx]["id"]
-                    self.selected_game_idx = 0
+            if event.button == 1:
+                # Botón volver
+                if self.back_btn_rect.collidepoint(mx, my):
                     self.engine.play_sound("navigate")
-                    return None
+                    return {"action": "BACK"}
 
-            # Clic en cuadrícula de juegos
-            for idx, r in enumerate(self.game_card_rects):
-                if r.collidepoint(mx, my):
-                    if idx < len(filtered):
-                        self.engine.play_sound("reward")
-                        return {"action": "LAUNCH_GAME", "game": filtered[idx]}
+                # Clic en categorías laterales
+                for idx, r in enumerate(self.cat_rects):
+                    if r.collidepoint(mx, my):
+                        self.selected_category = self.categories[idx]["id"]
+                        self.selected_game_idx = 0
+                        self.scroll_y = 0.0
+                        self.engine.play_sound("navigate")
+                        return None
 
+                # Clic en tarjetas de juegos (considerando scroll_y)
+                if self.content_rect.collidepoint(mx, my):
+                    for r, game in self.game_card_rects:
+                        if r.collidepoint(mx, my):
+                            self.engine.play_sound("reward")
+                            return {"action": "OPEN_DETAILS", "item": game}
+
+            elif event.button == 4:  # Wheel up
+                self.scroll_y = max(0.0, self.scroll_y - 60.0)
+            elif event.button == 5:  # Wheel down
+                self.scroll_y = min(float(max_scroll), self.scroll_y + 60.0)
+
+        # 2. NAVEGACIÓN POR TECLADO CON AUTO-SCROLL
         elif event.type == pygame.KEYDOWN:
             if event.key in (pygame.K_ESCAPE, pygame.K_BACKSPACE):
                 self.engine.play_sound("navigate")
@@ -700,130 +675,255 @@ class OmniDashLibraryView:
                     self.selected_game_idx -= 1
                     self.engine.play_sound("navigate")
             elif event.key in (pygame.K_DOWN, pygame.K_s):
-                if self.selected_game_idx + 5 < len(filtered):
-                    self.selected_game_idx += 5
+                if self.selected_game_idx + cols < len(filtered):
+                    self.selected_game_idx += cols
                     self.engine.play_sound("navigate")
             elif event.key in (pygame.K_UP, pygame.K_w):
-                if self.selected_game_idx - 5 >= 0:
-                    self.selected_game_idx -= 5
+                if self.selected_game_idx - cols >= 0:
+                    self.selected_game_idx -= cols
                     self.engine.play_sound("navigate")
+            elif event.key in (pygame.K_PAGEUP,):
+                self.scroll_y = max(0.0, self.scroll_y - 200.0)
+            elif event.key in (pygame.K_PAGEDOWN,):
+                self.scroll_y = min(float(max_scroll), self.scroll_y + 200.0)
             elif event.key in (pygame.K_RETURN, pygame.K_SPACE):
                 if filtered and self.selected_game_idx < len(filtered):
                     self.engine.play_sound("reward")
-                    return {"action": "LAUNCH_GAME", "game": filtered[self.selected_game_idx]}
+                    return {"action": "OPEN_DETAILS", "item": filtered[self.selected_game_idx]}
+
+            # Auto-scroll para mantener la tarjeta en pantalla
+            cur_row = self.selected_game_idx // cols
+            card_top = cur_row * (card_h + gap_y)
+            if card_top < self.scroll_y:
+                self.scroll_y = float(card_top)
+            elif card_top + card_h > self.scroll_y + visible_h:
+                self.scroll_y = float(card_top + card_h - visible_h + 20)
 
         return None
 
     def render(self, surface: pygame.Surface):
-        # 1. Barra Lateral Izquierda (#g-lib-side en aero-library.jpg)
+        # 1. Barra Lateral Izquierda
         sr = self.sidebar_rect
-        s_surf = pygame.Surface((sr.width, sr.height), pygame.SRCALPHA)
-        pygame.draw.rect(s_surf, (20, 105, 150, 190), (0, 0, sr.width, sr.height), border_radius=14)
-        pygame.draw.line(s_surf, (255, 255, 255, 190), (4, 0), (sr.width - 4, 0))
-        surface.blit(s_surf, sr.topleft)
-        pygame.draw.rect(surface, (255, 255, 255, 110), sr, width=1, border_radius=14)
+        draw_glass_rect(surface, sr, (16, 75, 115, 210), (255, 255, 255, 120), border_radius=14)
 
-        # Botón Volver
+        # Botón Volver con contraste perfecto
         is_back_hov = self.back_btn_rect.collidepoint(pygame.mouse.get_pos())
-        pygame.draw.rect(surface, (255, 255, 255, 90 if is_back_hov else 40), self.back_btn_rect, border_radius=16)
-        pygame.draw.rect(surface, (255, 255, 255, 160), self.back_btn_rect, width=1, border_radius=16)
+        draw_glass_rect(surface, self.back_btn_rect, (8, 48, 80, 220 if is_back_hov else 160), (182, 245, 90) if is_back_hov else (255, 255, 255, 140), border_radius=16)
         bt = self.engine.font_btn.render("⇦  Home", True, (255, 255, 255))
         surface.blit(bt, bt.get_rect(center=self.back_btn_rect.center))
 
-        # Anillo de almacenamiento oficial ("72% used")
+        # Anillo de almacenamiento ("72% used")
         ring_center = (sr.centerx, 104)
         pygame.draw.circle(surface, (255, 255, 255, 40), ring_center, 22, width=4)
         pygame.draw.circle(surface, (182, 245, 90), ring_center, 22, width=4)
         r_txt = self.engine.font_badge.render("72%", True, (255, 255, 255))
         surface.blit(r_txt, r_txt.get_rect(center=ring_center))
 
-        # Buscador
-        pygame.draw.rect(surface, (255, 255, 255, 40), self.search_rect, border_radius=17)
-        pygame.draw.rect(surface, (255, 255, 255, 100), self.search_rect, width=1, border_radius=17)
-        srch_t = self.engine.font_sub.render("🔍  Search games...", True, (210, 235, 255))
+        # Buscador con alto contraste
+        draw_glass_rect(surface, self.search_rect, (10, 45, 75, 200), (255, 255, 255, 110), border_radius=17)
+        srch_t = self.engine.font_sub.render("🔍  Search games...", True, (215, 238, 255))
         surface.blit(srch_t, (self.search_rect.x + 14, self.search_rect.y + 8))
 
         # Pestañas de categorías
         self.cat_rects = []
-        cy = 194
+        cy = 190
         for idx, cat in enumerate(self.categories):
-            r = pygame.Rect(48, cy, 218, 44)
+            r = pygame.Rect(48, cy, 218, 42)
             self.cat_rects.append(r)
 
             is_sel = (cat["id"] == self.selected_category)
             if is_sel:
-                pygame.draw.rect(surface, (255, 255, 255, 70), r, border_radius=10)
-                pygame.draw.rect(surface, (182, 245, 90), r, width=2, border_radius=10)
+                draw_glass_rect(surface, r, (31, 134, 214, 200), (182, 245, 90), border_radius=10, border_width=2)
+            else:
+                draw_glass_rect(surface, r, (12, 55, 90, 100), (255, 255, 255, 50), border_radius=10, border_width=1)
 
             c_name = self.engine.font_body.render(cat["label"], True, (255, 255, 255))
-            surface.blit(c_name, (r.x + 14, r.y + 12))
+            surface.blit(c_name, (r.x + 14, r.y + 11))
 
             c_count = self.engine.font_badge.render(str(cat["count"]), True, (182, 245, 90) if is_sel else (200, 225, 255))
-            surface.blit(c_count, (r.right - c_count.get_width() - 14, r.y + 14))
+            surface.blit(c_count, (r.right - c_count.get_width() - 14, r.y + 13))
 
-            cy += 50
+            cy += 48
 
-        # 2. Panel Principal de Contenido (.console-library-content en aero-library.jpg)
+        # 2. Panel Principal de Contenido
         cr = self.content_rect
-        c_surf = pygame.Surface((cr.width, cr.height), pygame.SRCALPHA)
-        pygame.draw.rect(c_surf, (10, 70, 115, 170), (0, 0, cr.width, cr.height), border_radius=14)
-        pygame.draw.line(c_surf, (255, 255, 255, 160), (4, 0), (cr.width - 4, 0))
-        surface.blit(c_surf, cr.topleft)
-        pygame.draw.rect(surface, (255, 255, 255, 100), cr, width=1, border_radius=14)
+        draw_glass_rect(surface, cr, (10, 65, 105, 195), (255, 255, 255, 110), border_radius=14)
 
         # Encabezado
         filtered = self._filtered_games()
-        head_t = self.engine.font_hero.render("Games", True, (255, 255, 255))
-        surface.blit(head_t, (cr.x + 30, cr.y + 24))
+        head_t = self.engine.font_hero.render(self.selected_category if self.selected_category != "Games" else "All Games", True, (255, 255, 255))
+        surface.blit(head_t, (cr.x + 30, cr.y + 22))
 
-        sub_t = self.engine.font_sub.render(f"{len(filtered)} games installed  •  Ready to play", True, (210, 235, 255))
-        surface.blit(sub_t, (cr.x + 32, cr.y + 56))
+        sub_t = self.engine.font_sub.render(f"{len(filtered)} games installed  •  Ready to play (60 FPS)", True, (210, 235, 255))
+        surface.blit(sub_t, (cr.x + 32, cr.y + 54))
 
-        # Botones de filtro y ordenación derecha
-        sort_r = pygame.Rect(cr.right - 140, cr.y + 26, 110, 32)
-        pygame.draw.rect(surface, (255, 255, 255, 40), sort_r, border_radius=16)
-        pygame.draw.rect(surface, (255, 255, 255, 100), sort_r, width=1, border_radius=16)
+        # Botón Sort con contraste
+        sort_r = pygame.Rect(cr.right - 140, cr.y + 24, 110, 32)
+        draw_glass_rect(surface, sort_r, (10, 48, 80, 200), (255, 255, 255, 120), border_radius=16)
         st_txt = self.engine.font_sub.render("Sort: A-Z  ▼", True, (255, 255, 255))
         surface.blit(st_txt, st_txt.get_rect(center=sort_r.center))
 
-        # 3. Cuadrícula 1:1 de 5 Columnas de Tarjetas Cuadradas Brillantes
-        self.game_card_rects = []
+        # 3. Cuadrícula de Juegos con SCROLL DOWN REAL
         cols = 5
-        card_w = 166
-        card_h = 166
-        gap_x = 18
-        gap_y = 18
-        start_x = cr.x + 30
-        start_y = cr.y + 96
+        card_w, card_h = 166, 166
+        gap_x, gap_y = 18, 18
+        start_x = cr.x + 28
+        start_y = cr.y + 90
+        visible_h = cr.height - 105
 
-        for idx, g in enumerate(filtered[:15]):  # 3 filas de 5
+        # Área de recorte (clip) para scroll perfecto
+        clip_rect = pygame.Rect(cr.x + 10, start_y, cr.width - 32, visible_h)
+        old_clip = surface.get_clip()
+        surface.set_clip(clip_rect)
+
+        self.game_card_rects = []
+        for idx, g in enumerate(filtered):
             col = idx % cols
             row = idx // cols
             gx = start_x + col * (card_w + gap_x)
-            gy = start_y + row * (card_h + gap_y)
+            gy = start_y + row * (card_h + gap_y) - int(self.scroll_y)
 
-            r = pygame.Rect(gx, gy, card_w, card_h)
-            self.game_card_rects.append(r)
+            card_r = pygame.Rect(gx, gy, card_w, card_h)
+            # Solo añadir para clic si está dentro del área visible
+            if card_r.bottom > start_y and card_r.top < start_y + visible_h:
+                self.game_card_rects.append((card_r, g))
 
-            draw_glossy_square_card(
-                surface,
-                r,
-                g["cover"],
-                is_focused=(idx == self.selected_game_idx),
-                title=g["title"],
-                draw_reflection=False
-            )
+            # Solo renderizar si intersecta con la vista
+            if gy + card_h >= start_y - 20 and gy <= start_y + visible_h + 20:
+                draw_glossy_square_card(
+                    surface,
+                    card_r,
+                    g["cover"],
+                    is_focused=(idx == self.selected_game_idx),
+                    title=g["title"],
+                    draw_reflection=False
+                )
+
+        surface.set_clip(old_clip)
+
+        # 4. Barra de Scroll Vertical Visible
+        total_rows = math.ceil(len(filtered) / cols) if filtered else 1
+        total_height = total_rows * (card_h + gap_y)
+        if total_height > visible_h:
+            track_r = pygame.Rect(cr.right - 14, start_y, 6, visible_h)
+            draw_glass_rect(surface, track_r, (255, 255, 255, 30), border_radius=3)
+
+            thumb_h = max(30, int(visible_h * (visible_h / total_height)))
+            thumb_y = start_y + int((self.scroll_y / (total_height - visible_h)) * (visible_h - thumb_h))
+            thumb_r = pygame.Rect(cr.right - 14, thumb_y, 6, thumb_h)
+            draw_glass_rect(surface, thumb_r, (182, 245, 90, 220), (255, 255, 255, 180), border_radius=3)
 
 
 # ==============================================================================
-# 3. VISTA AJUSTES OFICIAL OMNIDASH AERO (OmniDashSettingsView)
+# 3. VISTA FICHA TÉCNICA OFICIAL OMNIDASH (OmniDashGameDetailsView)
+# ==============================================================================
+class OmniDashGameDetailsView:
+    """Pantalla oficial de detalles del juego (garrison-details.js / screenshot-game-page.png):
+    - Carátula 1:1 grande a la izquierda.
+    - Botón verde gel 'PLAY GAME (60 FPS)'.
+    - Ficha técnica completa, capacidades y descripción.
+    """
+    def __init__(self, engine: OmniDashEngine, game_item: dict):
+        self.engine = engine
+        self.game = game_item
+        self.w, self.h = engine.w, engine.h
+
+        self.panel_rect = pygame.Rect(54, 40, self.w - 108, self.h - 80)
+        self.back_btn_rect = pygame.Rect(self.w - 190, 56, 120, 36)
+        self.play_btn_rect = pygame.Rect(90, 420, 280, 52)
+
+    def handle_event(self, event: pygame.event.Event) -> dict | None:
+        if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+            mx, my = event.pos
+            if self.back_btn_rect.collidepoint(mx, my):
+                self.engine.play_sound("navigate")
+                return {"action": "BACK"}
+            elif self.play_btn_rect.collidepoint(mx, my):
+                self.engine.play_sound("reward")
+                return {"action": "LAUNCH", "item": self.game}
+
+        elif event.type == pygame.KEYDOWN:
+            if event.key in (pygame.K_ESCAPE, pygame.K_BACKSPACE):
+                self.engine.play_sound("navigate")
+                return {"action": "BACK"}
+            elif event.key in (pygame.K_RETURN, pygame.K_SPACE):
+                self.engine.play_sound("reward")
+                return {"action": "LAUNCH", "item": self.game}
+
+        return None
+
+    def render(self, surface: pygame.Surface):
+        pr = self.panel_rect
+        draw_glass_rect(surface, pr, (12, 24, 40, 235), (255, 255, 255, 90), border_radius=18)
+
+        # Botón Volver con alto contraste
+        is_close_hov = self.back_btn_rect.collidepoint(pygame.mouse.get_pos())
+        draw_glass_rect(surface, self.back_btn_rect, (8, 48, 80, 220 if is_close_hov else 160), (182, 245, 90) if is_close_hov else (255, 255, 255, 140), border_radius=18)
+        bt = self.engine.font_btn.render("⇦  Back", True, (255, 255, 255))
+        surface.blit(bt, bt.get_rect(center=self.back_btn_rect.center))
+
+        # 1. Columna Izquierda: Carátula Grande y Botón de Inicio
+        cov_rect = pygame.Rect(90, 80, 280, 280)
+        draw_glossy_square_card(surface, cov_rect, self.game.get("cover", ""), is_focused=False, draw_reflection=False)
+
+        # Botón Verde Gel de Inicio Oficial (#3cb043 / #8eea6e)
+        is_play_hov = self.play_btn_rect.collidepoint(pygame.mouse.get_pos())
+        p_bg = (60, 176, 67, 240) if is_play_hov else (42, 164, 60, 230)
+        draw_glass_rect(surface, self.play_btn_rect, p_bg, (182, 245, 90) if is_play_hov else (255, 255, 255, 180), border_radius=14, border_width=2)
+        play_txt = self.engine.font_hero.render("▶  PLAY GAME (60 FPS)", True, (255, 255, 255))
+        surface.blit(play_txt, play_txt.get_rect(center=self.play_btn_rect.center))
+
+        # 2. Columna Derecha: Especificaciones y Capacidades
+        rx = 410
+        ry = 80
+        rw = pr.right - rx - 40
+
+        title_t = self.engine.font_hero.render(self.game.get("title", "Game Title"), True, (255, 255, 255))
+        surface.blit(title_t, (rx, ry))
+
+        meta_str = f"{self.game.get('console', 'Console')}  •  {self.game.get('developer', 'Official')}  •  {self.game.get('year', '2024')}"
+        meta_t = self.engine.font_body.render(meta_str, True, (182, 245, 90))
+        surface.blit(meta_t, (rx, ry + 40))
+
+        # Tarjeta de capacidades
+        cap_r = pygame.Rect(rx, ry + 78, rw, 80)
+        draw_glass_rect(surface, cap_r, (20, 35, 55, 180), (255, 255, 255, 60), border_radius=12)
+
+        caps = ["Single Player", "60 FPS V-Sync", "Controller Support", "Full HD Audio", "State Save"]
+        cx = rx + 16
+        for c in caps:
+            cw = len(c) * 8 + 22
+            cr_box = pygame.Rect(cx, ry + 102, cw, 28)
+            draw_glass_rect(surface, cr_box, (31, 134, 214, 180), (255, 255, 255, 140), border_radius=14)
+            ct = self.engine.font_badge.render(c, True, (255, 255, 255))
+            surface.blit(ct, ct.get_rect(center=cr_box.center))
+            cx += cw + 10
+
+        # Tarjeta de Descripción
+        desc_r = pygame.Rect(rx, ry + 175, rw, 130)
+        draw_glass_rect(surface, desc_r, (20, 35, 55, 180), (255, 255, 255, 60), border_radius=12)
+        d_lbl = self.engine.font_body.render("Description", True, (255, 255, 255))
+        surface.blit(d_lbl, (rx + 16, ry + 188))
+        d_txt = self.engine.font_sub.render(self.game.get("desc", "Official title preserved for C.C.I. SYSTEM."), True, (210, 235, 255))
+        surface.blit(d_txt, (rx + 16, ry + 220))
+
+        # Tarjeta de Archivo y Core
+        info_r = pygame.Rect(rx, ry + 320, rw, 150)
+        draw_glass_rect(surface, info_r, (20, 35, 55, 180), (255, 255, 255, 60), border_radius=12)
+        i_lbl = self.engine.font_body.render("Emulation Architecture & Core Info", True, (255, 255, 255))
+        surface.blit(i_lbl, (rx + 16, ry + 332))
+
+        core_info = f"Libretro Core: {self.game.get('core', 'Native C.C.I. Engine')}"
+        rom_info = f"ROM Path: {self.game.get('rom', 'Builtin Executable')}"
+        surface.blit(self.engine.font_sub.render(core_info, True, (185, 215, 240)), (rx + 16, ry + 365))
+        surface.blit(self.engine.font_sub.render(rom_info, True, (185, 215, 240)), (rx + 16, ry + 395))
+        surface.blit(self.engine.font_badge.render("Certified 60 FPS Low Latency Framebuffer", True, (182, 245, 90)), (rx + 16, ry + 425))
+
+
+# ==============================================================================
+# 4. VISTA AJUSTES OFICIAL OMNIDASH AERO (OmniDashSettingsView)
 # ==============================================================================
 class OmniDashSettingsView:
-    """Pantalla exacta a aero-settings.jpg (#g-aero-settings):
-    - Fondo de cristal oscuro translúcido.
-    - Barra lateral con 8 categorías oficiales y sus orbes circulares de color.
-    - Panel derecho con encabezado y opciones agrupadas en filas nítidas.
-    """
     def __init__(self, engine: OmniDashEngine, user_data=None, on_apply_display=None):
         self.engine = engine
         self.w, self.h = engine.w, engine.h
@@ -866,7 +966,6 @@ class OmniDashSettingsView:
                 self.engine.play_sound("navigate")
                 return {"action": "BACK"}
 
-            # Clic en categorías
             for idx, r in enumerate(self.cat_rects):
                 if r.collidepoint(mx, my):
                     self.selected_cat_idx = idx
@@ -874,7 +973,6 @@ class OmniDashSettingsView:
                     self.engine.play_sound("navigate")
                     return None
 
-            # Clic en filas
             for idx, r in enumerate(self.row_rects):
                 if r.collidepoint(mx, my):
                     self.selected_row_idx = idx
@@ -974,15 +1072,10 @@ class OmniDashSettingsView:
             self.settings["reduced_motion"] = not self.settings["reduced_motion"]
 
     def render(self, surface: pygame.Surface):
-        # Contenedor global de vidrio oscuro con gradiente
         pr = self.panel_rect
-        p_surf = pygame.Surface((pr.width, pr.height), pygame.SRCALPHA)
-        pygame.draw.rect(p_surf, (15, 25, 42, 235), (0, 0, pr.width, pr.height), border_radius=18)
-        pygame.draw.line(p_surf, (255, 255, 255, 140), (4, 0), (pr.width - 4, 0))
-        surface.blit(p_surf, pr.topleft)
-        pygame.draw.rect(surface, (255, 255, 255, 80), pr, width=1, border_radius=18)
+        draw_glass_rect(surface, pr, (12, 22, 38, 235), (255, 255, 255, 90), border_radius=18)
 
-        # Encabezado oficial aero-settings.jpg
+        # Encabezado
         t_head = self.engine.font_hero.render("Settings", True, (255, 255, 255))
         surface.blit(t_head, (pr.x + 32, pr.y + 20))
 
@@ -991,12 +1084,11 @@ class OmniDashSettingsView:
 
         # Botón Cerrar
         is_close_hov = self.back_btn_rect.collidepoint(pygame.mouse.get_pos())
-        pygame.draw.rect(surface, (255, 255, 255, 80 if is_close_hov else 40), self.back_btn_rect, border_radius=18)
-        pygame.draw.rect(surface, (255, 255, 255, 140), self.back_btn_rect, width=1, border_radius=18)
+        draw_glass_rect(surface, self.back_btn_rect, (8, 48, 80, 220 if is_close_hov else 160), (182, 245, 90) if is_close_hov else (255, 255, 255, 140), border_radius=18)
         bt = self.engine.font_btn.render("Ⓑ / Esc  Close", True, (255, 255, 255))
         surface.blit(bt, bt.get_rect(center=self.back_btn_rect.center))
 
-        # 1. Barra Lateral con Orbes de Color
+        # Barra Lateral con Orbes de Color
         side_x = pr.x + 28
         side_y = pr.y + 92
         side_w = 320
@@ -1009,32 +1101,28 @@ class OmniDashSettingsView:
 
             is_sel = (idx == self.selected_cat_idx)
             if is_sel:
-                pygame.draw.rect(surface, (255, 255, 255, 50), r, border_radius=10)
-                pygame.draw.rect(surface, (182, 245, 90), r, width=2, border_radius=10)
+                draw_glass_rect(surface, r, (31, 134, 214, 180), (182, 245, 90), border_radius=10, border_width=2)
+            else:
+                draw_glass_rect(surface, r, (15, 45, 75, 120), (255, 255, 255, 40), border_radius=10, border_width=1)
 
-            # Orbe circular oficial de color
             orb_center = (side_x + 24, cy + 24)
             pygame.draw.circle(surface, cat["color"], orb_center, 15)
             pygame.draw.circle(surface, (255, 255, 255, 180), orb_center, 15, width=1)
             ico_t = self.engine.font_badge.render(cat["icon"], True, (255, 255, 255))
             surface.blit(ico_t, ico_t.get_rect(center=orb_center))
 
-            c_lbl = self.engine.font_body.render(cat["name"], True, (255, 255, 255) if is_sel else (200, 220, 240))
+            c_lbl = self.engine.font_body.render(cat["name"], True, (255, 255, 255))
             surface.blit(c_lbl, (side_x + 50, cy + 14))
 
-        # 2. Panel Derecho de Opciones Agrupadas
+        # Panel Derecho de Opciones Agrupadas
         cur_cat = self.categories[self.selected_cat_idx]
         rx = side_x + side_w + 24
         ry = side_y
         rw = pr.width - side_w - 76
         rh = pr.height - 116
 
-        r_surf = pygame.Surface((rw, rh), pygame.SRCALPHA)
-        pygame.draw.rect(r_surf, (22, 32, 48, 220), (0, 0, rw, rh), border_radius=14)
-        surface.blit(r_surf, (rx, ry))
-        pygame.draw.rect(surface, (255, 255, 255, 40), (rx, ry, rw, rh), width=1, border_radius=14)
+        draw_glass_rect(surface, pygame.Rect(rx, ry, rw, rh), (16, 28, 45, 220), (255, 255, 255, 50), border_radius=14)
 
-        # Encabezado de sección
         head_orb = (rx + 34, ry + 32)
         pygame.draw.circle(surface, cur_cat["color"], head_orb, 20)
         h_ico = self.engine.font_title.render(cur_cat["icon"], True, (255, 255, 255))
@@ -1046,7 +1134,6 @@ class OmniDashSettingsView:
         st_desc = self.engine.font_sub.render(cur_cat["desc"], True, (170, 200, 230))
         surface.blit(st_desc, (rx + 70, ry + 44))
 
-        # Filas de opciones
         rows = self._get_rows()
         self.row_rects = []
         row_y = ry + 80
@@ -1056,10 +1143,10 @@ class OmniDashSettingsView:
             self.row_rects.append(r)
 
             is_sel = (idx == self.selected_row_idx)
-            row_bg = (255, 255, 255, 45) if is_sel else (255, 255, 255, 12)
-            pygame.draw.rect(surface, row_bg, r, border_radius=10)
             if is_sel:
-                pygame.draw.rect(surface, (182, 245, 90), r, width=2, border_radius=10)
+                draw_glass_rect(surface, r, (25, 60, 95, 220), (182, 245, 90), border_radius=10, border_width=2)
+            else:
+                draw_glass_rect(surface, r, (12, 38, 65, 140), (255, 255, 255, 40), border_radius=10, border_width=1)
 
             l_lbl = self.engine.font_body.render(row["label"], True, (255, 255, 255))
             surface.blit(l_lbl, (r.x + 16, r.y + 10))
@@ -1072,7 +1159,7 @@ class OmniDashSettingsView:
 
 
 # ==============================================================================
-# 4. VISTA PERFIL & GAMERSCORE OFICIAL OMNIDASH AERO (OmniDashProfileView)
+# 5. VISTA PERFIL & GAMERSCORE OFICIAL OMNIDASH AERO (OmniDashProfileView)
 # ==============================================================================
 class OmniDashProfileView:
     def __init__(self, engine: OmniDashEngine, user_data=None):
@@ -1094,19 +1181,13 @@ class OmniDashProfileView:
 
     def render(self, surface: pygame.Surface):
         pr = self.panel_rect
-        p_surf = pygame.Surface((pr.width, pr.height), pygame.SRCALPHA)
-        pygame.draw.rect(p_surf, (15, 25, 42, 235), (0, 0, pr.width, pr.height), border_radius=18)
-        surface.blit(p_surf, pr.topleft)
-        pygame.draw.rect(surface, (255, 255, 255, 80), pr, width=1, border_radius=18)
+        draw_glass_rect(surface, pr, (12, 22, 38, 235), (255, 255, 255, 80), border_radius=18)
 
-        # Botón Cerrar
         is_close_hov = self.back_btn_rect.collidepoint(pygame.mouse.get_pos())
-        pygame.draw.rect(surface, (255, 255, 255, 80 if is_close_hov else 40), self.back_btn_rect, border_radius=18)
-        pygame.draw.rect(surface, (255, 255, 255, 140), self.back_btn_rect, width=1, border_radius=18)
+        draw_glass_rect(surface, self.back_btn_rect, (8, 48, 80, 220 if is_close_hov else 160), (182, 245, 90) if is_close_hov else (255, 255, 255, 140), border_radius=18)
         bt = self.engine.font_btn.render("Ⓑ / Esc  Close", True, (255, 255, 255))
         surface.blit(bt, bt.get_rect(center=self.back_btn_rect.center))
 
-        # Avatar circular
         av_center = (pr.x + 80, pr.y + 70)
         pygame.draw.circle(surface, (90, 166, 214), av_center, 40)
         pygame.draw.circle(surface, (255, 255, 255), av_center, 40, width=2)
@@ -1116,11 +1197,9 @@ class OmniDashProfileView:
         name_t = self.engine.font_hero.render("Alex  •  Frutiger Pilot", True, (255, 255, 255))
         surface.blit(name_t, (pr.x + 138, pr.y + 42))
 
-        # Gamerscore 18,450 G
         score_t = self.engine.font_title.render("18,450 G  •  Level 42 Master", True, (182, 245, 90))
         surface.blit(score_t, (pr.x + 140, pr.y + 78))
 
-        # Lista de logros
         trophies = [
             ("Master of Preservation", "Run 50 classic titles with rock-solid 60 FPS.", "🥇 GOLD"),
             ("Super Mario 16-Bit Legend", "Completed Super Mario World with all secrets.", "🥈 SILVER"),
@@ -1136,8 +1215,7 @@ class OmniDashProfileView:
         for idx, (tname, tdesc, tbadge) in enumerate(trophies):
             ry = ty + 38 + idx * 72
             r = pygame.Rect(tx, ry, pr.width - 80, 60)
-            pygame.draw.rect(surface, (255, 255, 255, 20), r, border_radius=10)
-            pygame.draw.rect(surface, (255, 255, 255, 50), r, width=1, border_radius=10)
+            draw_glass_rect(surface, r, (16, 36, 60, 160), (255, 255, 255, 50), border_radius=10)
 
             b_t = self.engine.font_badge.render(tbadge, True, (255, 220, 60))
             surface.blit(b_t, (r.x + 16, r.y + 12))
@@ -1150,7 +1228,7 @@ class OmniDashProfileView:
 
 
 # ==============================================================================
-# 5. VISTA COMUNIDAD C.C.I. OMNIDASH AERO (OmniDashCommunityView)
+# 6. VISTA COMUNIDAD C.C.I. OMNIDASH AERO (OmniDashCommunityView)
 # ==============================================================================
 class OmniDashCommunityView:
     def __init__(self, engine: OmniDashEngine):
@@ -1171,15 +1249,10 @@ class OmniDashCommunityView:
 
     def render(self, surface: pygame.Surface):
         pr = self.panel_rect
-        p_surf = pygame.Surface((pr.width, pr.height), pygame.SRCALPHA)
-        pygame.draw.rect(p_surf, (15, 25, 42, 235), (0, 0, pr.width, pr.height), border_radius=18)
-        surface.blit(p_surf, pr.topleft)
-        pygame.draw.rect(surface, (255, 255, 255, 80), pr, width=1, border_radius=18)
+        draw_glass_rect(surface, pr, (12, 22, 38, 235), (255, 255, 255, 80), border_radius=18)
 
-        # Botón Cerrar
         is_close_hov = self.back_btn_rect.collidepoint(pygame.mouse.get_pos())
-        pygame.draw.rect(surface, (255, 255, 255, 80 if is_close_hov else 40), self.back_btn_rect, border_radius=18)
-        pygame.draw.rect(surface, (255, 255, 255, 140), self.back_btn_rect, width=1, border_radius=18)
+        draw_glass_rect(surface, self.back_btn_rect, (8, 48, 80, 220 if is_close_hov else 160), (182, 245, 90) if is_close_hov else (255, 255, 255, 140), border_radius=18)
         bt = self.engine.font_btn.render("Ⓑ / Esc  Close", True, (255, 255, 255))
         surface.blit(bt, bt.get_rect(center=self.back_btn_rect.center))
 
@@ -1198,8 +1271,7 @@ class OmniDashCommunityView:
         for idx, (gname, gactivity, gstatus, gcol) in enumerate(groups):
             gy = pr.y + 110 + idx * 96
             r = pygame.Rect(pr.x + 36, gy, pr.width - 72, 78)
-            pygame.draw.rect(surface, (255, 255, 255, 22), r, border_radius=12)
-            pygame.draw.rect(surface, (255, 255, 255, 60), r, width=1, border_radius=12)
+            draw_glass_rect(surface, r, (16, 36, 60, 160), (255, 255, 255, 60), border_radius=12)
 
             orb = (r.x + 36, r.y + 39)
             pygame.draw.circle(surface, gcol, orb, 20)
@@ -1217,7 +1289,7 @@ class OmniDashCommunityView:
 
 
 # ==============================================================================
-# 6. PANTALLA CINEMÁTICA DE LANZAMIENTO OFICIAL OMNIDASH AERO
+# 7. PANTALLA CINEMÁTICA DE LANZAMIENTO OFICIAL OMNIDASH AERO
 # ==============================================================================
 class OmniDashLaunchScreenView:
     def __init__(self, engine: OmniDashEngine, target_item: dict):
@@ -1260,7 +1332,6 @@ class OmniDashLaunchScreenView:
         dim.fill((0, 20, 45, int(160 + progress * 50)))
         surface.blit(dim, (0, 0))
 
-        # Easing curve para elevación de logo
         ease_y = math.sin(progress * math.pi / 2)
         logo_y = int(h + 80 - ease_y * (h * 0.55 + 80))
 
@@ -1272,7 +1343,6 @@ class OmniDashLaunchScreenView:
         m_surf = self.engine.font_body.render(meta_str, True, (182, 245, 90))
         surface.blit(m_surf, m_surf.get_rect(center=(w // 2, logo_y + 44)))
 
-        # Barra de carga verde neón #b6f55a
         bw, bh = 420, 8
         bx = (w - bw) // 2
         by = h - 68
@@ -1283,7 +1353,7 @@ class OmniDashLaunchScreenView:
 
 
 # ==============================================================================
-# 7. ESTADOS PARA STATEMACHINE EN MAIN.PY
+# 8. ESTADOS DE STATEMACHINE PARA MAIN.PY
 # ==============================================================================
 _SHARED_ENGINE = None
 
@@ -1322,8 +1392,8 @@ class OmniDashHomeState:
 
             res = self.home_view.handle_event(event)
             if res:
-                if res.get("action") == "LAUNCH_DIRECT":
-                    self.state_machine.change_state("LAUNCH_ANIM", target=res["item"])
+                if res.get("action") == "OPEN_DETAILS":
+                    self.state_machine.change_state("DETAILS", item=res["item"])
                 elif res.get("action") == "NAVIGATE_UTIL":
                     self.state_machine.change_state(res["destination"])
 
@@ -1356,8 +1426,8 @@ class OmniDashLibraryState:
                 if res.get("action") == "BACK":
                     self.state_machine.change_state("MENU")
                     return
-                elif res.get("action") == "LAUNCH_GAME":
-                    self.state_machine.change_state("LAUNCH_ANIM", target=res["game"])
+                elif res.get("action") == "OPEN_DETAILS":
+                    self.state_machine.change_state("DETAILS", item=res["item"])
                     return
 
     def update(self, dt):
@@ -1366,6 +1436,40 @@ class OmniDashLibraryState:
     def draw(self, screen):
         self.engine.render_background(screen)
         self.library_view.render(screen)
+
+
+class OmniDashDetailsState:
+    def __init__(self, state_machine):
+        self.state_machine = state_machine
+        self.engine = get_shared_engine()
+        self.details_view = None
+
+    def enter(self, item=None, **kwargs):
+        target = item or FEATURED_RECENT[0]
+        self.details_view = OmniDashGameDetailsView(self.engine, target)
+
+    def exit(self):
+        pass
+
+    def handle_events(self, events):
+        if self.details_view:
+            for event in events:
+                res = self.details_view.handle_event(event)
+                if res:
+                    if res.get("action") == "BACK":
+                        self.state_machine.change_state("LIBRARY")
+                        return
+                    elif res.get("action") == "LAUNCH":
+                        self.state_machine.change_state("LAUNCH_ANIM", target=res["item"])
+                        return
+
+    def update(self, dt):
+        pass
+
+    def draw(self, screen):
+        self.engine.render_background(screen)
+        if self.details_view:
+            self.details_view.render(screen)
 
 
 class OmniDashSettingsState:
@@ -1447,48 +1551,6 @@ class OmniDashCommunityState:
     def draw(self, screen):
         self.engine.render_background(screen)
         self.comm_view.render(screen)
-
-
-class OmniDashDetailsState:
-    def __init__(self, state_machine):
-        self.state_machine = state_machine
-        self.engine = get_shared_engine()
-        self.item = None
-
-    def enter(self, item=None, **kwargs):
-        self.item = item or FEATURED_RECENT[0]
-
-    def exit(self):
-        pass
-
-    def handle_events(self, events):
-        for event in events:
-            if event.type == pygame.KEYDOWN:
-                if event.key in (pygame.K_ESCAPE, pygame.K_BACKSPACE):
-                    self.state_machine.change_state("MENU")
-                    return
-                elif event.key in (pygame.K_RETURN, pygame.K_SPACE):
-                    if self.item:
-                        self.state_machine.change_state("LAUNCH_ANIM", target=self.item)
-                        return
-
-    def update(self, dt):
-        pass
-
-    def draw(self, screen):
-        self.engine.render_background(screen)
-        if self.item:
-            w, h = screen.get_size()
-            rect = pygame.Rect(100, 100, w - 200, h - 200)
-            pygame.draw.rect(screen, (20, 30, 45, 230), rect, border_radius=16)
-            pygame.draw.rect(screen, (182, 245, 90), rect, width=2, border_radius=16)
-            t = self.engine.font_hero.render(self.item.get("title", ""), True, (255, 255, 255))
-            screen.blit(t, (rect.x + 40, rect.y + 40))
-            sub = self.engine.font_body.render(self.item.get("subtitle", self.item.get("desc", "")), True, (180, 210, 240))
-            screen.blit(sub, (rect.x + 42, rect.y + 90))
-            btn = self.engine.font_btn.render("Press [ ENTER ] to play  •  [ ESC ] Back", True, (182, 245, 90))
-            screen.blit(btn, (rect.x + 42, rect.bottom - 60))
-        self.engine.render_bottom_dock(screen)
 
 
 class OmniDashLaunchAnimState:

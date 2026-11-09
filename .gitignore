@@ -31,6 +31,16 @@ METAL SLUG/No Commentary].mp4
 *.raw
 .cached_*.raw
 
+# Large ROM files & disc dumps
+roms/ps1/
+roms/wii/
+roms/nds/Pokemon White Version 2/
+*.iso
+*.wbfs
+*.bin
+*.cue
+*.7z
+
 # Temporary debug outputs
 METAL SLUG/test_output/
 METAL SLUG/scratch/

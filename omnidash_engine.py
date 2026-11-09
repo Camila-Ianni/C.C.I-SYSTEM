@@ -20,6 +20,31 @@ import pygame
 
 ROOT = Path(__file__).resolve().parent
 
+# ==============================================================================
+# UTILIDADES DE CRISTAL TRANSLÚCIDO SEGURO (PREVIENE BOTONES BLANCOS CIEGOS)
+# ==============================================================================
+def draw_glass_rect(surface: pygame.Surface, rect: pygame.Rect, bg_rgba: tuple, border_rgba: tuple | None = None, border_radius: int = 0, border_width: int = 1):
+    w, h = rect.width, rect.height
+    if w <= 0 or h <= 0:
+        return
+    g_surf = pygame.Surface((w, h), pygame.SRCALPHA)
+    pygame.draw.rect(g_surf, bg_rgba, (0, 0, w, h), border_radius=border_radius)
+    if border_rgba:
+        pygame.draw.rect(g_surf, border_rgba, (0, 0, w, h), width=border_width, border_radius=border_radius)
+    surface.blit(g_surf, rect.topleft)
+
+
+def draw_glass_circle(surface: pygame.Surface, center: tuple[int, int], radius: int, bg_rgba: tuple, border_rgba: tuple | None = None, border_width: int = 1):
+    if radius <= 0:
+        return
+    size = radius * 2 + 6
+    c_surf = pygame.Surface((size, size), pygame.SRCALPHA)
+    lc = (radius + 3, radius + 3)
+    pygame.draw.circle(c_surf, bg_rgba, lc, radius)
+    if border_rgba:
+        pygame.draw.circle(c_surf, border_rgba, lc, radius, width=border_width)
+    surface.blit(c_surf, (center[0] - radius - 3, center[1] - radius - 3))
+
 THEMES = {
     "aero": {
         "id": "aero",
@@ -99,7 +124,7 @@ class OmniDashEngine:
         self.nav_dock_items = [
             {"id": "home", "label": "Inicio", "icon": "🏠", "action": "HOME"},
             {"id": "library", "label": "Biblioteca", "icon": "📚", "action": "LIBRARY"},
-            {"id": "community", "label": "Comunidad", "icon": "👥", "action": "GROUPS"},
+            {"id": "community", "label": "Comunidad", "icon": "👥", "action": "COMMUNITY"},
             {"id": "settings", "label": "Ajustes", "icon": "⚙️", "action": "SETTINGS"},
         ]
         self.nav_dock_rects: list[pygame.Rect] = []
@@ -215,17 +240,13 @@ class OmniDashEngine:
             is_active = (item["action"] == active_tab)
             is_hover = (idx == self.hovered_nav_idx)
 
-            # Fondo circular de vidrio o aura azul activa
+            # Fondo circular de vidrio con contraste perfecto (cero bloque blanco sólido)
             if is_active:
-                # Botón de Home o pestaña activa brilla en azul cerúleo oficial (#1f86d6)
-                pygame.draw.circle(surface, (31, 134, 214, 230), (bx, by), btn_radius)
-                pygame.draw.circle(surface, (255, 255, 255), (bx, by), btn_radius, width=2)
+                draw_glass_circle(surface, (bx, by), btn_radius, (31, 134, 214, 235), (255, 255, 255, 240), border_width=2)
             elif is_hover:
-                pygame.draw.circle(surface, (255, 255, 255, 120), (bx, by), btn_radius)
-                pygame.draw.circle(surface, (182, 245, 90), (bx, by), btn_radius, width=2)
+                draw_glass_circle(surface, (bx, by), btn_radius, (12, 60, 105, 220), (182, 245, 90), border_width=2)
             else:
-                pygame.draw.circle(surface, (255, 255, 255, 50), (bx, by), btn_radius)
-                pygame.draw.circle(surface, (255, 255, 255, 100), (bx, by), btn_radius, width=1)
+                draw_glass_circle(surface, (bx, by), btn_radius, (10, 48, 80, 180), (255, 255, 255, 120), border_width=1)
 
             ico_t = self.font_body.render(item["icon"], True, (255, 255, 255))
             surface.blit(ico_t, ico_t.get_rect(center=(bx, by)))
@@ -246,7 +267,7 @@ class OmniDashEngine:
         store_lbl = self.font_body.render("Store", True, (255, 255, 255))
         surface.blit(store_lbl, (110, by + 6))
 
-        # Chips de vidrio translúcido
+        # Chips de vidrio translúcido con alto contraste
         self.store_chip_rects = []
         cx = 175
         for chip in self.store_chips:
@@ -255,9 +276,9 @@ class OmniDashEngine:
             self.store_chip_rects.append(r)
 
             is_hov = r.collidepoint(pygame.mouse.get_pos())
-            bg_col = (255, 255, 255, 80) if is_hov else (255, 255, 255, 40)
-            pygame.draw.rect(surface, bg_col, r, border_radius=15)
-            pygame.draw.rect(surface, (182, 245, 90) if is_hov else (255, 255, 255, 140), r, width=1, border_radius=15)
+            bg_col = (14, 65, 110, 220) if is_hov else (10, 48, 80, 175)
+            border_col = (182, 245, 90) if is_hov else (255, 255, 255, 120)
+            draw_glass_rect(surface, r, bg_col, border_col, border_radius=15, border_width=1)
 
             lt = self.font_sub.render(chip["label"], True, (255, 255, 255))
             surface.blit(lt, lt.get_rect(center=r.center))
