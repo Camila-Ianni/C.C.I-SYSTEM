@@ -242,6 +242,26 @@ def load_all_games() -> list[dict]:
                 "desc": f"Arcade 24-Bit Neo-Geo: {clean_name}"
             })
 
+    # 8. ROMs Nintendo Wii
+    wii_dir = roms_dir / "wii"
+    if wii_dir.exists():
+        for f in sorted(wii_dir.glob("*.wbfs")):
+            clean_name = f.stem.split("[")[0].strip()
+            cov = pick_color_cover(clean_name, "WII")
+            games.append({
+                "id": f"wii_{f.stem}",
+                "title": clean_name,
+                "console": "Nintendo Wii",
+                "badge": "WII",
+                "type": "libretro",
+                "core": "cores/dolphin_libretro.dylib",
+                "rom": str(f.relative_to(ROOT)),
+                "cover": cov,
+                "year": "2006",
+                "developer": "Nintendo",
+                "desc": f"Innovación por control de movimiento: {clean_name}"
+            })
+
     return games
 
 
