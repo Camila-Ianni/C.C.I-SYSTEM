@@ -105,27 +105,42 @@ class OmniDashEngine:
                 except Exception:
                     pass
 
-        # Cargar fondo oficial Frutiger Aero
+        # Cargar fondo oficial Frutiger Aero y pre-calcular desenfoque acrílico real con Pillow
         self.bg_surf = None
+        self.bg_blurred_surf = None
         aero_bg = ROOT / "assets_omnidash" / "aero-background.webp"
         if aero_bg.exists():
             try:
                 loaded = pygame.image.load(str(aero_bg)).convert()
                 self.bg_surf = pygame.transform.smoothscale(loaded, (self.w, self.h))
+
+                # Desenfoque gaussiano real con Pillow (Backdrop Acrylic Blur oficial)
+                from PIL import Image, ImageFilter, ImageEnhance
+                bg_pil = Image.open(str(aero_bg)).convert("RGB").resize((self.w, self.h))
+                blurred_pil = bg_pil.filter(ImageFilter.GaussianBlur(radius=22))
+                blurred_pil = ImageEnhance.Brightness(blurred_pil).enhance(1.08)
+                raw_bytes = blurred_pil.tobytes()
+                try:
+                    self.bg_blurred_surf = pygame.image.frombytes(raw_bytes, (self.w, self.h), "RGB").convert()
+                except AttributeError:
+                    self.bg_blurred_surf = pygame.image.fromstring(raw_bytes, (self.w, self.h), "RGB").convert()
             except Exception:
                 pass
+
+        # Cache de iconos vectoriales limpios (Microsoft Fluent System / Lucide Icons)
+        self.icon_cache: dict[str, pygame.Surface] = {}
 
         # Datos del jugador oficial OmniDash
         self.player_name = "Alex"
         self.gamerscore = 18450
 
         # Botones circulares oficiales del centro de la barra superior:
-        # [ 🏠 Inicio ] [ 📚 Biblioteca ] [ 👥 Comunidad ] [ ⚙️ Ajustes ]
+        # [ 🏠 Inicio ] [ 📚 Biblioteca ] [ 👥 Amigos ] [ ⚙️ Ajustes ]
         self.nav_dock_items = [
-            {"id": "home", "label": "Inicio", "icon": "🏠", "action": "HOME"},
-            {"id": "library", "label": "Biblioteca", "icon": "📚", "action": "LIBRARY"},
-            {"id": "community", "label": "Comunidad", "icon": "👥", "action": "COMMUNITY"},
-            {"id": "settings", "label": "Ajustes", "icon": "⚙️", "action": "SETTINGS"},
+            {"id": "home", "label": "Inicio", "icon_name": "home", "action": "HOME"},
+            {"id": "library", "label": "Biblioteca", "icon_name": "library", "action": "LIBRARY"},
+            {"id": "friends", "label": "Amigos", "icon_name": "people", "action": "COMMUNITY"},
+            {"id": "settings", "label": "Ajustes", "icon_name": "settings", "action": "SETTINGS"},
         ]
         self.nav_dock_rects: list[pygame.Rect] = []
         self.hovered_nav_idx = -1
@@ -139,6 +154,91 @@ class OmniDashEngine:
             {"id": "search", "label": "Buscar Juegos", "action": "LIBRARY"},
         ]
         self.store_chip_rects: list[pygame.Rect] = []
+
+    def get_icon(self, name: str, size: tuple[int, int] = (24, 24)) -> pygame.Surface | None:
+        key = f"{name}_{size[0]}x{size[1]}"
+        if key in self.icon_cache:
+            return self.icon_cache[key]
+        ip = ROOT / "assets_omnidash" / "icons" / f"{name}.png"
+        if not ip.exists():
+            return None
+        try:
+            loaded = pygame.image.load(str(ip)).convert_alpha()
+            scaled = pygame.transform.smoothscale(loaded, size)
+            self.icon_cache[key] = scaled
+            return scaled
+        except Exception:
+            return None
+
+    def draw_acrylic_glass(
+        self,
+        surface: pygame.Surface,
+        rect: pygame.Rect,
+        border_radius: int = 14,
+        tint_top: tuple = (140, 215, 245, 115),
+        tint_bot: tuple = (6, 52, 90, 215),
+        border_rgba: tuple = (255, 255, 255, 135),
+        border_width: int = 1,
+        specular: bool = True
+    ):
+        """Renderiza cristal acrílico con desenfoque gaussiano real de fondo (Pillow Backdrop Blur)
+        combinado con tinte aguamarina Frutiger Aero y brillo superior blanco.
+        """
+        w, h = rect.width, rect.height
+        if w <= 0 or h <= 0:
+            return
+
+        # 1. Recorte de fondo desenfocado real
+        if self.bg_blurred_surf:
+            rx = max(0, min(rect.x, self.w - w))
+            ry = max(0, min(rect.y, self.h - h))
+            try:
+                sub_bg = self.bg_blurred_surf.subsurface((rx, ry, w, h)).copy()
+            except Exception:
+                sub_bg = pygame.Surface((w, h))
+                sub_bg.fill((10, 45, 80))
+        else:
+            sub_bg = pygame.Surface((w, h))
+            sub_bg.fill((10, 45, 80))
+
+        # 2. Gradiente aguamarina sobre el desenfoque
+        grad_surf = pygame.Surface((w, h), pygame.SRCALPHA)
+        for y in range(h):
+            prog = y / float(h)
+            r = int(tint_top[0] * (1 - prog) + tint_bot[0] * prog)
+            g = int(tint_top[1] * (1 - prog) + tint_bot[1] * prog)
+            b = int(tint_top[2] * (1 - prog) + tint_bot[2] * prog)
+            a = int(tint_top[3] * (1 - prog) + tint_bot[3] * prog)
+            pygame.draw.line(grad_surf, (r, g, b, a), (0, y), (w, y))
+
+        sub_bg.blit(grad_surf, (0, 0))
+
+        # 3. Brillo gel especular superior (Aero Gloss Curve)
+        if specular and h > 20:
+            spec_h = int(h * 0.45)
+            spec_surf = pygame.Surface((w, spec_h), pygame.SRCALPHA)
+            for sy in range(spec_h):
+                s_alpha = int(45 * (1.0 - sy / float(spec_h)))
+                pygame.draw.line(spec_surf, (255, 255, 255, s_alpha), (0, sy), (w, sy))
+            sub_bg.blit(spec_surf, (0, 0))
+
+        # 4. Máscara de bordes redondeados
+        mask_surf = pygame.Surface((w, h), pygame.SRCALPHA)
+        mask_surf.fill((0, 0, 0, 0))
+        pygame.draw.rect(mask_surf, (255, 255, 255, 255), (0, 0, w, h), border_radius=border_radius)
+
+        final_surf = pygame.Surface((w, h), pygame.SRCALPHA)
+        final_surf.blit(sub_bg, (0, 0))
+        final_surf.blit(mask_surf, (0, 0), special_flags=pygame.BLEND_RGBA_MIN)
+
+        # 5. Brillo blanco superior (inset 0 1px 0 rgba(255, 255, 255, .7))
+        pygame.draw.line(final_surf, (255, 255, 255, 175), (border_radius, 1), (w - border_radius, 1))
+
+        # 6. Borde exterior de cristal translúcido
+        if border_rgba:
+            pygame.draw.rect(final_surf, border_rgba, (0, 0, w, h), width=border_width, border_radius=border_radius)
+
+        surface.blit(final_surf, rect.topleft)
 
     def play_sound(self, name: str):
         s = self.sfx.get(name)
@@ -248,8 +348,10 @@ class OmniDashEngine:
             else:
                 draw_glass_circle(surface, (bx, by), btn_radius, (10, 48, 80, 180), (255, 255, 255, 120), border_width=1)
 
-            ico_t = self.font_body.render(item["icon"], True, (255, 255, 255))
-            surface.blit(ico_t, ico_t.get_rect(center=(bx, by)))
+            # Icono vectorial oficial Fluent / Lucide en vez de emoji
+            ico_surf = self.get_icon(item["icon_name"], (20, 20))
+            if ico_surf:
+                surface.blit(ico_surf, ico_surf.get_rect(center=(bx, by)))
 
         # 3. Reloj Digital oficial OmniDash (Derecha)
         now_str = datetime.datetime.now().strftime("%I:%M %p")

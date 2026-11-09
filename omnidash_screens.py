@@ -574,10 +574,11 @@ class OmniDashHomeView:
         # 3. My games & apps
         mr = self.my_games_rect
         is_m_sel = (self.selected_idx == 5)
-        draw_glass_rect(surface, mr, (15, 85, 125, 220), (182, 245, 90) if is_m_sel else (255, 255, 255, 90), border_radius=8, border_width=3 if is_m_sel else 1)
+        self.engine.draw_acrylic_glass(surface, mr, border_radius=10, border_rgba=(182, 245, 90) if is_m_sel else (255, 255, 255, 120), border_width=3 if is_m_sel else 1)
 
-        lib_ico = self.engine.font_hero.render("📚", True, (255, 255, 255))
-        surface.blit(lib_ico, lib_ico.get_rect(center=(mr.centerx, mr.centery - 18)))
+        lib_ico = self.engine.get_icon("library", (34, 34))
+        if lib_ico:
+            surface.blit(lib_ico, lib_ico.get_rect(center=(mr.centerx, mr.centery - 18)))
 
         lib_t = self.engine.font_badge.render("My games & apps", True, (255, 255, 255))
         surface.blit(lib_t, lib_t.get_rect(center=(mr.centerx, mr.centery + 18)))
@@ -585,21 +586,22 @@ class OmniDashHomeView:
         count_t = self.engine.font_badge.render(f"{len(ALL_GAMES)} games", True, (180, 225, 255))
         surface.blit(count_t, count_t.get_rect(center=(mr.centerx, mr.centery + 34)))
 
-        # 4. Tarjetas esmeriladas inferiores
+        # 4. Tarjetas de cristal esmerilado inferior con desenfoque acrílico real (Pillow)
         glass_cards_data = [
-            {"title": "My games & apps", "sub": f"{len(ALL_GAMES)} games\nReady to play", "badge": "LIBRARY", "img": "fotos web/donkeykong.jpg"},
-            {"title": "Friends", "sub": "Seeker & Night Raid\n3 friends online right now", "badge": "FRIENDS", "img": None},
-            {"title": "GAME PASS", "sub": "Discover\nHundreds of great games", "badge": "PASS", "img": "assets_omnidash/covers/battlefield.webp"},
-            {"title": "Achievements", "sub": "18,450 G\nHorizon Superstar · 40G", "badge": "18,450", "img": None},
+            {"title": "My games & apps", "sub": f"{len(ALL_GAMES)} games\nReady to play", "badge": "LIBRARY", "img": "fotos web/donkeykong.jpg", "icon": "apps_list"},
+            {"title": "Friends", "sub": "Seeker & Night Raid\n3 friends online right now", "badge": "FRIENDS", "img": None, "icon": "people"},
+            {"title": "GAME PASS", "sub": "Discover\nHundreds of great games", "badge": "PASS", "img": "assets_omnidash/covers/battlefield.webp", "icon": "games"},
+            {"title": "Achievements", "sub": "18,450 G\nHorizon Superstar · 40G", "badge": "18,450", "img": None, "icon": "star"},
         ]
 
         for idx, gc in enumerate(glass_cards_data):
             r = self.glass_card_rects[idx]
             is_hov = r.collidepoint(pygame.mouse.get_pos())
 
-            bg_col = (13, 90, 42, 210) if gc["badge"] == "PASS" else ((25, 110, 150, 200) if is_hov else (20, 95, 135, 150))
-            border_col = (182, 245, 90) if is_hov else (255, 255, 255, 120)
-            draw_glass_rect(surface, r, bg_col, border_col, border_radius=10, border_width=2 if is_hov else 1)
+            top_t = (20, 140, 70, 160) if gc["badge"] == "PASS" else ((35, 135, 185, 150) if is_hov else (20, 110, 160, 120))
+            bot_t = (10, 80, 40, 220) if gc["badge"] == "PASS" else ((12, 70, 110, 220) if is_hov else (8, 55, 95, 200))
+            b_col = (182, 245, 90) if is_hov else (255, 255, 255, 140)
+            self.engine.draw_acrylic_glass(surface, r, border_radius=12, tint_top=top_t, tint_bot=bot_t, border_rgba=b_col, border_width=2 if is_hov else 1)
 
             t_t = self.engine.font_body.render(gc["title"], True, (255, 255, 255))
             surface.blit(t_t, (r.x + 16, r.y + 14))
@@ -614,6 +616,10 @@ class OmniDashHomeView:
                 if prev_img:
                     surface.blit(prev_img, (r.right - 84, r.y + 16))
                     pygame.draw.rect(surface, (255, 255, 255, 120), (r.right - 84, r.y + 16, 70, 70), width=1, border_radius=6)
+            elif gc.get("icon"):
+                c_ico = self.engine.get_icon(gc["icon"], (36, 36))
+                if c_ico:
+                    surface.blit(c_ico, (r.right - 60, r.y + 20))
 
 
 # ==============================================================================
@@ -742,27 +748,33 @@ class OmniDashLibraryView:
         return None
 
     def render(self, surface: pygame.Surface):
-        # 1. Barra Lateral Izquierda
+        # 1. Barra Lateral Izquierda con Desenfoque Acrílico Real (Pillow)
         sr = self.sidebar_rect
-        draw_glass_rect(surface, sr, (16, 75, 115, 210), (255, 255, 255, 120), border_radius=14)
+        self.engine.draw_acrylic_glass(surface, sr, border_radius=14, tint_top=(140, 215, 245, 110), tint_bot=(8, 60, 100, 220))
 
-        # Botón Volver con contraste perfecto
+        # Botón Volver con icono Home nítido
         is_back_hov = self.back_btn_rect.collidepoint(pygame.mouse.get_pos())
-        draw_glass_rect(surface, self.back_btn_rect, (8, 48, 80, 220 if is_back_hov else 160), (182, 245, 90) if is_back_hov else (255, 255, 255, 140), border_radius=16)
-        bt = self.engine.font_btn.render("⇦  Home", True, (255, 255, 255))
-        surface.blit(bt, bt.get_rect(center=self.back_btn_rect.center))
+        self.engine.draw_acrylic_glass(surface, self.back_btn_rect, border_radius=16, tint_top=(20, 90, 140, 160), tint_bot=(10, 48, 80, 220), border_rgba=(182, 245, 90) if is_back_hov else (255, 255, 255, 140))
+        home_ico = self.engine.get_icon("home", (16, 16))
+        if home_ico:
+            surface.blit(home_ico, (self.back_btn_rect.x + 14, self.back_btn_rect.centery - 8))
+        bt = self.engine.font_btn.render("Home", True, (255, 255, 255))
+        surface.blit(bt, (self.back_btn_rect.x + 36, self.back_btn_rect.centery - 7))
 
         # Anillo de almacenamiento ("72% used")
         ring_center = (sr.centerx, 104)
-        pygame.draw.circle(surface, (255, 255, 255, 40), ring_center, 22, width=4)
+        pygame.draw.circle(surface, (15, 60, 95), ring_center, 22, width=4)
         pygame.draw.circle(surface, (182, 245, 90), ring_center, 22, width=4)
         r_txt = self.engine.font_badge.render("72%", True, (255, 255, 255))
         surface.blit(r_txt, r_txt.get_rect(center=ring_center))
 
-        # Buscador con alto contraste
-        draw_glass_rect(surface, self.search_rect, (10, 45, 75, 200), (255, 255, 255, 110), border_radius=17)
-        srch_t = self.engine.font_sub.render("🔍  Search games...", True, (215, 238, 255))
-        surface.blit(srch_t, (self.search_rect.x + 14, self.search_rect.y + 8))
+        # Buscador con alto contraste e icono Search oficial
+        self.engine.draw_acrylic_glass(surface, self.search_rect, border_radius=17, tint_top=(15, 75, 120, 160), tint_bot=(8, 42, 75, 220))
+        srch_ico = self.engine.get_icon("search", (16, 16))
+        if srch_ico:
+            surface.blit(srch_ico, (self.search_rect.x + 12, self.search_rect.centery - 8))
+        srch_t = self.engine.font_sub.render("Search games...", True, (215, 238, 255))
+        surface.blit(srch_t, (self.search_rect.x + 34, self.search_rect.y + 8))
 
         # Pestañas de categorías
         self.cat_rects = []
@@ -785,9 +797,9 @@ class OmniDashLibraryView:
 
             cy += 48
 
-        # 2. Panel Principal de Contenido
+        # 2. Panel Principal de Contenido con Desenfoque Acrílico Real
         cr = self.content_rect
-        draw_glass_rect(surface, cr, (10, 65, 105, 195), (255, 255, 255, 110), border_radius=14)
+        self.engine.draw_acrylic_glass(surface, cr, border_radius=14, tint_top=(140, 215, 245, 95), tint_bot=(6, 52, 90, 210))
 
         # Encabezado
         filtered = self._filtered_games()
@@ -797,11 +809,14 @@ class OmniDashLibraryView:
         sub_t = self.engine.font_sub.render(f"{len(filtered)} games installed  •  Ready to play (60 FPS)", True, (210, 235, 255))
         surface.blit(sub_t, (cr.x + 32, cr.y + 54))
 
-        # Botón Sort con contraste
+        # Botón Sort con icono de ordenamiento oficial
         sort_r = pygame.Rect(cr.right - 140, cr.y + 24, 110, 32)
         draw_glass_rect(surface, sort_r, (10, 48, 80, 200), (255, 255, 255, 120), border_radius=16)
-        st_txt = self.engine.font_sub.render("Sort: A-Z  ▼", True, (255, 255, 255))
-        surface.blit(st_txt, st_txt.get_rect(center=sort_r.center))
+        sort_ico = self.engine.get_icon("arrow_sort", (14, 14))
+        if sort_ico:
+            surface.blit(sort_ico, (sort_r.x + 10, sort_r.centery - 7))
+        st_txt = self.engine.font_sub.render("Sort: A-Z", True, (255, 255, 255))
+        surface.blit(st_txt, (sort_r.x + 28, sort_r.centery - 8))
 
         # 3. Cuadrícula de Juegos con SCROLL DOWN REAL
         cols = 5
@@ -894,13 +909,16 @@ class OmniDashGameDetailsView:
 
     def render(self, surface: pygame.Surface):
         pr = self.panel_rect
-        draw_glass_rect(surface, pr, (12, 24, 40, 235), (255, 255, 255, 90), border_radius=18)
+        self.engine.draw_acrylic_glass(surface, pr, border_radius=18, tint_top=(140, 215, 245, 110), tint_bot=(8, 55, 95, 220))
 
-        # Botón Volver con alto contraste
+        # Botón Volver con alto contraste y desenfoque
         is_close_hov = self.back_btn_rect.collidepoint(pygame.mouse.get_pos())
-        draw_glass_rect(surface, self.back_btn_rect, (8, 48, 80, 220 if is_close_hov else 160), (182, 245, 90) if is_close_hov else (255, 255, 255, 140), border_radius=18)
-        bt = self.engine.font_btn.render("⇦  Back", True, (255, 255, 255))
-        surface.blit(bt, bt.get_rect(center=self.back_btn_rect.center))
+        self.engine.draw_acrylic_glass(surface, self.back_btn_rect, border_radius=18, tint_top=(20, 90, 140, 160), tint_bot=(10, 48, 80, 220), border_rgba=(182, 245, 90) if is_close_hov else (255, 255, 255, 140))
+        home_ico = self.engine.get_icon("home", (16, 16))
+        if home_ico:
+            surface.blit(home_ico, (self.back_btn_rect.x + 16, self.back_btn_rect.centery - 8))
+        bt = self.engine.font_btn.render("Volver", True, (255, 255, 255))
+        surface.blit(bt, (self.back_btn_rect.x + 40, self.back_btn_rect.centery - 7))
 
         # 1. Columna Izquierda: Carátula Grande y Botón de Inicio
         cov_rect = pygame.Rect(90, 80, 280, 280)
@@ -908,10 +926,15 @@ class OmniDashGameDetailsView:
 
         # Botón Verde Gel de Inicio Oficial (#3cb043 / #8eea6e)
         is_play_hov = self.play_btn_rect.collidepoint(pygame.mouse.get_pos())
-        p_bg = (60, 176, 67, 240) if is_play_hov else (42, 164, 60, 230)
-        draw_glass_rect(surface, self.play_btn_rect, p_bg, (182, 245, 90) if is_play_hov else (255, 255, 255, 180), border_radius=14, border_width=2)
-        play_txt = self.engine.font_hero.render("▶  PLAY GAME (60 FPS)", True, (255, 255, 255))
-        surface.blit(play_txt, play_txt.get_rect(center=self.play_btn_rect.center))
+        p_top = (75, 210, 85, 230) if is_play_hov else (50, 185, 60, 210)
+        p_bot = (30, 140, 45, 245) if is_play_hov else (20, 120, 35, 230)
+        self.engine.draw_acrylic_glass(surface, self.play_btn_rect, border_radius=14, tint_top=p_top, tint_bot=p_bot, border_rgba=(220, 255, 180) if is_play_hov else (182, 245, 90), border_width=2)
+        
+        play_ico = self.engine.get_icon("play", (22, 22))
+        if play_ico:
+            surface.blit(play_ico, (self.play_btn_rect.x + 22, self.play_btn_rect.centery - 11))
+        play_txt = self.engine.font_hero.render("JUGAR AHORA (60 FPS)", True, (255, 255, 255))
+        surface.blit(play_txt, (self.play_btn_rect.x + 52, self.play_btn_rect.centery - 10))
 
         # 2. Columna Derecha: Especificaciones y Capacidades
         rx = 410
@@ -927,21 +950,21 @@ class OmniDashGameDetailsView:
 
         # Tarjeta de capacidades
         cap_r = pygame.Rect(rx, ry + 78, rw, 80)
-        draw_glass_rect(surface, cap_r, (20, 35, 55, 180), (255, 255, 255, 60), border_radius=12)
+        self.engine.draw_acrylic_glass(surface, cap_r, border_radius=12, tint_top=(25, 95, 145, 130), tint_bot=(10, 48, 80, 200))
 
         caps = ["Single Player", "60 FPS V-Sync", "Controller Support", "Full HD Audio", "State Save"]
         cx = rx + 16
         for c in caps:
             cw = len(c) * 8 + 22
             cr_box = pygame.Rect(cx, ry + 102, cw, 28)
-            draw_glass_rect(surface, cr_box, (31, 134, 214, 180), (255, 255, 255, 140), border_radius=14)
+            self.engine.draw_acrylic_glass(surface, cr_box, border_radius=14, tint_top=(31, 134, 214, 180), tint_bot=(12, 70, 120, 220), border_rgba=(255, 255, 255, 140))
             ct = self.engine.font_badge.render(c, True, (255, 255, 255))
             surface.blit(ct, ct.get_rect(center=cr_box.center))
             cx += cw + 10
 
         # Tarjeta de Descripción
         desc_r = pygame.Rect(rx, ry + 175, rw, 130)
-        draw_glass_rect(surface, desc_r, (20, 35, 55, 180), (255, 255, 255, 60), border_radius=12)
+        self.engine.draw_acrylic_glass(surface, desc_r, border_radius=12, tint_top=(25, 95, 145, 130), tint_bot=(10, 48, 80, 200))
         d_lbl = self.engine.font_body.render("Description", True, (255, 255, 255))
         surface.blit(d_lbl, (rx + 16, ry + 188))
         d_txt = self.engine.font_sub.render(self.game.get("desc", "Official title preserved for C.C.I. SYSTEM."), True, (210, 235, 255))
@@ -949,7 +972,7 @@ class OmniDashGameDetailsView:
 
         # Tarjeta de Archivo y Core
         info_r = pygame.Rect(rx, ry + 320, rw, 150)
-        draw_glass_rect(surface, info_r, (20, 35, 55, 180), (255, 255, 255, 60), border_radius=12)
+        self.engine.draw_acrylic_glass(surface, info_r, border_radius=12, tint_top=(25, 95, 145, 130), tint_bot=(10, 48, 80, 200))
         i_lbl = self.engine.font_body.render("Emulation Architecture & Core Info", True, (255, 255, 255))
         surface.blit(i_lbl, (rx + 16, ry + 332))
 
@@ -971,14 +994,14 @@ class OmniDashSettingsView:
         self.on_apply_display = on_apply_display
 
         self.categories = [
-            {"id": "appearance", "name": "Appearance", "icon": "🎨", "color": (142, 92, 247), "desc": "Frutiger Aero theme, glass effects and UI scale."},
-            {"id": "display_sound", "name": "Display & sound", "icon": "📺", "color": (47, 124, 246), "desc": "Resolution, fullscreen mode and audio volumes."},
-            {"id": "controllers", "name": "Controllers & headsets", "icon": "🎮", "color": (47, 174, 75), "desc": "Button layout, haptic rumble and triggers."},
-            {"id": "notifications", "name": "Notifications", "icon": "🔔", "color": (239, 75, 75), "desc": "Gamerscore achievement toasts and friend alerts."},
-            {"id": "library", "name": "Library & Emulation", "icon": "📁", "color": (242, 147, 31), "desc": "60 FPS Libretro cores, ROM directories and regions."},
-            {"id": "account", "name": "Profile & system", "icon": "👤", "color": (90, 122, 156), "desc": "Alex (18,450 G), Gamertag and custom avatar."},
-            {"id": "accessibility", "name": "Accessibility", "icon": "♿", "color": (31, 155, 224), "desc": "Reduced motion, high contrast focus and text size."},
-            {"id": "system", "name": "System", "icon": "⚙️", "color": (122, 127, 135), "desc": "C.C.I. System v2.1.0, disk storage and state saves."},
+            {"id": "appearance", "name": "Personalisation", "icon_name": "paint_brush", "color": (142, 92, 247), "desc": "Frutiger Aero theme, glass effects and UI scale."},
+            {"id": "display_sound", "name": "Display & sound", "icon_name": "desktop", "color": (47, 124, 246), "desc": "Resolution, fullscreen mode and audio volumes."},
+            {"id": "controllers", "name": "Controllers & headsets", "icon_name": "xbox_controller", "color": (47, 174, 75), "desc": "Button layout, haptic rumble and triggers."},
+            {"id": "notifications", "name": "Notifications", "icon_name": "alert", "color": (239, 75, 75), "desc": "Gamerscore achievement toasts and friend alerts."},
+            {"id": "library", "name": "Library & Emulation", "icon_name": "library", "color": (242, 147, 31), "desc": "60 FPS Libretro cores, ROM directories and regions."},
+            {"id": "account", "name": "Profile & system", "icon_name": "person", "color": (90, 122, 156), "desc": "Alex (18,450 G), Gamertag and custom avatar."},
+            {"id": "accessibility", "name": "Accessibility", "icon_name": "accessibility", "color": (31, 155, 224), "desc": "Reduced motion, high contrast focus and text size."},
+            {"id": "system", "name": "System", "icon_name": "settings", "color": (122, 127, 135), "desc": "C.C.I. System v2.1.0, disk storage and state saves."},
         ]
 
         self.selected_cat_idx = 0
@@ -1141,14 +1164,14 @@ class OmniDashSettingsView:
         c_txt = self.engine.font_btn.render("Close", True, (255, 255, 255))
         surface.blit(c_txt, (self.back_btn_rect.x + 38, self.back_btn_rect.centery - 7))
 
-        # 3. Dos Paneles de Cristal Independientes idénticos a aero-settings.jpg
-        # Panel Izquierdo: Categorías (.as-cats)
+        # 3. Dos Paneles de Cristal Independientes con Desenfoque Acrílico Real (Pillow)
+        # Panel Izquierdo: Categorías (.as-cats de aero-settings.jpg)
         cats_rect = pygame.Rect(64, 96, 350, 564)
-        draw_aero_glass_panel(surface, cats_rect, border_radius=14)
+        self.engine.draw_acrylic_glass(surface, cats_rect, border_radius=14, tint_top=(140, 215, 245, 110), tint_bot=(6, 52, 90, 215))
 
-        # Panel Derecho: Ajustes de la Categoría (.as-page)
+        # Panel Derecho: Ajustes de la Categoría (.as-page de aero-settings.jpg)
         page_rect = pygame.Rect(434, 96, 782, 564)
-        draw_aero_glass_panel(surface, page_rect, border_radius=14)
+        self.engine.draw_acrylic_glass(surface, page_rect, border_radius=14, tint_top=(140, 215, 245, 100), tint_bot=(6, 52, 90, 215))
 
         # Renderizar filas de categorías en Panel Izquierdo
         self.cat_rects = []
@@ -1167,14 +1190,14 @@ class OmniDashSettingsView:
             else:
                 draw_glass_rect(surface, r, (255, 255, 255, 18), (255, 255, 255, 40), border_radius=10, border_width=1)
 
-            # Orbe de color redondo con brillo
+            # Orbe de color redondo con brillo e icono Fluent
             orb_center = (r.x + 28, r.centery)
             pygame.draw.circle(surface, cat["color"], orb_center, 18)
             pygame.draw.circle(surface, (255, 255, 255, 190), orb_center, 18, width=1)
-            # Brillo superior del orbe
             pygame.draw.circle(surface, (255, 255, 255, 120), (orb_center[0], orb_center[1] - 5), 8)
-            ico_t = self.engine.font_badge.render(cat["icon"], True, (255, 255, 255))
-            surface.blit(ico_t, ico_t.get_rect(center=orb_center))
+            c_ico = self.engine.get_icon(cat["icon_name"], (18, 18))
+            if c_ico:
+                surface.blit(c_ico, c_ico.get_rect(center=orb_center))
 
             c_lbl = self.engine.font_body.render(cat["name"], True, (255, 255, 255))
             surface.blit(c_lbl, (r.x + 58, r.y + 10))
@@ -1192,8 +1215,9 @@ class OmniDashSettingsView:
         pygame.draw.circle(surface, cur_cat["color"], head_orb, 24)
         pygame.draw.circle(surface, (255, 255, 255, 200), head_orb, 24, width=2)
         pygame.draw.circle(surface, (255, 255, 255, 140), (head_orb[0], head_orb[1] - 7), 10)
-        h_ico = self.engine.font_title.render(cur_cat["icon"], True, (255, 255, 255))
-        surface.blit(h_ico, h_ico.get_rect(center=head_orb))
+        h_ico = self.engine.get_icon(cur_cat["icon_name"], (24, 24))
+        if h_ico:
+            surface.blit(h_ico, h_ico.get_rect(center=head_orb))
 
         st_title = self.engine.font_title.render(cur_cat["name"], True, (255, 255, 255))
         surface.blit(st_title, (page_rect.x + 82, page_rect.y + 22))
@@ -1283,16 +1307,16 @@ class OmniDashProfileView:
     def render(self, surface: pygame.Surface):
         # Panel de cristal aguamarina translúcido oficial Frutiger Aero
         pr = self.panel_rect
-        draw_aero_glass_panel(surface, pr, border_radius=16)
+        self.engine.draw_acrylic_glass(surface, pr, border_radius=16, tint_top=(140, 215, 245, 110), tint_bot=(8, 55, 95, 220))
 
         # Botón Cerrar oficial con badge rojo B
         is_close_hov = self.back_btn_rect.collidepoint(pygame.mouse.get_pos())
-        draw_glass_rect(surface, self.back_btn_rect, (8, 45, 75, 220 if is_close_hov else 160), (182, 245, 90) if is_close_hov else (255, 255, 255, 140), border_radius=18)
+        self.engine.draw_acrylic_glass(surface, self.back_btn_rect, border_radius=18, tint_top=(20, 90, 140, 160), tint_bot=(10, 48, 80, 220), border_rgba=(182, 245, 90) if is_close_hov else (255, 255, 255, 140))
         kbd_center = (self.back_btn_rect.x + 20, self.back_btn_rect.centery)
         pygame.draw.circle(surface, (208, 56, 58), kbd_center, 10)
         b_txt = self.engine.font_badge.render("B", True, (255, 255, 255))
         surface.blit(b_txt, b_txt.get_rect(center=kbd_center))
-        c_txt = self.engine.font_btn.render("Close", True, (255, 255, 255))
+        c_txt = self.engine.font_btn.render("Cerrar", True, (255, 255, 255))
         surface.blit(c_txt, (self.back_btn_rect.x + 38, self.back_btn_rect.centery - 7))
 
         # Avatar circular con borde de cristal
@@ -1300,8 +1324,12 @@ class OmniDashProfileView:
         pygame.draw.circle(surface, (90, 166, 214), av_center, 38)
         pygame.draw.circle(surface, (255, 255, 255), av_center, 38, width=2)
         pygame.draw.circle(surface, (255, 255, 255, 120), (av_center[0], av_center[1] - 8), 16)
-        av_txt = self.engine.font_hero.render("A", True, (255, 255, 255))
-        surface.blit(av_txt, av_txt.get_rect(center=av_center))
+        p_ico = self.engine.get_icon("person", (32, 32))
+        if p_ico:
+            surface.blit(p_ico, p_ico.get_rect(center=av_center))
+        else:
+            av_txt = self.engine.font_hero.render("A", True, (255, 255, 255))
+            surface.blit(av_txt, av_txt.get_rect(center=av_center))
 
         name_t = self.engine.font_hero.render("Alex  •  Frutiger Pilot", True, (255, 255, 255))
         surface.blit(name_t, (pr.x + 128, pr.y + 40))
@@ -1324,14 +1352,20 @@ class OmniDashProfileView:
         for idx, (tname, tdesc, tbadge) in enumerate(trophies):
             ry = ty + 38 + idx * 72
             r = pygame.Rect(tx, ry, pr.width - 72, 60)
-            draw_glass_rect(surface, r, (255, 255, 255, 28), (255, 255, 255, 70), border_radius=10)
-            pygame.draw.line(surface, (255, 255, 255, 110), (r.x + 10, r.y + 1), (r.right - 10, r.y + 1))
+            self.engine.draw_acrylic_glass(surface, r, border_radius=10, tint_top=(255, 255, 255, 35), tint_bot=(10, 48, 80, 190), border_rgba=(255, 255, 255, 100))
+
+            star_ico = self.engine.get_icon("star", (20, 20))
+            if star_ico:
+                surface.blit(star_ico, (r.x + 16, r.y + 18))
+                tx_offset = 44
+            else:
+                tx_offset = 16
 
             b_t = self.engine.font_badge.render(tbadge, True, (255, 220, 60))
-            surface.blit(b_t, (r.x + 16, r.y + 12))
+            surface.blit(b_t, (r.x + tx_offset, r.y + 12))
 
             n_t = self.engine.font_body.render(tname, True, (255, 255, 255))
-            surface.blit(n_t, (r.x + 16, r.y + 32))
+            surface.blit(n_t, (r.x + tx_offset, r.y + 32))
 
             d_t = self.engine.font_sub.render(tdesc, True, (215, 238, 255))
             surface.blit(d_t, (r.x + 320, r.y + 20))
