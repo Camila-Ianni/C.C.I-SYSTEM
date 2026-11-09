@@ -31,11 +31,29 @@ from cci_users import UserManager
 from retro_core_runner import LibretroRunner
 from backend.communities.repository import CommunitiesRepository
 from backend.communities.service import CommunitiesService
+from omnidash_screens import ALL_GAMES
 
 ROOT = Path(__file__).resolve().parent
 
-# Lista consolidada de juegos de C.C.I.
-ALL_GAMES = list(CATALOG)
+
+def get_rounded_pixmap(pix: QPixmap, w: int, h: int, radius: int = 10) -> QPixmap:
+    """Recorta una imagen con bordes redondeados y escalado de alta calidad (HiDPI) sin deformar."""
+    if not pix or pix.isNull():
+        return QPixmap()
+    target = QPixmap(w, h)
+    target.fill(Qt.transparent)
+    painter = QPainter(target)
+    painter.setRenderHint(QPainter.Antialiasing)
+    painter.setRenderHint(QPainter.SmoothPixmapTransform)
+    path = QPainterPath()
+    path.addRoundedRect(0, 0, w, h, radius, radius)
+    painter.setClipPath(path)
+    scaled = pix.scaled(w, h, Qt.KeepAspectRatioByExpanding, Qt.SmoothTransformation)
+    sx = max(0, (scaled.width() - w) // 2)
+    sy = max(0, (scaled.height() - h) // 2)
+    painter.drawPixmap(0, 0, scaled, sx, sy, w, h)
+    painter.end()
+    return target
 
 
 # ==============================================================================
@@ -302,8 +320,9 @@ class HomeView(QWidget):
         top_row = QHBoxLayout()
         top_row.setSpacing(18)
 
-        # Hero Card (Último juego jugado)
-        self.hero_game = ALL_GAMES[0] if ALL_GAMES else {"title": "Super Nintendo", "console": "SNES"}
+        # Hero Card (Super Mario / Super Nintendo)
+        mario_candidates = [g for g in ALL_GAMES if "mario" in g.get("title", "").lower() or "super" in g.get("console", "").lower()]
+        self.hero_game = mario_candidates[0] if mario_candidates else (ALL_GAMES[0] if ALL_GAMES else {"title": "Super Nintendo", "console": "SNES"})
         self.hero_card = AcrylicGlassCard(self, border_radius=16, is_interactive=True)
         self.hero_card.setFixedSize(300, 310)
         hero_layout = QVBoxLayout(self.hero_card)
@@ -312,11 +331,11 @@ class HomeView(QWidget):
         # Carátula Hero
         self.hero_img = QLabel()
         self.hero_img.setFixedSize(268, 160)
-        self.hero_img.setStyleSheet("border-radius: 10px; background: rgba(0,0,0,100);")
-        self.hero_img.setScaledContents(True)
+        self.hero_img.setStyleSheet("border-radius: 10px; background: rgba(0,0,0,80);")
         cov_path = self.hero_game.get("cover")
         if cov_path and (ROOT / cov_path).exists():
-            self.hero_img.setPixmap(QPixmap(str(ROOT / cov_path)))
+            raw_pix = QPixmap(str(ROOT / cov_path))
+            self.hero_img.setPixmap(get_rounded_pixmap(raw_pix, 268, 160, 12))
         hero_layout.addWidget(self.hero_img)
 
         # Título y consola
@@ -336,8 +355,18 @@ class HomeView(QWidget):
 
         top_row.addWidget(self.hero_card)
 
-        # Fila de mosaicos recientes (5 juegos)
-        for game in ALL_GAMES[1:6]:
+        # Fila de mosaicos recientes (5 juegos destacados de diversas plataformas)
+        recent_picks = []
+        seen_consoles = {self.hero_game.get("console", "")}
+        for g in ALL_GAMES:
+            c = g.get("console", "")
+            if c not in seen_consoles and len(recent_picks) < 5:
+                recent_picks.append(g)
+                seen_consoles.add(c)
+        if len(recent_picks) < 5:
+            recent_picks = [g for g in ALL_GAMES if g.get("id") != self.hero_game.get("id")][:5]
+
+        for game in recent_picks:
             card = AcrylicGlassCard(self, border_radius=14, is_interactive=True)
             card.setFixedSize(148, 310)
             c_layout = QVBoxLayout(card)
@@ -347,10 +376,10 @@ class HomeView(QWidget):
             img_lbl = QLabel()
             img_lbl.setFixedSize(128, 128)
             img_lbl.setStyleSheet("border-radius: 10px; background: rgba(0,0,0,80);")
-            img_lbl.setScaledContents(True)
             cov = game.get("cover")
             if cov and (ROOT / cov).exists():
-                img_lbl.setPixmap(QPixmap(str(ROOT / cov)))
+                raw_pix = QPixmap(str(ROOT / cov))
+                img_lbl.setPixmap(get_rounded_pixmap(raw_pix, 128, 128, 10))
             c_layout.addWidget(img_lbl)
 
             # Título
@@ -468,12 +497,22 @@ class LibraryView(QWidget):
 
         # Filtros por consola
         side_layout.addWidget(QLabel("CATEGORÍAS"))
-        self.current_platform = "Todas"
+        self.current_plat_name = "Todas"
+        self.current_plat_code = "todas"
 
-        platforms = ["Todas", "Super Nintendo", "Arcade MAME", "Nintendo 64", "PlayStation 1", "Nintendo DS", "Neo-Geo", "C.C.I."]
+        platforms = [
+            ("Todas", "todas"),
+            ("Super Nintendo", "super"),
+            ("Arcade MAME", "arcade"),
+            ("Nintendo 64", "64"),
+            ("PlayStation 1", "playstation"),
+            ("Nintendo DS", "ds"),
+            ("Neo-Geo", "neo"),
+            ("C.C.I.", "c.c.i"),
+        ]
         self.cat_buttons = []
-        for p in platforms:
-            b = QPushButton(p)
+        for name, code in platforms:
+            b = QPushButton(name)
             b.setCursor(Qt.PointingHandCursor)
             b.setStyleSheet("""
                 QPushButton {
@@ -491,7 +530,7 @@ class LibraryView(QWidget):
                     color: #ffffff;
                 }
             """)
-            b.clicked.connect(lambda _, plat=p: self._set_platform(plat))
+            b.clicked.connect(lambda _, n=name, c=code: self._set_platform(n, c))
             side_layout.addWidget(b)
             self.cat_buttons.append(b)
 
@@ -505,7 +544,7 @@ class LibraryView(QWidget):
 
         # Cabecera de contenido
         header_row = QHBoxLayout()
-        self.count_label = QLabel(f"Todos los Juegos ({len(ALL_GAMES)} instalados)")
+        self.count_label = QLabel(f"Todas ({len(ALL_GAMES)} disponibles)")
         self.count_label.setStyleSheet("font-size: 16px; font-weight: 700; color: #ffffff;")
         header_row.addWidget(self.count_label)
         header_row.addStretch(1)
@@ -526,21 +565,26 @@ class LibraryView(QWidget):
 
         self._populate_grid(ALL_GAMES)
 
-    def _set_platform(self, plat: str):
-        self.current_platform = plat
+    def _set_platform(self, name: str, code: str):
+        self.current_plat_name = name
+        self.current_plat_code = code
         self._filter_games()
 
     def _filter_games(self):
         query = self.search_input.text().lower().strip()
         filtered = []
+        code = self.current_plat_code
         for g in ALL_GAMES:
             title = g.get("title", "").lower()
             console = g.get("console", "").lower()
-            plat_match = (self.current_platform == "Todas") or (self.current_platform.lower() in console)
+            if not code or code == "todas":
+                plat_match = True
+            else:
+                plat_match = (code in console)
             query_match = not query or (query in title) or (query in console)
             if plat_match and query_match:
                 filtered.append(g)
-        self.count_label.setText(f"{self.current_platform} ({len(filtered)} disponibles)")
+        self.count_label.setText(f"{self.current_plat_name} ({len(filtered)} disponibles)")
         self._populate_grid(filtered)
 
     def _populate_grid(self, games: list[dict]):
@@ -561,11 +605,11 @@ class LibraryView(QWidget):
             # Carátula
             img_l = QLabel()
             img_l.setFixedSize(190, 140)
-            img_l.setStyleSheet("border-radius: 8px; background: rgba(0,0,0,100);")
-            img_l.setScaledContents(True)
+            img_l.setStyleSheet("border-radius: 8px; background: rgba(0,0,0,80);")
             cov = g.get("cover")
             if cov and (ROOT / cov).exists():
-                img_l.setPixmap(QPixmap(str(ROOT / cov)))
+                raw_pix = QPixmap(str(ROOT / cov))
+                img_l.setPixmap(get_rounded_pixmap(raw_pix, 190, 140, 8))
             c_lay.addWidget(img_l)
 
             # Título
@@ -705,7 +749,8 @@ class GameDetailsView(QWidget):
 
         cov = game.get("cover")
         if cov and (ROOT / cov).exists():
-            self.cover_lbl.setPixmap(QPixmap(str(ROOT / cov)))
+            raw_pix = QPixmap(str(ROOT / cov))
+            self.cover_lbl.setPixmap(get_rounded_pixmap(raw_pix, 280, 280, 12))
 
 
 # ==============================================================================
