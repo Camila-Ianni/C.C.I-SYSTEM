@@ -113,19 +113,23 @@ def main():
             except Exception:
                 pass
 
-    from ps4_dashboard_ui import PS4DashboardState
-    state_machine.register_state("MENU", PS4DashboardState(state_machine, on_game_launch=record_game_launch))
+    from omnidash_screens import (
+        OmniDashHomeState,
+        OmniDashDetailsState,
+        OmniDashSettingsState,
+        OmniDashProfileState,
+    )
+    state_machine.register_state("MENU", OmniDashHomeState(state_machine, on_game_launch=record_game_launch))
+    state_machine.register_state("DETAILS", OmniDashDetailsState(state_machine))
+    state_machine.register_state("SETTINGS", OmniDashSettingsState(state_machine, user_data, apply_display))
+    state_machine.register_state("PROFILE", OmniDashProfileState(state_machine, user_data))
+    state_machine.register_state("ACHIEVEMENTS", OmniDashProfileState(state_machine, user_data))
     state_machine.register_state("ARCADE_MENU", MenuState(state_machine, on_game_launch=record_game_launch))
     from console_selector_ui import ConsoleSelectorState
     state_machine.register_state("LIBRARY", ConsoleSelectorState(state_machine))
     from groups_ui import GroupsHubState, CommunityViewState
     state_machine.register_state("GROUPS", GroupsHubState(state_machine))
     state_machine.register_state("COMMUNITY", CommunityViewState(state_machine))
-    from ps4_profile_ui import PS4ProfileState
-    from ps4_settings_ui import PS4SettingsState
-    state_machine.register_state("PROFILE", PS4ProfileState(state_machine, user_data))
-    state_machine.register_state("ACHIEVEMENTS", CCIConsoleState(state_machine, "achievements", user_data, apply_display))
-    state_machine.register_state("SETTINGS", PS4SettingsState(state_machine, user_data, apply_display))
     state_machine.register_state("PLAYING", PlayingState(state_machine))
     state_machine.change_state("BOOT")
 

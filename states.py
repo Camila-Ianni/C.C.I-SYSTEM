@@ -903,11 +903,11 @@ class PlayingState(BaseState):
             runner = LibretroRunner(core_path)
             if not runner.load_rom(rom_path):
                 self._show_notice(screen, "No se pudo cargar la ROM seleccionada.")
-                self.state_machine.change_state("LIBRARY")
+                self.state_machine.change_state("MENU")
                 return
         except Exception as err:
             self._show_notice(screen, f"Error inicializando núcleo: {err}")
-            self.state_machine.change_state("LIBRARY")
+            self.state_machine.change_state("MENU")
             return
 
         joysticks = [pygame.joystick.Joystick(i) for i in range(pygame.joystick.get_count())]
@@ -937,7 +937,7 @@ class PlayingState(BaseState):
             pygame.display.flip()
 
         runner.unload()
-        self.state_machine.change_state("LIBRARY")
+        self.state_machine.change_state("MENU")
 
     @staticmethod
     def _show_notice(screen, message, seconds=3.0):

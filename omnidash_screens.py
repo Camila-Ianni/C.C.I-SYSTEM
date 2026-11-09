@@ -469,6 +469,173 @@ class OmniDashSettingsView:
 
 
 # ==============================================================================
+# 5. ESTADOS DE STATEMACHINE PARA INTEGRACIÓN CON C.C.I. SYSTEM
+# ==============================================================================
+_SHARED_ENGINE = None
+
+def get_shared_engine(w=1280, h=720) -> OmniDashEngine:
+    global _SHARED_ENGINE
+    if _SHARED_ENGINE is None:
+        _SHARED_ENGINE = OmniDashEngine(w, h, active_theme="ps4")
+    return _SHARED_ENGINE
+
+
+class OmniDashHomeState:
+    """Estado 'MENU' principal de C.C.I. SYSTEM gobernado por OmniDash."""
+    def __init__(self, state_machine, on_game_launch=None):
+        self.state_machine = state_machine
+        self.on_game_launch = on_game_launch
+        self.engine = get_shared_engine()
+        self.home_view = OmniDashHomeView(self.engine)
+
+    def enter(self, **kwargs):
+        pass
+
+    def exit(self):
+        pass
+
+    def handle_events(self, events):
+        for event in events:
+            # 1. Shell global
+            shell_res = self.engine.handle_shell_event(event)
+            if shell_res:
+                if shell_res.get("action") == "QUIT":
+                    pygame.event.post(pygame.event.Event(pygame.QUIT))
+                    return
+                elif shell_res.get("action") == "NAVIGATE":
+                    dest = shell_res["destination"]
+                    if dest in ("SETTINGS", "PROFILE"):
+                        self.state_machine.change_state(dest)
+                        return
+                    elif dest == "ACHIEVEMENTS":
+                        self.state_machine.change_state("PROFILE")
+                        return
+
+            # 2. Vista Home
+            res = self.home_view.handle_event(event)
+            if res and res.get("action") == "OPEN_DETAILS":
+                item = res["item"]
+                if item["id"] == "community":
+                    self.state_machine.change_state("GROUPS")
+                else:
+                    self.state_machine.change_state("DETAILS", item=item)
+
+    def update(self, dt):
+        pass
+
+    def draw(self, screen):
+        self.engine.render_background(screen)
+        self.home_view.render(screen)
+        self.engine.render_top_bar(screen)
+        self.engine.render_bottom_dock(screen)
+
+
+class OmniDashDetailsState:
+    """Estado 'DETAILS' para ver ficha técnica y seleccionar ROMs de la consola."""
+    def __init__(self, state_machine):
+        self.state_machine = state_machine
+        self.engine = get_shared_engine()
+        self.details_view = None
+
+    def enter(self, item=None, **kwargs):
+        if item:
+            self.details_view = OmniDashGameDetailsView(self.engine, item)
+
+    def exit(self):
+        pass
+
+    def handle_events(self, events):
+        if not self.details_view:
+            self.state_machine.change_state("MENU")
+            return
+
+        for event in events:
+            res = self.details_view.handle_event(event)
+            if not res:
+                continue
+            if res.get("action") == "BACK":
+                self.state_machine.change_state("MENU")
+                return
+            elif res.get("action") == "LAUNCH":
+                item = res["item"]
+                rom = res.get("rom")
+                if item.get("core") and rom:
+                    rom_path = f"roms/{item['id']}/{rom['file']}"
+                    core_path = item["core"]
+                    self.state_machine.change_state(
+                        "PLAYING",
+                        game_key=rom["name"],
+                        rom_path=rom_path,
+                        core_path=core_path
+                    )
+                    return
+
+    def update(self, dt):
+        pass
+
+    def draw(self, screen):
+        self.engine.render_background(screen)
+        if self.details_view:
+            self.details_view.render(screen)
+        self.engine.render_bottom_dock(screen, extra_actions=[("⌧", "Lanzar Título")])
+
+
+class OmniDashSettingsState:
+    """Estado 'SETTINGS' conectado a la StateMachine de C.C.I. SYSTEM."""
+    def __init__(self, state_machine, user_data=None, apply_display_callback=None):
+        self.state_machine = state_machine
+        self.engine = get_shared_engine()
+        from ps4_settings_ui import PS4SettingsUI
+        self.ui = PS4SettingsUI(1280, 720, user_data=user_data, apply_display_callback=apply_display_callback)
+
+    def enter(self, **kwargs):
+        pass
+
+    def exit(self):
+        pass
+
+    def handle_events(self, events):
+        for event in events:
+            res = self.ui.handle_event(event)
+            if res and res.get("action") == "BACK":
+                self.state_machine.change_state("MENU")
+
+    def update(self, dt):
+        pass
+
+    def draw(self, screen):
+        self.ui.render(screen)
+
+
+class OmniDashProfileState:
+    """Estado 'PROFILE' conectado a la StateMachine de C.C.I. SYSTEM."""
+    def __init__(self, state_machine, user_data=None):
+        self.state_machine = state_machine
+        self.engine = get_shared_engine()
+        from ps4_profile_ui import PS4ProfileUI
+        self.ui = PS4ProfileUI(1280, 720, user_data=user_data)
+
+    def enter(self, **kwargs):
+        pass
+
+    def exit(self):
+        pass
+
+    def handle_events(self, events):
+        for event in events:
+            res = self.ui.handle_event(event)
+            if res and res.get("action") == "BACK":
+                self.state_machine.change_state("MENU")
+
+    def update(self, dt):
+        pass
+
+    def draw(self, screen):
+        self.ui.render(screen)
+
+
+
+# ==============================================================================
 # 4. VISTA PERFIL DE USUARIO (OmniDashProfileView)
 # ==============================================================================
 class OmniDashProfileView:
@@ -484,3 +651,170 @@ class OmniDashProfileView:
 
     def render(self, surface: pygame.Surface):
         self.inner_ui.render(surface)
+
+
+# ==============================================================================
+# 5. ESTADOS DE STATEMACHINE PARA INTEGRACIÓN CON C.C.I. SYSTEM
+# ==============================================================================
+_SHARED_ENGINE = None
+
+def get_shared_engine(w=1280, h=720) -> OmniDashEngine:
+    global _SHARED_ENGINE
+    if _SHARED_ENGINE is None:
+        _SHARED_ENGINE = OmniDashEngine(w, h, active_theme="ps4")
+    return _SHARED_ENGINE
+
+
+class OmniDashHomeState:
+    """Estado 'MENU' principal de C.C.I. SYSTEM gobernado por OmniDash."""
+    def __init__(self, state_machine, on_game_launch=None):
+        self.state_machine = state_machine
+        self.on_game_launch = on_game_launch
+        self.engine = get_shared_engine()
+        self.home_view = OmniDashHomeView(self.engine)
+
+    def enter(self, **kwargs):
+        pass
+
+    def exit(self):
+        pass
+
+    def handle_events(self, events):
+        for event in events:
+            # 1. Shell global
+            shell_res = self.engine.handle_shell_event(event)
+            if shell_res:
+                if shell_res.get("action") == "QUIT":
+                    pygame.event.post(pygame.event.Event(pygame.QUIT))
+                    return
+                elif shell_res.get("action") == "NAVIGATE":
+                    dest = shell_res["destination"]
+                    if dest in ("SETTINGS", "PROFILE"):
+                        self.state_machine.change_state(dest)
+                        return
+                    elif dest == "ACHIEVEMENTS":
+                        self.state_machine.change_state("PROFILE")
+                        return
+
+            # 2. Vista Home
+            res = self.home_view.handle_event(event)
+            if res and res.get("action") == "OPEN_DETAILS":
+                item = res["item"]
+                if item["id"] == "community":
+                    self.state_machine.change_state("GROUPS")
+                else:
+                    self.state_machine.change_state("DETAILS", item=item)
+
+    def update(self, dt):
+        pass
+
+    def draw(self, screen):
+        self.engine.render_background(screen)
+        self.home_view.render(screen)
+        self.engine.render_top_bar(screen)
+        self.engine.render_bottom_dock(screen)
+
+
+class OmniDashDetailsState:
+    """Estado 'DETAILS' para ver ficha técnica y seleccionar ROMs de la consola."""
+    def __init__(self, state_machine):
+        self.state_machine = state_machine
+        self.engine = get_shared_engine()
+        self.details_view = None
+
+    def enter(self, item=None, **kwargs):
+        if item:
+            self.details_view = OmniDashGameDetailsView(self.engine, item)
+
+    def exit(self):
+        pass
+
+    def handle_events(self, events):
+        if not self.details_view:
+            self.state_machine.change_state("MENU")
+            return
+
+        for event in events:
+            res = self.details_view.handle_event(event)
+            if not res:
+                continue
+            if res.get("action") == "BACK":
+                self.state_machine.change_state("MENU")
+                return
+            elif res.get("action") == "LAUNCH":
+                item = res["item"]
+                rom = res.get("rom")
+                if item.get("core") and rom:
+                    rom_path = f"roms/{item['id']}/{rom['file']}"
+                    core_path = item["core"]
+                    self.state_machine.change_state(
+                        "PLAYING",
+                        game_key=rom["name"],
+                        rom_path=rom_path,
+                        core_path=core_path
+                    )
+                    return
+
+    def update(self, dt):
+        pass
+
+    def draw(self, screen):
+        self.engine.render_background(screen)
+        if self.details_view:
+            self.details_view.render(screen)
+        self.engine.render_bottom_dock(screen, extra_actions=[("⌧", "Lanzar Título")])
+
+
+class OmniDashSettingsState:
+    """Estado 'SETTINGS' conectado a la StateMachine de C.C.I. SYSTEM."""
+    def __init__(self, state_machine, user_data=None, apply_display_callback=None):
+        self.state_machine = state_machine
+        self.engine = get_shared_engine()
+        from ps4_settings_ui import PS4SettingsUI
+        self.ui = PS4SettingsUI(1280, 720, user_data=user_data, apply_display_callback=apply_display_callback)
+
+    def enter(self, **kwargs):
+        pass
+
+    def exit(self):
+        pass
+
+    def handle_events(self, events):
+        for event in events:
+            res = self.ui.handle_event(event)
+            if res and res.get("action") == "BACK":
+                self.state_machine.change_state("MENU")
+
+    def update(self, dt):
+        pass
+
+    def draw(self, screen):
+        self.ui.render(screen)
+
+
+class OmniDashProfileState:
+    """Estado 'PROFILE' conectado a la StateMachine de C.C.I. SYSTEM."""
+    def __init__(self, state_machine, user_data=None):
+        self.state_machine = state_machine
+        self.engine = get_shared_engine()
+        from ps4_profile_ui import PS4ProfileUI
+        self.ui = PS4ProfileUI(1280, 720, user_data=user_data)
+
+    def enter(self, **kwargs):
+        pass
+
+    def exit(self):
+        pass
+
+    def handle_events(self, events):
+        for event in events:
+            res = self.ui.handle_event(event)
+            if res and res.get("action") == "BACK":
+                self.state_machine.change_state("MENU")
+
+    def update(self, dt):
+        pass
+
+    def draw(self, screen):
+        self.ui.render(screen)
+
