@@ -45,7 +45,9 @@ def main():
 
             if mode == "DASHBOARD":
                 res = dashboard.handle_event(event)
-                if res and res.get("action") == "SELECT_ITEM":
+                if not res:
+                    continue
+                if res.get("action") == "SELECT_ITEM":
                     item = res["item"]
                     if item["type"] == "CONSOLE":
                         # Abrir selector de juegos para esa consola
@@ -59,6 +61,23 @@ def main():
                         mode = "SELECTOR"
                     elif item["type"] == "COMMUNITY":
                         print("[PS4 UI] Accediendo a Comunidad C.C.I.")
+                elif res.get("action") == "TOPBAR_ACTION":
+                    top_id = res["item"]["id"]
+                    print(f"[PS4 UI] Acción TopBar activada: {top_id}")
+                    if top_id == "off":
+                        running = False
+                        break
+                    elif top_id in ("plus", "friends"):
+                        print("[PS4 UI] Abriendo Hub de Comunidad...")
+                    elif top_id == "trophy":
+                        print("[PS4 UI] Abriendo Sistema de Trofeos...")
+                    elif top_id == "settings":
+                        print("[PS4 UI] Abriendo Ajustes...")
+                    elif top_id == "user":
+                        print("[PS4 UI] Abriendo Perfil de Alex...")
+                elif res.get("action") == "QUIT":
+                    running = False
+                    break
 
             elif mode == "SELECTOR":
                 if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
