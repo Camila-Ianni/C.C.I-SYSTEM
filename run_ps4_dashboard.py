@@ -6,6 +6,8 @@ from __future__ import annotations
 import sys
 import pygame
 from ps4_dashboard_ui import PS4DashboardUI
+from ps4_settings_ui import PS4SettingsUI
+from ps4_profile_ui import PS4ProfileUI
 from console_selector_ui import ConsoleSelectorUI
 from retro_core_runner import LibretroRunner
 
@@ -20,9 +22,11 @@ def main():
     clock = pygame.time.Clock()
 
     dashboard = PS4DashboardUI(screen_w, screen_h)
+    settings_ui = PS4SettingsUI(screen_w, screen_h)
+    profile_ui = PS4ProfileUI(screen_w, screen_h)
     selector = None
     active_runner = None
-    mode = "DASHBOARD"  # "DASHBOARD", "SELECTOR", "RUNNER"
+    mode = "DASHBOARD"  # "DASHBOARD", "SETTINGS", "PROFILE", "SELECTOR"
 
     # Música de fondo ambiental PS4
     ambient_path = "assets_ps4/audio/ambient.mp3"
@@ -52,7 +56,6 @@ def main():
                     if item["type"] == "CONSOLE":
                         # Abrir selector de juegos para esa consola
                         selector = ConsoleSelectorUI(screen_w, screen_h)
-                        # Preseleccionar consola si coincide
                         for c_idx, c in enumerate(selector.consoles):
                             if c["id"] == item["id"]:
                                 selector.selected_console_idx = c_idx
@@ -63,21 +66,30 @@ def main():
                         print("[PS4 UI] Accediendo a Comunidad C.C.I.")
                 elif res.get("action") == "TOPBAR_ACTION":
                     top_id = res["item"]["id"]
-                    print(f"[PS4 UI] Acción TopBar activada: {top_id}")
                     if top_id == "off":
                         running = False
                         break
+                    elif top_id == "settings":
+                        mode = "SETTINGS"
+                    elif top_id == "user":
+                        mode = "PROFILE"
                     elif top_id in ("plus", "friends"):
                         print("[PS4 UI] Abriendo Hub de Comunidad...")
                     elif top_id == "trophy":
-                        print("[PS4 UI] Abriendo Sistema de Trofeos...")
-                    elif top_id == "settings":
-                        print("[PS4 UI] Abriendo Ajustes...")
-                    elif top_id == "user":
-                        print("[PS4 UI] Abriendo Perfil de Alex...")
+                        mode = "PROFILE"
                 elif res.get("action") == "QUIT":
                     running = False
                     break
+
+            elif mode == "SETTINGS":
+                res = settings_ui.handle_event(event)
+                if res and res.get("action") == "BACK":
+                    mode = "DASHBOARD"
+
+            elif mode == "PROFILE":
+                res = profile_ui.handle_event(event)
+                if res and res.get("action") == "BACK":
+                    mode = "DASHBOARD"
 
             elif mode == "SELECTOR":
                 if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
@@ -89,7 +101,6 @@ def main():
                         mode = "DASHBOARD"
                     elif sel_res.get("action") == "LAUNCH_GAME":
                         print(f"[PS4 UI] Lanzando juego: {sel_res['rom_path']} con {sel_res['core_path']}")
-                        # Lanzar con LibretroRunner
                         pygame.mixer.music.pause()
                         try:
                             runner = LibretroRunner(
@@ -111,6 +122,10 @@ def main():
         # Render
         if mode == "DASHBOARD":
             dashboard.render(screen)
+        elif mode == "SETTINGS":
+            settings_ui.render(screen)
+        elif mode == "PROFILE":
+            profile_ui.render(screen)
         elif mode == "SELECTOR":
             selector.render(screen)
 

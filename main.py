@@ -121,9 +121,11 @@ def main():
     from groups_ui import GroupsHubState, CommunityViewState
     state_machine.register_state("GROUPS", GroupsHubState(state_machine))
     state_machine.register_state("COMMUNITY", CommunityViewState(state_machine))
-    state_machine.register_state("PROFILE", CCIConsoleState(state_machine, "profile", user_data, apply_display))
+    from ps4_profile_ui import PS4ProfileState
+    from ps4_settings_ui import PS4SettingsState
+    state_machine.register_state("PROFILE", PS4ProfileState(state_machine, user_data))
     state_machine.register_state("ACHIEVEMENTS", CCIConsoleState(state_machine, "achievements", user_data, apply_display))
-    state_machine.register_state("SETTINGS", CCIConsoleState(state_machine, "settings", user_data, apply_display))
+    state_machine.register_state("SETTINGS", PS4SettingsState(state_machine, user_data, apply_display))
     state_machine.register_state("PLAYING", PlayingState(state_machine))
     state_machine.change_state("BOOT")
 
