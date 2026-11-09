@@ -1,6 +1,6 @@
 """retro_core_runner.py - Ejecutor universal en Python puro de núcleos Libretro para C.C.I. SYSTEM.
 Permite ejecutar ROMs de SNES, MAME/Arcade y otras consolas directamente en ventanas Pygame a 60 FPS,
-con soporte completo para mandos, teclado, audio estéreo y controles de estado (Pause, Volver).
+con soporte completo para mandos, teclado, audio estéreo en tiempo real y controles de estado (Pause, Volver).
 Autora: Camila Carolina Ianni
 """
 from __future__ import annotations
@@ -42,6 +42,28 @@ class RetroGameInfo(ctypes.Structure):
     ]
 
 
+class RetroSystemAvInfo(ctypes.Structure):
+    class Geometry(ctypes.Structure):
+        _fields_ = [
+            ("base_width", ctypes.c_uint),
+            ("base_height", ctypes.c_uint),
+            ("max_width", ctypes.c_uint),
+            ("max_height", ctypes.c_uint),
+            ("aspect_ratio", ctypes.c_float),
+        ]
+
+    class Timing(ctypes.Structure):
+        _fields_ = [
+            ("fps", ctypes.c_double),
+            ("sample_rate", ctypes.c_double),
+        ]
+
+    _fields_ = [
+        ("geometry", Geometry),
+        ("timing", Timing),
+    ]
+
+
 class LibretroRunner:
     def __init__(self, core_path: str | Path):
         self.core_path = Path(core_path).resolve()
@@ -55,6 +77,8 @@ class LibretroRunner:
         self.current_height = 224
         self.rom_buffer = None
         self.fps = 60.0
+        self.sample_rate = 32000.0
+        self.audio_stream = None
         self.running = False
         self.paused = False
 
@@ -71,6 +95,8 @@ class LibretroRunner:
         self.lib.retro_deinit.restype = None
         self.lib.retro_load_game.argtypes = [ctypes.POINTER(RetroGameInfo)]
         self.lib.retro_load_game.restype = ctypes.c_bool
+        self.lib.retro_get_system_av_info.argtypes = [ctypes.POINTER(RetroSystemAvInfo)]
+        self.lib.retro_get_system_av_info.restype = None
         self.lib.retro_unload_game.restype = None
         self.lib.retro_run.restype = None
 
@@ -124,20 +150,30 @@ class LibretroRunner:
                     b = raw_32 & 0xFF
                     rgb = np.dstack((r, g, b)).astype(np.uint8)
                     self.latest_surface = pygame.surfarray.make_surface(np.transpose(rgb, (1, 0, 2)))
-            except Exception as e:
+            except Exception:
                 pass
 
         self._c_video_cb = self._video_cb_type(_video_cb)
         self.lib.retro_set_video_refresh(self._c_video_cb)
 
-        # 3. Audio Callbacks
+        # 3. Audio Callbacks (Transmisión Estéreo en Tiempo Real a Apple Core Audio)
         self._audio_sample_type = ctypes.CFUNCTYPE(None, ctypes.c_int16, ctypes.c_int16)
         def _audio_sample_cb(left, right): pass
         self._c_audio_sample_cb = self._audio_sample_type(_audio_sample_cb)
         self.lib.retro_set_audio_sample(self._c_audio_sample_cb)
 
         self._audio_batch_type = ctypes.CFUNCTYPE(ctypes.c_size_t, ctypes.POINTER(ctypes.c_int16), ctypes.c_size_t)
-        def _audio_batch_cb(data, frames): return frames
+
+        def _audio_batch_cb(data, frames):
+            if self.audio_stream and not self.paused and frames > 0:
+                try:
+                    num_bytes = frames * 4
+                    raw_bytes = ctypes.string_at(data, num_bytes)
+                    self.audio_stream.write(raw_bytes)
+                except Exception:
+                    pass
+            return frames
+
         self._c_audio_batch_cb = self._audio_batch_type(_audio_batch_cb)
         self.lib.retro_set_audio_sample_batch(self._c_audio_batch_cb)
 
@@ -154,6 +190,25 @@ class LibretroRunner:
             return 0
         self._c_input_state_cb = self._input_state_type(_input_state_cb)
         self.lib.retro_set_input_state(self._c_input_state_cb)
+
+    def _init_audio(self):
+        try:
+            import sounddevice as sd
+            if self.audio_stream:
+                try:
+                    self.audio_stream.stop()
+                    self.audio_stream.close()
+                except Exception:
+                    pass
+            self.audio_stream = sd.RawOutputStream(
+                samplerate=int(self.sample_rate),
+                channels=2,
+                dtype="int16",
+                blocksize=512,
+            )
+            self.audio_stream.start()
+        except Exception as e:
+            self.audio_stream = None
 
     def load_rom(self, rom_path: str | Path) -> bool:
         rom_p = Path(rom_path).resolve()
@@ -173,6 +228,17 @@ class LibretroRunner:
         success = self.lib.retro_load_game(ctypes.byref(game_info))
         if success:
             self.running = True
+            # Extraer timing y audio rate exactos
+            av_info = RetroSystemAvInfo()
+            try:
+                self.lib.retro_get_system_av_info(ctypes.byref(av_info))
+                if av_info.timing.sample_rate > 8000:
+                    self.sample_rate = av_info.timing.sample_rate
+                if av_info.timing.fps > 20:
+                    self.fps = av_info.timing.fps
+            except Exception:
+                pass
+            self._init_audio()
         return success
 
     def update_input(self, keys, joystick=None):
@@ -219,7 +285,6 @@ class LibretroRunner:
 
     def render_to(self, target_surface: pygame.Surface, screen_w: int = 1280, screen_h: int = 720):
         if self.latest_surface:
-            # Escalar manteniendo aspect ratio
             sw, sh = self.latest_surface.get_size()
             scale = min(screen_w / sw, screen_h / sh)
             dw = int(sw * scale)
@@ -232,6 +297,14 @@ class LibretroRunner:
             target_surface.blit(scaled, (dx, dy))
 
     def unload(self):
+        if self.audio_stream:
+            try:
+                self.audio_stream.stop()
+                self.audio_stream.close()
+            except Exception:
+                pass
+            self.audio_stream = None
+
         if self.running:
             try:
                 self.lib.retro_unload_game()
