@@ -880,9 +880,64 @@ class PlayingState(BaseState):
         super().__init__(state_machine)
         self.game_key = None
 
-    def enter(self, game_key="davinci"):
+    def enter(self, game_key="davinci", rom_path=None, core_path=None):
         self.game_key = game_key
-        self._run_game()
+        if rom_path and core_path:
+            self._run_libretro_game(rom_path, core_path)
+        else:
+            self._run_game()
+
+    def _run_libretro_game(self, rom_path, core_path):
+        from retro_core_runner import LibretroRunner
+        screen = self.state_machine.screen
+        clock = pygame.time.Clock()
+
+        try:
+            if pygame.mixer.get_init():
+                pygame.mixer.music.stop()
+                pygame.mixer.stop()
+        except Exception:
+            pass
+
+        try:
+            runner = LibretroRunner(core_path)
+            if not runner.load_rom(rom_path):
+                self._show_notice(screen, "No se pudo cargar la ROM seleccionada.")
+                self.state_machine.change_state("LIBRARY")
+                return
+        except Exception as err:
+            self._show_notice(screen, f"Error inicializando núcleo: {err}")
+            self.state_machine.change_state("LIBRARY")
+            return
+
+        joysticks = [pygame.joystick.Joystick(i) for i in range(pygame.joystick.get_count())]
+        for j in joysticks:
+            if not j.get_init():
+                j.init()
+
+        running = True
+        while running:
+            clock.tick(60)
+            events = pygame.event.get()
+            for event in events:
+                if event.type == pygame.QUIT:
+                    runner.unload()
+                    pygame.event.post(pygame.event.Event(pygame.QUIT))
+                    return
+                elif event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+                    running = False
+                elif event.type == pygame.JOYBUTTONDOWN and event.button in (6, 8):
+                    running = False
+
+            keys = {k: True for k, pressed in enumerate(pygame.key.get_pressed()) if pressed}
+            joy = joysticks[0] if joysticks else None
+            runner.update_input(keys, joy)
+            runner.step_frame()
+            runner.render_to(screen, screen.get_width(), screen.get_height())
+            pygame.display.flip()
+
+        runner.unload()
+        self.state_machine.change_state("LIBRARY")
 
     @staticmethod
     def _show_notice(screen, message, seconds=3.0):

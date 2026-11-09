@@ -114,7 +114,8 @@ def main():
                 pass
 
     state_machine.register_state("MENU", MenuState(state_machine, on_game_launch=record_game_launch))
-    state_machine.register_state("LIBRARY", CCIConsoleState(state_machine, "library", user_data, apply_display))
+    from console_selector_ui import ConsoleSelectorState
+    state_machine.register_state("LIBRARY", ConsoleSelectorState(state_machine))
     from groups_ui import GroupsHubState, CommunityViewState
     state_machine.register_state("GROUPS", GroupsHubState(state_machine))
     state_machine.register_state("COMMUNITY", CommunityViewState(state_machine))
