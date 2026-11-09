@@ -61,7 +61,7 @@ def get_rounded_pixmap(pix: QPixmap, w: int, h: int, radius: int = 10) -> QPixma
 # ==============================================================================
 AERO_STYLE_SHEET = """
 QWidget {
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+    font-family: "Helvetica Neue", Arial, sans-serif;
     color: #ffffff;
 }
 
@@ -153,13 +153,20 @@ class AcrylicGlassCard(QFrame):
     - Borde biselado blanco translúcido
     - Tinte azul aguamarina profundo
     - Brillo especular superior
+    - Soporte completo para navegación por teclado (focus visual verde gel)
     """
     def __init__(self, parent=None, border_radius=14, is_interactive=False):
         super().__init__(parent)
         self.border_radius = border_radius
         self.is_interactive = is_interactive
         self.is_hovered = False
+        self.is_focused = False
         self.setAttribute(Qt.WA_Hover, is_interactive)
+
+    def set_focused(self, focused: bool):
+        if self.is_focused != focused:
+            self.is_focused = focused
+            self.update()
 
     def enterEvent(self, event):
         if self.is_interactive:
@@ -181,12 +188,14 @@ class AcrylicGlassCard(QFrame):
         path = QPainterPath()
         path.addRoundedRect(0.5, 0.5, w - 1, h - 1, self.border_radius, self.border_radius)
 
+        active = self.is_hovered or self.is_focused
+
         # Gradiente acrílico aguamarina
         grad = QLinearGradient(0, 0, 0, h)
-        if self.is_hovered:
-            grad.setColorAt(0.0, QColor(140, 220, 255, 150))
-            grad.setColorAt(0.4, QColor(30, 115, 170, 190))
-            grad.setColorAt(1.0, QColor(10, 65, 110, 240))
+        if active:
+            grad.setColorAt(0.0, QColor(140, 220, 255, 160))
+            grad.setColorAt(0.4, QColor(30, 115, 170, 200))
+            grad.setColorAt(1.0, QColor(10, 65, 110, 245))
         else:
             grad.setColorAt(0.0, QColor(115, 200, 240, 115))
             grad.setColorAt(0.4, QColor(20, 95, 145, 160))
@@ -208,9 +217,9 @@ class AcrylicGlassCard(QFrame):
         painter.setPen(QColor(255, 255, 255, 160))
         painter.drawLine(self.border_radius, 1, w - self.border_radius, 1)
 
-        # Borde exterior
-        if self.is_hovered:
-            painter.setPen(QPen(QColor(182, 245, 90, 240), 2))
+        # Borde exterior (Resaltado verde lima oficial al enfocar por teclado)
+        if active:
+            painter.setPen(QPen(QColor(182, 245, 90, 255), 2.5))
         else:
             painter.setPen(QPen(QColor(255, 255, 255, 115), 1))
         painter.drawPath(path)
@@ -312,6 +321,7 @@ class HomeView(QWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
+        self.setFocusPolicy(Qt.StrongFocus)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(48, 12, 48, 24)
         layout.setSpacing(20)
@@ -366,6 +376,7 @@ class HomeView(QWidget):
         if len(recent_picks) < 5:
             recent_picks = [g for g in ALL_GAMES if g.get("id") != self.hero_game.get("id")][:5]
 
+        self.recent_cards = []
         for game in recent_picks:
             card = AcrylicGlassCard(self, border_radius=14, is_interactive=True)
             card.setFixedSize(148, 310)
@@ -400,6 +411,8 @@ class HomeView(QWidget):
             view_btn.clicked.connect(lambda _, gm=game: self.open_details.emit(gm))
             c_layout.addWidget(view_btn)
 
+            card.mousePressEvent = lambda _, gm=game: self.open_details.emit(gm)
+            self.recent_cards.append(card)
             top_row.addWidget(card)
 
         layout.addLayout(top_row)
@@ -415,6 +428,7 @@ class HomeView(QWidget):
             ("Achievements", "18,450 G • 110 Trophies", "PROFILE", "star"),
         ]
 
+        self.util_cards = []
         for title, subtitle, dest, icon_name in cards_data:
             c = AcrylicGlassCard(self, border_radius=14, is_interactive=True)
             c.setFixedHeight(94)
@@ -441,9 +455,61 @@ class HomeView(QWidget):
 
             c.mousePressEvent = lambda _, d=dest: self.navigate_to.emit(d)
             c.setCursor(Qt.PointingHandCursor)
+            self.util_cards.append(c)
             bot_row.addWidget(c)
 
         layout.addLayout(bot_row)
+
+        # Sistema de navegación por teclado
+        self.nav_items: list[tuple[AcrylicGlassCard, callable]] = []
+        self.nav_items.append((self.hero_card, lambda: self.launch_game.emit(self.hero_game)))
+        for idx, gm in enumerate(recent_picks):
+            self.nav_items.append((self.recent_cards[idx], lambda g=gm: self.open_details.emit(g)))
+        for idx, (_, _, dest, _) in enumerate(cards_data):
+            self.nav_items.append((self.util_cards[idx], lambda d=dest: self.navigate_to.emit(d)))
+
+        self.focus_idx = 0
+        self._update_focus()
+
+    def _update_focus(self):
+        for idx, (card, _) in enumerate(self.nav_items):
+            card.set_focused(idx == self.focus_idx)
+
+    def handle_key(self, key: int) -> bool:
+        if key in (Qt.Key_Left, Qt.Key_A):
+            if 0 < self.focus_idx <= 5:
+                self.focus_idx -= 1
+                self._update_focus()
+                return True
+            elif 6 < self.focus_idx <= 9:
+                self.focus_idx -= 1
+                self._update_focus()
+                return True
+        elif key in (Qt.Key_Right, Qt.Key_D):
+            if 0 <= self.focus_idx < 5:
+                self.focus_idx += 1
+                self._update_focus()
+                return True
+            elif 6 <= self.focus_idx < 9:
+                self.focus_idx += 1
+                self._update_focus()
+                return True
+        elif key in (Qt.Key_Down, Qt.Key_S):
+            if 0 <= self.focus_idx <= 5:
+                self.focus_idx = min(9, 6 + (self.focus_idx * 4 // 6))
+                self._update_focus()
+                return True
+        elif key in (Qt.Key_Up, Qt.Key_W):
+            if 6 <= self.focus_idx <= 9:
+                self.focus_idx = min(5, (self.focus_idx - 6) * 6 // 4)
+                self._update_focus()
+                return True
+        elif key in (Qt.Key_Return, Qt.Key_Enter, Qt.Key_Space):
+            if 0 <= self.focus_idx < len(self.nav_items):
+                _, action = self.nav_items[self.focus_idx]
+                action()
+                return True
+        return False
 
 
 # ==============================================================================
@@ -455,6 +521,11 @@ class LibraryView(QWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
+        self.setFocusPolicy(Qt.StrongFocus)
+        self.grid_cards: list[AcrylicGlassCard] = []
+        self.grid_games: list[dict] = []
+        self.selected_idx = 0
+
         layout = QHBoxLayout(self)
         layout.setContentsMargins(36, 12, 36, 24)
         layout.setSpacing(20)
@@ -551,15 +622,15 @@ class LibraryView(QWidget):
         content_layout.addLayout(header_row)
 
         # Scroll Area transparente
-        scroll = QScrollArea()
-        scroll.setWidgetResizable(True)
-        scroll.setStyleSheet("background: transparent; border: none;")
+        self.scroll = QScrollArea()
+        self.scroll.setWidgetResizable(True)
+        self.scroll.setStyleSheet("background: transparent; border: none;")
         scroll_content = QWidget()
         scroll_content.setStyleSheet("background: transparent;")
         self.grid = QGridLayout(scroll_content)
         self.grid.setSpacing(14)
-        scroll.setWidget(scroll_content)
-        content_layout.addWidget(scroll)
+        self.scroll.setWidget(scroll_content)
+        content_layout.addWidget(self.scroll)
 
         layout.addWidget(self.content_panel, 1)
 
@@ -587,6 +658,13 @@ class LibraryView(QWidget):
         self.count_label.setText(f"{self.current_plat_name} ({len(filtered)} disponibles)")
         self._populate_grid(filtered)
 
+    def _update_grid_focus(self):
+        for idx, card in enumerate(self.grid_cards):
+            is_sel = (idx == self.selected_idx)
+            card.set_focused(is_sel)
+            if is_sel:
+                self.scroll.ensureWidgetVisible(card, 20, 20)
+
     def _populate_grid(self, games: list[dict]):
         # Limpiar grid
         while self.grid.count():
@@ -594,6 +672,10 @@ class LibraryView(QWidget):
             widget = item.widget()
             if widget:
                 widget.deleteLater()
+
+        self.grid_cards = []
+        self.grid_games = list(games)
+        self.selected_idx = 0
 
         cols = 4
         for idx, g in enumerate(games):
@@ -625,9 +707,50 @@ class LibraryView(QWidget):
             card.mousePressEvent = lambda _, gm=g: self.open_game.emit(gm)
             card.setCursor(Qt.PointingHandCursor)
 
+            self.grid_cards.append(card)
+
             row = idx // cols
             col = idx % cols
             self.grid.addWidget(card, row, col)
+
+        if self.grid_cards:
+            self._update_grid_focus()
+
+    def handle_key(self, key: int) -> bool:
+        if not self.grid_cards:
+            return False
+        cols = 4
+        total = len(self.grid_cards)
+
+        if key in (Qt.Key_Left, Qt.Key_A):
+            self.selected_idx = max(0, self.selected_idx - 1)
+            self._update_grid_focus()
+            return True
+        elif key in (Qt.Key_Right, Qt.Key_D):
+            self.selected_idx = min(total - 1, self.selected_idx + 1)
+            self._update_grid_focus()
+            return True
+        elif key in (Qt.Key_Up, Qt.Key_W):
+            self.selected_idx = max(0, self.selected_idx - cols)
+            self._update_grid_focus()
+            return True
+        elif key in (Qt.Key_Down, Qt.Key_S):
+            self.selected_idx = min(total - 1, self.selected_idx + cols)
+            self._update_grid_focus()
+            return True
+        elif key in (Qt.Key_Return, Qt.Key_Enter, Qt.Key_Space):
+            if 0 <= self.selected_idx < len(self.grid_games):
+                self.open_game.emit(self.grid_games[self.selected_idx])
+                return True
+        elif key == Qt.Key_PageDown:
+            self.selected_idx = min(total - 1, self.selected_idx + cols * 2)
+            self._update_grid_focus()
+            return True
+        elif key == Qt.Key_PageUp:
+            self.selected_idx = max(0, self.selected_idx - cols * 2)
+            self._update_grid_focus()
+            return True
+        return False
 
 
 # ==============================================================================
@@ -751,6 +874,15 @@ class GameDetailsView(QWidget):
         if cov and (ROOT / cov).exists():
             raw_pix = QPixmap(str(ROOT / cov))
             self.cover_lbl.setPixmap(get_rounded_pixmap(raw_pix, 280, 280, 12))
+
+    def handle_key(self, key: int) -> bool:
+        if key in (Qt.Key_Return, Qt.Key_Enter, Qt.Key_Space):
+            self.launch_game.emit(self.game)
+            return True
+        elif key in (Qt.Key_Escape, Qt.Key_Backspace, Qt.Key_Left):
+            self.back_to_library.emit()
+            return True
+        return False
 
 
 # ==============================================================================
@@ -1092,6 +1224,38 @@ class OmniDashMainWindow(QMainWindow):
         self.details_view.load_game(game)
         self.stack.setCurrentIndex(2)
 
+    def keyPressEvent(self, event):
+        key = event.key()
+        curr = self.stack.currentIndex()
+
+        if key in (Qt.Key_Escape, Qt.Key_Backspace):
+            if curr != 0:
+                self.switch_view("HOME")
+                return
+
+        # Atajos de teclado 1-5 para navegación rápida
+        if key == Qt.Key_1:
+            self.switch_view("HOME")
+            return
+        elif key == Qt.Key_2:
+            self.switch_view("LIBRARY")
+            return
+        elif key == Qt.Key_3:
+            self.switch_view("COMMUNITY")
+            return
+        elif key == Qt.Key_4:
+            self.switch_view("SETTINGS")
+            return
+        elif key == Qt.Key_5:
+            self.switch_view("PROFILE")
+            return
+
+        cw = self.stack.currentWidget()
+        if hasattr(cw, "handle_key") and cw.handle_key(key):
+            return
+
+        super().keyPressEvent(event)
+
     def launch_game(self, game: dict):
         core = game.get("core")
         rom = game.get("rom")
@@ -1099,7 +1263,6 @@ class OmniDashMainWindow(QMainWindow):
 
         if core and rom:
             print(f"[OmniDash-Qt] Lanzando emulador Libretro 60 FPS: {title} ({core})...")
-            # Ocultar o minimizar durante el juego para rendimiento óptimo
             try:
                 runner = LibretroRunner(
                     core_path=core,
@@ -1107,9 +1270,12 @@ class OmniDashMainWindow(QMainWindow):
                     screen_w=1280,
                     screen_h=720
                 )
-                runner.run_standalone()
+                runner.run_standalone(title=f"C.C.I. SYSTEM — {title} (60 FPS)")
             except Exception as exc:
                 print(f"[OmniDash-Qt] Error al ejecutar core: {exc}")
+            finally:
+                self.activateWindow()
+                self.raise_()
         else:
             print(f"[OmniDash-Qt] Ejecutando juego nativo C.C.I.: {title}")
 

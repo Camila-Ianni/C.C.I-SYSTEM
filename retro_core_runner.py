@@ -65,10 +65,20 @@ class RetroSystemAvInfo(ctypes.Structure):
 
 
 class LibretroRunner:
-    def __init__(self, core_path: str | Path):
+    def __init__(
+        self,
+        core_path: str | Path,
+        rom_path: str | Path | None = None,
+        screen_w: int = 1280,
+        screen_h: int = 720,
+    ):
         self.core_path = Path(core_path).resolve()
         if not self.core_path.exists():
             raise FileNotFoundError(f"Núcleo no encontrado: {self.core_path}")
+
+        self.rom_path = Path(rom_path).resolve() if rom_path else None
+        self.screen_w = screen_w
+        self.screen_h = screen_h
 
         self.lib = ctypes.CDLL(str(self.core_path))
         self.pixel_format = RETRO_PIXEL_FORMAT_RGB565
@@ -312,3 +322,74 @@ class LibretroRunner:
             except Exception:
                 pass
             self.running = False
+
+    def run_standalone(
+        self,
+        rom_path: str | Path | None = None,
+        screen_w: int | None = None,
+        screen_h: int | None = None,
+        title: str = "C.C.I. SYSTEM — Retro Core 60 FPS",
+    ):
+        """Bucle de ejecución interactivo completo a 60 FPS con teclado, gamepad y audio."""
+        rp = rom_path or self.rom_path
+        if not rp:
+            raise ValueError("No se especificó rom_path para ejecutar.")
+
+        sw = screen_w or self.screen_w
+        sh = screen_h or self.screen_h
+
+        if not pygame.get_init():
+            pygame.init()
+        if not pygame.font.get_init():
+            pygame.font.init()
+        if not pygame.joystick.get_init():
+            try:
+                pygame.joystick.init()
+            except Exception:
+                pass
+
+        try:
+            if pygame.mixer.get_init():
+                pygame.mixer.music.pause()
+        except Exception:
+            pass
+
+        if not self.load_rom(rp):
+            raise RuntimeError(f"No se pudo cargar la ROM: {rp}")
+
+        screen = pygame.display.set_mode((sw, sh))
+        pygame.display.set_caption(title)
+        clock = pygame.time.Clock()
+
+        joysticks = [pygame.joystick.Joystick(i) for i in range(pygame.joystick.get_count())]
+        for j in joysticks:
+            if not j.get_init():
+                try:
+                    j.init()
+                except Exception:
+                    pass
+
+        running = True
+        while running:
+            clock.tick(60)
+            events = pygame.event.get()
+            for event in events:
+                if event.type == pygame.QUIT:
+                    running = False
+                elif event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+                    running = False
+                elif event.type == pygame.JOYBUTTONDOWN and event.button in (6, 8):
+                    running = False
+
+            keys = pygame.key.get_pressed()
+            joy = joysticks[0] if joysticks else None
+            self.update_input(keys, joy)
+            self.step_frame()
+            self.render_to(screen, sw, sh)
+            pygame.display.flip()
+
+        self.unload()
+        try:
+            pygame.display.quit()
+        except Exception:
+            pass
