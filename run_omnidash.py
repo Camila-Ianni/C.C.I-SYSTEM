@@ -24,7 +24,7 @@ def main():
     pygame.display.set_caption("OmniDash — C.C.I. SYSTEM Virtual Console")
     clock = pygame.time.Clock()
 
-    engine = OmniDashEngine(screen_w, screen_h, active_theme="ps4")
+    engine = OmniDashEngine(screen_w, screen_h, active_theme="aero")
     home_view = OmniDashHomeView(engine)
     settings_view = OmniDashSettingsView(engine)
     profile_view = OmniDashProfileView(engine)
@@ -61,18 +61,25 @@ def main():
                     dest = shell_res["destination"]
                     if dest == "SETTINGS":
                         current_view = "SETTINGS"
-                    elif dest == "PROFILE":
+                    elif dest in ("PROFILE", "ACHIEVEMENTS"):
                         current_view = "PROFILE"
-                    elif dest == "ACHIEVEMENTS":
-                        current_view = "PROFILE"
+                    elif dest == "HOME":
+                        current_view = "HOME"
                     continue
 
             # 2. Eventos de la vista activa
             if current_view == "HOME":
                 h_res = home_view.handle_event(event)
-                if h_res and h_res.get("action") == "OPEN_DETAILS":
-                    details_view = OmniDashGameDetailsView(engine, h_res["item"])
-                    current_view = "DETAILS"
+                if h_res:
+                    if h_res.get("action") == "OPEN_DETAILS":
+                        details_view = OmniDashGameDetailsView(engine, h_res["item"])
+                        current_view = "DETAILS"
+                    elif h_res.get("action") == "NAVIGATE_UTIL":
+                        dest = h_res["destination"]
+                        if dest == "SETTINGS":
+                            current_view = "SETTINGS"
+                        elif dest == "PROFILE":
+                            current_view = "PROFILE"
 
             elif current_view == "DETAILS":
                 d_res = details_view.handle_event(event)

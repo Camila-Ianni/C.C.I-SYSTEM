@@ -1,12 +1,11 @@
-"""omnidash_engine.py - Motor Base Unificado estilo OmniDash para C.C.I. SYSTEM.
+"""omnidash_engine.py - Motor Base Auténtico estilo OmniDash para C.C.I. SYSTEM.
 100% Python puro con Pygame-CE.
-Soporta:
-- Arquitectura Dark Glass moderna a 1280x720 / 60 FPS.
-- 4 Temas completos con fondos procedurales: PlayStation 4, Frutiger Aero, Helix Dark Glass y Xbox Series.
-- Barra superior de estado (Perfil, Gamerscore, Ticker de notificaciones, Reloj).
-- Barra inferior de control (Leyenda universal de mandos y teclado).
-- Gestor universal de entrada: Ratón (hover/clic), Teclado y Mando (con hotplugging).
-- Sistema de audio nativo con efectos de sonido de consola.
+Implementa el diseño oficial de OmniDash (Frutiger Aero, Helix Dark Glass, Xbox Series, Wii):
+- Fondo panorámico Frutiger Aero (isla tropical soleada con mar turquesa y cielo azul).
+- Barra superior: Perfil de jugador a la izquierda (Avatar + Gamerscore 18,450 G),
+  dock flotante central con píldoras de navegación (Inicio, Biblioteca, Buscar, Ajustes), reloj a la derecha.
+- Dock inferior con botones de navegación rápida y leyendas de mando.
+- Cero archivos JS/CSS: GitHub 100% Python.
 Autora: Camila Carolina Ianni
 """
 from __future__ import annotations
@@ -15,77 +14,68 @@ import datetime
 import math
 import os
 import sys
-import time
 from pathlib import Path
 import pygame
 
 ROOT = Path(__file__).resolve().parent
 
-# Definición de Temas OmniDash
 THEMES = {
-    "ps4": {
-        "id": "ps4",
-        "name": "PlayStation 4",
-        "bg_base": (14, 108, 196),
-        "accent": (0, 162, 255),
-        "panel_bg": (15, 24, 40, 225),
-        "card_bg": (20, 32, 54, 230),
-        "card_hover": (34, 52, 85, 245),
-        "text_primary": (255, 255, 255),
-        "text_secondary": (180, 205, 235),
-        "focus_glow": (255, 255, 255),
-    },
     "aero": {
         "id": "aero",
-        "name": "Frutiger Aero",
-        "bg_base": (2, 136, 209),
-        "accent": (79, 195, 247),
-        "panel_bg": (255, 255, 255, 120),
-        "card_bg": (255, 255, 255, 160),
-        "card_hover": (255, 255, 255, 210),
-        "text_primary": (10, 30, 50),
-        "text_secondary": (30, 70, 100),
+        "name": "Frutiger Aero (OmniDash Signature)",
+        "bg_image": "assets_omnidash/aero-background.webp",
+        "bg_base": (0, 119, 182),
+        "accent": (0, 180, 216),
+        "panel_glass": (255, 255, 255, 110),
+        "card_glass": (255, 255, 255, 150),
+        "card_hover": (255, 255, 255, 215),
+        "border_glass": (255, 255, 255, 180),
+        "text_primary": (12, 28, 48),
+        "text_secondary": (25, 60, 95),
+        "text_bright": (255, 255, 255),
         "focus_glow": (255, 255, 255),
     },
     "helix": {
         "id": "helix",
-        "name": "Helix (Dark Glass)",
-        "bg_base": (12, 14, 20),
+        "name": "Helix (Black Glass PC)",
+        "bg_image": None,
+        "bg_base": (10, 12, 16),
         "accent": (147, 51, 234),
-        "panel_bg": (20, 24, 34, 230),
-        "card_bg": (28, 34, 48, 230),
-        "card_hover": (45, 54, 76, 245),
-        "text_primary": (250, 250, 255),
-        "text_secondary": (165, 175, 200),
+        "panel_glass": (20, 24, 34, 220),
+        "card_glass": (26, 32, 44, 220),
+        "card_hover": (44, 54, 74, 240),
+        "border_glass": (168, 85, 247, 180),
+        "text_primary": (255, 255, 255),
+        "text_secondary": (170, 185, 210),
+        "text_bright": (255, 255, 255),
         "focus_glow": (168, 85, 247),
     },
     "xbox": {
         "id": "xbox",
         "name": "Xbox Series",
-        "bg_base": (16, 22, 26),
+        "bg_image": None,
+        "bg_base": (15, 20, 24),
         "accent": (16, 160, 68),
-        "panel_bg": (24, 32, 38, 230),
-        "card_bg": (32, 42, 50, 230),
-        "card_hover": (48, 62, 74, 245),
+        "panel_glass": (24, 32, 38, 220),
+        "card_glass": (30, 40, 48, 220),
+        "card_hover": (46, 60, 72, 240),
+        "border_glass": (16, 200, 80, 180),
         "text_primary": (255, 255, 255),
-        "text_secondary": (175, 195, 185),
+        "text_secondary": (180, 200, 190),
+        "text_bright": (255, 255, 255),
         "focus_glow": (16, 200, 80),
     },
 }
 
 
 class OmniDashEngine:
-    """Motor unificado de interfaz tipo consola para C.C.I. SYSTEM."""
-
-    def __init__(self, screen_w: int = 1280, screen_h: int = 720, active_theme: str = "ps4"):
+    def __init__(self, screen_w: int = 1280, screen_h: int = 720, active_theme: str = "aero"):
         self.w = screen_w
         self.h = screen_h
-        self.active_theme_id = active_theme if active_theme in THEMES else "ps4"
+        self.active_theme_id = active_theme if active_theme in THEMES else "aero"
         self.theme = THEMES[self.active_theme_id]
 
         self.anim_timer = 0.0
-        self.particles: list[dict] = []
-        self._init_particles()
 
         # Fuentes oficiales SST o sistema
         font_path = ROOT / "assets_ps4" / "font" / "sst.ttf"
@@ -93,21 +83,23 @@ class OmniDashEngine:
 
         pygame.font.init()
         try:
-            self.font_title = pygame.font.Font(font_file, 26)
-            self.font_body = pygame.font.Font(font_file, 16)
-            self.font_sub = pygame.font.Font(font_file, 14)
-            self.font_badge = pygame.font.Font(font_file, 12)
-            self.font_clock = pygame.font.Font(font_file, 17)
+            self.font_hero = pygame.font.Font(font_file, 26)
+            self.font_title = pygame.font.Font(font_file, 20)
+            self.font_body = pygame.font.Font(font_file, 15)
+            self.font_sub = pygame.font.Font(font_file, 13)
+            self.font_badge = pygame.font.Font(font_file, 11)
+            self.font_clock = pygame.font.Font(font_file, 16)
             self.font_btn = pygame.font.Font(font_file, 13)
         except Exception:
-            self.font_title = pygame.font.SysFont("Helvetica, Arial", 26, bold=True)
-            self.font_body = pygame.font.SysFont("Helvetica, Arial", 16, bold=True)
-            self.font_sub = pygame.font.SysFont("Helvetica, Arial", 14)
-            self.font_badge = pygame.font.SysFont("Courier, monospace", 12, bold=True)
-            self.font_clock = pygame.font.SysFont("Helvetica, Arial", 17, bold=True)
+            self.font_hero = pygame.font.SysFont("Helvetica, Arial", 26, bold=True)
+            self.font_title = pygame.font.SysFont("Helvetica, Arial", 20, bold=True)
+            self.font_body = pygame.font.SysFont("Helvetica, Arial", 15, bold=True)
+            self.font_sub = pygame.font.SysFont("Helvetica, Arial", 13)
+            self.font_badge = pygame.font.SysFont("Courier, monospace", 11, bold=True)
+            self.font_clock = pygame.font.SysFont("Helvetica, Arial", 16, bold=True)
             self.font_btn = pygame.font.SysFont("Helvetica, Arial", 13, bold=True)
 
-        # Sonidos oficiales
+        # Sonidos
         self.sfx = {}
         for sname in ("navigate.mp3", "reward.mp3", "startup.mp3", "shutdown.mp3"):
             sp = ROOT / "assets_ps4" / "audio" / sname
@@ -117,45 +109,41 @@ class OmniDashEngine:
                 except Exception:
                     pass
 
-        # Textura de fondo opcional
+        # Cargar fondo Frutiger Aero
         self.bg_surf = None
-        bg_path = ROOT / "assets_ps4" / "background.png"
-        if bg_path.exists():
+        aero_bg = ROOT / "assets_omnidash" / "aero-background.webp"
+        if aero_bg.exists():
             try:
-                loaded = pygame.image.load(str(bg_path)).convert()
+                loaded = pygame.image.load(str(aero_bg)).convert()
                 self.bg_surf = pygame.transform.smoothscale(loaded, (self.w, self.h))
             except Exception:
                 pass
 
-        # Datos del jugador en el Shell
+        # Datos del jugador
         self.player_name = "Alex"
-        self.player_level = 12
-        self.gamerscore = 12450
-        self.ticker_text = "C.C.I. SYSTEM — VIRTUAL CONSOLE v2.1.0"
-        self.is_online = True
+        self.gamerscore = 18450
 
-        # Botones superiores de acceso rápido
-        self.top_buttons = [
-            {"id": "user", "label": "Alex", "icon": "👤", "action": "PROFILE"},
-            {"id": "gamerscore", "label": "12,450 G", "icon": "🏆", "action": "ACHIEVEMENTS"},
-            {"id": "theme", "label": "Tema", "icon": "🎨", "action": "CYCLE_THEME"},
+        # Botones del Dock central superior de OmniDash: [ 🏠 Inicio ] [ 📚 Biblioteca ] [ 🔍 Buscar ] [ ⚙️ Ajustes ]
+        self.nav_dock_items = [
+            {"id": "home", "label": "Inicio", "icon": "🏠", "action": "HOME"},
+            {"id": "library", "label": "Biblioteca", "icon": "📚", "action": "LIBRARY"},
+            {"id": "community", "label": "Comunidad", "icon": "👥", "action": "GROUPS"},
             {"id": "settings", "label": "Ajustes", "icon": "⚙️", "action": "SETTINGS"},
+        ]
+        self.nav_dock_rects: list[pygame.Rect] = []
+        self.hovered_nav_idx = -1
+
+        # Botones del pie de página OmniDash
+        self.bottom_pills = [
+            {"id": "consoles", "label": "Consolas", "icon": "🎮", "action": "HOME"},
+            {"id": "community", "label": "Comunidad C.C.I.", "icon": "👥", "action": "GROUPS"},
+            {"id": "trophies", "label": "Logros", "icon": "🏆", "action": "PROFILE"},
+            {"id": "settings", "label": "Ajustes", "icon": "⚙️", "action": "SETTINGS"},
+            {"id": "theme", "label": "Tema", "icon": "🎨", "action": "CYCLE_THEME"},
             {"id": "off", "label": "Apagar", "icon": "⏻", "action": "QUIT"},
         ]
-        self.top_rects: list[pygame.Rect] = []
-        self.hovered_top_idx = -1
-
-    def _init_particles(self):
-        self.particles = []
-        for i in range(25):
-            self.particles.append({
-                "x": (i * 57) % self.w,
-                "y": (i * 31) % self.h,
-                "vx": (i % 3 + 1) * 0.4,
-                "vy": -((i % 2) * 0.5 + 0.3),
-                "radius": (i % 4) + 2,
-                "alpha": 30 + (i * 7) % 70,
-            })
+        self.bottom_pill_rects: list[pygame.Rect] = []
+        self.hovered_bottom_idx = -1
 
     def set_theme(self, theme_id: str):
         if theme_id in THEMES:
@@ -178,23 +166,43 @@ class OmniDashEngine:
                 pass
 
     def handle_shell_event(self, event: pygame.event.Event) -> dict | None:
-        """Maneja eventos de la barra superior y accesos globales de OmniDash."""
         if event.type == pygame.MOUSEMOTION:
             mx, my = event.pos
-            prev_hover = self.hovered_top_idx
-            self.hovered_top_idx = -1
-            for idx, r in enumerate(self.top_rects):
+
+            # Hover en dock superior
+            prev_nav = self.hovered_nav_idx
+            self.hovered_nav_idx = -1
+            for idx, r in enumerate(self.nav_dock_rects):
                 if r.collidepoint(mx, my):
-                    self.hovered_top_idx = idx
-                    if prev_hover != idx:
+                    self.hovered_nav_idx = idx
+                    if prev_nav != idx:
+                        self.play_sound("navigate")
+                    break
+
+            # Hover en píldoras inferiores
+            prev_bot = self.hovered_bottom_idx
+            self.hovered_bottom_idx = -1
+            for idx, r in enumerate(self.bottom_pill_rects):
+                if r.collidepoint(mx, my):
+                    self.hovered_bottom_idx = idx
+                    if prev_bot != idx:
                         self.play_sound("navigate")
                     break
 
         elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
             mx, my = event.pos
-            for idx, r in enumerate(self.top_rects):
+
+            # Clic en dock superior
+            for idx, r in enumerate(self.nav_dock_rects):
                 if r.collidepoint(mx, my):
-                    item = self.top_buttons[idx]
+                    item = self.nav_dock_items[idx]
+                    self.play_sound("reward")
+                    return {"action": "NAVIGATE", "destination": item["action"]}
+
+            # Clic en píldoras inferiores
+            for idx, r in enumerate(self.bottom_pill_rects):
+                if r.collidepoint(mx, my):
+                    item = self.bottom_pills[idx]
                     if item["action"] == "CYCLE_THEME":
                         self.cycle_theme()
                         return None
@@ -212,95 +220,92 @@ class OmniDashEngine:
         self.anim_timer += 0.02
         t = self.theme
 
-        # 1. Base Wallpaper
-        if self.active_theme_id == "ps4" and self.bg_surf:
+        if self.active_theme_id == "aero" and self.bg_surf:
             surface.blit(self.bg_surf, (0, 0))
         else:
             surface.fill(t["bg_base"])
 
-        # 2. Efectos Procedurales por Tema
-        if self.active_theme_id in ("ps4", "aero"):
-            # Ondas dinámicas fluidas
-            for i in range(3):
-                wave_surf = pygame.Surface((self.w, self.h), pygame.SRCALPHA)
-                pts = []
-                for x in range(0, self.w + 25, 25):
-                    wave_y = int(self.h * 0.68 + math.sin(x * 0.003 + self.anim_timer + i * 1.2) * 55)
-                    pts.append((x, wave_y))
-                pts.append((self.w, self.h))
-                pts.append((0, self.h))
-                wave_color = (255, 255, 255, 10 + i * 6) if self.active_theme_id == "ps4" else (255, 255, 255, 20 + i * 10)
-                pygame.draw.polygon(wave_surf, wave_color, pts)
-                surface.blit(wave_surf, (0, 0))
-
-        # Partículas flotantes estilo cristal / bokeh
-        for p in self.particles:
-            p["x"] = (p["x"] + p["vx"]) % self.w
-            p["y"] = (p["y"] + p["vy"]) % self.h
-            p_surf = pygame.Surface((p["radius"] * 2, p["radius"] * 2), pygame.SRCALPHA)
-            pygame.draw.circle(p_surf, (255, 255, 255, p["alpha"]), (p["radius"], p["radius"]), p["radius"])
-            surface.blit(p_surf, (int(p["x"]), int(p["y"])))
-
     def render_top_bar(self, surface: pygame.Surface):
-        top_y = 30
+        top_y = 20
         t = self.theme
 
-        # Banner izquierdo con Ticker de estado y logo
-        ticker_t = self.font_sub.render(self.ticker_text, True, t["text_secondary"])
-        surface.blit(ticker_t, (40, top_y + 8))
+        # 1. Perfil del Jugador Izquierda (Avatar circular + Nombre + Gamerscore)
+        p_surf = pygame.Surface((190, 48), pygame.SRCALPHA)
+        pygame.draw.rect(p_surf, t["panel_glass"], (0, 0, 190, 48), border_radius=24)
+        pygame.draw.rect(p_surf, t["border_glass"], (0, 0, 190, 48), width=1, border_radius=24)
+        surface.blit(p_surf, (36, top_y))
 
-        # Indicador online
-        pygame.draw.circle(surface, (34, 197, 94), (28, top_y + 15), 5)
+        # Avatar
+        pygame.draw.circle(surface, (20, 40, 70), (60, top_y + 24), 16)
+        pygame.draw.circle(surface, t["accent"], (60, top_y + 24), 16, width=2)
+        av_txt = self.font_badge.render("A", True, (255, 255, 255))
+        surface.blit(av_txt, av_txt.get_rect(center=(60, top_y + 24)))
 
-        # Botones de navegación a la derecha
-        self.top_rects = []
-        base_x = 520
-        spacing = 130
+        # Nombre y Gamerscore
+        name_t = self.font_body.render(self.player_name, True, t["text_primary"])
+        surface.blit(name_t, (84, top_y + 8))
 
-        for idx, btn in enumerate(self.top_buttons):
-            bx = base_x + idx * spacing
-            btn_rect = pygame.Rect(bx, top_y, 118, 34)
-            self.top_rects.append(btn_rect)
+        gs_t = self.font_badge.render(f"🎮 {self.gamerscore:,} G", True, t["text_secondary"])
+        surface.blit(gs_t, (84, top_y + 28))
 
-            is_hov = (idx == self.hovered_top_idx)
+        # 2. Dock Flotante Central de OmniDash [ 🏠 Inicio ] [ 📚 Biblioteca ] [ 👥 Comunidad ] [ ⚙️ Ajustes ]
+        dock_w = 460
+        dock_h = 44
+        dock_x = (self.w - dock_w) // 2
+        d_surf = pygame.Surface((dock_w, dock_h), pygame.SRCALPHA)
+        pygame.draw.rect(d_surf, t["panel_glass"], (0, 0, dock_w, dock_h), border_radius=22)
+        pygame.draw.rect(d_surf, t["border_glass"], (0, 0, dock_w, dock_h), width=1, border_radius=22)
+        surface.blit(d_surf, (dock_x, top_y + 2))
 
-            # Fondo del botón
-            pill_color = (255, 255, 255, 60) if is_hov else (255, 255, 255, 18)
-            pygame.draw.rect(surface, pill_color, btn_rect, border_radius=17)
+        self.nav_dock_rects = []
+        item_w = 105
+        for idx, it in enumerate(self.nav_dock_items):
+            ix = dock_x + 10 + idx * (item_w + 6)
+            rect = pygame.Rect(ix, top_y + 6, item_w, 36)
+            self.nav_dock_rects.append(rect)
+
+            is_hov = (idx == self.hovered_nav_idx)
             if is_hov:
-                pygame.draw.rect(surface, t["focus_glow"], btn_rect, width=2, border_radius=17)
+                pygame.draw.rect(surface, (255, 255, 255, 80), rect, border_radius=18)
+                pygame.draw.rect(surface, (255, 255, 255), rect, width=1, border_radius=18)
 
-            # Icono + Etiqueta
-            ico_t = self.font_sub.render(btn["icon"], True, t["text_primary"])
-            surface.blit(ico_t, (btn_rect.x + 12, btn_rect.y + 7))
+            txt = self.font_sub.render(f"{it['icon']} {it['label']}", True, t["text_primary"])
+            surface.blit(txt, txt.get_rect(center=rect.center))
 
-            lbl_t = self.font_btn.render(btn["label"], True, t["text_primary"])
-            surface.blit(lbl_t, (btn_rect.x + 36, btn_rect.y + 8))
+        # 3. Reloj Digital Derecha
+        now_str = datetime.datetime.now().strftime("%I:%M %p")
+        clock_pill = pygame.Surface((120, 44), pygame.SRCALPHA)
+        pygame.draw.rect(clock_pill, t["panel_glass"], (0, 0, 120, 44), border_radius=22)
+        pygame.draw.rect(clock_pill, t["border_glass"], (0, 0, 120, 44), width=1, border_radius=22)
+        surface.blit(clock_pill, (self.w - 156, top_y + 2))
 
-        # Reloj digital en vivo
-        now_str = datetime.datetime.now().strftime("%H:%M")
-        clock_t = self.font_clock.render(now_str, True, t["text_primary"])
-        surface.blit(clock_t, (self.w - 85, top_y + 7))
+        ct = self.font_clock.render(now_str, True, t["text_primary"])
+        surface.blit(ct, ct.get_rect(center=(self.w - 96, top_y + 24)))
 
     def render_bottom_dock(self, surface: pygame.Surface, extra_actions: list[tuple[str, str]] = None):
-        dock_y = self.h - 46
+        dock_y = self.h - 58
         t = self.theme
-        pygame.draw.line(surface, (255, 255, 255, 25), (0, dock_y), (self.w, dock_y), 1)
 
-        actions = [
-            ("⌧", "Seleccionar / Iniciar"),
-            ("◯", "Atrás / Volver"),
-            ("△", "Cambiar Tema"),
-            ("⇦ ⇨", "Desplazar Mosaicos"),
-        ]
-        if extra_actions:
-            actions.extend(extra_actions)
+        # Píldoras de acción rápida a la izquierda
+        self.bottom_pill_rects = []
+        cur_x = 36
+        for idx, pill in enumerate(self.bottom_pills):
+            p_w = 120 if pill["id"] == "community" else 105
+            p_rect = pygame.Rect(cur_x, dock_y, p_w, 36)
+            self.bottom_pill_rects.append(p_rect)
 
-        cx = 40
-        for glyph, desc in actions:
-            gt = self.font_badge.render(glyph, True, t["accent"] if glyph in ("⌧", "△") else t["text_primary"])
-            dt = self.font_sub.render(desc, True, t["text_secondary"])
+            is_hov = (idx == self.hovered_bottom_idx)
+            p_surf = pygame.Surface((p_w, 36), pygame.SRCALPHA)
+            bg_col = (255, 255, 255, 80) if is_hov else (255, 255, 255, 35)
+            pygame.draw.rect(p_surf, bg_col, (0, 0, p_w, 36), border_radius=18)
+            pygame.draw.rect(p_surf, (255, 255, 255, 140), (0, 0, p_w, 36), width=1, border_radius=18)
+            surface.blit(p_surf, (cur_x, dock_y))
 
-            surface.blit(gt, (cx, dock_y + 14))
-            surface.blit(dt, (cx + gt.get_width() + 8, dock_y + 12))
-            cx += gt.get_width() + dt.get_width() + 32
+            pt = self.font_sub.render(f"{pill['icon']} {pill['label']}", True, t["text_primary"])
+            surface.blit(pt, pt.get_rect(center=p_rect.center))
+            cur_x += p_w + 10
+
+        # Guía de mando a la derecha
+        guide_t = self.font_badge.render("🎮 [Y] Tema   [A] Seleccionar   [B] Atrás", True, t["text_primary"])
+        g_rect = guide_t.get_rect(right=self.w - 36, centery=dock_y + 18)
+        surface.blit(guide_t, g_rect)
