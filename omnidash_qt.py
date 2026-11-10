@@ -15,10 +15,10 @@ from pathlib import Path
 from datetime import datetime
 
 from PySide6.QtCore import (
-    Qt, QSize, QTimer, QRectF, QPropertyAnimation, QEasingCurve, Signal, Slot
+    Qt, QSize, QTimer, QRectF, QPropertyAnimation, QEasingCurve, Signal, Slot, QPoint
 )
 from PySide6.QtGui import (
-    QColor, QFont, QIcon, QPainter, QPainterPath, QPixmap, QLinearGradient, QBrush, QPen
+    QColor, QFont, QIcon, QPainter, QPainterPath, QPixmap, QLinearGradient, QBrush, QPen, QImage
 )
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QStackedWidget,
@@ -34,6 +34,34 @@ from backend.communities.service import CommunitiesService
 from omnidash_screens import ALL_GAMES
 
 ROOT = Path(__file__).resolve().parent
+
+# Estado global de fondo óptico desenfocado y detección de tonalidad
+GLOBAL_BLURRED_BG: QPixmap | None = None
+WALLPAPER_IS_DARK: bool = True
+
+
+def update_global_blurred_wallpaper(path: str | Path, target_size: tuple[int, int] = (1280, 720)):
+    """Calcula el desenfoque óptico del fondo (Backdrop Blur) y detecta si es oscuro o claro."""
+    global GLOBAL_BLURRED_BG, WALLPAPER_IS_DARK
+    p = Path(path).resolve()
+    if not p.exists():
+        return
+
+    from PIL import Image, ImageFilter, ImageStat
+    try:
+        pil_img = Image.open(str(p)).convert("RGB")
+        stat = ImageStat.Stat(pil_img)
+        avg_r, avg_g, avg_b = stat.mean[:3]
+        lum = 0.299 * avg_r + 0.587 * avg_g + 0.114 * avg_b
+        WALLPAPER_IS_DARK = (lum < 100)
+
+        tw, th = max(100, target_size[0]), max(100, target_size[1])
+        pil_blurred = pil_img.resize((tw, th)).filter(ImageFilter.GaussianBlur(radius=26))
+        raw_bytes = pil_blurred.tobytes("raw", "RGB")
+        qimg = QImage(raw_bytes, tw, th, tw * 3, QImage.Format_RGB888)
+        GLOBAL_BLURRED_BG = QPixmap.fromImage(qimg)
+    except Exception as err:
+        print(f"[OmniDash-Qt] Error actualizando desenfoque de fondo: {err}")
 
 
 def get_rounded_pixmap(pix: QPixmap, w: int, h: int, radius: int = 10) -> QPixmap:
@@ -68,45 +96,45 @@ QWidget {
 /* ScrollBar de Cristal */
 QScrollBar:vertical {
     border: none;
-    background: rgba(8, 45, 75, 80);
+    background: rgba(0, 0, 0, 45);
     width: 8px;
     margin: 0px;
     border-radius: 4px;
 }
 QScrollBar::handle:vertical {
-    background: rgba(140, 215, 245, 140);
+    background: rgba(255, 255, 255, 130);
     min-height: 24px;
     border-radius: 4px;
 }
 QScrollBar::handle:vertical:hover {
-    background: rgba(182, 245, 90, 220);
+    background: rgba(255, 255, 255, 210);
 }
 QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
     height: 0px;
 }
 
-/* Buscador de cristal */
+/* Buscador de cristal adaptativo */
 QLineEdit#searchBox {
-    background: rgba(10, 48, 80, 180);
+    background: rgba(0, 0, 0, 85);
     border: 1px solid rgba(255, 255, 255, 120);
     border-radius: 16px;
     padding: 6px 14px;
     color: #ffffff;
     font-size: 13px;
-    selection-background-color: #3cb043;
+    selection-background-color: rgba(255, 255, 255, 60);
 }
 QLineEdit#searchBox:focus {
-    border: 1px solid rgba(182, 245, 90, 240);
-    background: rgba(15, 65, 105, 210);
+    border: 1.5px solid rgba(255, 255, 255, 230);
+    background: rgba(0, 0, 0, 130);
 }
 
-/* Botones genéricos de cristal */
+/* Botones genéricos de cristal adaptativo */
 QPushButton.glassBtn {
     background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-        stop:0 rgba(140, 215, 245, 120),
-        stop:0.45 rgba(40, 120, 175, 160),
-        stop:1 rgba(8, 55, 95, 220));
-    border: 1px solid rgba(255, 255, 255, 140);
+        stop:0 rgba(255, 255, 255, 65),
+        stop:0.45 rgba(255, 255, 255, 25),
+        stop:1 rgba(0, 0, 0, 75));
+    border: 1px solid rgba(255, 255, 255, 135);
     border-radius: 14px;
     padding: 6px 16px;
     color: #ffffff;
@@ -114,20 +142,20 @@ QPushButton.glassBtn {
     font-weight: 600;
 }
 QPushButton.glassBtn:hover {
-    border: 1px solid rgba(182, 245, 90, 255);
+    border: 1.5px solid rgba(255, 255, 255, 240);
     background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-        stop:0 rgba(160, 235, 255, 160),
-        stop:0.45 rgba(50, 140, 205, 190),
-        stop:1 rgba(12, 75, 125, 240));
+        stop:0 rgba(255, 255, 255, 115),
+        stop:0.45 rgba(255, 255, 255, 55),
+        stop:1 rgba(0, 0, 0, 95));
 }
 
-/* Botón Verde Gel de Inicio Frutiger Aero */
+/* Botón Gel de Inicio Adaptativo */
 QPushButton.playGelBtn {
     background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-        stop:0 rgba(120, 235, 130, 255),
-        stop:0.4 rgba(60, 185, 75, 255),
-        stop:1 rgba(25, 125, 40, 255));
-    border: 1.5px solid rgba(220, 255, 180, 230);
+        stop:0 rgba(255, 255, 255, 160),
+        stop:0.4 rgba(210, 225, 240, 110),
+        stop:1 rgba(30, 40, 55, 220));
+    border: 1.5px solid rgba(255, 255, 255, 210);
     border-radius: 14px;
     padding: 10px 24px;
     color: #ffffff;
@@ -138,22 +166,22 @@ QPushButton.playGelBtn {
 QPushButton.playGelBtn:hover {
     border: 2px solid #ffffff;
     background: qlineargradient(x1:0, y1:0, x2:0, y2:1,
-        stop:0 rgba(145, 255, 155, 255),
-        stop:0.4 rgba(75, 210, 90, 255),
-        stop:1 rgba(30, 150, 50, 255));
+        stop:0 rgba(255, 255, 255, 215),
+        stop:0.4 rgba(230, 240, 250, 150),
+        stop:1 rgba(45, 60, 80, 240));
 }
 """
 
 
 # ==============================================================================
-# COMPONENTE DE TARJETA ACRÍLICA FRUTIGER AERO
+# COMPONENTE DE TARJETA ACRÍLICA ADAPTATIVA AL FONDO
 # ==============================================================================
 class AcrylicGlassCard(QFrame):
-    """Panel contenedor con efecto de cristal acrílico Frutiger Aero:
-    - Borde biselado blanco translúcido
-    - Tinte azul aguamarina profundo
-    - Brillo especular superior
-    - Soporte completo para navegación por teclado (focus visual verde gel)
+    """Panel contenedor con desenfoque óptico adaptativo:
+    - Muestra el desenfoque real del fondo detrás del widget (Backdrop Blur).
+    - Si el fondo es negro -> se vuelve ahumado oscuro con brillo blanco.
+    - Si el fondo es celeste -> se vuelve celeste con reflejos aguamarina.
+    - Borde adaptativo: blanco de cristal iluminado en fondos oscuros (o celeste hielo en claros).
     """
     def __init__(self, parent=None, border_radius=14, is_interactive=False):
         super().__init__(parent)
@@ -188,40 +216,71 @@ class AcrylicGlassCard(QFrame):
         path = QPainterPath()
         path.addRoundedRect(0.5, 0.5, w - 1, h - 1, self.border_radius, self.border_radius)
 
+        painter.save()
+        painter.setClipPath(path)
+
+        # 1. Desenfoque óptico del fondo de pantalla detrás del widget
+        drawn_blur = False
+        if GLOBAL_BLURRED_BG and not GLOBAL_BLURRED_BG.isNull():
+            try:
+                win = self.window()
+                pt = self.mapTo(win, QPoint(0, 0))
+                gx, gy = pt.x(), pt.y()
+
+                bw, bh = GLOBAL_BLURRED_BG.width(), GLOBAL_BLURRED_BG.height()
+                rx = max(0, min(gx, max(0, bw - 1)))
+                ry = max(0, min(gy, max(0, bh - 1)))
+                rw = max(1, min(w, bw - rx))
+                rh = max(1, min(h, bh - ry))
+                patch = GLOBAL_BLURRED_BG.copy(rx, ry, rw, rh)
+                if not patch.isNull():
+                    painter.drawPixmap(0, 0, w, h, patch)
+                    drawn_blur = True
+            except Exception:
+                pass
+
         active = self.is_hovered or self.is_focused
 
-        # Gradiente acrílico aguamarina
-        grad = QLinearGradient(0, 0, 0, h)
-        if active:
-            grad.setColorAt(0.0, QColor(140, 220, 255, 160))
-            grad.setColorAt(0.4, QColor(30, 115, 170, 200))
-            grad.setColorAt(1.0, QColor(10, 65, 110, 245))
+        # 2. Capa translúcida adaptativa según el brillo del fondo
+        if not drawn_blur:
+            fallback_col = QColor(18, 22, 30, 220) if WALLPAPER_IS_DARK else QColor(10, 55, 95, 210)
+            painter.fillRect(0, 0, w, h, fallback_col)
+
+        if WALLPAPER_IS_DARK:
+            # Fondo oscuro: cristal ahumado con destello blanco
+            dark_film = QColor(0, 0, 0, 90 if active else 130)
+            white_sheen = QColor(255, 255, 255, 45 if active else 18)
+            painter.fillRect(0, 0, w, h, dark_film)
+            painter.fillRect(0, 0, w, h, white_sheen)
         else:
-            grad.setColorAt(0.0, QColor(115, 200, 240, 115))
-            grad.setColorAt(0.4, QColor(20, 95, 145, 160))
-            grad.setColorAt(1.0, QColor(6, 52, 90, 225))
+            # Fondo claro/marino: tinte aguamarina suave
+            aqua_film = QColor(8, 48, 85, 95 if active else 135)
+            aqua_sheen = QColor(255, 255, 255, 60 if active else 30)
+            painter.fillRect(0, 0, w, h, aqua_film)
+            painter.fillRect(0, 0, w, h, aqua_sheen)
 
-        painter.fillPath(path, QBrush(grad))
-
-        # Brillo especular superior (Aero Gloss Curve)
-        spec_h = int(h * 0.45)
+        # 3. Brillo gel especular superior
+        spec_h = int(h * 0.42)
         if spec_h > 10:
             spec_grad = QLinearGradient(0, 0, 0, spec_h)
-            spec_grad.setColorAt(0.0, QColor(255, 255, 255, 65))
+            spec_grad.setColorAt(0.0, QColor(255, 255, 255, 75 if active else 45))
             spec_grad.setColorAt(1.0, QColor(255, 255, 255, 0))
-            spec_path = QPainterPath()
-            spec_path.addRoundedRect(1, 1, w - 2, spec_h, self.border_radius, self.border_radius)
-            painter.fillPath(spec_path, QBrush(spec_grad))
+            painter.fillRect(0, 0, w, spec_h, QBrush(spec_grad))
 
-        # Línea de brillo inset superior
+        # 4. Línea de brillo inset superior
         painter.setPen(QColor(255, 255, 255, 160))
         painter.drawLine(self.border_radius, 1, w - self.border_radius, 1)
 
-        # Borde exterior (Resaltado verde lima oficial al enfocar por teclado)
+        painter.restore()
+
+        # 5. Borde exterior adaptativo (Sin bordes verdes discordantes)
         if active:
-            painter.setPen(QPen(QColor(182, 245, 90, 255), 2.5))
+            if WALLPAPER_IS_DARK:
+                painter.setPen(QPen(QColor(255, 255, 255, 250), 2.0))
+            else:
+                painter.setPen(QPen(QColor(160, 235, 255, 250), 2.0))
         else:
-            painter.setPen(QPen(QColor(255, 255, 255, 115), 1))
+            painter.setPen(QPen(QColor(255, 255, 255, 115), 1.0))
         painter.drawPath(path)
 
 
@@ -352,7 +411,7 @@ class HomeView(QWidget):
         h_title = QLabel(self.hero_game.get("title", "Super Nintendo"))
         h_title.setStyleSheet("font-size: 16px; font-weight: 700; color: #ffffff;")
         h_sub = QLabel(f"{self.hero_game.get('console', 'SNES')}  •  16-Bit Preservation")
-        h_sub.setStyleSheet("font-size: 12px; color: #b6f55a; font-weight: 600;")
+        h_sub.setStyleSheet("font-size: 12px; color: #bde4ff; font-weight: 600;")
         hero_layout.addWidget(h_title)
         hero_layout.addWidget(h_sub)
 
@@ -552,7 +611,7 @@ class LibraryView(QWidget):
         st_lay = QVBoxLayout(storage_box)
         st_lay.setContentsMargins(12, 8, 12, 8)
         st_title = QLabel("Storage: 72% used")
-        st_title.setStyleSheet("font-size: 12px; font-weight: 700; color: #b6f55a;")
+        st_title.setStyleSheet("font-size: 12px; font-weight: 700; color: #bde4ff;")
         st_sub = QLabel("128 GB Free of 512 GB")
         st_sub.setStyleSheet("font-size: 10px; color: #bde4ff;")
         st_lay.addWidget(st_title)
@@ -701,7 +760,7 @@ class LibraryView(QWidget):
             c_lay.addWidget(t_lbl)
 
             c_plat = QLabel(f"{g.get('console', 'Retro')}  •  60 FPS")
-            c_plat.setStyleSheet("font-size: 11px; color: #b6f55a; font-weight: 600;")
+            c_plat.setStyleSheet("font-size: 11px; color: #bde4ff; font-weight: 600;")
             c_lay.addWidget(c_plat)
 
             card.mousePressEvent = lambda _, gm=g: self.open_game.emit(gm)
@@ -813,7 +872,7 @@ class GameDetailsView(QWidget):
         right_box.addWidget(self.title_lbl)
 
         self.meta_lbl = QLabel("Consola • Desarrollador • 2024")
-        self.meta_lbl.setStyleSheet("font-size: 14px; color: #b6f55a; font-weight: 600;")
+        self.meta_lbl.setStyleSheet("font-size: 14px; color: #bde4ff; font-weight: 600;")
         right_box.addWidget(self.meta_lbl)
 
         # Chips de capacidades
@@ -850,7 +909,7 @@ class GameDetailsView(QWidget):
         self.rom_info = QLabel("ROM Path: Builtin")
         self.rom_info.setStyleSheet("font-size: 12px; color: #bde4ff;")
         cert = QLabel("✓ Certificado 60 FPS Low-Latency Framebuffer")
-        cert.setStyleSheet("font-size: 11px; color: #b6f55a; font-weight: 700;")
+        cert.setStyleSheet("font-size: 11px; color: #bde4ff; font-weight: 700;")
         core_lay.addWidget(self.core_info)
         core_lay.addWidget(self.rom_info)
         core_lay.addWidget(cert)
@@ -943,7 +1002,7 @@ class SettingsView(QWidget):
                     font-weight: 600;
                 }
                 QPushButton:hover {
-                    border: 1px solid rgba(182, 245, 90, 200);
+                    border: 1px solid rgba(255, 255, 255, 180);
                     background: rgba(255, 255, 255, 45);
                 }
             """)
@@ -975,7 +1034,7 @@ class SettingsView(QWidget):
         wp_header.addWidget(wp_title)
         wp_header.addStretch(1)
         self.wp_current_lbl = QLabel("Spider-Man (background.jpg)")
-        self.wp_current_lbl.setStyleSheet("font-size: 12px; color: #b6f55a; font-weight: 600;")
+        self.wp_current_lbl.setStyleSheet("font-size: 12px; color: #bde4ff; font-weight: 600;")
         wp_header.addWidget(self.wp_current_lbl)
         wp_lay.addLayout(wp_header)
 
@@ -1021,7 +1080,7 @@ class SettingsView(QWidget):
             t_l = QLabel(title)
             t_l.setStyleSheet("font-size: 13px; font-weight: 700; color: #ffffff;")
             v_l = QLabel(val)
-            v_l.setStyleSheet("font-size: 12px; color: #b6f55a; font-weight: 600;")
+            v_l.setStyleSheet("font-size: 12px; color: #bde4ff; font-weight: 600;")
 
             r_lay.addWidget(t_l)
             r_lay.addStretch(1)
@@ -1109,7 +1168,7 @@ class FriendsView(QWidget):
             c_lay.addStretch(1)
 
             online_lbl = QLabel(f"● {r.get('members_count', 1)} online")
-            online_lbl.setStyleSheet("font-size: 12px; color: #b6f55a; font-weight: 700;")
+            online_lbl.setStyleSheet("font-size: 12px; color: #70d6ff; font-weight: 700;")
             c_lay.addWidget(online_lbl)
 
             join_btn = QPushButton("Unirse")
@@ -1156,7 +1215,7 @@ class ProfileView(QWidget):
         name_l = QLabel("Alex  •  Frutiger Pilot")
         name_l.setStyleSheet("font-size: 20px; font-weight: 800; color: #ffffff;")
         score_l = QLabel("18,450 G  •  Level 42 Master  •  110 Trofeos C.C.I.")
-        score_l.setStyleSheet("font-size: 13px; color: #b6f55a; font-weight: 700;")
+        score_l.setStyleSheet("font-size: 13px; color: #ffd166; font-weight: 700;")
         name_box.addWidget(name_l)
         name_box.addWidget(score_l)
         head_box.addLayout(name_box)
@@ -1210,11 +1269,12 @@ class OmniDashMainWindow(QMainWindow):
 
         # Cargar fondo predeterminado (prioriza background.jpg subido por el usuario)
         self.bg_pixmap = None
-        bg_path = ROOT / "background.jpg"
-        if not bg_path.exists():
-            bg_path = ROOT / "assets_omnidash" / "aero-background.webp"
-        if bg_path.exists():
-            self.bg_pixmap = QPixmap(str(bg_path))
+        self.bg_path = ROOT / "background.jpg"
+        if not self.bg_path.exists():
+            self.bg_path = ROOT / "assets_omnidash" / "aero-background.webp"
+        if self.bg_path.exists():
+            self.bg_pixmap = QPixmap(str(self.bg_path))
+            update_global_blurred_wallpaper(self.bg_path, (1280, 720))
 
         # Widget central
         central = QWidget(self)
@@ -1264,8 +1324,20 @@ class OmniDashMainWindow(QMainWindow):
     def set_wallpaper(self, path: str):
         p = Path(path).resolve()
         if p.exists():
+            self.bg_path = p
             self.bg_pixmap = QPixmap(str(p))
+            update_global_blurred_wallpaper(p, (self.width(), self.height()))
             self.update()
+            for child in self.findChildren(AcrylicGlassCard):
+                child.update()
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        if hasattr(self, "bg_path") and self.bg_path:
+            update_global_blurred_wallpaper(self.bg_path, (self.width(), self.height()))
+            self.update()
+            for child in self.findChildren(AcrylicGlassCard):
+                child.update()
 
     def paintEvent(self, event):
         painter = QPainter(self)
