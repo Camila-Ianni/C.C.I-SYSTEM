@@ -728,6 +728,9 @@ class HomeView(QWidget):
             bg_image=hero_pix,
             inner_padding=0,
         )
+        self.hero_card._orig_border_color = QColor(145, 165, 179, 140)
+        self.hero_card._orig_glow_color = QColor(145, 165, 179, 80)
+        self.hero_card._orig_glow_radius = 18
         self.hero_card.setFixedSize(485, 416)
         hero_layout = QVBoxLayout(self.hero_card)
         hero_layout.setContentsMargins(16, 12, 16, 18)
@@ -846,6 +849,9 @@ class HomeView(QWidget):
                 bg_image=card_pix,
                 inner_padding=0,
             )
+            card._orig_border_color = border_col
+            card._orig_glow_color = glow_col
+            card._orig_glow_radius = 18
             card.setFixedSize(236, 198)
             card.mousePressEvent = lambda _, gm=matched_game: self.open_details.emit(gm)
             card.setCursor(Qt.PointingHandCursor)
@@ -877,6 +883,11 @@ class HomeView(QWidget):
         """)
         main_row.addWidget(self.right_arrow)
 
+        # Conexión interactiva del carrusel
+        self.carousel_page = 0
+        self.left_arrow.clicked.connect(lambda: self.set_carousel_page(self.carousel_page - 1))
+        self.right_arrow.clicked.connect(lambda: self.set_carousel_page(self.carousel_page + 1))
+
         layout.addLayout(main_row)
         layout.addSpacing(10)
 
@@ -885,16 +896,17 @@ class HomeView(QWidget):
         dots_box.setSpacing(8)
         dots_box.setAlignment(Qt.AlignCenter)
 
-        dot_active = QLabel()
-        dot_active.setFixedSize(32, 6)
-        dot_active.setStyleSheet("background: #ffffff; border-radius: 3px;")
-        dots_box.addWidget(dot_active)
-
-        for _ in range(3):
+        self.dots = []
+        for i in range(4):
             dot = QLabel()
-            dot.setFixedSize(6, 6)
-            dot.setStyleSheet("background: rgba(145, 165, 179, 120); border-radius: 3px;")
+            if i == 0:
+                dot.setFixedSize(32, 6)
+                dot.setStyleSheet("background: #ffffff; border-radius: 3px;")
+            else:
+                dot.setFixedSize(6, 6)
+                dot.setStyleSheet("background: rgba(145, 165, 179, 120); border-radius: 3px;")
             dots_box.addWidget(dot)
+            self.dots.append(dot)
 
         layout.addLayout(dots_box)
         layout.addSpacing(16)
@@ -948,6 +960,9 @@ class HomeView(QWidget):
                 glow_radius=18,
                 border_color=border_c,
             )
+            c._orig_border_color = border_c
+            c._orig_glow_color = glow_c
+            c._orig_glow_radius = 18
             c.setFixedHeight(90)
             c_lay = QHBoxLayout(c)
             c_lay.setContentsMargins(18, 8, 18, 8)
@@ -1001,9 +1016,40 @@ class HomeView(QWidget):
         self.focus_idx = 0
         self._update_focus()
 
+    def set_carousel_page(self, page: int):
+        self.carousel_page = page % 4
+        for i, dot in enumerate(self.dots):
+            if i == self.carousel_page:
+                dot.setFixedSize(32, 6)
+                dot.setStyleSheet("background: #ffffff; border-radius: 3px;")
+            else:
+                dot.setFixedSize(6, 6)
+                dot.setStyleSheet("background: rgba(145, 165, 179, 120); border-radius: 3px;")
+
     def _update_focus(self):
         for idx, (card, _) in enumerate(self.nav_items):
-            card.set_focused(idx == self.focus_idx)
+            is_active = (idx == self.focus_idx)
+            card.set_focused(is_active)
+            if hasattr(card, "_orig_border_color"):
+                if is_active:
+                    card.border_color = QColor(53, 200, 241, 245)
+                    card.set_glow(QColor(53, 200, 241, 220), 24)
+                else:
+                    card.border_color = card._orig_border_color
+                    card.set_glow(card._orig_glow_color, card._orig_glow_radius)
+            card.update()
+
+    def resizeEvent(self, event):
+        super().resizeEvent(event)
+        w = self.width()
+        if w <= 0:
+            return
+        s = min(max(0.72, w / 1672.0), 1.15)
+        self.hero_card.setFixedSize(int(485 * s), int(416 * s))
+        for card, _ in self.grid_cards:
+            card.setFixedSize(int(236 * s), int(198 * s))
+        for c in self.util_cards:
+            c.setFixedHeight(int(90 * s))
 
     def handle_key(self, key: int) -> bool:
         if key in (Qt.Key_Left, Qt.Key_A):
