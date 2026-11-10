@@ -638,13 +638,76 @@ class HomeView(QWidget):
         self.setFocusPolicy(Qt.StrongFocus)
         self.setAttribute(Qt.WA_TranslucentBackground, True)
 
+        # Cargar fondo local para renderizado con proporción de aspecto perfecta (sin estirar Spider-Man)
+        self.bg_path = ROOT / "background.jpg"
+        if not self.bg_path.exists():
+            self.bg_path = ROOT / "assets_omnidash" / "aero-background.webp"
+        self.bg_pixmap = QPixmap(str(self.bg_path)) if self.bg_path.exists() else None
+        self._cached_home_bg = None
+
         self.layout = QVBoxLayout(self)
-        self.layout.setContentsMargins(52, 10, 52, 22)
+        self.layout.setContentsMargins(52, 10, 52, 26)
         self.layout.setSpacing(14)
 
         # ----------------------------------------------------------------------
-        # 1. SECCIÓN DE SALUDO Y BIENVENIDA (1:1 con Referencia)
+        # 1. SECCIÓN DE ENCABEZADO: PERFIL ALEX + SALUDO (1:1 con Referencia)
         # ----------------------------------------------------------------------
+        header_v = QVBoxLayout()
+        header_v.setContentsMargins(0, 0, 0, 0)
+        header_v.setSpacing(12)
+
+        # 1.1 Cápsula de Perfil de Alex (Fila 1: Alex ●, Fila 2: 18,450 G)
+        self.profile_pill = AcrylicGlassCard(
+            self,
+            border_radius=22,
+            is_interactive=True,
+            glow_color=QColor(0, 217, 255, 60),
+            glow_radius=12,
+            border_color=QColor(145, 165, 179, 110),
+        )
+        self.profile_pill.setFixedSize(185, 46)
+        self.profile_pill.setCursor(Qt.PointingHandCursor)
+        self.profile_pill.mousePressEvent = lambda _: self.navigate_to.emit("PROFILE")
+
+        pp_lay = QHBoxLayout(self.profile_pill)
+        pp_lay.setContentsMargins(6, 4, 14, 4)
+        pp_lay.setSpacing(10)
+
+        self.avatar_lbl = QLabel()
+        av_p = ROOT / "assets_omnidash" / "spidey_avatar.png"
+        if not av_p.exists():
+            av_p = ROOT / "assets_omnidash" / "avatar.png"
+        if av_p.exists():
+            self.avatar_lbl.setPixmap(get_rounded_pixmap(QPixmap(str(av_p)), 36, 36, 18))
+        pp_lay.addWidget(self.avatar_lbl)
+
+        txt_v_pill = QVBoxLayout()
+        txt_v_pill.setContentsMargins(0, 0, 0, 0)
+        txt_v_pill.setSpacing(1)
+
+        name_row = QHBoxLayout()
+        name_row.setContentsMargins(0, 0, 0, 0)
+        name_row.setSpacing(6)
+        name_row.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+
+        alex_lbl = QLabel("Alex")
+        alex_lbl.setStyleSheet("font-size: 13px; font-weight: 800; color: #FFFFFF;")
+        name_row.addWidget(alex_lbl)
+
+        green_dot = QLabel("●")
+        green_dot.setStyleSheet("font-size: 8px; color: #00E676; margin-top: 1px;")
+        name_row.addWidget(green_dot)
+        txt_v_pill.addLayout(name_row)
+
+        score_lbl = QLabel("18,450 G")
+        score_lbl.setStyleSheet("font-size: 11px; font-weight: 700; color: #A8C4D8;")
+        txt_v_pill.addWidget(score_lbl)
+
+        pp_lay.addLayout(txt_v_pill, 1)
+
+        header_v.addWidget(self.profile_pill, alignment=Qt.AlignLeft)
+
+        # 1.2 Saludo y Bienvenida
         greet_row = QHBoxLayout()
         greet_row.setContentsMargins(0, 0, 0, 0)
         greet_row.setSpacing(14)
@@ -681,7 +744,8 @@ class HomeView(QWidget):
         greet_row.addLayout(greet_v)
         greet_row.addStretch(1)
 
-        self.layout.addLayout(greet_row)
+        header_v.addLayout(greet_row)
+        self.layout.addLayout(header_v)
 
         # ----------------------------------------------------------------------
         # 2. CUATRO WIDGETS PRINCIPALES (Row 1)
@@ -702,7 +766,7 @@ class HomeView(QWidget):
                 "Amigos",
                 "Seeker & Night Raid • 3 en línea",
                 "COMMUNITY",
-                "friends_outline.png",
+                "friends_duo_white.png",
                 QColor(60, 160, 240, 200),
                 QColor(60, 160, 240, 120),
             ),
@@ -1080,9 +1144,6 @@ class HomeView(QWidget):
 
         self.layout.addLayout(news_row)
 
-        # Stretch final para que el suelo mojado y pies de Spider-Man queden visibles
-        self.layout.addStretch(1)
-
         # Sistema de foco por teclado unificado
         self.focus_idx = 0
         self.nav_items = []
@@ -1094,6 +1155,52 @@ class HomeView(QWidget):
             self.nav_items.append((c, lambda card=c: card.mousePressEvent(None)))
 
         self._update_focus()
+
+    def _update_bg_cache(self):
+        """Calcula el escalado y centrado del fondo Spider-Man preservando exactamente su aspecto 16:9 sin estiramiento."""
+        if not hasattr(self, "bg_pixmap") or not self.bg_pixmap or self.bg_pixmap.isNull():
+            return
+        w, h = self.width(), self.height()
+        if w <= 0 or h <= 0:
+            return
+
+        win = self.window()
+        ww = win.width() if win else w
+        wh = win.height() if win else (h + 76)
+        dpr = self.devicePixelRatioF() if hasattr(self, "devicePixelRatioF") else float(self.devicePixelRatio())
+
+        bw, bh = self.bg_pixmap.width(), self.bg_pixmap.height()
+        scale = max(ww / bw, wh / bh)
+        nw, nh = max(10, int(bw * scale * dpr)), max(10, int(bh * scale * dpr))
+
+        scaled = self.bg_pixmap.scaled(nw, nh, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+
+        # Centrar Spider-Man y la luna en el espacio global de la ventana
+        ox = max(0, (nw - int(ww * dpr)) // 2)
+        oy = max(0, (nh - int(wh * dpr)) // 2)
+
+        # Posición local de HomeView respecto de la ventana (para alinear con el fondo de la barra de navegación)
+        pt = self.mapTo(win, QPoint(0, 0)) if win else QPoint(0, 76)
+        gx = int(pt.x() * dpr)
+        gy = int(pt.y() * dpr)
+
+        cw = int(w * dpr)
+        ch = int(h * dpr)
+
+        rx = min(max(0, ox + gx), max(0, scaled.width() - cw))
+        ry = min(max(0, oy + gy), max(0, scaled.height() - ch))
+
+        crop = scaled.copy(rx, ry, cw, ch)
+        crop.setDevicePixelRatio(dpr)
+        self._cached_home_bg = crop
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+        painter.setRenderHint(QPainter.SmoothPixmapTransform)
+        if getattr(self, "_cached_home_bg", None) and not self._cached_home_bg.isNull():
+            painter.drawPixmap(0, 0, self._cached_home_bg)
+        super().paintEvent(event)
 
     def set_recent_page(self, page: int):
         self.recent_page = page % len(self.recent_pages_data)
@@ -1121,11 +1228,12 @@ class HomeView(QWidget):
                 matched = {"title": title, "console": "Retro", "cover": img_rel}
             slot["game"] = matched
 
-            # Cargar imagen redondeada
+            # Cargar imagen redondeada adaptada al tamaño del slot
             img_p = ROOT / img_rel
             if img_p.exists():
                 raw = QPixmap(str(img_p))
-                slot["thumb_lbl"].setPixmap(get_rounded_pixmap(raw, 94, 94, 16))
+                ts = slot["thumb_lbl"].width() if slot["thumb_lbl"].width() > 10 else 96
+                slot["thumb_lbl"].setPixmap(get_rounded_pixmap(raw, ts, ts, 16))
 
             # Conectar botón de play y clic de tarjeta
             slot["card"].mousePressEvent = lambda _, gm=matched: self.launch_game.emit(gm)
@@ -1162,16 +1270,36 @@ class HomeView(QWidget):
     def resizeEvent(self, event):
         super().resizeEvent(event)
         w = self.width()
-        if w <= 0:
+        h = self.height()
+        if w <= 0 or h <= 0:
             return
-        s = min(max(0.75, w / 1672.0), 1.15)
+
+        # Factor de escala responsive considerando ancho y altura de ventana real
+        sw = w / 1536.0
+        sh = h / 884.0
+        s = min(max(0.78, min(sw, sh * 1.05)), 1.25)
+
         for c in self.main_cards:
-            c.setFixedHeight(int(160 * s))
+            c.setFixedHeight(int(165 * s))
+
+        recent_h = int(134 * s)
+        thumb_s = int(98 * s)
         for slot in self.recent_cards_widgets:
-            slot["card"].setFixedHeight(int(126 * s))
-            slot["thumb_lbl"].setFixedSize(int(94 * s), int(94 * s))
+            slot["card"].setFixedHeight(recent_h)
+            slot["thumb_lbl"].setFixedSize(thumb_s, thumb_s)
+
         for c in self.news_cards:
-            c.setFixedHeight(int(110 * s))
+            c.setFixedHeight(int(112 * s))
+
+        side_margin = max(38, int(52 * sw))
+        top_margin = max(6, int(10 * sh))
+        bottom_margin = max(24, int(42 * sh))
+        spacing = max(10, int(15 * sh))
+        self.layout.setContentsMargins(side_margin, top_margin, side_margin, bottom_margin)
+        self.layout.setSpacing(spacing)
+
+        self._update_bg_cache()
+        self._update_recent_slots()
 
     def handle_key(self, key: int) -> bool:
         if key in (Qt.Key_Left, Qt.Key_A):
