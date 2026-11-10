@@ -462,7 +462,8 @@ class OmniDashNavBar(QWidget):
         nav_items = [
             ("Inicio", "home", "HOME"),
             ("Biblioteca", "library", "LIBRARY"),
-            ("Amigos", "people", "COMMUNITY"),
+            ("Comunidades", "people", "COMMUNITY"),
+            ("Amigos", "friends_duo", "FRIENDS"),
             ("Ajustes", "settings", "SETTINGS"),
         ]
 
@@ -2371,9 +2372,1047 @@ class SettingsView(QWidget):
 
 
 # ==============================================================================
-# 5. VISTA DE COMUNIDADES Y AMIGOS (COMMUNITIES / FRIENDS)
+# 5. VISTA DE COMUNIDADES Y AMIGOS (COMMUNITIES / FRIENDS - 1:1 DISCORD-LIKE DARK GLASS)
 # ==============================================================================
-class FriendsView(QWidget):
+class ServerRailItem(QPushButton):
+    def __init__(self, icon_path: Path, is_active: bool = False, tooltip: str = "", parent=None):
+        super().__init__(parent)
+        self.is_active = is_active
+        self.setFixedSize(46, 46)
+        self.setCursor(Qt.PointingHandCursor)
+        self.setToolTip(tooltip)
+        self._pixmap = None
+        if icon_path.exists():
+            self._pixmap = QPixmap(str(icon_path))
+
+        self.shadow = QGraphicsDropShadowEffect(self)
+        self.shadow.setOffset(0, 0)
+        self.shadow.setBlurRadius(14)
+        if is_active:
+            self.shadow.setColor(QColor(53, 200, 241, 180))
+        else:
+            self.shadow.setColor(QColor(0, 0, 0, 0))
+        self.setGraphicsEffect(self.shadow)
+
+    def set_active(self, active: bool):
+        self.is_active = active
+        if active:
+            self.shadow.setColor(QColor(53, 200, 241, 180))
+        else:
+            self.shadow.setColor(QColor(0, 0, 0, 0))
+        self.update()
+
+    def paintEvent(self, event):
+        p = QPainter(self)
+        p.setRenderHint(QPainter.Antialiasing)
+        p.setRenderHint(QPainter.SmoothPixmapTransform)
+        w, h = self.width(), self.height()
+        radius = 16 if self.is_active else 23
+
+        path = QPainterPath()
+        path.addRoundedRect(1, 1, w - 2, h - 2, radius, radius)
+
+        bg = QColor(18, 38, 56, 220) if self.is_active else QColor(14, 28, 40, 160)
+        p.fillPath(path, QBrush(bg))
+
+        if self._pixmap and not self._pixmap.isNull():
+            ico_size = 26 if self.is_active else 24
+            scaled = self._pixmap.scaled(ico_size, ico_size, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+            p.drawPixmap((w - ico_size) // 2, (h - ico_size) // 2, scaled)
+
+        if self.is_active:
+            p.setPen(QPen(QColor(53, 200, 241), 2.2))
+        else:
+            p.setPen(QPen(QColor(145, 165, 179, 70), 1.0))
+        p.setBrush(Qt.NoBrush)
+        p.drawRoundedRect(1, 1, w - 2, h - 2, radius, radius)
+
+
+class ServerRail(QWidget):
+    community_selected = Signal(str)
+    explore_clicked = Signal()
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setFixedWidth(64)
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(6, 4, 6, 8)
+        layout.setSpacing(10)
+        layout.setAlignment(Qt.AlignHCenter)
+
+        plus_p = ROOT / "assets_omnidash" / "communities" / "rail_plus.png"
+        self.add_btn = ServerRailItem(plus_p, tooltip="Explorar / Crear Comunidad")
+        self.add_btn.clicked.connect(self.explore_clicked.emit)
+        layout.addWidget(self.add_btn)
+
+        self.items: list[ServerRailItem] = []
+
+        servers = [
+            ("seeker-hub", "rail_seeker.png", True, "Seeker Hub Central"),
+            ("night-raid", "rail_skull.png", False, "Night Raid Elite"),
+            ("pixel-squad", "rail_alien.png", False, "Pixel Squad"),
+            ("retro-preservation", "rail_triforce.png", False, "Retro Preservation Society"),
+            ("ps-classics", "rail_ps.png", False, "PlayStation Classics"),
+        ]
+
+        for s_id, s_icon, active, tooltip in servers:
+            icon_p = ROOT / "assets_omnidash" / "communities" / s_icon
+            if not icon_p.exists():
+                icon_p = ROOT / "assets_omnidash" / "icons" / "xbox_controller.png"
+            item = ServerRailItem(icon_p, is_active=active, tooltip=tooltip)
+            item.clicked.connect(lambda _, sid=s_id, it=item: self._select_server(sid, it))
+            layout.addWidget(item)
+            self.items.append(item)
+
+        layout.addStretch(1)
+
+        more_p = ROOT / "assets_omnidash" / "communities" / "rail_more.png"
+        self.more_btn = ServerRailItem(more_p, tooltip="Más opciones")
+        layout.addWidget(self.more_btn)
+
+    def _select_server(self, server_id: str, item: ServerRailItem):
+        for it in self.items:
+            it.set_active(it == item)
+        self.community_selected.emit(server_id)
+
+
+class ChannelSidebar(AcrylicGlassCard):
+    channel_selected = Signal(str, str)
+
+    def __init__(self, parent=None):
+        super().__init__(
+            parent,
+            border_radius=22,
+            border_color=QColor(93, 116, 131, 80),
+            glow_color=QColor(0, 0, 0, 50),
+            glow_radius=10
+        )
+        self.setFixedWidth(280)
+        self.active_channel = "general"
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(12, 12, 12, 12)
+        layout.setSpacing(8)
+
+        self.banner_frame = QFrame()
+        self.banner_frame.setFixedHeight(94)
+        b_lay = QVBoxLayout(self.banner_frame)
+        b_lay.setContentsMargins(12, 12, 12, 10)
+        b_lay.setSpacing(2)
+
+        banner_path = ROOT / "assets_omnidash" / "communities" / "banner_seeker_hub.jpg"
+        if not banner_path.exists():
+            banner_path = ROOT / "assets_omnidash" / "wallpapers" / "sunset_city.jpg"
+
+        self.banner_frame.setStyleSheet(f"""
+            QFrame {{
+                background-image: url("{str(banner_path)}");
+                background-position: center;
+                border-radius: 14px;
+                border: 1px solid rgba(255, 255, 255, 0.2);
+            }}
+        """)
+
+        t_row = QHBoxLayout()
+        self.c_name_lbl = QLabel("Seeker Hub Central")
+        self.c_name_lbl.setStyleSheet("font-size: 15px; font-weight: 800; color: #ffffff; background: transparent;")
+        t_row.addWidget(self.c_name_lbl)
+        t_row.addStretch(1)
+
+        chev = QLabel("∨")
+        chev.setStyleSheet("font-size: 12px; font-weight: 800; color: #ffffff; background: transparent;")
+        t_row.addWidget(chev)
+        b_lay.addLayout(t_row)
+
+        self.c_members_lbl = QLabel("● 14 en línea · 42 miembros")
+        self.c_members_lbl.setStyleSheet("font-size: 11px; font-weight: 600; color: #a5d8ff; background: transparent;")
+        b_lay.addWidget(self.c_members_lbl)
+        b_lay.addStretch(1)
+
+        layout.addWidget(self.banner_frame)
+
+        home_btn = QPushButton("  Inicio")
+        home_btn.setCursor(Qt.PointingHandCursor)
+        home_btn.setFixedHeight(36)
+        h_ico = ROOT / "assets_omnidash" / "icons" / "home.png"
+        if h_ico.exists():
+            home_btn.setIcon(QIcon(str(h_ico)))
+            home_btn.setIconSize(QSize(16, 16))
+        home_btn.setStyleSheet("""
+            QPushButton {
+                text-align: left;
+                padding-left: 12px;
+                background: rgba(255, 255, 255, 0.04);
+                border: 1px solid rgba(255, 255, 255, 0.08);
+                border-radius: 10px;
+                color: #ffffff;
+                font-size: 13px;
+                font-weight: 600;
+            }
+            QPushButton:hover {
+                background: rgba(255, 255, 255, 0.1);
+            }
+        """)
+        layout.addWidget(home_btn)
+
+        t_sec = QHBoxLayout()
+        t_sec_lbl = QLabel("∨  Canales de texto")
+        t_sec_lbl.setStyleSheet("font-size: 12px; font-weight: 700; color: #BDD4E4;")
+        t_sec.addWidget(t_sec_lbl)
+        t_sec.addStretch(1)
+        add_t_btn = QLabel("+")
+        add_t_btn.setStyleSheet("font-size: 14px; font-weight: 700; color: #BDD4E4;")
+        t_sec.addWidget(add_t_btn)
+        layout.addLayout(t_sec)
+
+        self.text_buttons: dict[str, QPushButton] = {}
+        text_channels = ["general", "juegos", "torneos", "clips-y-streams", "off-topic", "memes"]
+
+        for ch in text_channels:
+            btn = QPushButton(f" #  {ch}")
+            btn.setCursor(Qt.PointingHandCursor)
+            btn.setFixedHeight(32)
+            btn.clicked.connect(lambda _, c=ch: self._set_active_text_channel(c))
+            layout.addWidget(btn)
+            self.text_buttons[ch] = btn
+
+        self._style_text_channels()
+
+        layout.addSpacing(6)
+        v_sec = QHBoxLayout()
+        v_sec_lbl = QLabel("∨  Canales de voz")
+        v_sec_lbl.setStyleSheet("font-size: 12px; font-weight: 700; color: #BDD4E4;")
+        v_sec.addWidget(v_sec_lbl)
+        v_sec.addStretch(1)
+        add_v_btn = QLabel("+")
+        add_v_btn.setStyleSheet("font-size: 14px; font-weight: 700; color: #BDD4E4;")
+        v_sec.addWidget(add_v_btn)
+        layout.addLayout(v_sec)
+
+        voice_channels = [
+            ("Lobby General", "speaker_2", "14"),
+            ("Gaming 1", "speaker_2", "4"),
+            ("Gaming 2", "speaker_2", None),
+            ("Streaming", "sound_wave", None),
+        ]
+
+        for v_name, v_ico, badge in voice_channels:
+            v_btn = QPushButton(f"    {v_name}")
+            v_btn.setCursor(Qt.PointingHandCursor)
+            v_btn.setFixedHeight(32)
+            vip = ROOT / "assets_omnidash" / "icons" / f"{v_ico}.png"
+            if vip.exists():
+                v_btn.setIcon(QIcon(str(vip)))
+                v_btn.setIconSize(QSize(15, 15))
+            v_btn.setStyleSheet("""
+                QPushButton {
+                    text-align: left;
+                    padding-left: 10px;
+                    background: transparent;
+                    border: none;
+                    border-radius: 8px;
+                    color: #BDD4E4;
+                    font-size: 13px;
+                    font-weight: 600;
+                }
+                QPushButton:hover {
+                    background: rgba(255, 255, 255, 0.08);
+                    color: #ffffff;
+                }
+            """)
+            if badge:
+                row = QHBoxLayout(v_btn)
+                row.setContentsMargins(0, 0, 10, 0)
+                row.addStretch(1)
+                b_lbl = QLabel(badge)
+                b_lbl.setStyleSheet("background: rgba(255, 255, 255, 0.15); border-radius: 8px; padding: 1px 6px; font-size: 11px; font-weight: 700; color: #ffffff;")
+                row.addWidget(b_lbl)
+            layout.addWidget(v_btn)
+
+        layout.addStretch(1)
+
+    def _set_active_text_channel(self, ch_name: str):
+        self.active_channel = ch_name
+        self._style_text_channels()
+        self.channel_selected.emit(ch_name, "text")
+
+    def _style_text_channels(self):
+        for name, btn in self.text_buttons.items():
+            if name == self.active_channel:
+                btn.setStyleSheet("""
+                    QPushButton {
+                        text-align: left;
+                        padding-left: 12px;
+                        background: rgba(27, 48, 64, 0.95);
+                        border: 1px solid rgba(53, 200, 241, 0.6);
+                        border-radius: 8px;
+                        color: #ffffff;
+                        font-size: 13px;
+                        font-weight: 700;
+                    }
+                """)
+            else:
+                btn.setStyleSheet("""
+                    QPushButton {
+                        text-align: left;
+                        padding-left: 12px;
+                        background: transparent;
+                        border: none;
+                        border-radius: 8px;
+                        color: #BDD4E4;
+                        font-size: 13px;
+                        font-weight: 600;
+                    }
+                    QPushButton:hover {
+                        background: rgba(255, 255, 255, 0.06);
+                        color: #ffffff;
+                    }
+                """)
+
+
+class StreamCard(AcrylicGlassCard):
+    play_stream = Signal(str)
+
+    def __init__(self, title: str, streamer: str, viewers: int, thumb_path: Path, parent=None):
+        super().__init__(
+            parent,
+            border_radius=18,
+            border_color=QColor(93, 116, 131, 90),
+            glow_color=QColor(0, 0, 0, 60),
+            glow_radius=12
+        )
+        self.setFixedHeight(126)
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(10, 10, 14, 10)
+        layout.setSpacing(14)
+
+        self.thumb_frame = QFrame()
+        self.thumb_frame.setFixedSize(190, 106)
+        t_lay = QVBoxLayout(self.thumb_frame)
+        t_lay.setContentsMargins(8, 8, 8, 8)
+
+        b_row = QHBoxLayout()
+        live_lbl = QLabel("EN VIVO")
+        live_lbl.setStyleSheet("background: #E94B56; color: #ffffff; font-size: 10px; font-weight: 800; border-radius: 4px; padding: 2px 6px;")
+        b_row.addWidget(live_lbl)
+        b_row.addStretch(1)
+
+        v_lbl = QLabel(f"👁 {viewers}")
+        v_lbl.setStyleSheet("background: rgba(0, 0, 0, 0.6); color: #ffffff; font-size: 11px; font-weight: 700; border-radius: 4px; padding: 2px 6px;")
+        b_row.addWidget(v_lbl)
+        t_lay.addLayout(b_row)
+        t_lay.addStretch(1)
+
+        self.thumb_frame.setStyleSheet(f"""
+            QFrame {{
+                background-image: url("{str(thumb_path)}");
+                background-position: center;
+                border-radius: 12px;
+                border: 1px solid rgba(255, 255, 255, 0.25);
+            }}
+        """)
+        layout.addWidget(self.thumb_frame)
+
+        info_lay = QVBoxLayout()
+        info_lay.setContentsMargins(0, 6, 0, 6)
+        info_lay.setSpacing(4)
+
+        title_lbl = QLabel(title)
+        title_lbl.setStyleSheet("font-size: 15px; font-weight: 800; color: #ffffff;")
+        info_lay.addWidget(title_lbl)
+
+        st_row = QHBoxLayout()
+        st_row.setSpacing(6)
+        av_lbl = QLabel()
+        av_p = ROOT / "assets_omnidash" / "communities" / "avatar_miku.png"
+        if av_p.exists():
+            av_lbl.setPixmap(get_rounded_pixmap(QPixmap(str(av_p)), 20, 20, 10))
+        st_row.addWidget(av_lbl)
+
+        name_lbl = QLabel(streamer)
+        name_lbl.setStyleSheet("font-size: 12px; font-weight: 600; color: #BDD4E4;")
+        st_row.addWidget(name_lbl)
+        st_row.addStretch(1)
+        info_lay.addLayout(st_row)
+
+        info_lay.addStretch(1)
+
+        act_row = QHBoxLayout()
+        act_row.setSpacing(10)
+
+        play_btn = QPushButton(" ▶  Ver stream")
+        play_btn.setCursor(Qt.PointingHandCursor)
+        play_btn.setFixedHeight(34)
+        play_btn.setStyleSheet("""
+            QPushButton {
+                background: rgba(255, 255, 255, 0.12);
+                border: 1.5px solid rgba(255, 255, 255, 0.35);
+                border-radius: 12px;
+                color: #ffffff;
+                font-size: 12px;
+                font-weight: 700;
+                padding: 0 16px;
+            }
+            QPushButton:hover {
+                background: rgba(53, 200, 241, 0.3);
+                border: 1.5px solid #35C8F1;
+            }
+        """)
+        play_btn.clicked.connect(lambda: self.play_stream.emit(title))
+        act_row.addWidget(play_btn)
+
+        pop_btn = QPushButton(" ↗ ")
+        pop_btn.setCursor(Qt.PointingHandCursor)
+        pop_btn.setFixedSize(34, 34)
+        pop_btn.setStyleSheet("""
+            QPushButton {
+                background: rgba(255, 255, 255, 0.08);
+                border: 1px solid rgba(255, 255, 255, 0.2);
+                border-radius: 10px;
+                color: #ffffff;
+                font-size: 14px;
+                font-weight: 700;
+            }
+            QPushButton:hover {
+                background: rgba(255, 255, 255, 0.18);
+            }
+        """)
+        act_row.addWidget(pop_btn)
+        act_row.addStretch(1)
+        info_lay.addLayout(act_row)
+
+        layout.addLayout(info_lay, 1)
+
+
+class ChatMessageWidget(QWidget):
+    def __init__(self, author: str, time_str: str, text: str, avatar_path: Path, has_crown: bool = False, parent=None):
+        super().__init__(parent)
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(8, 6, 8, 6)
+        layout.setSpacing(12)
+
+        av_lbl = QLabel()
+        av_lbl.setFixedSize(36, 36)
+        if avatar_path.exists():
+            av_lbl.setPixmap(get_rounded_pixmap(QPixmap(str(avatar_path)), 36, 36, 18))
+        layout.addWidget(av_lbl, 0, Qt.AlignTop)
+
+        content_lay = QVBoxLayout()
+        content_lay.setSpacing(3)
+
+        hdr_row = QHBoxLayout()
+        hdr_row.setSpacing(6)
+
+        name_lbl = QLabel(author)
+        name_lbl.setStyleSheet("font-size: 13px; font-weight: 800; color: #ffffff;")
+        hdr_row.addWidget(name_lbl)
+
+        if has_crown:
+            cr_lbl = QLabel()
+            cr_p = ROOT / "assets_omnidash" / "icons" / "crown.png"
+            if cr_p.exists():
+                cr_lbl.setPixmap(QPixmap(str(cr_p)).scaled(14, 14, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+            hdr_row.addWidget(cr_lbl)
+
+        t_lbl = QLabel(time_str)
+        t_lbl.setStyleSheet("font-size: 11px; color: #7f95a6; font-weight: 500;")
+        hdr_row.addWidget(t_lbl)
+        hdr_row.addStretch(1)
+        content_lay.addLayout(hdr_row)
+
+        txt_lbl = QLabel(text)
+        txt_lbl.setStyleSheet("font-size: 13px; color: #F4F6F8; line-height: 1.4;")
+        txt_lbl.setWordWrap(True)
+        content_lay.addWidget(txt_lbl)
+
+        layout.addLayout(content_lay, 1)
+
+
+class CentralChatWidget(QWidget):
+    message_sent = Signal(str)
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(8, 0, 8, 4)
+        layout.setSpacing(8)
+
+        c_hdr = QHBoxLayout()
+        c_hdr.setContentsMargins(8, 4, 8, 8)
+        c_hdr.setSpacing(10)
+
+        t_box = QVBoxLayout()
+        t_box.setSpacing(2)
+        self.c_title = QLabel("# general")
+        self.c_title.setStyleSheet("font-size: 17px; font-weight: 800; color: #ffffff;")
+        self.c_topic = QLabel("Conversación general de la comunidad.")
+        self.c_topic.setStyleSheet("font-size: 12px; color: #BDD4E4;")
+        t_box.addWidget(self.c_title)
+        t_box.addWidget(self.c_topic)
+        c_hdr.addLayout(t_box)
+        c_hdr.addStretch(1)
+
+        for ico_name in ["bell_badge", "pin", "friends_duo", "more_horizontal"]:
+            b = QPushButton()
+            b.setFixedSize(30, 30)
+            b.setCursor(Qt.PointingHandCursor)
+            ip = ROOT / "assets_omnidash" / "icons" / f"{ico_name}.png"
+            if ip.exists():
+                b.setIcon(QIcon(str(ip)))
+                b.setIconSize(QSize(16, 16))
+            b.setStyleSheet("""
+                QPushButton {
+                    background: transparent;
+                    border: none;
+                    border-radius: 6px;
+                }
+                QPushButton:hover {
+                    background: rgba(255, 255, 255, 0.1);
+                }
+            """)
+            c_hdr.addWidget(b)
+
+        layout.addLayout(c_hdr)
+
+        sep = QFrame()
+        sep.setFixedHeight(1)
+        sep.setStyleSheet("background: rgba(145, 165, 179, 0.2);")
+        layout.addWidget(sep)
+
+        self.scroll = QScrollArea()
+        self.scroll.setWidgetResizable(True)
+        self.scroll.setStyleSheet("QScrollArea { border: none; background: transparent; }")
+
+        self.msgs_container = QWidget()
+        self.msgs_layout = QVBoxLayout(self.msgs_container)
+        self.msgs_layout.setContentsMargins(6, 10, 6, 10)
+        self.msgs_layout.setSpacing(10)
+
+        self._load_initial_messages()
+
+        self.msgs_layout.addStretch(1)
+        self.scroll.setWidget(self.msgs_container)
+        layout.addWidget(self.scroll, 1)
+
+        comp_frame = QFrame()
+        comp_frame.setFixedHeight(50)
+        comp_frame.setStyleSheet("""
+            QFrame {
+                background: rgba(18, 38, 56, 0.85);
+                border: 1.5px solid rgba(145, 165, 179, 0.35);
+                border-radius: 14px;
+            }
+        """)
+        comp_lay = QHBoxLayout(comp_frame)
+        comp_lay.setContentsMargins(10, 0, 10, 0)
+        comp_lay.setSpacing(8)
+
+        add_b = QPushButton("+")
+        add_b.setFixedSize(28, 28)
+        add_b.setCursor(Qt.PointingHandCursor)
+        add_b.setStyleSheet("""
+            QPushButton {
+                background: rgba(255, 255, 255, 0.1);
+                border-radius: 14px;
+                font-size: 16px;
+                font-weight: 700;
+                color: #ffffff;
+                border: none;
+            }
+            QPushButton:hover {
+                background: rgba(255, 255, 255, 0.25);
+            }
+        """)
+        comp_lay.addWidget(add_b)
+
+        self.msg_input = QLineEdit()
+        self.msg_input.setPlaceholderText("Enviar mensaje a #general...")
+        self.msg_input.setStyleSheet("""
+            QLineEdit {
+                background: transparent;
+                border: none;
+                color: #ffffff;
+                font-size: 13px;
+            }
+        """)
+        self.msg_input.returnPressed.connect(self._send_current_message)
+        comp_lay.addWidget(self.msg_input, 1)
+
+        emojis = [("smile", "😊"), ("image", "🖼️"), ("gift", "🎁")]
+        for _, em_char in emojis:
+            eb = QPushButton(em_char)
+            eb.setFixedSize(28, 28)
+            eb.setCursor(Qt.PointingHandCursor)
+            eb.setStyleSheet("QPushButton { background: transparent; border: none; font-size: 14px; } QPushButton:hover { background: rgba(255, 255, 255, 0.1); border-radius: 6px; }")
+            comp_lay.addWidget(eb)
+
+        send_b = QPushButton()
+        send_b.setFixedSize(30, 30)
+        send_b.setCursor(Qt.PointingHandCursor)
+        send_p = ROOT / "assets_omnidash" / "icons" / "paper_plane.png"
+        if send_p.exists():
+            send_b.setIcon(QIcon(str(send_p)))
+            send_b.setIconSize(QSize(15, 15))
+        send_b.setStyleSheet("""
+            QPushButton {
+                background: #35C8F1;
+                border-radius: 15px;
+                border: none;
+            }
+            QPushButton:hover {
+                background: #60d7f7;
+            }
+        """)
+        send_b.clicked.connect(self._send_current_message)
+        comp_lay.addWidget(send_b)
+
+        layout.addWidget(comp_frame)
+
+    def _load_initial_messages(self):
+        m1 = ChatMessageWidget(
+            "Enni", "Hoy a las 21:12",
+            "¿Alguien se suma para una partida de Metal Slug 2? 👀",
+            ROOT / "assets_omnidash" / "communities" / "avatar_enni.png",
+            has_crown=True
+        )
+        self.msgs_layout.addWidget(m1)
+
+        m2 = ChatMessageWidget(
+            "Alex", "Hoy a las 21:15",
+            "¡Yo me prendo! ¿Armamos sala? 🎮",
+            ROOT / "assets_omnidash" / "spidey_avatar.png"
+        )
+        self.msgs_layout.addWidget(m2)
+
+        m3 = ChatMessageWidget(
+            "Miku", "Hoy a las 21:20",
+            "Estoy en stream ahora, pasen a ver 👾",
+            ROOT / "assets_omnidash" / "communities" / "avatar_miku.png"
+        )
+        self.msgs_layout.addWidget(m3)
+
+        thumb_p = ROOT / "assets_omnidash" / "communities" / "stream_mslug2_preview.jpg"
+        if not thumb_p.exists():
+            thumb_p = ROOT / "assets_omnidash" / "covers" / "arcade_mslug.png"
+        self.stream_card = StreamCard("Metal Slug 2 - Arcade Run", "Miku", 12, thumb_p)
+        self.msgs_layout.addWidget(self.stream_card)
+
+        m4 = ChatMessageWidget(
+            "Lau", "Hoy a las 21:28",
+            "¡Qué partida! 🔥",
+            ROOT / "assets_omnidash" / "communities" / "avatar_lau.png"
+        )
+        self.msgs_layout.addWidget(m4)
+
+    def _send_current_message(self):
+        txt = self.msg_input.text().strip()
+        if not txt:
+            return
+        self.msg_input.clear()
+        m = ChatMessageWidget("Alex", "Ahora", txt, ROOT / "assets_omnidash" / "spidey_avatar.png")
+        count = self.msgs_layout.count()
+        self.msgs_layout.insertWidget(count - 1, m)
+        try:
+            repo = CommunitiesRepository.get_instance()
+            comm = repo.get_community_by_slug("seeker-hub")
+            if comm:
+                chans = repo.list_channels(comm["id"])
+                g_ch = [c for c in chans if c["name"] == "general"]
+                if g_ch:
+                    repo.create_message(g_ch[0]["id"], "u_alex", txt)
+        except Exception:
+            pass
+        self.message_sent.emit(txt)
+
+
+class MemberItemWidget(QWidget):
+    def __init__(self, name: str, status_text: str, is_online: bool, avatar_path: Path, has_crown: bool = False, parent=None):
+        super().__init__(parent)
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(6, 4, 6, 4)
+        layout.setSpacing(10)
+
+        av_container = QFrame()
+        av_container.setFixedSize(32, 32)
+        av_lay = QVBoxLayout(av_container)
+        av_lay.setContentsMargins(0, 0, 0, 0)
+
+        av_lbl = QLabel()
+        if avatar_path.exists():
+            av_lbl.setPixmap(get_rounded_pixmap(QPixmap(str(avatar_path)), 30, 30, 15))
+        av_lay.addWidget(av_lbl)
+
+        layout.addWidget(av_container)
+
+        info = QVBoxLayout()
+        info.setSpacing(1)
+
+        n_row = QHBoxLayout()
+        n_row.setSpacing(4)
+        nl = QLabel(name)
+        nl.setStyleSheet("font-size: 13px; font-weight: 700; color: #ffffff;")
+        n_row.addWidget(nl)
+
+        if has_crown:
+            cr = QLabel()
+            cr_p = ROOT / "assets_omnidash" / "icons" / "crown.png"
+            if cr_p.exists():
+                cr.setPixmap(QPixmap(str(cr_p)).scaled(13, 13, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+            n_row.addWidget(cr)
+
+        n_row.addStretch(1)
+        info.addLayout(n_row)
+
+        st = QLabel(status_text)
+        st_color = "#32D875" if ("stream" in status_text.lower() or "jugando" in status_text.lower() or "transmitiendo" in status_text.lower() or "partida" in status_text.lower()) else "#7f95a6"
+        st.setStyleSheet(f"font-size: 11px; color: {st_color};")
+        info.addWidget(st)
+
+        layout.addLayout(info, 1)
+
+
+class RightPanel(QWidget):
+    voice_toggled = Signal(str, bool)
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setFixedWidth(270)
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(6, 4, 6, 6)
+        layout.setSpacing(10)
+
+        m_scroll = QScrollArea()
+        m_scroll.setWidgetResizable(True)
+        m_scroll.setStyleSheet("QScrollArea { border: none; background: transparent; }")
+
+        m_container = QWidget()
+        m_lay = QVBoxLayout(m_container)
+        m_lay.setContentsMargins(0, 0, 0, 0)
+        m_lay.setSpacing(4)
+
+        on_hdr = QLabel("●  En línea — 14")
+        on_hdr.setStyleSheet("font-size: 12px; font-weight: 800; color: #32D875; padding: 4px 6px;")
+        m_lay.addWidget(on_hdr)
+
+        online_members = [
+            ("Alex", "Jugando: Metal Slug 2", ROOT / "assets_omnidash" / "spidey_avatar.png", False),
+            ("Enni", "En stream", ROOT / "assets_omnidash" / "communities" / "avatar_enni.png", True),
+            ("Miku", "Transmitiendo", ROOT / "assets_omnidash" / "communities" / "avatar_miku.png", False),
+            ("Lau", "Jugando: Tetris", ROOT / "assets_omnidash" / "communities" / "avatar_lau.png", False),
+            ("Rami", "En partida", ROOT / "assets_omnidash" / "communities" / "avatar_rami.png", False),
+        ]
+        for name, st, av, crown in online_members:
+            m_lay.addWidget(MemberItemWidget(name, st, True, av, has_crown=crown))
+
+        m_lay.addSpacing(10)
+
+        off_hdr = QLabel("●  Búsqueda — 28")
+        off_hdr.setStyleSheet("font-size: 12px; font-weight: 800; color: #7f95a6; padding: 4px 6px;")
+        m_lay.addWidget(off_hdr)
+
+        offline_members = [
+            ("Tomi", "Desconectado", ROOT / "assets_omnidash" / "communities" / "avatar_tomi.png"),
+            ("Vale", "Desconectado", ROOT / "assets_omnidash" / "communities" / "avatar_vale.png"),
+        ]
+        for name, st, av in offline_members:
+            m_lay.addWidget(MemberItemWidget(name, st, False, av))
+
+        m_lay.addStretch(1)
+        m_scroll.setWidget(m_container)
+        layout.addWidget(m_scroll, 1)
+
+        self.voice_panel = AcrylicGlassCard(
+            self,
+            border_radius=18,
+            border_color=QColor(93, 116, 131, 80),
+            glow_color=QColor(0, 0, 0, 50),
+            glow_radius=10
+        )
+        self.voice_panel.setFixedHeight(140)
+        v_lay = QVBoxLayout(self.voice_panel)
+        v_lay.setContentsMargins(14, 12, 14, 12)
+        v_lay.setSpacing(10)
+
+        v_hdr = QHBoxLayout()
+        v_hdr.setSpacing(8)
+
+        v_wave = QLabel()
+        wave_p = ROOT / "assets_omnidash" / "icons" / "sound_wave.png"
+        if wave_p.exists():
+            v_wave.setPixmap(QPixmap(str(wave_p)).scaled(20, 20, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+        v_hdr.addWidget(v_wave)
+
+        v_titles = QVBoxLayout()
+        v_titles.setSpacing(1)
+        v_st = QLabel("Voz conectada")
+        v_st.setStyleSheet("font-size: 13px; font-weight: 800; color: #ffffff;")
+        v_chan = QLabel("Lobby General")
+        v_chan.setStyleSheet("font-size: 11px; font-weight: 600; color: #BDD4E4;")
+        v_titles.addWidget(v_st)
+        v_titles.addWidget(v_chan)
+        v_hdr.addLayout(v_titles)
+        v_hdr.addStretch(1)
+
+        user_ico = QLabel()
+        u_p = ROOT / "assets_omnidash" / "icons" / "person.png"
+        if u_p.exists():
+            user_ico.setPixmap(QPixmap(str(u_p)).scaled(16, 16, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+        v_hdr.addWidget(user_ico)
+
+        v_lay.addLayout(v_hdr)
+
+        ctrls_row = QHBoxLayout()
+        ctrls_row.setSpacing(10)
+
+        self.mic_btn = QPushButton()
+        self.mic_btn.setFixedSize(38, 38)
+        self.mic_btn.setCursor(Qt.PointingHandCursor)
+        self.mic_muted = False
+        self._update_mic_style()
+        self.mic_btn.clicked.connect(self._toggle_mic)
+        ctrls_row.addWidget(self.mic_btn)
+
+        self.headset_btn = QPushButton()
+        self.headset_btn.setFixedSize(38, 38)
+        self.headset_btn.setCursor(Qt.PointingHandCursor)
+        self.headset_muted = False
+        self._update_headset_style()
+        self.headset_btn.clicked.connect(self._toggle_headset)
+        ctrls_row.addWidget(self.headset_btn)
+
+        self.screen_btn = QPushButton()
+        self.screen_btn.setFixedSize(38, 38)
+        self.screen_btn.setCursor(Qt.PointingHandCursor)
+        self.screen_active = False
+        self._update_screen_style()
+        self.screen_btn.clicked.connect(self._toggle_screen)
+        ctrls_row.addWidget(self.screen_btn)
+
+        self.dc_btn = QPushButton()
+        self.dc_btn.setFixedSize(38, 38)
+        self.dc_btn.setCursor(Qt.PointingHandCursor)
+        dc_p = ROOT / "assets_omnidash" / "icons" / "phone_disconnect.png"
+        if dc_p.exists():
+            self.dc_btn.setIcon(QIcon(str(dc_p)))
+            self.dc_btn.setIconSize(QSize(18, 18))
+        self.dc_btn.setStyleSheet("""
+            QPushButton {
+                background: #E94B56;
+                border-radius: 19px;
+                border: none;
+            }
+            QPushButton:hover {
+                background: #ff606c;
+            }
+        """)
+        self.dc_btn.clicked.connect(self._disconnect_voice)
+        ctrls_row.addWidget(self.dc_btn)
+
+        v_lay.addLayout(ctrls_row)
+        layout.addWidget(self.voice_panel)
+
+    def _toggle_mic(self):
+        self.mic_muted = not self.mic_muted
+        self._update_mic_style()
+        self.voice_toggled.emit("mic", not self.mic_muted)
+
+    def _update_mic_style(self):
+        mic_p = ROOT / "assets_omnidash" / "icons" / "microphone.png"
+        if mic_p.exists():
+            self.mic_btn.setIcon(QIcon(str(mic_p)))
+            self.mic_btn.setIconSize(QSize(18, 18))
+        if self.mic_muted:
+            self.mic_btn.setStyleSheet("QPushButton { background: rgba(233, 75, 86, 0.85); border: 1.5px solid #E94B56; border-radius: 19px; }")
+        else:
+            self.mic_btn.setStyleSheet("QPushButton { background: rgba(255, 255, 255, 0.12); border: 1.5px solid rgba(255, 255, 255, 0.25); border-radius: 19px; } QPushButton:hover { background: rgba(255, 255, 255, 0.25); }")
+
+    def _toggle_headset(self):
+        self.headset_muted = not self.headset_muted
+        self._update_headset_style()
+        self.voice_toggled.emit("headset", not self.headset_muted)
+
+    def _update_headset_style(self):
+        hs_p = ROOT / "assets_omnidash" / "icons" / "headset.png"
+        if hs_p.exists():
+            self.headset_btn.setIcon(QIcon(str(hs_p)))
+            self.headset_btn.setIconSize(QSize(18, 18))
+        if self.headset_muted:
+            self.headset_btn.setStyleSheet("QPushButton { background: rgba(120, 120, 120, 0.6); border: 1.5px solid #888888; border-radius: 19px; }")
+        else:
+            self.headset_btn.setStyleSheet("QPushButton { background: rgba(255, 255, 255, 0.12); border: 1.5px solid rgba(255, 255, 255, 0.25); border-radius: 19px; } QPushButton:hover { background: rgba(255, 255, 255, 0.25); }")
+
+    def _toggle_screen(self):
+        self.screen_active = not self.screen_active
+        self._update_screen_style()
+        self.voice_toggled.emit("screen", self.screen_active)
+
+    def _update_screen_style(self):
+        sc_p = ROOT / "assets_omnidash" / "icons" / "screen_share.png"
+        if sc_p.exists():
+            self.screen_btn.setIcon(QIcon(str(sc_p)))
+            self.screen_btn.setIconSize(QSize(18, 18))
+        if self.screen_active:
+            self.screen_btn.setStyleSheet("QPushButton { background: rgba(53, 200, 241, 0.3); border: 1.5px solid #35C8F1; border-radius: 19px; }")
+        else:
+            self.screen_btn.setStyleSheet("QPushButton { background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.18); border-radius: 19px; } QPushButton:hover { background: rgba(255, 255, 255, 0.2); }")
+
+    def _disconnect_voice(self):
+        self.voice_panel.hide()
+        self.voice_toggled.emit("disconnect", False)
+
+
+class CommunityInteriorView(AcrylicGlassCard):
+    back_to_explore = Signal()
+
+    def __init__(self, parent=None):
+        super().__init__(
+            parent,
+            border_radius=30,
+            border_color=QColor(145, 165, 179, 85),
+            glow_color=QColor(0, 0, 0, 75),
+            glow_radius=14
+        )
+        main_lay = QVBoxLayout(self)
+        main_lay.setContentsMargins(20, 16, 20, 18)
+        main_lay.setSpacing(12)
+
+        hdr_row = QHBoxLayout()
+        hdr_row.setContentsMargins(4, 0, 4, 4)
+        hdr_row.setSpacing(12)
+
+        logo_box = QHBoxLayout()
+        logo_box.setSpacing(10)
+
+        ico_lbl = QLabel()
+        ico_p = ROOT / "assets_omnidash" / "icons" / "controller_outline.png"
+        if not ico_p.exists():
+            ico_p = ROOT / "assets_omnidash" / "icons" / "xbox_controller.png"
+        if ico_p.exists():
+            ico_lbl.setPixmap(QPixmap(str(ico_p)).scaled(32, 32, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+        logo_box.addWidget(ico_lbl)
+
+        txt_v = QVBoxLayout()
+        txt_v.setSpacing(0)
+        t_cci = QLabel("C.C.I.")
+        t_cci.setStyleSheet("font-size: 20px; font-weight: 900; color: #ffffff; letter-spacing: 1.5px;")
+        t_com = QLabel("Communities")
+        t_com.setStyleSheet("font-size: 11px; font-weight: 800; color: #35C8F1; letter-spacing: 1px;")
+        txt_v.addWidget(t_cci)
+        txt_v.addWidget(t_com)
+        logo_box.addLayout(txt_v)
+        hdr_row.addLayout(logo_box)
+
+        sep = QLabel("|")
+        sep.setStyleSheet("color: rgba(255, 255, 255, 60); font-size: 26px; font-weight: 200; margin: 0 4px;")
+        hdr_row.addWidget(sep)
+
+        desc_v = QVBoxLayout()
+        desc_v.setSpacing(2)
+        m_title = QLabel("Gaming Communities & Friends")
+        m_title.setStyleSheet("font-size: 18px; font-weight: 800; color: #ffffff;")
+        m_desc = QLabel("Crea comunidades, juega, conversa y transmite con tu gente.")
+        m_desc.setStyleSheet("font-size: 12px; color: #BDD4E4;")
+        desc_v.addWidget(m_title)
+        desc_v.addWidget(m_desc)
+        hdr_row.addLayout(desc_v)
+
+        hdr_row.addStretch(1)
+
+        search_frame = QFrame()
+        search_frame.setFixedHeight(38)
+        search_frame.setFixedWidth(220)
+        search_frame.setStyleSheet("""
+            QFrame {
+                background: rgba(14, 28, 42, 0.7);
+                border: 1px solid rgba(145, 165, 179, 0.3);
+                border-radius: 19px;
+            }
+        """)
+        s_lay = QHBoxLayout(search_frame)
+        s_lay.setContentsMargins(12, 0, 12, 0)
+        s_lay.setSpacing(8)
+
+        s_ico = QLabel()
+        s_p = ROOT / "assets_omnidash" / "icons" / "search.png"
+        if s_p.exists():
+            s_ico.setPixmap(QPixmap(str(s_p)).scaled(14, 14, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+        s_lay.addWidget(s_ico)
+
+        s_inp = QLineEdit()
+        s_inp.setPlaceholderText("Buscar en C.C.I...")
+        s_inp.setStyleSheet("background: transparent; border: none; color: #ffffff; font-size: 12px;")
+        s_lay.addWidget(s_inp)
+        hdr_row.addWidget(search_frame)
+
+        add_comm_btn = QPushButton("+")
+        add_comm_btn.setFixedSize(38, 38)
+        add_comm_btn.setCursor(Qt.PointingHandCursor)
+        add_comm_btn.setToolTip("Crear Comunidad")
+        add_comm_btn.setStyleSheet("""
+            QPushButton {
+                background: rgba(18, 38, 56, 0.75);
+                border: 1px solid rgba(145, 165, 179, 0.4);
+                border-radius: 19px;
+                color: #ffffff;
+                font-size: 18px;
+                font-weight: 700;
+            }
+            QPushButton:hover {
+                background: rgba(53, 200, 241, 0.25);
+                border: 1.5px solid #35C8F1;
+            }
+        """)
+        hdr_row.addWidget(add_comm_btn)
+
+        invite_btn = QPushButton()
+        invite_btn.setFixedSize(38, 38)
+        invite_btn.setCursor(Qt.PointingHandCursor)
+        invite_btn.setToolTip("Invitar Amigos")
+        inv_p = ROOT / "assets_omnidash" / "icons" / "person_add.png"
+        if not inv_p.exists():
+            inv_p = ROOT / "assets_omnidash" / "icons" / "people.png"
+        if inv_p.exists():
+            invite_btn.setIcon(QIcon(str(inv_p)))
+            invite_btn.setIconSize(QSize(18, 18))
+        invite_btn.setStyleSheet("""
+            QPushButton {
+                background: rgba(18, 38, 56, 0.75);
+                border: 1px solid rgba(145, 165, 179, 0.4);
+                border-radius: 19px;
+            }
+            QPushButton:hover {
+                background: rgba(53, 200, 241, 0.25);
+                border: 1.5px solid #35C8F1;
+            }
+        """)
+        hdr_row.addWidget(invite_btn)
+
+        main_lay.addLayout(hdr_row)
+
+        body_row = QHBoxLayout()
+        body_row.setSpacing(12)
+
+        self.rail = ServerRail(self)
+        self.rail.explore_clicked.connect(self.back_to_explore.emit)
+        body_row.addWidget(self.rail)
+
+        self.channel_sidebar = ChannelSidebar(self)
+        body_row.addWidget(self.channel_sidebar)
+
+        self.chat_area = CentralChatWidget(self)
+        body_row.addWidget(self.chat_area, 1)
+
+        self.right_panel = RightPanel(self)
+        body_row.addWidget(self.right_panel)
+
+        main_lay.addLayout(body_row, 1)
+
+
+class CommunityExploreView(QWidget):
+    open_community_requested = Signal(str)
+
     def __init__(self, parent=None):
         super().__init__(parent)
         layout = QVBoxLayout(self)
@@ -2391,7 +3430,6 @@ class FriendsView(QWidget):
         p_lay.addWidget(title)
         p_lay.addWidget(sub)
 
-        # Conectar con backend real CommunitiesService
         try:
             repo = CommunitiesRepository.get_instance()
             service = CommunitiesService(repo)
@@ -2401,9 +3439,9 @@ class FriendsView(QWidget):
 
         if not rooms:
             rooms = [
-                {"id": "r1", "name": "Seeker Hub Central", "description": "3 friends playing Metal Slug 2", "members_count": 14},
-                {"id": "r2", "name": "Night Raid Elite", "description": "Street Fighter II Turbo Tournament", "members_count": 8},
-                {"id": "r3", "name": "Retro Preservation Society", "description": "Castlevania Symphony of the Night Party", "members_count": 22},
+                {"id": "seeker-hub", "name": "Seeker Hub Central", "description": "3 friends playing Metal Slug 2", "members_count": 14},
+                {"id": "night-raid", "name": "Night Raid Elite", "description": "Street Fighter II Turbo Tournament", "members_count": 8},
+                {"id": "retro-preservation", "name": "Retro Preservation Society", "description": "Castlevania Symphony of the Night Party", "members_count": 22},
             ]
 
         for r in rooms:
@@ -2436,12 +3474,47 @@ class FriendsView(QWidget):
             join_btn = QPushButton("Unirse")
             join_btn.setProperty("class", "glassBtn")
             join_btn.setCursor(Qt.PointingHandCursor)
+            join_btn.clicked.connect(lambda _, cid=r.get("id"): self.open_community_requested.emit(cid))
             c_lay.addWidget(join_btn)
 
             p_lay.addWidget(card)
 
         p_lay.addStretch(1)
         layout.addWidget(self.panel)
+
+
+class CommunitiesView(QWidget):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(44, 12, 44, 20)
+
+        self.internal_stack = QStackedWidget(self)
+        layout.addWidget(self.internal_stack)
+
+        self.explore_view = CommunityExploreView(self)
+        self.interior_view = CommunityInteriorView(self)
+
+        self.internal_stack.addWidget(self.explore_view)   # Index 0: Catálogo / Explorar
+        self.internal_stack.addWidget(self.interior_view)  # Index 1: Interior de Comunidad (1:1 Imagen 2)
+
+        # Conectar navegación
+        self.explore_view.open_community_requested.connect(self.show_interior)
+        self.interior_view.back_to_explore.connect(self.show_explore)
+
+        # Mostrar interior por defecto para alineación con Imagen 2
+        self.internal_stack.setCurrentIndex(1)
+
+    def show_interior(self, community_id: str = "seeker-hub"):
+        self.internal_stack.setCurrentIndex(1)
+
+    def show_explore(self):
+        self.internal_stack.setCurrentIndex(0)
+
+
+# Alias para retrocompatibilidad
+FriendsView = CommunityExploreView
+
 
 
 # ==============================================================================
@@ -2559,16 +3632,17 @@ class OmniDashMainWindow(QMainWindow):
         self.library_view = LibraryView(self)
         self.details_view = GameDetailsView(self)
         self.settings_view = SettingsView(self)
-        self.friends_view = FriendsView(self)
+        self.communities_view = CommunitiesView(self)
+        self.friends_view = self.communities_view.explore_view
         self.profile_view = ProfileView(self)
 
         # Registrar en stack
-        self.stack.addWidget(self.home_view)       # 0: HOME
-        self.stack.addWidget(self.library_view)    # 1: LIBRARY
-        self.stack.addWidget(self.details_view)    # 2: DETAILS
-        self.stack.addWidget(self.settings_view)   # 3: SETTINGS
-        self.stack.addWidget(self.friends_view)    # 4: COMMUNITY
-        self.stack.addWidget(self.profile_view)    # 5: PROFILE
+        self.stack.addWidget(self.home_view)          # 0: HOME
+        self.stack.addWidget(self.library_view)       # 1: LIBRARY
+        self.stack.addWidget(self.details_view)       # 2: DETAILS
+        self.stack.addWidget(self.settings_view)      # 3: SETTINGS
+        self.stack.addWidget(self.communities_view)   # 4: COMMUNITY / COMMUNITIES / FRIENDS
+        self.stack.addWidget(self.profile_view)       # 5: PROFILE
 
         # Conectar señales
         self.home_view.navigate_to.connect(self.switch_view)
@@ -2582,6 +3656,15 @@ class OmniDashMainWindow(QMainWindow):
         self.details_view.launch_game.connect(self.launch_game)
 
         self.settings_view.wallpaper_changed.connect(self.set_wallpaper)
+
+        # Conectar Stream Card para lanzar juego en directo
+        self.communities_view.interior_view.chat_area.stream_card.play_stream.connect(
+            lambda _: self.launch_game({
+                "title": "Metal Slug 2",
+                "core": "cores/fbneo_libretro.dylib",
+                "rom": "roms/arcade/mslug2.zip"
+            })
+        )
 
     def set_wallpaper(self, path: str):
         p = Path(path).resolve()
@@ -2638,11 +3721,16 @@ class OmniDashMainWindow(QMainWindow):
             "DETAILS": 2,
             "SETTINGS": 3,
             "COMMUNITY": 4,
+            "COMMUNITIES": 4,
             "FRIENDS": 4,
             "PROFILE": 5,
         }
         idx = mapping.get(view_id, 0)
         self.stack.setCurrentIndex(idx)
+        if view_id == "FRIENDS":
+            self.communities_view.show_explore()
+        elif view_id in ("COMMUNITY", "COMMUNITIES"):
+            self.communities_view.show_interior()
         self.nav_bar.set_active_view(view_id)
 
     def show_details(self, game: dict):
