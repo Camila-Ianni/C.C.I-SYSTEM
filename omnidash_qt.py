@@ -3445,7 +3445,12 @@ class CommunityInteriorView(AcrylicGlassCard):
         if not ico_p.exists():
             ico_p = ROOT / "assets_omnidash" / "icons" / "xbox_controller.png"
         if ico_p.exists():
-            ico_lbl.setPixmap(QPixmap(str(ico_p)).scaled(32, 32, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+            ico_lbl.setPixmap(QPixmap(str(ico_p)).scaled(36, 36, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+        ico_shadow = QGraphicsDropShadowEffect(ico_lbl)
+        ico_shadow.setOffset(0, 0)
+        ico_shadow.setBlurRadius(14)
+        ico_shadow.setColor(QColor(53, 200, 241, 230))
+        ico_lbl.setGraphicsEffect(ico_shadow)
         logo_box.addWidget(ico_lbl)
 
         txt_v = QVBoxLayout()
@@ -3460,7 +3465,7 @@ class CommunityInteriorView(AcrylicGlassCard):
         hdr_row.addLayout(logo_box)
 
         sep = QLabel("|")
-        sep.setStyleSheet("color: rgba(255, 255, 255, 60); font-size: 26px; font-weight: 200; margin: 0 4px;")
+        sep.setStyleSheet("color: rgba(255, 255, 255, 60); font-size: 26px; font-weight: 200; margin: 0 6px;")
         hdr_row.addWidget(sep)
 
         desc_v = QVBoxLayout()
@@ -3476,42 +3481,42 @@ class CommunityInteriorView(AcrylicGlassCard):
         hdr_row.addStretch(1)
 
         search_frame = QFrame()
-        search_frame.setFixedHeight(38)
-        search_frame.setFixedWidth(220)
+        search_frame.setFixedHeight(40)
+        search_frame.setFixedWidth(240)
         search_frame.setStyleSheet("""
             QFrame {
-                background: rgba(14, 28, 42, 0.7);
-                border: 1px solid rgba(145, 165, 179, 0.3);
-                border-radius: 19px;
+                background: rgba(14, 28, 44, 0.75);
+                border: 1px solid rgba(145, 165, 179, 0.35);
+                border-radius: 20px;
             }
         """)
         s_lay = QHBoxLayout(search_frame)
-        s_lay.setContentsMargins(12, 0, 12, 0)
+        s_lay.setContentsMargins(14, 0, 14, 0)
         s_lay.setSpacing(8)
 
         s_ico = QLabel()
         s_p = ROOT / "assets_omnidash" / "icons" / "search.png"
         if s_p.exists():
-            s_ico.setPixmap(QPixmap(str(s_p)).scaled(14, 14, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+            s_ico.setPixmap(QPixmap(str(s_p)).scaled(15, 15, Qt.KeepAspectRatio, Qt.SmoothTransformation))
         s_lay.addWidget(s_ico)
 
         s_inp = QLineEdit()
         s_inp.setPlaceholderText("Buscar en C.C.I...")
-        s_inp.setStyleSheet("background: transparent; border: none; color: #ffffff; font-size: 12px;")
+        s_inp.setStyleSheet("background: transparent; border: none; color: #ffffff; font-size: 13px;")
         s_lay.addWidget(s_inp)
         hdr_row.addWidget(search_frame)
 
         add_comm_btn = QPushButton("+")
-        add_comm_btn.setFixedSize(38, 38)
+        add_comm_btn.setFixedSize(40, 40)
         add_comm_btn.setCursor(Qt.PointingHandCursor)
         add_comm_btn.setToolTip("Crear Comunidad")
         add_comm_btn.setStyleSheet("""
             QPushButton {
                 background: rgba(18, 38, 56, 0.75);
                 border: 1px solid rgba(145, 165, 179, 0.4);
-                border-radius: 19px;
+                border-radius: 20px;
                 color: #ffffff;
-                font-size: 18px;
+                font-size: 19px;
                 font-weight: 700;
             }
             QPushButton:hover {
@@ -3522,7 +3527,7 @@ class CommunityInteriorView(AcrylicGlassCard):
         hdr_row.addWidget(add_comm_btn)
 
         invite_btn = QPushButton()
-        invite_btn.setFixedSize(38, 38)
+        invite_btn.setFixedSize(40, 40)
         invite_btn.setCursor(Qt.PointingHandCursor)
         invite_btn.setToolTip("Invitar Amigos")
         inv_p = ROOT / "assets_omnidash" / "icons" / "person_add.png"
@@ -3530,12 +3535,12 @@ class CommunityInteriorView(AcrylicGlassCard):
             inv_p = ROOT / "assets_omnidash" / "icons" / "people.png"
         if inv_p.exists():
             invite_btn.setIcon(QIcon(str(inv_p)))
-            invite_btn.setIconSize(QSize(18, 18))
+            invite_btn.setIconSize(QSize(20, 20))
         invite_btn.setStyleSheet("""
             QPushButton {
                 background: rgba(18, 38, 56, 0.75);
                 border: 1px solid rgba(145, 165, 179, 0.4);
-                border-radius: 19px;
+                border-radius: 20px;
             }
             QPushButton:hover {
                 background: rgba(53, 200, 241, 0.25);
@@ -3642,7 +3647,7 @@ class CommunitiesView(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(44, 12, 44, 20)
+        layout.setContentsMargins(36, 8, 36, 18)
 
         self.internal_stack = QStackedWidget(self)
         layout.addWidget(self.internal_stack)
