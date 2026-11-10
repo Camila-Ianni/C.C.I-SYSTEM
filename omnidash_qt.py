@@ -637,7 +637,7 @@ class HomeView(QWidget):
         super().__init__(parent)
         self.setFocusPolicy(Qt.StrongFocus)
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(60, 4, 60, 24)
+        layout.setContentsMargins(56, 2, 56, 22)
         layout.setSpacing(0)
 
         # 0. PERFIL DE USUARIO ALEX (Debajo del logotipo C.C.I. SYSTEM en el margen izquierdo)
@@ -646,13 +646,13 @@ class HomeView(QWidget):
 
         self.profile_card = AcrylicGlassCard(
             self,
-            border_radius=28,
+            border_radius=26,
             is_interactive=True,
-            glow_color=QColor(0, 180, 255, 60),
+            glow_color=QColor(53, 200, 241, 60),
             glow_radius=14,
-            border_color=QColor(255, 255, 255, 95),
+            border_color=QColor(145, 165, 179, 90),
         )
-        self.profile_card.setFixedSize(255, 58)
+        self.profile_card.setFixedSize(240, 52)
         p_lay = QHBoxLayout(self.profile_card)
         p_lay.setContentsMargins(8, 4, 16, 4)
         p_lay.setSpacing(10)
@@ -661,7 +661,7 @@ class HomeView(QWidget):
         av_p = ROOT / "assets_omnidash" / "spidey_avatar.png"
         if av_p.exists():
             raw_av = QPixmap(str(av_p))
-            av_lbl.setPixmap(get_rounded_pixmap(raw_av, 44, 44, 22))
+            av_lbl.setPixmap(get_rounded_pixmap(raw_av, 42, 42, 21))
         p_lay.addWidget(av_lbl)
 
         name_v = QVBoxLayout()
@@ -679,7 +679,7 @@ class HomeView(QWidget):
         profile_row.addWidget(self.profile_card)
         profile_row.addStretch(1)
         layout.addLayout(profile_row)
-        layout.addSpacing(10)
+        layout.addSpacing(8)
 
         # 1. FILA PRINCIPAL: Botón Izq + Hero Card + Grid 3x2 + Botón Der
         main_row = QHBoxLayout()
@@ -700,8 +700,8 @@ class HomeView(QWidget):
                 font-weight: 700;
             }
             QPushButton:hover {
-                background: rgba(0, 180, 255, 160);
-                border: 1.6px solid #00e5ff;
+                background: rgba(53, 200, 241, 160);
+                border: 1.6px solid #35C8F1;
             }
         """)
         main_row.addWidget(self.left_arrow)
@@ -713,49 +713,40 @@ class HomeView(QWidget):
         ]
         self.hero_game = mario_candidates[0] if mario_candidates else (ALL_GAMES[0] if ALL_GAMES else {"title": "Super Mario Bros", "console": "SNES"})
 
-        # Cargar arte del Hero (foto oficial de fotos juegos/)
-        hero_pix = None
-        if self.hero_game and self.hero_game.get("cover"):
-            cp = ROOT / self.hero_game["cover"]
-            if cp.exists():
-                hero_pix = QPixmap(str(cp))
-        if not hero_pix or hero_pix.isNull():
-            hero_art_path = ROOT / "fotos juegos" / "Super Mario World 2- Yoshi's Island.jpg"
-            if hero_art_path.exists():
-                hero_pix = QPixmap(str(hero_art_path))
+        hero_art_path = ROOT / "assets_omnidash" / "mockup_cards" / "hero_mario_2x.png"
+        if not hero_art_path.exists():
+            hero_art_path = ROOT / "assets_omnidash" / "mockup_cards" / "hero_mario.png"
+        hero_pix = QPixmap(str(hero_art_path)) if hero_art_path.exists() else None
 
         self.hero_card = AcrylicGlassCard(
             self,
-            border_radius=36,
+            border_radius=34,
             is_interactive=True,
-            glow_color=QColor(0, 210, 255, 220),
+            glow_color=QColor(53, 200, 241, 230),
             glow_radius=26,
-            border_color=QColor(160, 230, 255, 240),
+            border_color=QColor(53, 200, 241, 240),
             bg_image=hero_pix,
-            inner_padding=6,
+            inner_padding=0,
         )
-        self.hero_card.setFixedSize(490, 416)
+        self.hero_card.setFixedSize(485, 416)
         hero_layout = QVBoxLayout(self.hero_card)
-        hero_layout.setContentsMargins(16, 14, 16, 16)
+        hero_layout.setContentsMargins(16, 12, 16, 18)
 
         # Botón Favorito (Corazón) en esquina superior derecha
         h_top_row = QHBoxLayout()
         h_top_row.addStretch(1)
-        self.fav_btn = QPushButton("♡")
-        self.fav_btn.setFixedSize(36, 36)
+        self.fav_btn = QPushButton("")
+        self.fav_btn.setFixedSize(38, 38)
         self.fav_btn.setCursor(Qt.PointingHandCursor)
         self.fav_btn.setStyleSheet("""
             QPushButton {
-                background: rgba(10, 20, 35, 140);
-                border: 1.5px solid rgba(255, 255, 255, 180);
-                border-radius: 18px;
-                color: #ffffff;
-                font-size: 18px;
-                font-weight: 700;
+                background: transparent;
+                border: none;
             }
             QPushButton:hover {
-                background: rgba(255, 75, 110, 190);
-                border: 1.5px solid #ffffff;
+                background: rgba(255, 75, 110, 60);
+                border: 1.5px solid rgba(255, 255, 255, 180);
+                border-radius: 19px;
             }
         """)
         h_top_row.addWidget(self.fav_btn)
@@ -765,22 +756,18 @@ class HomeView(QWidget):
         # Botón Flotante Liquid Glass "▶ Iniciar (60 FPS)"
         h_bot_row = QHBoxLayout()
         h_bot_row.addStretch(1)
-        self.play_btn = QPushButton(" ▶   Iniciar (60 FPS)")
-        self.play_btn.setFixedSize(270, 48)
+        self.play_btn = QPushButton("")
+        self.play_btn.setFixedSize(262, 54)
         self.play_btn.setCursor(Qt.PointingHandCursor)
         self.play_btn.setStyleSheet("""
             QPushButton {
-                background: rgba(10, 22, 38, 190);
-                border: 1.8px solid rgba(255, 255, 255, 230);
-                border-radius: 24px;
-                color: #ffffff;
-                font-size: 13px;
-                font-weight: 700;
-                padding: 6px 18px;
+                background: transparent;
+                border: none;
             }
             QPushButton:hover {
-                background: rgba(0, 180, 255, 180);
-                border: 1.8px solid #ffffff;
+                background: rgba(53, 200, 241, 40);
+                border: 1.6px solid rgba(255, 255, 255, 180);
+                border-radius: 27px;
             }
         """)
         self.play_btn.clicked.connect(lambda: self.launch_game.emit(self.hero_game))
@@ -792,50 +779,50 @@ class HomeView(QWidget):
         self.hero_card.setCursor(Qt.PointingHandCursor)
         main_row.addWidget(self.hero_card)
 
-        # --- B. GRID DE 6 TARJETAS (2 FILAS x 3 COLUMNAS - FOTOS JUEGOS OFICIALES) ---
+        # --- B. GRID DE 6 TARJETAS (2 FILAS x 3 COLUMNAS - MOCKUP EXACTO) ---
         grid_items_data = [
             (
-                "Super Mario All-Stars",
-                "fotos juegos/Super Mario All-Stars Online.jpeg",
-                QColor(0, 210, 255, 190),
-                QColor(0, 210, 255, 230),
+                "Super Mario",
+                "assets_omnidash/mockup_cards/grid_mario_2x.png",
+                QColor(53, 200, 241, 150),
+                QColor(145, 165, 179, 140),
             ),
             (
-                "Metal Slug 2",
-                "fotos juegos/Metal Slug 2- Super Vehicle-001:II.jpg",
-                QColor(255, 159, 28, 190),
-                QColor(255, 159, 28, 230),
+                "Metal Slug",
+                "assets_omnidash/mockup_cards/grid_metalslug_2x.png",
+                QColor(255, 159, 28, 150),
+                QColor(145, 165, 179, 140),
             ),
             (
                 "The Legend of Zelda",
-                "fotos juegos/The Legend of Zelda- Ocarina of Time.jpg",
-                QColor(255, 215, 0, 190),
-                QColor(255, 215, 0, 230),
+                "assets_omnidash/mockup_cards/grid_zelda_2x.png",
+                QColor(255, 215, 0, 150),
+                QColor(145, 165, 179, 140),
             ),
             (
                 "Donkey Kong 64",
-                "fotos juegos/Donkey Kong 64.jpg",
-                QColor(46, 204, 113, 190),
-                QColor(46, 204, 113, 230),
+                "assets_omnidash/mockup_cards/grid_donkeykong_2x.png",
+                QColor(46, 204, 113, 150),
+                QColor(145, 165, 179, 140),
             ),
             (
-                "Castlevania - Symphony of the Night",
-                "fotos juegos/Castlevania- Symphony of the Night.webp",
-                QColor(230, 57, 70, 190),
-                QColor(230, 57, 70, 230),
+                "Castlevania",
+                "assets_omnidash/mockup_cards/grid_castlevania_2x.png",
+                QColor(230, 57, 70, 150),
+                QColor(145, 165, 179, 140),
             ),
             (
                 "Mario Kart DS",
-                "fotos juegos/Mario Kart DS.jpg",
-                QColor(112, 214, 255, 190),
-                QColor(112, 214, 255, 230),
+                "assets_omnidash/mockup_cards/grid_mariokart_2x.png",
+                QColor(53, 200, 241, 150),
+                QColor(145, 165, 179, 140),
             ),
         ]
 
         grid_container = QWidget()
         grid_layout = QGridLayout(grid_container)
         grid_layout.setContentsMargins(0, 0, 0, 0)
-        grid_layout.setSpacing(14)
+        grid_layout.setSpacing(16)
 
         self.grid_cards = []
         for idx, (title, cover_rel, glow_col, border_col) in enumerate(grid_items_data):
@@ -851,15 +838,15 @@ class HomeView(QWidget):
 
             card = AcrylicGlassCard(
                 self,
-                border_radius=22,
+                border_radius=24,
                 is_interactive=True,
                 glow_color=glow_col,
                 glow_radius=18,
                 border_color=border_col,
                 bg_image=card_pix,
-                inner_padding=6,
+                inner_padding=0,
             )
-            card.setFixedSize(228, 194)
+            card.setFixedSize(236, 198)
             card.mousePressEvent = lambda _, gm=matched_game: self.open_details.emit(gm)
             card.setCursor(Qt.PointingHandCursor)
 
@@ -884,8 +871,8 @@ class HomeView(QWidget):
                 font-weight: 700;
             }
             QPushButton:hover {
-                background: rgba(0, 180, 255, 160);
-                border: 1.6px solid #00e5ff;
+                background: rgba(53, 200, 241, 160);
+                border: 1.6px solid #35C8F1;
             }
         """)
         main_row.addWidget(self.right_arrow)
@@ -899,18 +886,18 @@ class HomeView(QWidget):
         dots_box.setAlignment(Qt.AlignCenter)
 
         dot_active = QLabel()
-        dot_active.setFixedSize(30, 6)
-        dot_active.setStyleSheet("background: #00d2ff; border-radius: 3px;")
+        dot_active.setFixedSize(32, 6)
+        dot_active.setStyleSheet("background: #ffffff; border-radius: 3px;")
         dots_box.addWidget(dot_active)
 
         for _ in range(3):
             dot = QLabel()
             dot.setFixedSize(6, 6)
-            dot.setStyleSheet("background: rgba(255, 255, 255, 110); border-radius: 3px;")
+            dot.setStyleSheet("background: rgba(145, 165, 179, 120); border-radius: 3px;")
             dots_box.addWidget(dot)
 
         layout.addLayout(dots_box)
-        layout.addSpacing(14)
+        layout.addSpacing(16)
 
         # 3. FILA INFERIOR: 4 TARJETAS ANCHAS DE CRISTAL LÍQUIDO CON GLOW TEMÁTICO
         bot_row = QHBoxLayout()
@@ -922,32 +909,32 @@ class HomeView(QWidget):
                 f"{len(ALL_GAMES)} juegos listos para jugar",
                 "LIBRARY",
                 "apps_grid",
-                QColor(0, 180, 255, 200),
-                QColor(0, 180, 255, 230),
+                QColor(53, 200, 241, 140),
+                QColor(145, 165, 179, 110),
             ),
             (
                 "Amigos",
                 "Seeker & Night Raid • 3 en línea",
                 "COMMUNITY",
                 "friends_duo",
-                QColor(0, 235, 255, 190),
-                QColor(0, 235, 255, 230),
+                QColor(53, 200, 241, 140),
+                QColor(145, 165, 179, 110),
             ),
             (
                 "GAME PASS",
                 "Descubre cientos de juegos",
                 "LIBRARY",
                 "xbox_gamepass",
-                QColor(46, 204, 113, 210),
-                QColor(46, 204, 113, 240),
+                QColor(50, 216, 117, 180),
+                QColor(50, 216, 117, 210),
             ),
             (
                 "Logros",
                 "18,450 G • 110 trofeos",
                 "PROFILE",
                 "trophy",
-                QColor(192, 96, 255, 210),
-                QColor(192, 96, 255, 240),
+                QColor(167, 122, 228, 180),
+                QColor(167, 122, 228, 210),
             ),
         ]
 
@@ -958,7 +945,7 @@ class HomeView(QWidget):
                 border_radius=22,
                 is_interactive=True,
                 glow_color=glow_c,
-                glow_radius=20,
+                glow_radius=18,
                 border_color=border_c,
             )
             c.setFixedHeight(90)
@@ -979,9 +966,9 @@ class HomeView(QWidget):
             txt_box = QVBoxLayout()
             txt_box.setSpacing(2)
             t_lbl = QLabel(title)
-            t_lbl.setStyleSheet("font-size: 14px; font-weight: 700; color: #ffffff;")
+            t_lbl.setStyleSheet("font-size: 14px; font-weight: 800; color: #F4F6F8;")
             s_lbl = QLabel(subtitle)
-            s_lbl.setStyleSheet("font-size: 11px; color: #bde4ff;")
+            s_lbl.setStyleSheet("font-size: 11px; font-weight: 500; color: #BDD4E4;")
             txt_box.addWidget(t_lbl)
             txt_box.addWidget(s_lbl)
             c_lay.addLayout(txt_box)
@@ -990,7 +977,7 @@ class HomeView(QWidget):
 
             # Chevron indicador derecha
             chev_lbl = QLabel("›")
-            chev_lbl.setStyleSheet("font-size: 22px; font-weight: 600; color: rgba(255, 255, 255, 190);")
+            chev_lbl.setStyleSheet("font-size: 22px; font-weight: 600; color: #BDD4E4;")
             c_lay.addWidget(chev_lbl)
 
             c.mousePressEvent = lambda _, d=dest: self.navigate_to.emit(d)
