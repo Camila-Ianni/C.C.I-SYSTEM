@@ -95,6 +95,11 @@ class LibretroRunner:
         # Estado de botones
         self.joypad_state = [0] * 16
 
+        # Directorio persistente para BIOS oficiales (system/bios7.bin, bios9.bin, etc.)
+        self._sys_dir_path = str((self.core_path.parent.parent / "system").resolve()).encode("utf-8")
+        self._sys_dir_buf = ctypes.create_string_buffer(self._sys_dir_path)
+        self._sys_dir_ptr = ctypes.c_char_p(ctypes.addressof(self._sys_dir_buf))
+
         self._setup_c_types()
         self._setup_callbacks()
         self.lib.retro_init()
@@ -120,9 +125,8 @@ class LibretroRunner:
                 self.pixel_format = fmt
                 return True
             if cmd == 9 and data:
-                sys_dir = str((self.core_path.parent.parent / "system").resolve()).encode("utf-8")
                 ptr = ctypes.cast(data, ctypes.POINTER(ctypes.c_char_p))
-                ptr.contents = ctypes.c_char_p(sys_dir)
+                ptr[0] = self._sys_dir_ptr
                 return True
             if cmd == 3 and data:
                 ptr = ctypes.cast(data, ctypes.POINTER(ctypes.c_bool))

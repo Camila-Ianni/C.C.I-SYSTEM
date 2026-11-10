@@ -40,8 +40,8 @@ GLOBAL_BLURRED_BG: QPixmap | None = None
 WALLPAPER_IS_DARK: bool = True
 
 
-def update_global_blurred_wallpaper(path: str | Path, target_size: tuple[int, int] = (1280, 720)):
-    """Calcula el desenfoque óptico del fondo (Backdrop Blur) en resolución HiDPI 4K."""
+def update_global_blurred_wallpaper(path: str | Path, target_size: tuple[int, int] = (1672, 941)):
+    """Calcula el desenfoque óptico del fondo (Backdrop Blur) en resolución adaptativa 1-a-1."""
     global GLOBAL_BLURRED_BG, WALLPAPER_IS_DARK
     p = Path(path).resolve()
     if not p.exists():
@@ -55,17 +55,14 @@ def update_global_blurred_wallpaper(path: str | Path, target_size: tuple[int, in
         lum = 0.299 * avg_r + 0.587 * avg_g + 0.114 * avg_b
         WALLPAPER_IS_DARK = (lum < 100)
 
-        # Muestreo HiDPI Retina (2x) para preservar la nitidez 4K del cristal
-        dpr = 2.0
-        tw, th = max(200, int(target_size[0] * dpr)), max(200, int(target_size[1] * dpr))
+        # Muestreo a tamaño lógico de la ventana para correspondencia de coordenadas 1-a-1
+        tw, th = max(200, int(target_size[0])), max(200, int(target_size[1]))
         pil_blurred = pil_img.resize((tw, th), Image.Resampling.LANCZOS).filter(
-            ImageFilter.GaussianBlur(radius=int(10 * dpr))
+            ImageFilter.GaussianBlur(radius=14)
         )
         raw_bytes = pil_blurred.tobytes("raw", "RGB")
         qimg = QImage(raw_bytes, tw, th, tw * 3, QImage.Format_RGB888)
-        pix = QPixmap.fromImage(qimg)
-        pix.setDevicePixelRatio(dpr)
-        GLOBAL_BLURRED_BG = pix
+        GLOBAL_BLURRED_BG = QPixmap.fromImage(qimg)
     except Exception as err:
         print(f"[OmniDash-Qt] Error actualizando desenfoque de fondo: {err}")
 
@@ -324,22 +321,28 @@ class AcrylicGlassCard(QFrame):
 
         active = self.is_hovered or self.is_focused
 
-        # 2. Capa translúcida adaptativa de cristal base según el brillo del fondo
+        # 2. Capa translúcida de cristal líquido adaptativo (alta transparencia para ver fondo y charcos)
         if not drawn_blur:
-            fallback_col = QColor(14, 20, 32, 210) if WALLPAPER_IS_DARK else QColor(10, 55, 95, 210)
+            fallback_col = QColor(14, 24, 40, 180) if WALLPAPER_IS_DARK else QColor(10, 50, 85, 180)
             painter.fillRect(0, 0, w, h, fallback_col)
         elif WALLPAPER_IS_DARK:
-            # Cristal líquido oscuro con refracción azul ambiental del wallpaper
-            dark_film = QColor(10, 16, 28, 80 if active else 115)
-            blue_refraction = QColor(0, 140, 255, 26 if active else 16)
+            # Cristal líquido oscuro pero diáfano (permite ver el agua y reflejos del fondo)
+            dark_film = QColor(8, 20, 36, 65 if active else 85)
+            blue_refraction = QColor(0, 140, 255, 22 if active else 12)
             painter.fillRect(0, 0, w, h, dark_film)
             painter.fillRect(0, 0, w, h, blue_refraction)
         else:
-            # Cristal líquido claro con tinte aguamarina suave
-            aqua_film = QColor(8, 48, 85, 80 if active else 120)
-            aqua_sheen = QColor(255, 255, 255, 55 if active else 25)
+            aqua_film = QColor(8, 48, 85, 65 if active else 90)
+            aqua_sheen = QColor(255, 255, 255, 45 if active else 20)
             painter.fillRect(0, 0, w, h, aqua_film)
             painter.fillRect(0, 0, w, h, aqua_sheen)
+
+        # Gradiente especular multicapa (Glassmorphism & Liquid Glass)
+        glass_sheen = QLinearGradient(0, 0, 0, h)
+        glass_sheen.setColorAt(0.0, QColor(255, 255, 255, 40 if active else 22))
+        glass_sheen.setColorAt(0.4, QColor(255, 255, 255, 8))
+        glass_sheen.setColorAt(1.0, QColor(255, 255, 255, 2))
+        painter.fillRect(0, 0, w, h, QBrush(glass_sheen))
 
         # 2.5 Arte del juego inset (Borde de cristal transparente alrededor de la imagen)
         if self.bg_image and not self.bg_image.isNull():
@@ -358,8 +361,6 @@ class AcrylicGlassCard(QFrame):
                 sx = max(0, (scaled_bg.width() - iw) // 2)
                 sy = max(0, (scaled_bg.height() - ih) // 2)
                 painter.drawPixmap(pad, pad, scaled_bg, sx, sy, iw, ih)
-                # Sutil película para contraste
-                painter.fillRect(pad, pad, iw, ih, QColor(0, 0, 0, 25 if active else 45))
                 painter.restore()
 
                 # Línea interior sutil en el marco del arte
@@ -370,7 +371,7 @@ class AcrylicGlassCard(QFrame):
                 sx = max(0, (scaled_bg.width() - w) // 2)
                 sy = max(0, (scaled_bg.height() - h) // 2)
                 painter.drawPixmap(0, 0, scaled_bg, sx, sy, w, h)
-                tint = QColor(0, 0, 0, 35 if active else 60)
+                tint = QColor(0, 0, 0, 25 if active else 45)
                 painter.fillRect(0, 0, w, h, tint)
 
         # 3. Reflejo especular Liquid Glass (curva o gradiente superior sobre todo el cristal)
@@ -378,8 +379,8 @@ class AcrylicGlassCard(QFrame):
             spec_h = int(h * 0.45)
             if spec_h > 8:
                 spec_grad = QLinearGradient(0, 0, 0, spec_h)
-                spec_grad.setColorAt(0.0, QColor(255, 255, 255, 75 if active else 45))
-                spec_grad.setColorAt(0.35, QColor(255, 255, 255, 20))
+                spec_grad.setColorAt(0.0, QColor(255, 255, 255, 65 if active else 35))
+                spec_grad.setColorAt(0.35, QColor(255, 255, 255, 15))
                 spec_grad.setColorAt(1.0, QColor(255, 255, 255, 0))
                 painter.fillRect(0, 0, w, spec_h, QBrush(spec_grad))
 
@@ -389,112 +390,73 @@ class AcrylicGlassCard(QFrame):
 
         painter.restore()
 
-        # 5. Borde transparente con ligero brillo blanco luminoso exterior
+        # 5. Borde transparente con glow de color temático permanente
         if self.border_color:
-            b_col = self.border_color if active else QColor(255, 255, 255, 185)
-            painter.setPen(QPen(b_col, 2.0 if active else 1.4))
+            painter.setPen(QPen(self.border_color, 2.2 if active else 1.8))
         elif active:
-            if WALLPAPER_IS_DARK:
-                painter.setPen(QPen(QColor(0, 210, 255, 250), 2.2))
-            else:
-                painter.setPen(QPen(QColor(0, 180, 255, 250), 2.2))
+            painter.setPen(QPen(QColor(0, 210, 255, 250), 2.2))
         else:
-            painter.setPen(QPen(QColor(255, 255, 255, 185), 1.3))
+            painter.setPen(QPen(QColor(255, 255, 255, 140), 1.4))
 
         painter.drawPath(path)
 
 
 # ==============================================================================
-# BARRA SUPERIOR DE NAVEGACIÓN DOCK (C.C.I. SYSTEM + PROFILE + LIQUID DOCK)
+# BARRA SUPERIOR DE NAVEGACIÓN DOCK (C.C.I. SYSTEM + LIQUID DOCK + STATUS)
 # ==============================================================================
 class OmniDashNavBar(QWidget):
     navigate = Signal(str)
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setFixedHeight(68)
+        self.setFixedHeight(76)
         self.current_view = "HOME"
 
         layout = QHBoxLayout(self)
-        layout.setContentsMargins(36, 10, 36, 10)
-        layout.setSpacing(14)
+        layout.setContentsMargins(60, 14, 60, 6)
+        layout.setSpacing(16)
 
-        # 1. Logo C.C.I. SYSTEM & Badge de Usuario (Izquierda)
-        left_box = QHBoxLayout()
-        left_box.setSpacing(12)
-
-        # Brand Logo C.C.I. SYSTEM
+        # 1. Brand Logo C.C.I. SYSTEM (Esquina superior izquierda)
         brand_box = QHBoxLayout()
-        brand_box.setSpacing(8)
+        brand_box.setSpacing(10)
+
         ico_lbl = QLabel()
-        ico_p = ROOT / "assets_omnidash" / "icons" / "xbox_controller.png"
+        ico_p = ROOT / "assets_omnidash" / "icons" / "controller_outline.png"
+        if not ico_p.exists():
+            ico_p = ROOT / "assets_omnidash" / "icons" / "xbox_controller.png"
         if ico_p.exists():
-            ico_lbl.setPixmap(QPixmap(str(ico_p)).scaled(26, 26, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+            ico_lbl.setPixmap(QPixmap(str(ico_p)).scaled(32, 32, Qt.KeepAspectRatio, Qt.SmoothTransformation))
         brand_box.addWidget(ico_lbl)
 
         txt_v = QVBoxLayout()
         txt_v.setSpacing(0)
         t_cci = QLabel("C.C.I.")
-        t_cci.setStyleSheet("font-size: 16px; font-weight: 900; color: #ffffff; letter-spacing: 1px;")
+        t_cci.setStyleSheet("font-size: 22px; font-weight: 900; color: #ffffff; letter-spacing: 2px;")
         t_sys = QLabel("SYSTEM")
-        t_sys.setStyleSheet("font-size: 9px; font-weight: 800; color: #00d2ff; letter-spacing: 2px;")
+        t_sys.setStyleSheet("font-size: 10px; font-weight: 800; color: #00d2ff; letter-spacing: 3px;")
         txt_v.addWidget(t_cci)
         txt_v.addWidget(t_sys)
         brand_box.addLayout(txt_v)
-        left_box.addLayout(brand_box)
 
         # Separador vertical fino
         sep = QLabel("|")
-        sep.setStyleSheet("color: rgba(255, 255, 255, 60); font-size: 20px; font-weight: 300;")
-        left_box.addWidget(sep)
+        sep.setStyleSheet("color: rgba(255, 255, 255, 80); font-size: 24px; font-weight: 200; margin-left: 6px;")
+        brand_box.addWidget(sep)
 
-        # Profile Badge (Spidey Avatar + Alex + Gamerscore)
-        self.profile_card = AcrylicGlassCard(
-            self,
-            border_radius=18,
-            is_interactive=True,
-            glow_color=QColor(0, 180, 255, 80),
-            glow_radius=14,
-            border_color=QColor(255, 255, 255, 120),
-        )
-        self.profile_card.setFixedHeight(38)
-        p_lay = QHBoxLayout(self.profile_card)
-        p_lay.setContentsMargins(6, 4, 14, 4)
-        p_lay.setSpacing(8)
-
-        # Avatar Spidey circular
-        av_lbl = QLabel()
-        av_p = ROOT / "assets_omnidash" / "spidey_avatar.png"
-        if av_p.exists():
-            raw_av = QPixmap(str(av_p))
-            av_lbl.setPixmap(get_rounded_pixmap(raw_av, 28, 28, 14))
-        p_lay.addWidget(av_lbl)
-
-        name_lbl = QLabel("Alex  <span style='color: #00ff88;'>●</span>")
-        name_lbl.setStyleSheet("font-size: 13px; font-weight: 700; color: #ffffff;")
-        p_lay.addWidget(name_lbl)
-
-        pts_lbl = QLabel("18,450 G")
-        pts_lbl.setStyleSheet("font-size: 12px; font-weight: 600; color: #bde4ff;")
-        p_lay.addWidget(pts_lbl)
-
-        self.profile_card.mousePressEvent = lambda _: self.navigate.emit("PROFILE")
-        self.profile_card.setCursor(Qt.PointingHandCursor)
-        left_box.addWidget(self.profile_card)
-
-        layout.addLayout(left_box)
+        layout.addLayout(brand_box)
         layout.addStretch(1)
 
-        # 2. Dock de Navegación Central de Cristal Líquido (Glow Cyan)
+        # 2. Dock de Navegación Central Flotante de Cristal Líquido (Glow Cyan)
         dock_container = AcrylicGlassCard(
             self,
-            border_radius=20,
-            glow_color=QColor(0, 170, 255, 90),
+            border_radius=26,
+            glow_color=QColor(0, 170, 255, 80),
             glow_radius=16,
-            border_color=QColor(255, 255, 255, 110),
+            border_color=QColor(255, 255, 255, 90),
         )
+        dock_container.setFixedHeight(54)
         dock_layout = QHBoxLayout(dock_container)
-        dock_layout.setContentsMargins(6, 4, 6, 4)
+        dock_layout.setContentsMargins(8, 4, 8, 4)
         dock_layout.setSpacing(6)
 
         nav_items = [
@@ -508,7 +470,8 @@ class OmniDashNavBar(QWidget):
         for label, icon_name, view_id in nav_items:
             btn = QPushButton(f"  {label}")
             btn.setCursor(Qt.PointingHandCursor)
-            btn.setMinimumWidth(95)
+            btn.setMinimumWidth(100)
+            btn.setFixedHeight(40)
             ipath = ROOT / "assets_omnidash" / "icons" / f"{icon_name}.png"
             if ipath.exists():
                 btn.setIcon(QIcon(str(ipath)))
@@ -521,49 +484,51 @@ class OmniDashNavBar(QWidget):
         layout.addWidget(dock_container)
         layout.addStretch(1)
 
-        # 3. Status Widgets (Campana notificaciones, Wifi, Gamepad, Reloj)
+        # 3. Status Widgets (Campana notificaciones con badge, Wifi, Gamepad, Reloj)
         status_box = QHBoxLayout()
-        status_box.setSpacing(12)
+        status_box.setSpacing(16)
 
         # Campana con indicador 1
-        bell_card = AcrylicGlassCard(self, border_radius=16, is_interactive=True)
-        bell_card.setFixedSize(36, 36)
-        b_lay = QHBoxLayout(bell_card)
-        b_lay.setContentsMargins(0, 0, 0, 0)
         bell_lbl = QLabel()
-        bell_lbl.setAlignment(Qt.AlignCenter)
-        bell_p = ROOT / "assets_omnidash" / "icons" / "alert.png"
+        bell_lbl.setCursor(Qt.PointingHandCursor)
+        bell_p = ROOT / "assets_omnidash" / "icons" / "bell_badge.png"
+        if not bell_p.exists():
+            bell_p = ROOT / "assets_omnidash" / "icons" / "alert.png"
         if bell_p.exists():
-            bell_lbl.setPixmap(QPixmap(str(bell_p)).scaled(18, 18, Qt.KeepAspectRatio, Qt.SmoothTransformation))
-        b_lay.addWidget(bell_lbl)
-        bell_card.setCursor(Qt.PointingHandCursor)
-        status_box.addWidget(bell_card)
+            bell_lbl.setPixmap(QPixmap(str(bell_p)).scaled(26, 26, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+        status_box.addWidget(bell_lbl)
 
         # WiFi
         wifi_lbl = QLabel()
-        wifi_p = ROOT / "assets_omnidash" / "icons" / "globe.png"
+        wifi_p = ROOT / "assets_omnidash" / "icons" / "wifi_signal.png"
+        if not wifi_p.exists():
+            wifi_p = ROOT / "assets_omnidash" / "icons" / "globe.png"
         if wifi_p.exists():
-            wifi_lbl.setPixmap(QPixmap(str(wifi_p)).scaled(18, 18, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+            wifi_lbl.setPixmap(QPixmap(str(wifi_p)).scaled(22, 22, Qt.KeepAspectRatio, Qt.SmoothTransformation))
         status_box.addWidget(wifi_lbl)
 
         # Gamepad
         gp_lbl = QLabel()
-        gp_p = ROOT / "assets_omnidash" / "icons" / "xbox_controller.png"
+        gp_p = ROOT / "assets_omnidash" / "icons" / "controller_outline.png"
+        if not gp_p.exists():
+            gp_p = ROOT / "assets_omnidash" / "icons" / "xbox_controller.png"
         if gp_p.exists():
-            gp_lbl.setPixmap(QPixmap(str(gp_p)).scaled(18, 18, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+            gp_lbl.setPixmap(QPixmap(str(gp_p)).scaled(22, 22, Qt.KeepAspectRatio, Qt.SmoothTransformation))
         status_box.addWidget(gp_lbl)
 
-        # Reloj digital oficial
+        # Reloj digital oficial en cápsula de cristal
         self.clock_card = AcrylicGlassCard(
             self,
-            border_radius=16,
-            glow_color=QColor(0, 180, 255, 60),
+            border_radius=20,
+            glow_color=QColor(0, 180, 255, 50),
             glow_radius=12,
-            border_color=QColor(255, 255, 255, 120),
+            border_color=QColor(255, 255, 255, 110),
         )
+        self.clock_card.setFixedSize(130, 42)
         clock_layout = QHBoxLayout(self.clock_card)
-        clock_layout.setContentsMargins(14, 4, 14, 4)
+        clock_layout.setContentsMargins(12, 2, 12, 2)
         self.clock_label = QLabel()
+        self.clock_label.setAlignment(Qt.AlignCenter)
         self.clock_label.setStyleSheet("font-size: 13px; font-weight: 700; color: #ffffff;")
         clock_layout.addWidget(self.clock_label)
         status_box.addWidget(self.clock_card)
@@ -589,12 +554,12 @@ class OmniDashNavBar(QWidget):
             if vid == self.current_view:
                 btn.setStyleSheet("""
                     QPushButton {
-                        background: rgba(0, 180, 255, 55);
-                        border: 1.5px solid #00d2ff;
-                        border-radius: 14px;
-                        padding: 5px 12px;
+                        background: rgba(0, 150, 230, 0.45);
+                        border: 1.8px solid #00e5ff;
+                        border-radius: 18px;
+                        padding: 4px 14px;
                         font-size: 13px;
-                        font-weight: 700;
+                        font-weight: 800;
                         color: #ffffff;
                     }
                 """)
@@ -602,15 +567,15 @@ class OmniDashNavBar(QWidget):
                 btn.setStyleSheet("""
                     QPushButton {
                         background: transparent;
-                        border: 1px solid transparent;
-                        border-radius: 14px;
-                        padding: 5px 10px;
+                        border: 1.5px solid transparent;
+                        border-radius: 18px;
+                        padding: 4px 12px;
                         font-size: 13px;
                         font-weight: 600;
-                        color: rgba(255, 255, 255, 200);
+                        color: rgba(255, 255, 255, 215);
                     }
                     QPushButton:hover {
-                        background: rgba(255, 255, 255, 35);
+                        background: rgba(255, 255, 255, 30);
                         color: #ffffff;
                     }
                 """)
@@ -631,32 +596,71 @@ class HomeView(QWidget):
         super().__init__(parent)
         self.setFocusPolicy(Qt.StrongFocus)
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(36, 10, 36, 18)
+        layout.setContentsMargins(60, 4, 60, 24)
         layout.setSpacing(0)
 
-        # Stretch superior armónico que evita que los bloques se separen
-        layout.addStretch(1)
+        # 0. PERFIL DE USUARIO ALEX (Debajo del logotipo C.C.I. SYSTEM en el margen izquierdo)
+        profile_row = QHBoxLayout()
+        profile_row.setContentsMargins(0, 0, 0, 0)
 
-        # 1. FILA PRINCIPAL: Botón Izq + Hero Card + Grid 2x3 + Botón Der
+        self.profile_card = AcrylicGlassCard(
+            self,
+            border_radius=28,
+            is_interactive=True,
+            glow_color=QColor(0, 180, 255, 60),
+            glow_radius=14,
+            border_color=QColor(255, 255, 255, 95),
+        )
+        self.profile_card.setFixedSize(255, 58)
+        p_lay = QHBoxLayout(self.profile_card)
+        p_lay.setContentsMargins(8, 4, 16, 4)
+        p_lay.setSpacing(10)
+
+        av_lbl = QLabel()
+        av_p = ROOT / "assets_omnidash" / "spidey_avatar.png"
+        if av_p.exists():
+            raw_av = QPixmap(str(av_p))
+            av_lbl.setPixmap(get_rounded_pixmap(raw_av, 44, 44, 22))
+        p_lay.addWidget(av_lbl)
+
+        name_v = QVBoxLayout()
+        name_v.setSpacing(1)
+        name_lbl = QLabel("Alex  <span style='color: #00ff88; font-size: 13px;'>●</span>")
+        name_lbl.setStyleSheet("font-size: 14px; font-weight: 700; color: #ffffff;")
+        pts_lbl = QLabel("18,450 G")
+        pts_lbl.setStyleSheet("font-size: 12px; font-weight: 600; color: #bde4ff;")
+        name_v.addWidget(name_lbl)
+        name_v.addWidget(pts_lbl)
+        p_lay.addLayout(name_v)
+
+        self.profile_card.mousePressEvent = lambda _: self.navigate_to.emit("PROFILE")
+        self.profile_card.setCursor(Qt.PointingHandCursor)
+        profile_row.addWidget(self.profile_card)
+        profile_row.addStretch(1)
+        layout.addLayout(profile_row)
+        layout.addSpacing(10)
+
+        # 1. FILA PRINCIPAL: Botón Izq + Hero Card + Grid 3x2 + Botón Der
         main_row = QHBoxLayout()
-        main_row.setSpacing(12)
+        main_row.setSpacing(14)
+        main_row.setAlignment(Qt.AlignCenter)
 
         # Botón Flecha Izquierda Circular de Cristal
         self.left_arrow = QPushButton("<")
-        self.left_arrow.setFixedSize(34, 34)
+        self.left_arrow.setFixedSize(42, 42)
         self.left_arrow.setCursor(Qt.PointingHandCursor)
         self.left_arrow.setStyleSheet("""
             QPushButton {
-                background: rgba(10, 20, 35, 160);
-                border: 1.5px solid rgba(255, 255, 255, 170);
-                border-radius: 17px;
+                background: rgba(10, 20, 35, 140);
+                border: 1.6px solid rgba(255, 255, 255, 160);
+                border-radius: 21px;
                 color: #ffffff;
-                font-size: 16px;
+                font-size: 18px;
                 font-weight: 700;
             }
             QPushButton:hover {
                 background: rgba(0, 180, 255, 160);
-                border: 1.5px solid #ffffff;
+                border: 1.6px solid #00e5ff;
             }
         """)
         main_row.addWidget(self.left_arrow)
@@ -680,31 +684,31 @@ class HomeView(QWidget):
 
         self.hero_card = AcrylicGlassCard(
             self,
-            border_radius=22,
+            border_radius=36,
             is_interactive=True,
-            glow_color=QColor(0, 210, 255, 175),
-            glow_radius=20,
-            border_color=QColor(0, 210, 255, 240),
+            glow_color=QColor(0, 210, 255, 220),
+            glow_radius=26,
+            border_color=QColor(160, 230, 255, 240),
             bg_image=hero_pix,
-            inner_padding=8,
+            inner_padding=6,
         )
-        self.hero_card.setFixedSize(320, 250)
+        self.hero_card.setFixedSize(490, 416)
         hero_layout = QVBoxLayout(self.hero_card)
-        hero_layout.setContentsMargins(14, 12, 14, 14)
+        hero_layout.setContentsMargins(16, 14, 16, 16)
 
         # Botón Favorito (Corazón) en esquina superior derecha
         h_top_row = QHBoxLayout()
         h_top_row.addStretch(1)
         self.fav_btn = QPushButton("♡")
-        self.fav_btn.setFixedSize(32, 32)
+        self.fav_btn.setFixedSize(36, 36)
         self.fav_btn.setCursor(Qt.PointingHandCursor)
         self.fav_btn.setStyleSheet("""
             QPushButton {
-                background: rgba(10, 20, 35, 160);
-                border: 1.5px solid rgba(255, 255, 255, 170);
-                border-radius: 16px;
+                background: rgba(10, 20, 35, 140);
+                border: 1.5px solid rgba(255, 255, 255, 180);
+                border-radius: 18px;
                 color: #ffffff;
-                font-size: 16px;
+                font-size: 18px;
                 font-weight: 700;
             }
             QPushButton:hover {
@@ -720,21 +724,21 @@ class HomeView(QWidget):
         h_bot_row = QHBoxLayout()
         h_bot_row.addStretch(1)
         self.play_btn = QPushButton(" ▶   Iniciar (60 FPS)")
-        self.play_btn.setFixedSize(190, 36)
+        self.play_btn.setFixedSize(270, 48)
         self.play_btn.setCursor(Qt.PointingHandCursor)
         self.play_btn.setStyleSheet("""
             QPushButton {
-                background: rgba(10, 18, 32, 180);
-                border: 1.5px solid rgba(255, 255, 255, 215);
-                border-radius: 18px;
+                background: rgba(10, 22, 38, 190);
+                border: 1.8px solid rgba(255, 255, 255, 230);
+                border-radius: 24px;
                 color: #ffffff;
-                font-size: 12px;
+                font-size: 13px;
                 font-weight: 700;
-                padding: 4px 14px;
+                padding: 6px 18px;
             }
             QPushButton:hover {
-                background: rgba(0, 180, 255, 170);
-                border: 1.5px solid #ffffff;
+                background: rgba(0, 180, 255, 180);
+                border: 1.8px solid #ffffff;
             }
         """)
         self.play_btn.clicked.connect(lambda: self.launch_game.emit(self.hero_game))
@@ -752,42 +756,42 @@ class HomeView(QWidget):
                 "Super Mario Bros",
                 "grid_mario.png",
                 "fotos web/super mario.jpg",
-                QColor(0, 210, 255, 170),
+                QColor(0, 210, 255, 190),
                 QColor(0, 210, 255, 230),
             ),
             (
                 "Metal Slug",
                 "grid_metalslug.png",
                 "fotos web/metal slug.jpg",
-                QColor(255, 159, 28, 170),
+                QColor(255, 159, 28, 190),
                 QColor(255, 159, 28, 230),
             ),
             (
                 "The Legend Of Zelda",
                 "grid_zelda.png",
                 "fotos web/The_Legend_of_Zelda_film_logo.jpg",
-                QColor(255, 234, 167, 160),
-                QColor(255, 234, 167, 230),
+                QColor(255, 215, 0, 190),
+                QColor(255, 215, 0, 230),
             ),
             (
                 "Donkey Kong 64",
                 "grid_donkeykong.png",
                 "fotos web/donkeykong.jpg",
-                QColor(46, 204, 113, 170),
+                QColor(46, 204, 113, 190),
                 QColor(46, 204, 113, 230),
             ),
             (
                 "Castlevania - Symphony of the Night",
                 "grid_castlevania.png",
                 "fotos web/castlevania.webp",
-                QColor(230, 57, 70, 170),
+                QColor(230, 57, 70, 190),
                 QColor(230, 57, 70, 230),
             ),
             (
                 "Mario Kart DS",
                 "grid_mariokart.png",
                 "fotos web/super mario.jpg",
-                QColor(112, 214, 255, 170),
+                QColor(112, 214, 255, 190),
                 QColor(112, 214, 255, 230),
             ),
         ]
@@ -795,7 +799,7 @@ class HomeView(QWidget):
         grid_container = QWidget()
         grid_layout = QGridLayout(grid_container)
         grid_layout.setContentsMargins(0, 0, 0, 0)
-        grid_layout.setSpacing(10)
+        grid_layout.setSpacing(14)
 
         self.grid_cards = []
         for idx, (title, mock_file, fallback, glow_col, border_col) in enumerate(grid_items_data):
@@ -811,15 +815,15 @@ class HomeView(QWidget):
 
             card = AcrylicGlassCard(
                 self,
-                border_radius=18,
+                border_radius=22,
                 is_interactive=True,
                 glow_color=glow_col,
-                glow_radius=16,
+                glow_radius=18,
                 border_color=border_col,
                 bg_image=card_pix,
                 inner_padding=6,
             )
-            card.setFixedSize(170, 120)
+            card.setFixedSize(228, 194)
             card.mousePressEvent = lambda _, gm=matched_game: self.open_details.emit(gm)
             card.setCursor(Qt.PointingHandCursor)
 
@@ -832,26 +836,26 @@ class HomeView(QWidget):
 
         # Botón Flecha Derecha Circular de Cristal
         self.right_arrow = QPushButton(">")
-        self.right_arrow.setFixedSize(34, 34)
+        self.right_arrow.setFixedSize(42, 42)
         self.right_arrow.setCursor(Qt.PointingHandCursor)
         self.right_arrow.setStyleSheet("""
             QPushButton {
-                background: rgba(10, 20, 35, 160);
-                border: 1.5px solid rgba(255, 255, 255, 170);
-                border-radius: 17px;
+                background: rgba(10, 20, 35, 140);
+                border: 1.6px solid rgba(255, 255, 255, 160);
+                border-radius: 21px;
                 color: #ffffff;
-                font-size: 16px;
+                font-size: 18px;
                 font-weight: 700;
             }
             QPushButton:hover {
                 background: rgba(0, 180, 255, 160);
-                border: 1.5px solid #ffffff;
+                border: 1.6px solid #00e5ff;
             }
         """)
         main_row.addWidget(self.right_arrow)
 
         layout.addLayout(main_row)
-        layout.addSpacing(8)
+        layout.addSpacing(10)
 
         # 2. INDICADORES DE CARRUSEL (PUNTOS • • • •)
         dots_box = QHBoxLayout()
@@ -859,7 +863,7 @@ class HomeView(QWidget):
         dots_box.setAlignment(Qt.AlignCenter)
 
         dot_active = QLabel()
-        dot_active.setFixedSize(24, 6)
+        dot_active.setFixedSize(30, 6)
         dot_active.setStyleSheet("background: #00d2ff; border-radius: 3px;")
         dots_box.addWidget(dot_active)
 
@@ -870,44 +874,44 @@ class HomeView(QWidget):
             dots_box.addWidget(dot)
 
         layout.addLayout(dots_box)
-        layout.addSpacing(10)
+        layout.addSpacing(14)
 
         # 3. FILA INFERIOR: 4 TARJETAS ANCHAS DE CRISTAL LÍQUIDO CON GLOW TEMÁTICO
         bot_row = QHBoxLayout()
-        bot_row.setSpacing(12)
+        bot_row.setSpacing(18)
 
         cards_data = [
             (
                 "Mis juegos y apps",
                 f"{len(ALL_GAMES)} juegos listos para jugar",
                 "LIBRARY",
-                "grid",
-                QColor(0, 168, 255, 160),
-                QColor(0, 168, 255, 230),
+                "apps_grid",
+                QColor(0, 180, 255, 200),
+                QColor(0, 180, 255, 230),
             ),
             (
                 "Amigos",
                 "Seeker & Night Raid • 3 en línea",
                 "COMMUNITY",
-                "people",
-                QColor(0, 229, 255, 150),
-                QColor(0, 229, 255, 220),
+                "friends_duo",
+                QColor(0, 235, 255, 190),
+                QColor(0, 235, 255, 230),
             ),
             (
                 "GAME PASS",
                 "Descubre cientos de juegos",
                 "LIBRARY",
-                "xbox_console",
-                QColor(46, 204, 113, 170),
-                QColor(46, 204, 113, 230),
+                "xbox_gamepass",
+                QColor(46, 204, 113, 210),
+                QColor(46, 204, 113, 240),
             ),
             (
                 "Logros",
                 "18,450 G • 110 trofeos",
                 "PROFILE",
-                "star",
-                QColor(181, 23, 158, 170),
-                QColor(181, 23, 158, 230),
+                "trophy",
+                QColor(192, 96, 255, 210),
+                QColor(192, 96, 255, 240),
             ),
         ]
 
@@ -915,29 +919,31 @@ class HomeView(QWidget):
         for title, subtitle, dest, icon_name, glow_c, border_c in cards_data:
             c = AcrylicGlassCard(
                 self,
-                border_radius=18,
+                border_radius=22,
                 is_interactive=True,
                 glow_color=glow_c,
-                glow_radius=18,
+                glow_radius=20,
                 border_color=border_c,
             )
-            c.setFixedHeight(68)
+            c.setFixedHeight(90)
             c_lay = QHBoxLayout(c)
-            c_lay.setContentsMargins(14, 6, 14, 6)
-            c_lay.setSpacing(12)
+            c_lay.setContentsMargins(18, 8, 18, 8)
+            c_lay.setSpacing(14)
 
             # Icono temático
             ico_lbl = QLabel()
             ipath = ROOT / "assets_omnidash" / "icons" / f"{icon_name}.png"
+            if not ipath.exists():
+                ipath = ROOT / "assets_omnidash" / "icons" / "grid.png"
             if ipath.exists():
-                ico_lbl.setPixmap(QPixmap(str(ipath)).scaled(26, 26, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+                ico_lbl.setPixmap(QPixmap(str(ipath)).scaled(34, 34, Qt.KeepAspectRatio, Qt.SmoothTransformation))
             c_lay.addWidget(ico_lbl)
 
             # Textos
             txt_box = QVBoxLayout()
-            txt_box.setSpacing(1)
+            txt_box.setSpacing(2)
             t_lbl = QLabel(title)
-            t_lbl.setStyleSheet("font-size: 13px; font-weight: 700; color: #ffffff;")
+            t_lbl.setStyleSheet("font-size: 14px; font-weight: 700; color: #ffffff;")
             s_lbl = QLabel(subtitle)
             s_lbl.setStyleSheet("font-size: 11px; color: #bde4ff;")
             txt_box.addWidget(t_lbl)
@@ -948,7 +954,7 @@ class HomeView(QWidget):
 
             # Chevron indicador derecha
             chev_lbl = QLabel("›")
-            chev_lbl.setStyleSheet("font-size: 20px; font-weight: 600; color: rgba(255, 255, 255, 190);")
+            chev_lbl.setStyleSheet("font-size: 22px; font-weight: 600; color: rgba(255, 255, 255, 190);")
             c_lay.addWidget(chev_lbl)
 
             c.mousePressEvent = lambda _, d=dest: self.navigate_to.emit(d)
@@ -2053,8 +2059,8 @@ class OmniDashMainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("C.C.I. SYSTEM — OmniDash Virtual Console (Frutiger Aero)")
-        self.resize(1280, 720)
-        self.setMinimumSize(1024, 600)
+        self.resize(1672, 941)
+        self.setMinimumSize(1280, 720)
 
         # Cargar fondo predeterminado (prioriza background.jpg subido por el usuario)
         self.bg_pixmap = None
@@ -2063,7 +2069,7 @@ class OmniDashMainWindow(QMainWindow):
             self.bg_path = ROOT / "assets_omnidash" / "aero-background.webp"
         if self.bg_path.exists():
             self.bg_pixmap = QPixmap(str(self.bg_path))
-            update_global_blurred_wallpaper(self.bg_path, (1280, 720))
+            update_global_blurred_wallpaper(self.bg_path, (1672, 941))
 
         # Widget central
         central = QWidget(self)
