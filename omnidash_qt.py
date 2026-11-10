@@ -416,8 +416,14 @@ class OmniDashNavBar(QWidget):
         layout.setContentsMargins(60, 14, 60, 6)
         layout.setSpacing(16)
 
-        # 1. Brand Logo C.C.I. SYSTEM (Esquina superior izquierda)
-        brand_box = QHBoxLayout()
+        # 1. Left Corner: Logo C.C.I. SYSTEM o Perfil del Jugador según la vista activa
+        self.left_stack = QStackedWidget(self)
+        self.left_stack.setFixedHeight(50)
+
+        # Index 0: Brand Logo C.C.I. SYSTEM
+        brand_widget = QWidget()
+        brand_box = QHBoxLayout(brand_widget)
+        brand_box.setContentsMargins(0, 0, 0, 0)
         brand_box.setSpacing(10)
 
         ico_lbl = QLabel()
@@ -438,12 +444,41 @@ class OmniDashNavBar(QWidget):
         txt_v.addWidget(t_sys)
         brand_box.addLayout(txt_v)
 
-        # Separador vertical fino
         sep = QLabel("|")
         sep.setStyleSheet("color: rgba(255, 255, 255, 80); font-size: 24px; font-weight: 200; margin-left: 6px;")
         brand_box.addWidget(sep)
+        self.left_stack.addWidget(brand_widget)
 
-        layout.addLayout(brand_box)
+        # Index 1: Cápsula de Perfil de Jugador (Alex • 18,450 G) para Comunidades (1:1 Imagen 2)
+        profile_widget = QWidget()
+        pr_box = QHBoxLayout(profile_widget)
+        pr_box.setContentsMargins(0, 0, 0, 0)
+        self.profile_pill = AcrylicGlassCard(
+            self,
+            border_radius=22,
+            border_color=QColor(145, 165, 179, 85),
+            glow_color=QColor(0, 0, 0, 50),
+            glow_radius=8
+        )
+        self.profile_pill.setFixedSize(190, 44)
+        pp_lay = QHBoxLayout(self.profile_pill)
+        pp_lay.setContentsMargins(6, 4, 14, 4)
+        pp_lay.setSpacing(8)
+
+        av_l = QLabel()
+        av_p = ROOT / "assets_omnidash" / "spidey_avatar.png"
+        if av_p.exists():
+            av_l.setPixmap(get_rounded_pixmap(QPixmap(str(av_p)), 32, 32, 16))
+        pp_lay.addWidget(av_l)
+
+        txt_l = QLabel("Alex  <span style='color: #32D875;'>●</span>  18,450 G")
+        txt_l.setStyleSheet("font-size: 13px; font-weight: 700; color: #ffffff;")
+        pp_lay.addWidget(txt_l)
+        pr_box.addWidget(self.profile_pill)
+        pr_box.addStretch(1)
+        self.left_stack.addWidget(profile_widget)
+
+        layout.addWidget(self.left_stack)
         layout.addStretch(1)
 
         # 2. Dock de Navegación Central Flotante de Cristal Líquido (Glow Cyan)
@@ -544,6 +579,11 @@ class OmniDashNavBar(QWidget):
 
     def set_active_view(self, view_id: str):
         self.current_view = view_id
+        if hasattr(self, "left_stack"):
+            if view_id in ("COMMUNITY", "COMMUNITIES"):
+                self.left_stack.setCurrentIndex(1)
+            else:
+                self.left_stack.setCurrentIndex(0)
         self._update_nav_styles()
 
     def _on_nav_click(self, view_id: str):
@@ -2434,9 +2474,9 @@ class ServerRail(QWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setFixedWidth(64)
+        self.setFixedWidth(58)
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(6, 4, 6, 8)
+        layout.setContentsMargins(4, 4, 4, 8)
         layout.setSpacing(10)
         layout.setAlignment(Qt.AlignHCenter)
 
@@ -2487,7 +2527,7 @@ class ChannelSidebar(AcrylicGlassCard):
             glow_color=QColor(0, 0, 0, 50),
             glow_radius=10
         )
-        self.setFixedWidth(280)
+        self.setFixedWidth(306)
         self.active_channel = "general"
 
         layout = QVBoxLayout(self)
@@ -2495,7 +2535,7 @@ class ChannelSidebar(AcrylicGlassCard):
         layout.setSpacing(8)
 
         self.banner_frame = QFrame()
-        self.banner_frame.setFixedHeight(94)
+        self.banner_frame.setFixedHeight(120)
         b_lay = QVBoxLayout(self.banner_frame)
         b_lay.setContentsMargins(12, 12, 12, 10)
         b_lay.setSpacing(2)
@@ -2681,15 +2721,15 @@ class StreamCard(AcrylicGlassCard):
             glow_color=QColor(0, 0, 0, 60),
             glow_radius=12
         )
-        self.setFixedHeight(126)
+        self.setFixedHeight(142)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
         layout = QHBoxLayout(self)
-        layout.setContentsMargins(10, 10, 14, 10)
-        layout.setSpacing(14)
+        layout.setContentsMargins(12, 10, 16, 10)
+        layout.setSpacing(16)
 
         self.thumb_frame = QFrame()
-        self.thumb_frame.setFixedSize(190, 106)
+        self.thumb_frame.setFixedSize(210, 120)
         t_lay = QVBoxLayout(self.thumb_frame)
         t_lay.setContentsMargins(8, 8, 8, 8)
 
@@ -2897,7 +2937,7 @@ class CentralChatWidget(QWidget):
         layout.addWidget(self.scroll, 1)
 
         comp_frame = QFrame()
-        comp_frame.setFixedHeight(50)
+        comp_frame.setFixedHeight(55)
         comp_frame.setStyleSheet("""
             QFrame {
                 background: rgba(18, 38, 56, 0.85);
@@ -3066,7 +3106,12 @@ class MemberItemWidget(QWidget):
         info.addLayout(n_row)
 
         st = QLabel(status_text)
-        st_color = "#32D875" if ("stream" in status_text.lower() or "jugando" in status_text.lower() or "transmitiendo" in status_text.lower() or "partida" in status_text.lower()) else "#7f95a6"
+        if "stream" in status_text.lower() or "transmitiendo" in status_text.lower():
+            st_color = "#A77AE4"
+        elif "jugando" in status_text.lower() or "partida" in status_text.lower():
+            st_color = "#32D875"
+        else:
+            st_color = "#7f95a6"
         st.setStyleSheet(f"font-size: 11px; color: {st_color};")
         info.addWidget(st)
 
@@ -3078,9 +3123,9 @@ class RightPanel(QWidget):
 
     def __init__(self, parent=None):
         super().__init__(parent)
-        self.setFixedWidth(270)
+        self.setFixedWidth(305)
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(6, 4, 6, 6)
+        layout.setContentsMargins(8, 4, 8, 6)
         layout.setSpacing(10)
 
         m_scroll = QScrollArea()
@@ -3130,10 +3175,10 @@ class RightPanel(QWidget):
             glow_color=QColor(0, 0, 0, 50),
             glow_radius=10
         )
-        self.voice_panel.setFixedHeight(140)
+        self.voice_panel.setFixedHeight(175)
         v_lay = QVBoxLayout(self.voice_panel)
-        v_lay.setContentsMargins(14, 12, 14, 12)
-        v_lay.setSpacing(10)
+        v_lay.setContentsMargins(14, 14, 14, 14)
+        v_lay.setSpacing(12)
 
         v_hdr = QHBoxLayout()
         v_hdr.setSpacing(8)
@@ -3147,9 +3192,9 @@ class RightPanel(QWidget):
         v_titles = QVBoxLayout()
         v_titles.setSpacing(1)
         v_st = QLabel("Voz conectada")
-        v_st.setStyleSheet("font-size: 13px; font-weight: 800; color: #ffffff;")
+        v_st.setStyleSheet("font-size: 14px; font-weight: 800; color: #ffffff;")
         v_chan = QLabel("Lobby General")
-        v_chan.setStyleSheet("font-size: 11px; font-weight: 600; color: #BDD4E4;")
+        v_chan.setStyleSheet("font-size: 12px; font-weight: 600; color: #BDD4E4;")
         v_titles.addWidget(v_st)
         v_titles.addWidget(v_chan)
         v_hdr.addLayout(v_titles)
@@ -3167,7 +3212,7 @@ class RightPanel(QWidget):
         ctrls_row.setSpacing(10)
 
         self.mic_btn = QPushButton()
-        self.mic_btn.setFixedSize(38, 38)
+        self.mic_btn.setFixedSize(42, 42)
         self.mic_btn.setCursor(Qt.PointingHandCursor)
         self.mic_muted = False
         self._update_mic_style()
@@ -3175,7 +3220,7 @@ class RightPanel(QWidget):
         ctrls_row.addWidget(self.mic_btn)
 
         self.headset_btn = QPushButton()
-        self.headset_btn.setFixedSize(38, 38)
+        self.headset_btn.setFixedSize(42, 42)
         self.headset_btn.setCursor(Qt.PointingHandCursor)
         self.headset_muted = False
         self._update_headset_style()
@@ -3183,7 +3228,7 @@ class RightPanel(QWidget):
         ctrls_row.addWidget(self.headset_btn)
 
         self.screen_btn = QPushButton()
-        self.screen_btn.setFixedSize(38, 38)
+        self.screen_btn.setFixedSize(42, 42)
         self.screen_btn.setCursor(Qt.PointingHandCursor)
         self.screen_active = False
         self._update_screen_style()
@@ -3191,16 +3236,16 @@ class RightPanel(QWidget):
         ctrls_row.addWidget(self.screen_btn)
 
         self.dc_btn = QPushButton()
-        self.dc_btn.setFixedSize(38, 38)
+        self.dc_btn.setFixedSize(42, 42)
         self.dc_btn.setCursor(Qt.PointingHandCursor)
         dc_p = ROOT / "assets_omnidash" / "icons" / "phone_disconnect.png"
         if dc_p.exists():
             self.dc_btn.setIcon(QIcon(str(dc_p)))
-            self.dc_btn.setIconSize(QSize(18, 18))
+            self.dc_btn.setIconSize(QSize(20, 20))
         self.dc_btn.setStyleSheet("""
             QPushButton {
                 background: #E94B56;
-                border-radius: 19px;
+                border-radius: 21px;
                 border: none;
             }
             QPushButton:hover {
