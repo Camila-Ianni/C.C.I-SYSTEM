@@ -421,34 +421,32 @@ class OmniDashNavBar(QWidget):
         # 1. Left Corner: Logo C.C.I. SYSTEM o Perfil del Jugador según la vista activa
         self.left_stack = QStackedWidget(self)
         self.left_stack.setFixedHeight(50)
+        self.left_stack.setFixedWidth(248)
 
-        # Index 0: Brand Logo C.C.I. SYSTEM
+        # Index 0: Brand Logo C.C.I. SYSTEM (Escala visual destacada 1:1 con Imagen B)
         brand_widget = QWidget()
         brand_box = QHBoxLayout(brand_widget)
         brand_box.setContentsMargins(0, 0, 0, 0)
-        brand_box.setSpacing(10)
+        brand_box.setSpacing(12)
 
         ico_lbl = QLabel()
         ico_p = ROOT / "assets_omnidash" / "icons" / "controller_outline.png"
         if not ico_p.exists():
             ico_p = ROOT / "assets_omnidash" / "icons" / "xbox_controller.png"
         if ico_p.exists():
-            ico_lbl.setPixmap(QPixmap(str(ico_p)).scaled(32, 32, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+            ico_lbl.setPixmap(QPixmap(str(ico_p)).scaled(38, 38, Qt.KeepAspectRatio, Qt.SmoothTransformation))
         brand_box.addWidget(ico_lbl)
 
         txt_v = QVBoxLayout()
         txt_v.setSpacing(0)
         t_cci = QLabel("C.C.I.")
-        t_cci.setStyleSheet("font-size: 22px; font-weight: 900; color: #ffffff; letter-spacing: 2px;")
+        t_cci.setStyleSheet("font-size: 24px; font-weight: 900; color: #ffffff; letter-spacing: 2px;")
         t_sys = QLabel("SYSTEM")
-        t_sys.setStyleSheet("font-size: 10px; font-weight: 800; color: #00d2ff; letter-spacing: 3px;")
+        t_sys.setStyleSheet("font-size: 11px; font-weight: 800; color: #00d2ff; letter-spacing: 3px;")
         txt_v.addWidget(t_cci)
         txt_v.addWidget(t_sys)
         brand_box.addLayout(txt_v)
-
-        sep = QLabel("|")
-        sep.setStyleSheet("color: rgba(255, 255, 255, 80); font-size: 24px; font-weight: 200; margin-left: 6px;")
-        brand_box.addWidget(sep)
+        brand_box.addStretch(1)
         self.left_stack.addWidget(brand_widget)
 
         # Index 1: Cápsula de Perfil de Jugador (Alex • 18,450 G) para Comunidades (1:1 Imagen 2)
@@ -523,8 +521,12 @@ class OmniDashNavBar(QWidget):
         layout.addStretch(1)
 
         # 3. Status Widgets (Campana notificaciones con badge, Wifi, Gamepad, Reloj)
-        status_box = QHBoxLayout()
-        status_box.setSpacing(16)
+        status_widget = QWidget()
+        status_widget.setFixedWidth(248)
+        status_box = QHBoxLayout(status_widget)
+        status_box.setContentsMargins(0, 0, 0, 0)
+        status_box.setSpacing(14)
+        status_box.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
 
         # Campana con indicador 1
         bell_lbl = QLabel()
@@ -571,7 +573,7 @@ class OmniDashNavBar(QWidget):
         clock_layout.addWidget(self.clock_label)
         status_box.addWidget(self.clock_card)
 
-        layout.addLayout(status_box)
+        layout.addWidget(status_widget)
 
         # Timer para reloj en vivo
         self.timer = QTimer(self)
@@ -656,23 +658,23 @@ class HomeView(QWidget):
         # ----------------------------------------------------------------------
         header_v = QVBoxLayout()
         header_v.setContentsMargins(0, 0, 0, 0)
-        header_v.setSpacing(12)
+        header_v.setSpacing(14)
 
         # 1.1 Cápsula de Perfil de Alex (Fila 1: Alex ●, Fila 2: 18,450 G)
         self.profile_pill = AcrylicGlassCard(
             self,
-            border_radius=22,
+            border_radius=25,
             is_interactive=True,
             glow_color=QColor(0, 217, 255, 60),
             glow_radius=12,
-            border_color=QColor(145, 165, 179, 110),
+            border_color=QColor(145, 165, 179, 120),
         )
-        self.profile_pill.setFixedSize(185, 46)
+        self.profile_pill.setFixedSize(210, 50)
         self.profile_pill.setCursor(Qt.PointingHandCursor)
         self.profile_pill.mousePressEvent = lambda _: self.navigate_to.emit("PROFILE")
 
         pp_lay = QHBoxLayout(self.profile_pill)
-        pp_lay.setContentsMargins(6, 4, 14, 4)
+        pp_lay.setContentsMargins(8, 4, 14, 4)
         pp_lay.setSpacing(10)
 
         self.avatar_lbl = QLabel()
@@ -680,7 +682,7 @@ class HomeView(QWidget):
         if not av_p.exists():
             av_p = ROOT / "assets_omnidash" / "avatar.png"
         if av_p.exists():
-            self.avatar_lbl.setPixmap(get_rounded_pixmap(QPixmap(str(av_p)), 36, 36, 18))
+            self.avatar_lbl.setPixmap(get_rounded_pixmap(QPixmap(str(av_p)), 40, 40, 20))
         pp_lay.addWidget(self.avatar_lbl)
 
         txt_v_pill = QVBoxLayout()
@@ -693,16 +695,16 @@ class HomeView(QWidget):
         name_row.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
 
         alex_lbl = QLabel("Alex")
-        alex_lbl.setStyleSheet("font-size: 13px; font-weight: 800; color: #FFFFFF;")
+        alex_lbl.setStyleSheet("font-size: 14px; font-weight: 800; color: #FFFFFF;")
         name_row.addWidget(alex_lbl)
 
         green_dot = QLabel("●")
-        green_dot.setStyleSheet("font-size: 8px; color: #00E676; margin-top: 1px;")
+        green_dot.setStyleSheet("font-size: 9px; color: #00E676; margin-top: 1px;")
         name_row.addWidget(green_dot)
         txt_v_pill.addLayout(name_row)
 
         score_lbl = QLabel("18,450 G")
-        score_lbl.setStyleSheet("font-size: 11px; font-weight: 700; color: #A8C4D8;")
+        score_lbl.setStyleSheet("font-size: 12px; font-weight: 700; color: #A8C4D8;")
         txt_v_pill.addWidget(score_lbl)
 
         pp_lay.addLayout(txt_v_pill, 1)
@@ -717,29 +719,29 @@ class HomeView(QWidget):
 
         # Barra vertical cyan luminosa
         self.cyan_bar = QFrame()
-        self.cyan_bar.setFixedSize(4, 46)
+        self.cyan_bar.setFixedSize(4, 52)
         self.cyan_bar.setStyleSheet("""
             background: #00D9FF;
             border-radius: 2px;
         """)
         bar_glow = QGraphicsDropShadowEffect(self.cyan_bar)
-        bar_glow.setColor(QColor(0, 217, 255, 230))
-        bar_glow.setBlurRadius(16)
+        bar_glow.setColor(QColor(0, 217, 255, 240))
+        bar_glow.setBlurRadius(18)
         bar_glow.setOffset(0, 0)
         self.cyan_bar.setGraphicsEffect(bar_glow)
         greet_row.addWidget(self.cyan_bar)
 
         # Textos de saludo dinámico
         greet_v = QVBoxLayout()
-        greet_v.setSpacing(2)
+        greet_v.setSpacing(3)
         greet_v.setContentsMargins(0, 0, 0, 0)
 
         username = "Alex"
         self.title_lbl = QLabel(f"¡Hola, {username}!")
-        self.title_lbl.setStyleSheet("font-size: 28px; font-weight: 800; color: #FFFFFF; letter-spacing: 0.5px;")
+        self.title_lbl.setStyleSheet("font-size: 34px; font-weight: 800; color: #FFFFFF; letter-spacing: 0.5px;")
 
         self.sub_lbl = QLabel("Tu centro de juegos, comunidades y amigos.")
-        self.sub_lbl.setStyleSheet("font-size: 14px; font-weight: 500; color: #BDD4E4;")
+        self.sub_lbl.setStyleSheet("font-size: 15px; font-weight: 500; color: #BDD4E4;")
 
         greet_v.addWidget(self.title_lbl)
         greet_v.addWidget(self.sub_lbl)
@@ -803,10 +805,10 @@ class HomeView(QWidget):
             c._orig_border_color = border_c
             c._orig_glow_color = glow_c
             c._orig_glow_radius = 20
-            c.setFixedHeight(160)
+            c.setFixedHeight(175)
 
             c_lay = QHBoxLayout(c)
-            c_lay.setContentsMargins(18, 16, 18, 16)
+            c_lay.setContentsMargins(16, 18, 16, 18)
             c_lay.setSpacing(0)
 
             # Espaciador izquierdo balanceador para centrado perfecto de textos
@@ -817,7 +819,7 @@ class HomeView(QWidget):
             # Columna central con Icono, Título y Subtítulo centrados
             center_v = QVBoxLayout()
             center_v.setContentsMargins(0, 0, 0, 0)
-            center_v.setSpacing(6)
+            center_v.setSpacing(8)
             center_v.setAlignment(Qt.AlignCenter)
 
             ico_l = QLabel()
@@ -826,17 +828,17 @@ class HomeView(QWidget):
             if not ico_p.exists():
                 ico_p = ROOT / "assets_omnidash" / "icons" / "grid.png"
             if ico_p.exists():
-                ico_l.setPixmap(QPixmap(str(ico_p)).scaled(42, 42, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+                ico_l.setPixmap(QPixmap(str(ico_p)).scaled(48, 48, Qt.KeepAspectRatio, Qt.SmoothTransformation))
             center_v.addWidget(ico_l)
 
             t_l = QLabel(title)
             t_l.setAlignment(Qt.AlignCenter)
-            t_l.setStyleSheet("font-size: 16px; font-weight: 800; color: #FFFFFF;")
+            t_l.setStyleSheet("font-size: 17px; font-weight: 800; color: #FFFFFF;")
             center_v.addWidget(t_l)
 
             s_l = QLabel(subtitle)
             s_l.setAlignment(Qt.AlignCenter)
-            s_l.setStyleSheet("font-size: 12px; font-weight: 500; color: #BDD4E4;")
+            s_l.setStyleSheet("font-size: 13px; font-weight: 500; color: #BDD4E4;")
             center_v.addWidget(s_l)
 
             c_lay.addLayout(center_v, 1)
@@ -937,7 +939,7 @@ class HomeView(QWidget):
             c._orig_border_color = QColor(0, 217, 255, 240) if slot_idx == 0 else QColor(145, 165, 179, 130)
             c._orig_glow_color = QColor(0, 217, 255, 180) if slot_idx == 0 else QColor(145, 165, 179, 70)
             c._orig_glow_radius = 22 if slot_idx == 0 else 14
-            c.setFixedHeight(126)
+            c.setFixedHeight(138)
 
             c_lay = QHBoxLayout(c)
             c_lay.setContentsMargins(14, 12, 18, 12)
@@ -945,13 +947,13 @@ class HomeView(QWidget):
 
             # Miniatura de portada redondeada
             thumb_l = QLabel()
-            thumb_l.setFixedSize(94, 94)
+            thumb_l.setFixedSize(100, 100)
             c_lay.addWidget(thumb_l)
 
             # VBox Textos
             txt_v = QVBoxLayout()
             txt_v.setContentsMargins(0, 0, 0, 0)
-            txt_v.setSpacing(3)
+            txt_v.setSpacing(4)
             txt_v.setAlignment(Qt.AlignVCenter)
 
             title_l = QLabel()
@@ -965,13 +967,13 @@ class HomeView(QWidget):
 
             # Botón circular de reproducción ▶
             play_btn = QPushButton("▶")
-            play_btn.setFixedSize(42, 42)
+            play_btn.setFixedSize(44, 44)
             play_btn.setCursor(Qt.PointingHandCursor)
             play_btn.setStyleSheet("""
                 QPushButton {
                     background: rgba(10, 25, 45, 180);
                     border: 1.5px solid rgba(255, 255, 255, 160);
-                    border-radius: 21px;
+                    border-radius: 22px;
                     color: #FFFFFF;
                     font-size: 14px;
                     padding-left: 2px;
@@ -1083,7 +1085,7 @@ class HomeView(QWidget):
             c._orig_border_color = QColor(145, 165, 179, 120)
             c._orig_glow_color = QColor(145, 165, 179, 70)
             c._orig_glow_radius = 14
-            c.setFixedHeight(110)
+            c.setFixedHeight(114)
 
             c_lay = QHBoxLayout(c)
             c_lay.setContentsMargins(20, 14, 22, 14)
@@ -1109,7 +1111,7 @@ class HomeView(QWidget):
                 t_row.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
 
                 t_lbl = QLabel(title)
-                t_lbl.setStyleSheet("font-size: 15px; font-weight: 800; color: #FFFFFF;")
+                t_lbl.setStyleSheet("font-size: 16px; font-weight: 800; color: #FFFFFF;")
                 t_row.addWidget(t_lbl)
 
                 live_badge = QLabel("EN VIVO")
@@ -1125,7 +1127,7 @@ class HomeView(QWidget):
                 txt_v.addLayout(t_row)
             else:
                 t_lbl = QLabel(title)
-                t_lbl.setStyleSheet("font-size: 15px; font-weight: 800; color: #FFFFFF;")
+                t_lbl.setStyleSheet("font-size: 16px; font-weight: 800; color: #FFFFFF;")
                 txt_v.addWidget(t_lbl)
 
             s_lbl = QLabel(subtitle)
@@ -1279,24 +1281,24 @@ class HomeView(QWidget):
         # Factor de escala responsive considerando ancho y altura de ventana real
         sw = w / 1536.0
         sh = h / 884.0
-        s = min(max(0.78, min(sw, sh * 1.05)), 1.25)
+        s = min(max(0.80, min(sw, sh * 1.05)), 1.25)
 
         for c in self.main_cards:
-            c.setFixedHeight(int(165 * s))
+            c.setFixedHeight(int(175 * s))
 
-        recent_h = int(134 * s)
-        thumb_s = int(98 * s)
+        recent_h = int(138 * s)
+        thumb_s = int(100 * s)
         for slot in self.recent_cards_widgets:
             slot["card"].setFixedHeight(recent_h)
             slot["thumb_lbl"].setFixedSize(thumb_s, thumb_s)
 
         for c in self.news_cards:
-            c.setFixedHeight(int(112 * s))
+            c.setFixedHeight(int(114 * s))
 
         side_margin = max(38, int(52 * sw))
         top_margin = max(6, int(10 * sh))
-        bottom_margin = max(24, int(42 * sh))
-        spacing = max(10, int(15 * sh))
+        bottom_margin = max(26, int(42 * sh))
+        spacing = max(10, int(14 * sh))
         self.layout.setContentsMargins(side_margin, top_margin, side_margin, bottom_margin)
         self.layout.setSpacing(spacing)
 
