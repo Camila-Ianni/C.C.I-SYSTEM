@@ -508,6 +508,7 @@ class OmniDashNavBar(QWidget):
         for label, icon_name, view_id in nav_items:
             btn = QPushButton(f"  {label}")
             btn.setCursor(Qt.PointingHandCursor)
+            btn.setMinimumWidth(95)
             ipath = ROOT / "assets_omnidash" / "icons" / f"{icon_name}.png"
             if ipath.exists():
                 btn.setIcon(QIcon(str(ipath)))
@@ -591,7 +592,7 @@ class OmniDashNavBar(QWidget):
                         background: rgba(0, 180, 255, 55);
                         border: 1.5px solid #00d2ff;
                         border-radius: 14px;
-                        padding: 6px 16px;
+                        padding: 5px 12px;
                         font-size: 13px;
                         font-weight: 700;
                         color: #ffffff;
@@ -603,7 +604,7 @@ class OmniDashNavBar(QWidget):
                         background: transparent;
                         border: 1px solid transparent;
                         border-radius: 14px;
-                        padding: 6px 14px;
+                        padding: 5px 10px;
                         font-size: 13px;
                         font-weight: 600;
                         color: rgba(255, 255, 255, 200);
@@ -1007,8 +1008,159 @@ class HomeView(QWidget):
 
 
 # ==============================================================================
-# 2. VISTA DE BIBLIOTECA (LIBRARY)
+# 2. VISTA DE BIBLIOTECA (LIBRARY REDESIGN - LIQUID GLASS & SIDEBAR)
 # ==============================================================================
+def resolve_game_cover(game: dict) -> QPixmap | None:
+    """Busca y resuelve la carátula en alta definición para el juego."""
+    title = game.get("title", "").lower()
+
+    priority_map = [
+        ("da vinci", ROOT / "assets_ps4" / "img" / "elden.png"),
+        ("asteroids", ROOT / "fotos web" / "asteroids.jpg"),
+        ("super mario", ROOT / "fotos web" / "super mario.jpg"),
+        ("zelda", ROOT / "fotos web" / "The_Legend_of_Zelda_film_logo.jpg"),
+        ("pac-man", ROOT / "fotos web" / "pac man.jpg"),
+        ("pacman", ROOT / "fotos web" / "pac man.jpg"),
+        ("tetris", ROOT / "fotos web" / "tetris logo .jpg"),
+        ("space invaders", ROOT / "fotos web" / "space nvaders.jpg"),
+        ("metal slug", ROOT / "fotos web" / "metal slug.jpg"),
+        ("donkey", ROOT / "fotos web" / "donkeykong.jpg"),
+        ("castlevania", ROOT / "fotos web" / "castlevania.webp"),
+        ("doom", ROOT / "fotos web" / "Doom_logo.png"),
+        ("flappy", ROOT / "fotos web" / "Flappy_Bird_icon.png"),
+        ("dino", ROOT / "fotos web" / "dino.jpg"),
+        ("ghostbusters", ROOT / "fotos web" / "ghostbusters.webp"),
+        ("street fighter", ROOT / "fotos web" / "Street_Fighter_old_logo.png"),
+        ("megaman", ROOT / "fotos web" / "megaman.jpg"),
+        ("pokemon", ROOT / "fotos web" / "pokemon.webp"),
+    ]
+    for key, path in priority_map:
+        if key in title and path.exists():
+            return QPixmap(str(path))
+
+    cov = game.get("cover")
+    if cov and (ROOT / cov).exists():
+        return QPixmap(str(ROOT / cov))
+
+    return None
+
+
+class LibraryGameCard(AcrylicGlassCard):
+    def __init__(self, game: dict, parent=None):
+        super().__init__(
+            parent,
+            border_radius=16,
+            is_interactive=True,
+            glow_color=QColor(0, 210, 255, 175),
+            glow_radius=16,
+            border_color=QColor(255, 255, 255, 95),
+            inner_padding=0,
+        )
+        self.game = game
+        self.setFixedSize(164, 212)
+        self.setCursor(Qt.PointingHandCursor)
+
+        lay = QVBoxLayout(self)
+        lay.setContentsMargins(8, 8, 8, 8)
+        lay.setSpacing(6)
+
+        # 1. Contenedor de Carátula con botón flotante de Favorito
+        cover_container = QWidget()
+        cover_container.setFixedSize(148, 126)
+        c_lay = QVBoxLayout(cover_container)
+        c_lay.setContentsMargins(0, 0, 0, 0)
+
+        self.cover_label = QLabel(cover_container)
+        self.cover_label.setFixedSize(148, 126)
+        self.cover_label.setStyleSheet("border-radius: 12px; background: rgba(0, 0, 0, 70);")
+
+        pix = resolve_game_cover(game)
+        if pix and not pix.isNull():
+            self.cover_label.setPixmap(get_rounded_pixmap(pix, 148, 126, 12))
+
+        # Botón Favorito (♡) flotante en esquina superior derecha
+        self.fav_btn = QPushButton("♡", cover_container)
+        self.fav_btn.setFixedSize(24, 24)
+        self.fav_btn.move(148 - 24 - 4, 4)
+        self.fav_btn.setCursor(Qt.PointingHandCursor)
+        self.fav_btn.setStyleSheet("""
+            QPushButton {
+                background: rgba(10, 20, 35, 170);
+                border: 1px solid rgba(255, 255, 255, 180);
+                border-radius: 12px;
+                color: #ffffff;
+                font-size: 12px;
+                font-weight: 700;
+            }
+            QPushButton:hover {
+                background: rgba(255, 75, 110, 190);
+                border: 1px solid #ffffff;
+            }
+        """)
+        self.is_fav = False
+
+        def toggle_fav():
+            self.is_fav = not self.is_fav
+            if self.is_fav:
+                self.fav_btn.setText("♥")
+                self.fav_btn.setStyleSheet("""
+                    QPushButton {
+                        background: rgba(255, 51, 102, 210);
+                        border: 1px solid #ffffff;
+                        border-radius: 12px;
+                        color: #ffffff;
+                        font-size: 12px;
+                        font-weight: 700;
+                    }
+                """)
+            else:
+                self.fav_btn.setText("♡")
+                self.fav_btn.setStyleSheet("""
+                    QPushButton {
+                        background: rgba(10, 20, 35, 170);
+                        border: 1px solid rgba(255, 255, 255, 180);
+                        border-radius: 12px;
+                        color: #ffffff;
+                        font-size: 12px;
+                        font-weight: 700;
+                    }
+                """)
+
+        self.fav_btn.clicked.connect(toggle_fav)
+        lay.addWidget(cover_container)
+
+        # 2. Textos: Título y Subtítulo
+        txt_box = QVBoxLayout()
+        txt_box.setSpacing(2)
+        txt_box.setContentsMargins(4, 0, 4, 0)
+
+        title = game.get("title", "Game")
+        self.title_lbl = QLabel(title)
+        self.title_lbl.setStyleSheet("font-size: 12px; font-weight: 700; color: #ffffff;")
+        self.title_lbl.setFixedHeight(18)
+        txt_box.addWidget(self.title_lbl)
+
+        # Subtítulo con icono de mando + "C.C.I. • 60 FPS"
+        sub_row = QHBoxLayout()
+        sub_row.setSpacing(4)
+        sub_row.setContentsMargins(0, 0, 0, 0)
+
+        ico = QLabel()
+        c_ico_path = ROOT / "assets_omnidash" / "icons" / "xbox_controller.png"
+        if c_ico_path.exists():
+            ico.setPixmap(QPixmap(str(c_ico_path)).scaled(13, 13, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+        sub_row.addWidget(ico)
+
+        sub_lbl = QLabel("C.C.I.  •  60 FPS")
+        sub_lbl.setStyleSheet("font-size: 10px; color: #bde4ff; font-weight: 600;")
+        sub_row.addWidget(sub_lbl)
+        sub_row.addStretch(1)
+
+        txt_box.addLayout(sub_row)
+        lay.addLayout(txt_box)
+        lay.addStretch(1)
+
+
 class LibraryView(QWidget):
     open_game = Signal(dict)
     back_home = Signal()
@@ -1016,113 +1168,297 @@ class LibraryView(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setFocusPolicy(Qt.StrongFocus)
-        self.grid_cards: list[AcrylicGlassCard] = []
+        self.grid_cards: list[LibraryGameCard] = []
         self.grid_games: list[dict] = []
         self.selected_idx = 0
 
         layout = QHBoxLayout(self)
-        layout.setContentsMargins(36, 12, 36, 24)
-        layout.setSpacing(20)
+        layout.setContentsMargins(32, 10, 32, 20)
+        layout.setSpacing(18)
 
-        # 1. Barra Lateral Izquierda de Cristal
-        self.sidebar = AcrylicGlassCard(self, border_radius=16)
-        self.sidebar.setFixedWidth(240)
+        # 1. Barra Lateral Izquierda de Cristal Líquido (Sidebar)
+        self.sidebar = AcrylicGlassCard(self, border_radius=22, border_color=QColor(255, 255, 255, 100))
+        self.sidebar.setFixedWidth(220)
         side_layout = QVBoxLayout(self.sidebar)
-        side_layout.setContentsMargins(18, 18, 18, 18)
-        side_layout.setSpacing(14)
+        side_layout.setContentsMargins(14, 14, 14, 14)
+        side_layout.setSpacing(10)
 
-        # Botón Volver a Home
-        back_btn = QPushButton("  Home")
-        back_btn.setProperty("class", "glassBtn")
+        # Botón Home en forma de píldora translúcida
+        back_btn = QPushButton("   Home")
         back_btn.setCursor(Qt.PointingHandCursor)
+        back_btn.setFixedHeight(36)
         ip = ROOT / "assets_omnidash" / "icons" / "home.png"
         if ip.exists():
             back_btn.setIcon(QIcon(str(ip)))
+            back_btn.setIconSize(QSize(16, 16))
+        back_btn.setStyleSheet("""
+            QPushButton {
+                background: rgba(12, 22, 38, 160);
+                border: 1.2px solid rgba(255, 255, 255, 150);
+                border-radius: 18px;
+                color: #ffffff;
+                font-size: 13px;
+                font-weight: 700;
+                padding-left: 10px;
+                text-align: center;
+            }
+            QPushButton:hover {
+                background: rgba(0, 180, 255, 150);
+                border: 1.2px solid #ffffff;
+            }
+        """)
         back_btn.clicked.connect(self.back_home.emit)
         side_layout.addWidget(back_btn)
 
-        # Anillo de almacenamiento ("72% used")
-        storage_box = AcrylicGlassCard(self, border_radius=12)
+        # Widget Storage: "Storage: 72% usado", "128 GB libres de 512 GB"
+        storage_box = QFrame()
+        storage_box.setFixedHeight(56)
+        storage_box.setStyleSheet("""
+            QFrame {
+                background: rgba(10, 20, 35, 150);
+                border: 1px solid rgba(255, 255, 255, 80);
+                border-radius: 14px;
+            }
+        """)
         st_lay = QVBoxLayout(storage_box)
-        st_lay.setContentsMargins(12, 8, 12, 8)
-        st_title = QLabel("Storage: 72% used")
-        st_title.setStyleSheet("font-size: 12px; font-weight: 700; color: #bde4ff;")
-        st_sub = QLabel("128 GB Free of 512 GB")
-        st_sub.setStyleSheet("font-size: 10px; color: #bde4ff;")
-        st_lay.addWidget(st_title)
-        st_lay.addWidget(st_sub)
+        st_lay.setContentsMargins(10, 6, 10, 6)
+        st_lay.setSpacing(4)
+
+        st_top = QHBoxLayout()
+        st_top.setSpacing(8)
+        hd_ico = QLabel()
+        hd_ico.setFixedSize(22, 22)
+        hd_ico.setStyleSheet("border: none; background: transparent;")
+        hd_path = ROOT / "assets_omnidash" / "icons" / "hard_drive.png"
+        if hd_path.exists():
+            hd_ico.setPixmap(QPixmap(str(hd_path)).scaled(22, 22, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+        st_top.addWidget(hd_ico)
+
+        st_txt = QVBoxLayout()
+        st_txt.setSpacing(1)
+        st_title = QLabel("Storage: 72% usado")
+        st_title.setFixedHeight(14)
+        st_title.setStyleSheet("font-size: 11px; font-weight: 700; color: #ffffff; border: none; background: transparent;")
+        st_sub = QLabel("128 GB libres de 512 GB")
+        st_sub.setFixedHeight(12)
+        st_sub.setStyleSheet("font-size: 10px; color: #bde4ff; border: none; background: transparent;")
+        st_txt.addWidget(st_title)
+        st_txt.addWidget(st_sub)
+        st_top.addLayout(st_txt)
+        st_top.addStretch(1)
+        st_lay.addLayout(st_top)
+
+        # Barra de progreso estilizada
+        self.storage_bar = QProgressBar()
+        self.storage_bar.setRange(0, 100)
+        self.storage_bar.setValue(72)
+        self.storage_bar.setTextVisible(False)
+        self.storage_bar.setFixedHeight(4)
+        self.storage_bar.setStyleSheet("""
+            QProgressBar {
+                background: rgba(255, 255, 255, 30);
+                border: none;
+                border-radius: 2px;
+            }
+            QProgressBar::chunk {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #00d2ff, stop:1 #00e5ff);
+                border-radius: 2px;
+            }
+        """)
+        st_lay.addWidget(self.storage_bar)
         side_layout.addWidget(storage_box)
 
-        # Buscador interactivo
-        self.search_input = QLineEdit()
-        self.search_input.setObjectName("searchBox")
-        self.search_input.setPlaceholderText("Buscar juegos...")
-        self.search_input.textChanged.connect(self._filter_games)
-        side_layout.addWidget(self.search_input)
+        # Buscador interactivo con lupa
+        search_box = QFrame()
+        search_box.setStyleSheet("""
+            QFrame {
+                background: rgba(8, 16, 28, 175);
+                border: 1px solid rgba(255, 255, 255, 90);
+                border-radius: 17px;
+            }
+        """)
+        search_box.setFixedHeight(34)
+        s_box_lay = QHBoxLayout(search_box)
+        s_box_lay.setContentsMargins(10, 0, 10, 0)
+        s_box_lay.setSpacing(6)
 
-        # Filtros por consola
-        side_layout.addWidget(QLabel("CATEGORÍAS"))
+        s_ico = QLabel()
+        s_ico_path = ROOT / "assets_omnidash" / "icons" / "search.png"
+        if s_ico_path.exists():
+            s_ico.setPixmap(QPixmap(str(s_ico_path)).scaled(16, 16, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+        s_ico.setStyleSheet("border: none; background: transparent;")
+        s_box_lay.addWidget(s_ico)
+
+        self.search_input = QLineEdit()
+        self.search_input.setPlaceholderText("Buscar juegos...")
+        self.search_input.setStyleSheet("""
+            QLineEdit {
+                background: transparent;
+                border: none;
+                color: #ffffff;
+                font-size: 12px;
+            }
+        """)
+        self.search_input.textChanged.connect(self._filter_games)
+        s_box_lay.addWidget(self.search_input)
+        side_layout.addWidget(search_box)
+
+        # Título "CATEGORÍAS"
+        cat_title = QLabel("CATEGORÍAS")
+        cat_title.setStyleSheet("font-size: 11px; font-weight: 800; color: #c8e6ff; padding: 4px 0px 2px 4px; letter-spacing: 0.5px;")
+        side_layout.addWidget(cat_title)
+
+        # Filtros por consola con iconos
         self.current_plat_name = "Todas"
         self.current_plat_code = "todas"
 
         platforms = [
-            ("Todas", "todas"),
-            ("Super Nintendo", "super"),
-            ("Arcade MAME", "arcade"),
-            ("Nintendo 64", "64"),
-            ("PlayStation 1", "playstation"),
-            ("Nintendo DS", "ds"),
-            ("Neo-Geo", "neo"),
-            ("C.C.I.", "c.c.i"),
+            ("Todas (68)", "todas", "grid.png"),
+            ("Super Nintendo", "super", "xbox_controller.png"),
+            ("Arcade MAME", "arcade", "calculator.png"),
+            ("Nintendo 64", "64", "xbox_controller.png"),
+            ("PlayStation 1", "playstation", "games_filled.png"),
+            ("Nintendo DS", "ds", "desktop.png"),
+            ("Neo-Geo", "neo", "games.png"),
+            ("C.C.I.", "c.c.i", "xbox_controller.png"),
         ]
+
         self.cat_buttons = []
-        for name, code in platforms:
-            b = QPushButton(name)
+        for name, code, icon_file in platforms:
+            b = QPushButton(f"  {name}")
             b.setCursor(Qt.PointingHandCursor)
-            b.setStyleSheet("""
-                QPushButton {
-                    text-align: left;
-                    padding: 8px 12px;
-                    border: none;
-                    border-radius: 8px;
-                    background: transparent;
-                    color: rgba(255, 255, 255, 190);
-                    font-size: 12px;
-                    font-weight: 600;
-                }
-                QPushButton:hover {
-                    background: rgba(255, 255, 255, 30);
-                    color: #ffffff;
-                }
-            """)
+            b.setFixedHeight(30)
+            ipath = ROOT / "assets_omnidash" / "icons" / icon_file
+            if ipath.exists():
+                b.setIcon(QIcon(str(ipath)))
+                b.setIconSize(QSize(15, 15))
             b.clicked.connect(lambda _, n=name, c=code: self._set_platform(n, c))
             side_layout.addWidget(b)
-            self.cat_buttons.append(b)
+            self.cat_buttons.append((b, code))
 
+        self._update_cat_button_styles()
         side_layout.addStretch(1)
         layout.addWidget(self.sidebar)
 
-        # 2. Panel Principal de Juegos (Scroll con Grid)
-        self.content_panel = AcrylicGlassCard(self, border_radius=16)
+        # 2. Panel Principal de Juegos (Content Panel)
+        self.content_panel = AcrylicGlassCard(self, border_radius=24, border_color=QColor(255, 255, 255, 110))
         content_layout = QVBoxLayout(self.content_panel)
-        content_layout.setContentsMargins(18, 18, 18, 18)
+        content_layout.setContentsMargins(18, 14, 14, 14)
+        content_layout.setSpacing(10)
 
-        # Cabecera de contenido
+        # Cabecera de contenido: Icono Gamepad + Título + Selector Cuadrícula/Lista
         header_row = QHBoxLayout()
+        header_row.setSpacing(8)
+
+        gp_ico = QLabel()
+        gp_path = ROOT / "assets_omnidash" / "icons" / "xbox_controller.png"
+        if gp_path.exists():
+            gp_ico.setPixmap(QPixmap(str(gp_path)).scaled(24, 24, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+        header_row.addWidget(gp_ico)
+
         self.count_label = QLabel(f"Todas ({len(ALL_GAMES)} disponibles)")
         self.count_label.setStyleSheet("font-size: 16px; font-weight: 700; color: #ffffff;")
         header_row.addWidget(self.count_label)
         header_row.addStretch(1)
+
+        # Selector de Vista Cuadrícula / Lista en píldora de cristal
+        view_toggle_frame = QFrame()
+        view_toggle_frame.setStyleSheet("""
+            QFrame {
+                background: rgba(10, 20, 35, 150);
+                border: 1px solid rgba(255, 255, 255, 90);
+                border-radius: 17px;
+            }
+        """)
+        view_toggle_frame.setFixedHeight(34)
+        vt_lay = QHBoxLayout(view_toggle_frame)
+        vt_lay.setContentsMargins(4, 3, 4, 3)
+        vt_lay.setSpacing(4)
+
+        self.grid_mode_btn = QPushButton()
+        self.grid_mode_btn.setFixedSize(28, 26)
+        self.grid_mode_btn.setCursor(Qt.PointingHandCursor)
+        grid_ico_path = ROOT / "assets_omnidash" / "icons" / "grid.png"
+        if grid_ico_path.exists():
+            self.grid_mode_btn.setIcon(QIcon(str(grid_ico_path)))
+            self.grid_mode_btn.setIconSize(QSize(16, 16))
+        self.grid_mode_btn.setStyleSheet("""
+            QPushButton {
+                background: rgba(0, 168, 255, 80);
+                border: 1.2px solid #00d2ff;
+                border-radius: 13px;
+            }
+        """)
+
+        self.list_mode_btn = QPushButton()
+        self.list_mode_btn.setFixedSize(28, 26)
+        self.list_mode_btn.setCursor(Qt.PointingHandCursor)
+        list_ico_path = ROOT / "assets_omnidash" / "icons" / "text_sort_ascending.png"
+        if not list_ico_path.exists():
+            list_ico_path = ROOT / "assets_omnidash" / "icons" / "apps_list.png"
+        if list_ico_path.exists():
+            self.list_mode_btn.setIcon(QIcon(str(list_ico_path)))
+            self.list_mode_btn.setIconSize(QSize(16, 16))
+        self.list_mode_btn.setStyleSheet("""
+            QPushButton {
+                background: transparent;
+                border: 1px solid transparent;
+                border-radius: 13px;
+            }
+            QPushButton:hover {
+                background: rgba(255, 255, 255, 30);
+            }
+        """)
+
+        vt_lay.addWidget(self.grid_mode_btn)
+        vt_lay.addWidget(self.list_mode_btn)
+        header_row.addWidget(view_toggle_frame)
         content_layout.addLayout(header_row)
 
-        # Scroll Area transparente
+        # Scroll Area transparente con barra estilizada vertical (sin scroll horizontal)
         self.scroll = QScrollArea()
         self.scroll.setWidgetResizable(True)
-        self.scroll.setStyleSheet("background: transparent; border: none;")
+        self.scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        self.scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        self.scroll.setStyleSheet("""
+            QScrollArea {
+                background: transparent;
+                border: none;
+            }
+            QScrollBar:horizontal {
+                height: 0px;
+                border: none;
+                background: transparent;
+            }
+            QScrollBar:vertical {
+                background: transparent;
+                width: 6px;
+                margin: 4px 0px 4px 0px;
+                border-radius: 3px;
+            }
+            QScrollBar::handle:vertical {
+                background: rgba(255, 255, 255, 100);
+                min-height: 30px;
+                border-radius: 3px;
+            }
+            QScrollBar::handle:vertical:hover {
+                background: rgba(0, 210, 255, 180);
+            }
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical,
+            QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {
+                height: 0px;
+                width: 0px;
+            }
+            QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical,
+            QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal {
+                background: transparent;
+            }
+        """)
         scroll_content = QWidget()
         scroll_content.setStyleSheet("background: transparent;")
         self.grid = QGridLayout(scroll_content)
-        self.grid.setSpacing(14)
+        self.grid.setSpacing(10)
+        self.grid.setContentsMargins(2, 2, 4, 2)
         self.scroll.setWidget(scroll_content)
         content_layout.addWidget(self.scroll)
 
@@ -1130,9 +1466,45 @@ class LibraryView(QWidget):
 
         self._populate_grid(ALL_GAMES)
 
+    def _update_cat_button_styles(self):
+        for b, code in self.cat_buttons:
+            if code == self.current_plat_code:
+                b.setStyleSheet("""
+                    QPushButton {
+                        text-align: left;
+                        padding: 5px 10px;
+                        border: 1.2px solid #00d2ff;
+                        border-radius: 10px;
+                        background: rgba(0, 168, 255, 75);
+                        color: #ffffff;
+                        font-size: 12px;
+                        font-weight: 700;
+                    }
+                """)
+            else:
+                b.setStyleSheet("""
+                    QPushButton {
+                        text-align: left;
+                        padding: 5px 10px;
+                        border: 1px solid transparent;
+                        border-radius: 10px;
+                        background: transparent;
+                        color: rgba(255, 255, 255, 185);
+                        font-size: 12px;
+                        font-weight: 600;
+                    }
+                    QPushButton:hover {
+                        background: rgba(255, 255, 255, 28);
+                        color: #ffffff;
+                    }
+                """)
+
     def _set_platform(self, name: str, code: str):
-        self.current_plat_name = name
+        # Limpiar conteo si viene con número "(68)"
+        clean_name = name.split("(")[0].strip()
+        self.current_plat_name = clean_name
         self.current_plat_code = code
+        self._update_cat_button_styles()
         self._filter_games()
 
     def _filter_games(self):
@@ -1173,34 +1545,8 @@ class LibraryView(QWidget):
 
         cols = 4
         for idx, g in enumerate(games):
-            card = AcrylicGlassCard(self, border_radius=12, is_interactive=True)
-            card.setFixedSize(210, 240)
-            c_lay = QVBoxLayout(card)
-            c_lay.setContentsMargins(10, 10, 10, 10)
-
-            # Carátula
-            img_l = QLabel()
-            img_l.setFixedSize(190, 140)
-            img_l.setStyleSheet("border-radius: 8px; background: rgba(0,0,0,80);")
-            cov = g.get("cover")
-            if cov and (ROOT / cov).exists():
-                raw_pix = QPixmap(str(ROOT / cov))
-                img_l.setPixmap(get_rounded_pixmap(raw_pix, 190, 140, 8))
-            c_lay.addWidget(img_l)
-
-            # Título
-            t_lbl = QLabel(g.get("title", "Game"))
-            t_lbl.setStyleSheet("font-size: 13px; font-weight: 700; color: #ffffff;")
-            t_lbl.setWordWrap(True)
-            c_lay.addWidget(t_lbl)
-
-            c_plat = QLabel(f"{g.get('console', 'Retro')}  •  60 FPS")
-            c_plat.setStyleSheet("font-size: 11px; color: #bde4ff; font-weight: 600;")
-            c_lay.addWidget(c_plat)
-
+            card = LibraryGameCard(g, self)
             card.mousePressEvent = lambda _, gm=g: self.open_game.emit(gm)
-            card.setCursor(Qt.PointingHandCursor)
-
             self.grid_cards.append(card)
 
             row = idx // cols
