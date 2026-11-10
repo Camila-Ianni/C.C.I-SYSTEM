@@ -117,12 +117,16 @@ COLOR_COVERS = {
     "needforspeed": "assets_omnidash/covers/need-for-speed.webp",
     "lego": "assets_omnidash/covers/lego.webp",
     "farcry": "assets_omnidash/covers/far-cry.webp",
-    # PlayStation / Colección Moderna
+    # PlayStation / Colección Moderna / Nuevos Juegos
     "elden": "assets_omnidash/covers/elden.png",
     "red": "assets_omnidash/covers/red.png",
     "destiny": "assets_omnidash/covers/destiny.png",
     "spider": "assets_omnidash/covers/spider.png",
-    "god": "assets_omnidash/covers/god.png",
+    "god": "assets_omnidash/covers/gow_ps2.png",
+    "kratos": "assets_omnidash/covers/gow_ps2.png",
+    "sparta": "assets_omnidash/covers/gow_sparta.png",
+    "olympus": "assets_omnidash/covers/gow_chains.png",
+    "chains": "assets_omnidash/covers/gow_chains.png",
     "horizon": "assets_omnidash/covers/horizon.png",
     "last": "assets_omnidash/covers/last.png",
     "mafia": "assets_omnidash/covers/mafia.png",
@@ -130,13 +134,15 @@ COLOR_COVERS = {
     "tomb": "assets_omnidash/covers/tomb.png",
     "fifa": "assets_omnidash/covers/fifa.png",
     "bratz": "roms/nds/6148 - Bratz Fashion Boutique (U)(frieNDS).jpg",
-    "lego": "roms/nds/1633 - Cover.png",
     "star wars": "roms/nds/1633 - Cover.png",
-    "sparta": "assets_omnidash/covers/god.png",
-    "olympus": "assets_omnidash/covers/god.png",
-    "barbie": "assets_omnidash/covers/sega.webp",
-    "disney": "assets_omnidash/covers/far-cry.webp",
-    "simpsons": "fotos web/Street_Fighter_old_logo.png",
+    "barbie": "assets_omnidash/covers/barbie_princess.png",
+    "disney": "assets_omnidash/covers/disney_girls.png",
+    "simpsons": "assets_omnidash/covers/simpsons_arcade.png",
+    "simpson": "assets_omnidash/covers/simpsons_arcade.png",
+    "monster high": "assets_omnidash/covers/mh_13_wishes.png",
+    "ghoul": "assets_omnidash/covers/mh_ghoul_spirit.png",
+    "roller": "assets_omnidash/covers/mh_roller.png",
+    "herbie": "assets_omnidash/covers/herbie.png",
 }
 
 
@@ -169,22 +175,42 @@ def load_all_games() -> list[dict]:
     games: list[dict] = []
     roms_dir = ROOT / "roms"
 
-    # 1. Juegos Nativos C.C.I. SYSTEM
-    for g in CATALOG:
-        cid = g.get("id", "")
-        cov = pick_color_cover(cid, "CCI")
+    # 1. Flagship Nativo C.C.I. SYSTEM (Motor matemático puro 60 FPS)
+    games.append({
+        "id": "native_davinci",
+        "title": "Da Vinci Fighters",
+        "console": "C.C.I.",
+        "badge": "CCI",
+        "type": "native",
+        "core": None,
+        "rom": None,
+        "cover": "assets_omnidash/covers/elden.png",
+        "year": "2026",
+        "developer": "C.C.I. Studio",
+        "desc": "Juego nativo oficial desarrollado para la plataforma C.C.I. SYSTEM con motor de combate 1v1.",
+        "installed": True,
+    })
+
+    # Clásicos Arcade para Cuadrícula de Inicio y Biblioteca
+    classic_arcades = [
+        {"id": "arcade_asteroids", "title": "Asteroids", "console": "Arcade", "badge": "ARCADE", "cover": "fotos web/asteroids.jpg", "year": "1979", "dev": "Atari"},
+        {"id": "arcade_tetris", "title": "Tetris", "console": "Arcade", "badge": "ARCADE", "cover": "fotos web/tetris logo .jpg", "year": "1984", "dev": "Alexey Pajitnov"},
+        {"id": "arcade_spaceinvaders", "title": "Space Invaders", "console": "Arcade", "badge": "ARCADE", "cover": "fotos web/space nvaders.jpg", "year": "1978", "dev": "Taito"},
+    ]
+    for ca in classic_arcades:
         games.append({
-            "id": f"native_{cid}",
-            "title": g.get("title", cid).title(),
-            "console": "C.C.I.",
-            "badge": "CCI",
-            "type": "native",
-            "core": None,
-            "rom": None,
-            "cover": cov,
-            "year": "2024",
-            "developer": "C.C.I. Studio",
-            "desc": g.get("desc", "Juego nativo oficial desarrollado para la plataforma C.C.I. SYSTEM.")
+            "id": ca["id"],
+            "title": ca["title"],
+            "console": ca["console"],
+            "badge": ca["badge"],
+            "type": "libretro",
+            "core": "cores/mame2003_plus_libretro.dylib",
+            "rom": "roms/mame/simpsons.zip",
+            "cover": ca["cover"],
+            "year": ca["year"],
+            "developer": ca["dev"],
+            "desc": f"Hito histórico arcade preservado en la consola: {ca['title']}",
+            "installed": True,
         })
 
     # 2. ROMs SNES
@@ -213,12 +239,17 @@ def load_all_games() -> list[dict]:
     if mame_dir.exists():
         for f in sorted(mame_dir.glob("*.zip")):
             clean_name = f.stem.upper()
+            cov = pick_color_cover(clean_name, "ARCADE")
             if f.stem.lower() == "simpsons":
                 clean_name = "The Simpsons Arcade"
-            cov = pick_color_cover(clean_name, "ARCADE")
+                cov = "assets_omnidash/covers/simpsons_arcade.png"
+            elif f.stem.lower() == "pacman":
+                clean_name = "Pac-Man"
+                cov = "fotos web/pac man.jpg"
+            title = clean_name if (clean_name.startswith("The") or clean_name == "Pac-Man") else f"Arcade: {clean_name}"
             games.append({
                 "id": f"mame_{f.stem}",
-                "title": f"Arcade: {clean_name}" if not clean_name.startswith("The") else clean_name,
+                "title": title,
                 "console": "Arcade",
                 "badge": "ARCADE",
                 "type": "libretro",
@@ -372,6 +403,164 @@ def load_all_games() -> list[dict]:
                 "developer": "Nintendo",
                 "desc": f"Innovación por control de movimiento: {clean_name}"
             })
+
+    # 9. Catálogo Extendido On-Demand / Nube (Instalador Core < 1 GB)
+    on_demand_games = [
+        {
+            "id": "gow_ps2_1",
+            "title": "God of War",
+            "console": "PlayStation 2",
+            "badge": "PS2",
+            "type": "on_demand",
+            "core": "cores/pcsx_rearmed_libretro.dylib",
+            "rom": None,
+            "cover": "assets_omnidash/covers/gow_ps2.png",
+            "year": "2005",
+            "developer": "Santa Monica Studio / Sony",
+            "desc": "Kratos desata su furia contra los dioses del Olimpo en Grecia clásica a 60 FPS.",
+            "installed": False,
+            "on_demand": True,
+            "size": "6.8 GB",
+            "download_url": "https://www.retrostic.com/es/roms/ps-2/god-of-war-83620",
+        },
+        {
+            "id": "gow_ps2_2",
+            "title": "God of War II",
+            "console": "PlayStation 2",
+            "badge": "PS2",
+            "type": "on_demand",
+            "core": "cores/pcsx_rearmed_libretro.dylib",
+            "rom": None,
+            "cover": "assets_omnidash/covers/gow_2.png",
+            "year": "2007",
+            "developer": "Santa Monica Studio / Sony",
+            "desc": "Segunda entrega épica de Kratos desafiando a las Moiras y a Zeus.",
+            "installed": False,
+            "on_demand": True,
+            "size": "6.4 GB",
+            "download_url": "https://www.retrostic.com/es/roms/ps-2/god-of-war-ii-83621",
+        },
+        {
+            "id": "gow_psp_chains",
+            "title": "God of War: Chains of Olympus",
+            "console": "PlayStation Portable",
+            "badge": "PSP",
+            "type": "on_demand",
+            "core": "cores/pcsx_rearmed_libretro.dylib",
+            "rom": None,
+            "cover": "assets_omnidash/covers/gow_chains.png",
+            "year": "2008",
+            "developer": "Ready at Dawn / Santa Monica Studio",
+            "desc": "Aventura portátil aclamada de Kratos antes de los eventos del primer God of War.",
+            "installed": False,
+            "on_demand": True,
+            "size": "1.25 GB",
+            "download_url": "https://www.retrostic.com/es/roms/psp/god-of-war-chains-of-olympus-83671",
+        },
+        {
+            "id": "gow_psp_sparta",
+            "title": "God of War: Ghost of Sparta",
+            "console": "PlayStation Portable",
+            "badge": "PSP",
+            "type": "on_demand",
+            "core": "cores/pcsx_rearmed_libretro.dylib",
+            "rom": None,
+            "cover": "assets_omnidash/covers/gow_sparta.png",
+            "year": "2010",
+            "developer": "Ready at Dawn / Santa Monica Studio",
+            "desc": "Kratos en busca de su hermano Deimos revelando el origen de sus cicatrices.",
+            "installed": False,
+            "on_demand": True,
+            "size": "1.08 GB",
+            "download_url": "https://www.retrostic.com/es/roms/psp/god-of-war-ghost-of-sparta-83672",
+        },
+        {
+            "id": "wii_monster_high",
+            "title": "Monster High: 13 Wishes",
+            "console": "Nintendo Wii",
+            "badge": "WII",
+            "type": "on_demand",
+            "core": "cores/dolphin_libretro.dylib",
+            "rom": None,
+            "cover": "assets_omnidash/covers/mh_13_wishes.png",
+            "year": "2013",
+            "developer": "Little Orbit / Mattel",
+            "desc": "Viaja al interior de la lámpara mágica con Frankie Stein y Clawdeen Wolf.",
+            "installed": False,
+            "on_demand": True,
+            "size": "4.4 GB",
+            "download_url": "https://www.retrostic.com/es/roms/wii/monster-high-13-wishes-84133",
+        },
+        {
+            "id": "nds_mh_13_wishes",
+            "title": "Monster High: 13 Wishes (NDS)",
+            "console": "Nintendo DS",
+            "badge": "NDS",
+            "type": "on_demand",
+            "core": "cores/melonds_libretro.dylib",
+            "rom": None,
+            "cover": "assets_omnidash/covers/mh_13_wishes.png",
+            "year": "2013",
+            "developer": "Little Orbit / Mattel",
+            "desc": "Versión táctil portátil de Monster High 13 Wishes para Nintendo DS.",
+            "installed": False,
+            "on_demand": True,
+            "size": "64 MB",
+            "download_url": "https://www.retrostic.com/es/roms/nds/monster-high-13-wishes-76572",
+        },
+        {
+            "id": "nds_mh_ghoul_spirit",
+            "title": "Monster High: Ghoul Spirit",
+            "console": "Nintendo DS",
+            "badge": "NDS",
+            "type": "on_demand",
+            "core": "cores/melonds_libretro.dylib",
+            "rom": None,
+            "cover": "assets_omnidash/covers/mh_ghoul_spirit.png",
+            "year": "2011",
+            "developer": "ImaginEngine / Mattel",
+            "desc": "Conviértete en nueva estudiante monstruosa en Monster High Ghoul Spirit.",
+            "installed": False,
+            "on_demand": True,
+            "size": "64 MB",
+            "download_url": "https://www.retrostic.com/es/roms/nds/monster-high-ghoul-spirit-75951",
+        },
+        {
+            "id": "nds_mh_roller_maze",
+            "title": "Monster High: Skultimate Roller Maze",
+            "console": "Nintendo DS",
+            "badge": "NDS",
+            "type": "on_demand",
+            "core": "cores/melonds_libretro.dylib",
+            "rom": None,
+            "cover": "assets_omnidash/covers/mh_roller.png",
+            "year": "2012",
+            "developer": "Little Orbit / Mattel",
+            "desc": "Carreras sobre patines monstruosas en laberintos vertiginosos.",
+            "installed": False,
+            "on_demand": True,
+            "size": "64 MB",
+            "download_url": "https://www.retrostic.com/es/roms/nds/monster-high-skultimate-roller-maze-76586",
+        },
+        {
+            "id": "gba_herbie",
+            "title": "Disney's Herbie: Fully Loaded",
+            "console": "Game Boy Advance",
+            "badge": "GBA",
+            "type": "on_demand",
+            "core": "cores/vba_next_libretro.dylib",
+            "rom": None,
+            "cover": "assets_omnidash/covers/herbie.png",
+            "year": "2005",
+            "developer": "Disney Interactive / Climax",
+            "desc": "Conduce al icónico Herbie #53 en carreras 32-Bit de alta velocidad.",
+            "installed": False,
+            "on_demand": True,
+            "size": "16 MB",
+            "download_url": "https://www.retrostic.com/es/roms/gba/disney-s-herbie-fully-loaded-13238",
+        },
+    ]
+    games.extend(on_demand_games)
 
     return games
 

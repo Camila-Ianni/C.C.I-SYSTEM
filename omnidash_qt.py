@@ -1019,7 +1019,6 @@ class HomeView(QWidget):
 def resolve_game_cover(game: dict) -> QPixmap | None:
     """Busca y resuelve la carátula en alta definición para el juego."""
     title = game.get("title", "").lower()
-
     priority_map = [
         ("da vinci", ROOT / "assets_omnidash" / "covers" / "elden.png"),
         ("asteroids", ROOT / "fotos web" / "asteroids.jpg"),
@@ -1030,22 +1029,22 @@ def resolve_game_cover(game: dict) -> QPixmap | None:
         ("tetris", ROOT / "fotos web" / "tetris logo .jpg"),
         ("space invaders", ROOT / "fotos web" / "space nvaders.jpg"),
         ("metal slug", ROOT / "fotos web" / "metal slug.jpg"),
-        ("donkey", ROOT / "fotos web" / "donkeykong.jpg"),
-        ("castlevania", ROOT / "fotos web" / "castlevania.webp"),
-        ("doom", ROOT / "fotos web" / "Doom_logo.png"),
-        ("flappy", ROOT / "fotos web" / "Flappy_Bird_icon.png"),
-        ("dino", ROOT / "fotos web" / "dino.jpg"),
-        ("ghostbusters", ROOT / "fotos web" / "ghostbusters.webp"),
-        ("street fighter", ROOT / "fotos web" / "Street_Fighter_old_logo.png"),
-        ("megaman", ROOT / "fotos web" / "megaman.jpg"),
-        ("pokemon", ROOT / "fotos web" / "pokemon.webp"),
+        ("simpson", ROOT / "assets_omnidash" / "covers" / "simpsons_arcade.png"),
+        ("chains of olympus", ROOT / "assets_omnidash" / "covers" / "gow_chains.png"),
+        ("ghost of sparta", ROOT / "assets_omnidash" / "covers" / "gow_sparta.png"),
+        ("god of war ii", ROOT / "assets_omnidash" / "covers" / "gow_2.png"),
+        ("god of war", ROOT / "assets_omnidash" / "covers" / "gow_ps2.png"),
+        ("13 wishes", ROOT / "assets_omnidash" / "covers" / "mh_13_wishes.png"),
+        ("ghoul spirit", ROOT / "assets_omnidash" / "covers" / "mh_ghoul_spirit.png"),
+        ("roller maze", ROOT / "assets_omnidash" / "covers" / "mh_roller.png"),
+        ("herbie", ROOT / "assets_omnidash" / "covers" / "herbie.png"),
+        ("barbie", ROOT / "assets_omnidash" / "covers" / "barbie_princess.png"),
+        ("disney", ROOT / "assets_omnidash" / "covers" / "disney_girls.png"),
         ("bratz", ROOT / "roms/nds/6148 - Bratz Fashion Boutique (U)(frieNDS).jpg"),
         ("lego", ROOT / "roms/nds/1633 - Cover.png"),
         ("star wars", ROOT / "roms/nds/1633 - Cover.png"),
-        ("god of war", ROOT / "assets_omnidash/covers/god.png"),
-        ("barbie", ROOT / "assets_omnidash/covers/sega.webp"),
-        ("disney", ROOT / "assets_omnidash/covers/far-cry.webp"),
-        ("simpsons", ROOT / "assets_omnidash/covers/battlefield.webp"),
+        ("donkey", ROOT / "fotos web" / "donkeykong.jpg"),
+        ("castlevania", ROOT / "fotos web" / "castlevania.webp"),
     ]
     for key, path in priority_map:
         if key in title and path.exists():
@@ -1170,8 +1169,12 @@ class LibraryGameCard(AcrylicGlassCard):
         sub_row.addWidget(ico)
 
         fps_val = game.get("fps", 60)
-        sub_lbl = QLabel(f"C.C.I.  •  {fps_val} FPS")
-        sub_lbl.setStyleSheet("font-size: 13px; color: #bdd1df; font-weight: 500;")
+        if game.get("on_demand"):
+            sub_lbl = QLabel(f"☁ En la nube  •  {game.get('size', 'Descargar')}")
+            sub_lbl.setStyleSheet("font-size: 13px; color: #56c9e9; font-weight: 600;")
+        else:
+            sub_lbl = QLabel(f"C.C.I.  •  {fps_val} FPS")
+            sub_lbl.setStyleSheet("font-size: 13px; color: #bdd1df; font-weight: 500;")
         sub_row.addWidget(sub_lbl)
         sub_row.addStretch(1)
 
@@ -1492,35 +1495,55 @@ class LibraryView(QWidget):
                 background: transparent;
             }
         """)
-        scroll_content = QWidget()
-        scroll_content.setStyleSheet("background: transparent;")
-        self.grid = QGridLayout(scroll_content)
+        self.scroll_content = QWidget()
+        self.scroll_content.setStyleSheet("background: transparent;")
+        self.grid = QGridLayout(self.scroll_content)
         self.grid.setHorizontalSpacing(20)
         self.grid.setVerticalSpacing(18)
         self.grid.setContentsMargins(6, 4, 12, 6)
-        self.scroll.setWidget(scroll_content)
+        self.scroll.setWidget(self.scroll_content)
         content_layout.addWidget(self.scroll)
 
         layout.addWidget(self.content_panel, 1)
 
-        self._populate_grid(self._get_prioritized_games(ALL_GAMES))
+        # Inicializar tarjetas persistentes en el scroll area
+        self.all_cards: list[LibraryGameCard] = []
+        prioritized = self._get_prioritized_games(ALL_GAMES)
+        for g in prioritized:
+            card = LibraryGameCard(g, self.scroll_content)
+            card.mousePressEvent = lambda _, gm=g: self.open_game.emit(gm)
+            self.all_cards.append(card)
+
+        self._filter_games()
 
     def _get_prioritized_games(self, games: list[dict]) -> list[dict]:
         """Ordena los 8 juegos emblemáticos en la cuadrícula 4x2 inicial según la referencia."""
-        top_order = [
+        def match_game(target: str, g: dict) -> bool:
+            t = g.get("title", "").lower().replace("-", " ")
+            if target == "da vinci": return "da vinci" in t
+            if target == "asteroids": return "asteroids" in t
+            if target == "mario": return "super mario" in t and "kart" not in t and "64" not in t and "world" not in t and "collection" not in t
+            if target == "zelda": return "zelda" in t
+            if target == "pacman": return "pac man" in t or "pacman" in t
+            if target == "tetris": return "tetris" in t
+            if target == "space invaders": return "space invader" in t
+            if target == "metal slug": return "metal slug" in t
+            return False
+
+        top_targets = [
             "da vinci",
             "asteroids",
-            "super mario",
+            "mario",
             "zelda",
-            "pac-man",
+            "pacman",
             "tetris",
             "space invaders",
             "metal slug"
         ]
         priority_games = []
         remaining_games = []
-        for target in top_order:
-            found = next((g for g in games if target in g.get("title", "").lower() and g not in priority_games), None)
+        for target in top_targets:
+            found = next((g for g in games if match_game(target, g) and g not in priority_games), None)
             if found:
                 priority_games.append(found)
         for g in games:
@@ -1569,13 +1592,23 @@ class LibraryView(QWidget):
         self._filter_games()
 
     def _filter_games(self):
-        query = self.search_input.text().lower().strip()
-        filtered = []
+        raw_query = self.search_input.text().lower().strip()
+        query = (
+            raw_query.replace("simpsom", "simpson")
+            .replace("gow", "god of war")
+            .replace("kratos", "god of war")
+            .replace("brats", "bratz")
+        )
         code = self.current_plat_code
-        for g in ALL_GAMES:
+        matching_cards = []
+
+        for card in self.all_cards:
+            g = card.game
             title = g.get("title", "").lower()
             console = g.get("console", "").lower()
             badge = g.get("badge", "").lower()
+            desc = g.get("desc", "").lower()
+
             if not code or code == "todas":
                 plat_match = True
             elif code == "snes":
@@ -1585,7 +1618,7 @@ class LibraryView(QWidget):
             elif code == "n64":
                 plat_match = ("64" in console or badge == "n64")
             elif code == "ps1":
-                plat_match = ("playstation" in console or "ps1" in console or badge == "ps1")
+                plat_match = ("playstation" in console or "ps1" in console or "ps2" in console or "psp" in console or badge in ("ps1", "ps2", "psp"))
             elif code == "nds":
                 plat_match = ("ds" in console or badge == "nds")
             elif code == "neo":
@@ -1597,35 +1630,40 @@ class LibraryView(QWidget):
             else:
                 plat_match = (code in console or code in badge)
 
-            query_match = not query or (query in title) or (query in console)
-            if plat_match and query_match:
-                filtered.append(g)
+            query_match = (
+                not query
+                or (query in title)
+                or (query in console)
+                or (query in desc)
+                or (query in badge)
+                or (raw_query in title)
+            )
 
-        self.count_label.setText(f"{self.current_plat_name} ({len(filtered)} disponibles)")
-        if code == "todas" and not query:
-            filtered = self._get_prioritized_games(filtered)
-        self._populate_grid(filtered)
+            if query:
+                if query_match:
+                    matching_cards.append(card)
+            else:
+                if plat_match:
+                    matching_cards.append(card)
 
-    def _populate_grid(self, games: list[dict]):
-        while self.grid.count():
-            item = self.grid.takeAt(0)
-            w = item.widget()
-            if w:
-                w.deleteLater()
+        self.count_label.setText(f"{self.current_plat_name} ({len(matching_cards)} disponibles)")
 
-        self.grid_cards = []
-        self.grid_games = games
-        self.selected_idx = 0
+        # Remover del layout y ocultar todas
+        for card in self.all_cards:
+            self.grid.removeWidget(card)
+            card.hide()
 
+        # Añadir y mostrar solo las tarjetas activas
         cols = 4
-        for idx, g in enumerate(games):
-            card = LibraryGameCard(g, self)
-            card.mousePressEvent = lambda _, gm=g: self.open_game.emit(gm)
+        self.grid_cards = matching_cards
+        self.grid_games = [c.game for c in matching_cards]
+        for idx, card in enumerate(matching_cards):
             row = idx // cols
             col = idx % cols
             self.grid.addWidget(card, row, col)
-            self.grid_cards.append(card)
+            card.show()
 
+        self.selected_idx = 0
         self._update_card_focus()
 
     def _update_card_focus(self):
@@ -1694,7 +1732,7 @@ class LibraryView(QWidget):
 
         cols = 4
         for idx, g in enumerate(games):
-            card = LibraryGameCard(g, self)
+            card = LibraryGameCard(g, self.scroll_content)
             card.mousePressEvent = lambda _, gm=g: self.open_game.emit(gm)
             self.grid_cards.append(card)
 

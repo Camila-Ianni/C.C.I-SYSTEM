@@ -42,6 +42,13 @@ class RetroGameInfo(ctypes.Structure):
     ]
 
 
+class RetroVariable(ctypes.Structure):
+    _fields_ = [
+        ("key", ctypes.c_char_p),
+        ("value", ctypes.c_char_p),
+    ]
+
+
 class RetroSystemAvInfo(ctypes.Structure):
     class Geometry(ctypes.Structure):
         _fields_ = [
@@ -94,6 +101,9 @@ class LibretroRunner:
 
         # Estado de botones
         self.joypad_state = [0] * 16
+        self.pointer_pressed = False
+        self.pointer_x = 0
+        self.pointer_y = 0
 
         # Directorio persistente para BIOS oficiales (system/bios7.bin, bios9.bin, etc.)
         self._sys_dir_path = str((self.core_path.parent.parent / "system").resolve()).encode("utf-8")
@@ -132,6 +142,13 @@ class LibretroRunner:
                 ptr = ctypes.cast(data, ctypes.POINTER(ctypes.c_bool))
                 ptr.contents = ctypes.c_bool(True)
                 return True
+            if cmd == 15 and data:
+                # RETRO_ENVIRONMENT_GET_VARIABLE
+                var = ctypes.cast(data, ctypes.POINTER(RetroVariable)).contents
+                key = var.key.decode("utf-8", errors="ignore") if var.key else ""
+                if key == "melonds_boot_directly":
+                    var.value = b"enabled"
+                    return True
             return False
 
         self._c_env_cb = self._env_cb_type(_env_cb)
@@ -199,8 +216,16 @@ class LibretroRunner:
 
         self._input_state_type = ctypes.CFUNCTYPE(ctypes.c_int16, ctypes.c_uint, ctypes.c_uint, ctypes.c_uint, ctypes.c_uint)
         def _input_state_cb(port, device, index, id_):
-            if port == 0 and device == RETRO_DEVICE_JOYPAD and 0 <= id_ < len(self.joypad_state):
-                return self.joypad_state[id_]
+            if port == 0:
+                if device == RETRO_DEVICE_JOYPAD and 0 <= id_ < len(self.joypad_state):
+                    return self.joypad_state[id_]
+                elif device == 6:  # RETRO_DEVICE_POINTER (touchscreen)
+                    if id_ == 2:  # PRESSED
+                        return 1 if self.pointer_pressed else 0
+                    elif id_ == 0:  # X
+                        return self.pointer_x
+                    elif id_ == 1:  # Y
+                        return self.pointer_y
             return 0
         self._c_input_state_cb = self._input_state_type(_input_state_cb)
         self.lib.retro_set_input_state(self._c_input_state_cb)
