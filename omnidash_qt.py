@@ -2754,44 +2754,45 @@ class StreamCard(AcrylicGlassCard):
     def __init__(self, title: str, streamer: str, viewers: int, thumb_path: Path, parent=None):
         super().__init__(
             parent,
-            border_radius=18,
+            border_radius=20,
             border_color=QColor(93, 116, 131, 90),
             glow_color=QColor(0, 0, 0, 60),
             glow_radius=12
         )
-        self.setFixedHeight(142)
+        self.setFixedHeight(165)
+        self.setMaximumWidth(720)
         self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
 
         layout = QHBoxLayout(self)
-        layout.setContentsMargins(12, 10, 16, 10)
-        layout.setSpacing(16)
+        layout.setContentsMargins(14, 12, 18, 12)
+        layout.setSpacing(18)
 
         self.thumb_lbl = QLabel()
-        self.thumb_lbl.setFixedSize(220, 112)
+        self.thumb_lbl.setFixedSize(250, 138)
         if thumb_path.exists():
-            pm = QPixmap(str(thumb_path)).scaled(220, 112, Qt.KeepAspectRatioByExpanding, Qt.SmoothTransformation)
-            self.thumb_lbl.setPixmap(get_rounded_pixmap(pm, 220, 112, 12))
-        self.thumb_lbl.setStyleSheet("border-radius: 12px; border: 1px solid rgba(255, 255, 255, 0.25);")
+            pm = QPixmap(str(thumb_path)).scaled(250, 138, Qt.KeepAspectRatioByExpanding, Qt.SmoothTransformation)
+            self.thumb_lbl.setPixmap(get_rounded_pixmap(pm, 250, 138, 14))
+        self.thumb_lbl.setStyleSheet("border-radius: 14px; border: 1px solid rgba(255, 255, 255, 0.25);")
         layout.addWidget(self.thumb_lbl)
 
         info_lay = QVBoxLayout()
-        info_lay.setContentsMargins(0, 6, 0, 6)
-        info_lay.setSpacing(4)
+        info_lay.setContentsMargins(0, 4, 0, 4)
+        info_lay.setSpacing(6)
 
         title_lbl = QLabel(title)
-        title_lbl.setStyleSheet("font-size: 15px; font-weight: 800; color: #ffffff;")
+        title_lbl.setStyleSheet("font-size: 16px; font-weight: 800; color: #ffffff;")
         info_lay.addWidget(title_lbl)
 
         st_row = QHBoxLayout()
-        st_row.setSpacing(6)
+        st_row.setSpacing(8)
         av_lbl = QLabel()
         av_p = ROOT / "assets_omnidash" / "communities" / "avatar_miku.png"
         if av_p.exists():
-            av_lbl.setPixmap(get_rounded_pixmap(QPixmap(str(av_p)), 20, 20, 10))
+            av_lbl.setPixmap(get_rounded_pixmap(QPixmap(str(av_p)), 24, 24, 12))
         st_row.addWidget(av_lbl)
 
         name_lbl = QLabel(streamer)
-        name_lbl.setStyleSheet("font-size: 12px; font-weight: 600; color: #BDD4E4;")
+        name_lbl.setStyleSheet("font-size: 13px; font-weight: 600; color: #BDD4E4;")
         st_row.addWidget(name_lbl)
         st_row.addStretch(1)
         info_lay.addLayout(st_row)
@@ -2803,16 +2804,16 @@ class StreamCard(AcrylicGlassCard):
 
         play_btn = QPushButton(" ▶  Ver stream")
         play_btn.setCursor(Qt.PointingHandCursor)
-        play_btn.setFixedHeight(34)
+        play_btn.setFixedHeight(38)
         play_btn.setStyleSheet("""
             QPushButton {
                 background: rgba(255, 255, 255, 0.12);
                 border: 1.5px solid rgba(255, 255, 255, 0.35);
-                border-radius: 12px;
+                border-radius: 14px;
                 color: #ffffff;
-                font-size: 12px;
+                font-size: 13px;
                 font-weight: 700;
-                padding: 0 16px;
+                padding: 0 20px;
             }
             QPushButton:hover {
                 background: rgba(53, 200, 241, 0.3);
@@ -2822,16 +2823,16 @@ class StreamCard(AcrylicGlassCard):
         play_btn.clicked.connect(lambda: self.play_stream.emit(title))
         act_row.addWidget(play_btn)
 
-        pop_btn = QPushButton(" ↗ ")
+        pop_btn = QPushButton(" ⤢ ")
         pop_btn.setCursor(Qt.PointingHandCursor)
-        pop_btn.setFixedSize(34, 34)
+        pop_btn.setFixedSize(38, 38)
         pop_btn.setStyleSheet("""
             QPushButton {
                 background: rgba(255, 255, 255, 0.08);
                 border: 1px solid rgba(255, 255, 255, 0.2);
-                border-radius: 10px;
+                border-radius: 12px;
                 color: #ffffff;
-                font-size: 14px;
+                font-size: 16px;
                 font-weight: 700;
             }
             QPushButton:hover {
@@ -2855,25 +2856,25 @@ class ChatMessageWidget(QWidget):
         layout.setSpacing(14)
 
         av_lbl = QLabel()
-        av_lbl.setFixedSize(46, 46)
+        av_lbl.setFixedSize(50, 50)
         if avatar_path.exists():
-            av_lbl.setPixmap(get_rounded_pixmap(QPixmap(str(avatar_path)), 46, 46, 23))
+            av_lbl.setPixmap(get_rounded_pixmap(QPixmap(str(avatar_path)), 50, 50, 25))
         layout.addWidget(av_lbl, 0, Qt.AlignTop)
 
         content_lay = QVBoxLayout()
-        content_lay.setSpacing(3)
+        content_lay.setSpacing(4)
 
         hdr_row = QHBoxLayout()
         hdr_row.setSpacing(6)
 
         name_lbl = QLabel(author)
         name_color = "#35C8F1" if is_blue_author else "#ffffff"
-        name_lbl.setStyleSheet(f"font-size: 15px; font-weight: 800; color: {name_color};")
+        name_lbl.setStyleSheet(f"font-size: 16px; font-weight: 800; color: {name_color};")
         hdr_row.addWidget(name_lbl)
 
         if has_crown:
             cr_lbl = QLabel("👑")
-            cr_lbl.setStyleSheet("font-size: 13px; color: #ffd700;")
+            cr_lbl.setStyleSheet("font-size: 14px; color: #ffd700;")
             hdr_row.addWidget(cr_lbl)
 
         t_lbl = QLabel(time_str)
@@ -2883,7 +2884,7 @@ class ChatMessageWidget(QWidget):
         content_lay.addLayout(hdr_row)
 
         txt_lbl = QLabel(text)
-        txt_lbl.setStyleSheet("font-size: 14px; font-weight: 500; color: #F4F6F8; line-height: 1.4;")
+        txt_lbl.setStyleSheet("font-size: 15px; font-weight: 500; color: #F4F6F8; line-height: 1.45;")
         txt_lbl.setWordWrap(True)
         content_lay.addWidget(txt_lbl)
 
@@ -3130,28 +3131,28 @@ class MemberItemWidget(QWidget):
         self.setAttribute(Qt.WA_TranslucentBackground, True)
         self.setStyleSheet("background: transparent;")
         layout = QHBoxLayout(self)
-        layout.setContentsMargins(4, 4, 4, 4)
+        layout.setContentsMargins(4, 5, 4, 5)
         layout.setSpacing(12)
 
         av_container = QWidget()
-        av_container.setFixedSize(40, 40)
+        av_container.setFixedSize(46, 46)
         av_container.setAttribute(Qt.WA_TranslucentBackground, True)
         av_container.setStyleSheet("background: transparent;")
 
         av_lbl = QLabel(av_container)
-        av_lbl.setGeometry(0, 0, 36, 36)
+        av_lbl.setGeometry(0, 0, 42, 42)
         if avatar_path.exists():
-            av_lbl.setPixmap(get_rounded_pixmap(QPixmap(str(avatar_path)), 36, 36, 18))
+            av_lbl.setPixmap(get_rounded_pixmap(QPixmap(str(avatar_path)), 42, 42, 21))
 
         dot = QLabel(av_container)
-        dot.setGeometry(25, 25, 12, 12)
+        dot.setGeometry(30, 30, 13, 13)
         if not is_online:
             dot_col = "#7f95a6"
         elif "stream" in status_text.lower() or "transmitiendo" in status_text.lower():
             dot_col = "#A77AE4"
         else:
             dot_col = "#32D875"
-        dot.setStyleSheet(f"background: {dot_col}; border: 2px solid #102638; border-radius: 6px;")
+        dot.setStyleSheet(f"background: {dot_col}; border: 2.2px solid #102638; border-radius: 6.5px;")
 
         layout.addWidget(av_container)
 
@@ -3159,14 +3160,14 @@ class MemberItemWidget(QWidget):
         info.setSpacing(2)
 
         n_row = QHBoxLayout()
-        n_row.setSpacing(4)
+        n_row.setSpacing(5)
         nl = QLabel(name)
-        nl.setStyleSheet(f"font-size: 14px; font-weight: 700; color: {'#ffffff' if is_online else '#91A5B3'};")
+        nl.setStyleSheet(f"font-size: 15px; font-weight: 700; color: {'#ffffff' if is_online else '#91A5B3'};")
         n_row.addWidget(nl)
 
         if has_crown:
             cr = QLabel("👑")
-            cr.setStyleSheet("font-size: 12px; color: #ffd700;")
+            cr.setStyleSheet("font-size: 13px; color: #ffd700;")
             n_row.addWidget(cr)
 
         n_row.addStretch(1)
@@ -3181,7 +3182,7 @@ class MemberItemWidget(QWidget):
             st_color = "#32D875"
         else:
             st_color = "#7f95a6"
-        st.setStyleSheet(f"font-size: 11px; font-weight: 500; color: {st_color};")
+        st.setStyleSheet(f"font-size: 12px; font-weight: 500; color: {st_color};")
         info.addWidget(st)
 
         layout.addLayout(info, 1)
@@ -3319,10 +3320,10 @@ class RightPanel(QWidget):
         v_lay.addLayout(v_hdr)
 
         ctrls_row = QHBoxLayout()
-        ctrls_row.setSpacing(10)
+        ctrls_row.setSpacing(12)
 
         self.mic_btn = QPushButton()
-        self.mic_btn.setFixedSize(42, 42)
+        self.mic_btn.setFixedSize(44, 44)
         self.mic_btn.setCursor(Qt.PointingHandCursor)
         self.mic_muted = False
         self._update_mic_style()
@@ -3330,7 +3331,7 @@ class RightPanel(QWidget):
         ctrls_row.addWidget(self.mic_btn)
 
         self.headset_btn = QPushButton()
-        self.headset_btn.setFixedSize(42, 42)
+        self.headset_btn.setFixedSize(44, 44)
         self.headset_btn.setCursor(Qt.PointingHandCursor)
         self.headset_muted = False
         self._update_headset_style()
@@ -3338,7 +3339,7 @@ class RightPanel(QWidget):
         ctrls_row.addWidget(self.headset_btn)
 
         self.screen_btn = QPushButton()
-        self.screen_btn.setFixedSize(42, 42)
+        self.screen_btn.setFixedSize(44, 44)
         self.screen_btn.setCursor(Qt.PointingHandCursor)
         self.screen_active = False
         self._update_screen_style()
@@ -3346,7 +3347,7 @@ class RightPanel(QWidget):
         ctrls_row.addWidget(self.screen_btn)
 
         self.dc_btn = QPushButton()
-        self.dc_btn.setFixedSize(42, 42)
+        self.dc_btn.setFixedSize(44, 44)
         self.dc_btn.setCursor(Qt.PointingHandCursor)
         dc_p = ROOT / "assets_omnidash" / "icons" / "phone_disconnect.png"
         if dc_p.exists():
@@ -3355,7 +3356,7 @@ class RightPanel(QWidget):
         self.dc_btn.setStyleSheet("""
             QPushButton {
                 background: #E94B56;
-                border-radius: 21px;
+                border-radius: 22px;
                 border: none;
             }
             QPushButton:hover {
@@ -3379,9 +3380,9 @@ class RightPanel(QWidget):
             self.mic_btn.setIcon(QIcon(str(mic_p)))
             self.mic_btn.setIconSize(QSize(18, 18))
         if self.mic_muted:
-            self.mic_btn.setStyleSheet("QPushButton { background: rgba(233, 75, 86, 0.85); border: 1.5px solid #E94B56; border-radius: 19px; }")
+            self.mic_btn.setStyleSheet("QPushButton { background: rgba(233, 75, 86, 0.85); border: 1.5px solid #E94B56; border-radius: 22px; }")
         else:
-            self.mic_btn.setStyleSheet("QPushButton { background: rgba(255, 255, 255, 0.12); border: 1.5px solid rgba(255, 255, 255, 0.25); border-radius: 19px; } QPushButton:hover { background: rgba(255, 255, 255, 0.25); }")
+            self.mic_btn.setStyleSheet("QPushButton { background: rgba(255, 255, 255, 0.12); border: 1.5px solid rgba(255, 255, 255, 0.25); border-radius: 22px; } QPushButton:hover { background: rgba(255, 255, 255, 0.25); }")
 
     def _toggle_headset(self):
         self.headset_muted = not self.headset_muted
@@ -3394,9 +3395,9 @@ class RightPanel(QWidget):
             self.headset_btn.setIcon(QIcon(str(hs_p)))
             self.headset_btn.setIconSize(QSize(18, 18))
         if self.headset_muted:
-            self.headset_btn.setStyleSheet("QPushButton { background: rgba(120, 120, 120, 0.6); border: 1.5px solid #888888; border-radius: 19px; }")
+            self.headset_btn.setStyleSheet("QPushButton { background: rgba(120, 120, 120, 0.6); border: 1.5px solid #888888; border-radius: 22px; }")
         else:
-            self.headset_btn.setStyleSheet("QPushButton { background: rgba(255, 255, 255, 0.12); border: 1.5px solid rgba(255, 255, 255, 0.25); border-radius: 19px; } QPushButton:hover { background: rgba(255, 255, 255, 0.25); }")
+            self.headset_btn.setStyleSheet("QPushButton { background: rgba(255, 255, 255, 0.12); border: 1.5px solid rgba(255, 255, 255, 0.25); border-radius: 22px; } QPushButton:hover { background: rgba(255, 255, 255, 0.25); }")
 
     def _toggle_screen(self):
         self.screen_active = not self.screen_active
@@ -3409,9 +3410,9 @@ class RightPanel(QWidget):
             self.screen_btn.setIcon(QIcon(str(sc_p)))
             self.screen_btn.setIconSize(QSize(18, 18))
         if self.screen_active:
-            self.screen_btn.setStyleSheet("QPushButton { background: rgba(53, 200, 241, 0.3); border: 1.5px solid #35C8F1; border-radius: 19px; }")
+            self.screen_btn.setStyleSheet("QPushButton { background: rgba(53, 200, 241, 0.3); border: 1.5px solid #35C8F1; border-radius: 22px; }")
         else:
-            self.screen_btn.setStyleSheet("QPushButton { background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.18); border-radius: 19px; } QPushButton:hover { background: rgba(255, 255, 255, 0.2); }")
+            self.screen_btn.setStyleSheet("QPushButton { background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.18); border-radius: 22px; } QPushButton:hover { background: rgba(255, 255, 255, 0.2); }")
 
     def _disconnect_voice(self):
         self.voice_panel.hide()
