@@ -48,6 +48,7 @@ CORE_EVOLUTION_SUITES = [
     "test_communities_phase7.py",
     "test_communities_ui.py",
     "test_communities_merge_audit.py",
+    "test_game_library_scanner.py",
 ]
 
 _STRUCTURED_RUNNER_CODE = r"""
