@@ -282,45 +282,7 @@ def load_all_games() -> list[dict]:
     games: list[dict] = []
     roms_dir = ROOT / "roms"
 
-    # 1. Flagship Nativo C.C.I. SYSTEM (Motor matemático puro 60 FPS)
-    games.append({
-        "id": "native_davinci",
-        "title": "Da Vinci Fighters",
-        "console": "C.C.I.",
-        "badge": "CCI",
-        "type": "native",
-        "core": None,
-        "rom": None,
-        "cover": "assets_omnidash/covers/elden.png",
-        "year": "2026",
-        "developer": "C.C.I. Studio",
-        "desc": "Juego nativo oficial desarrollado para la plataforma C.C.I. SYSTEM con motor de combate 1v1.",
-        "installed": True,
-    })
-
-    # Clásicos Arcade para Cuadrícula de Inicio y Biblioteca
-    classic_arcades = [
-        {"id": "arcade_asteroids", "title": "Asteroids", "console": "Arcade", "badge": "ARCADE", "cover": "fotos web/asteroids.jpg", "year": "1979", "dev": "Atari"},
-        {"id": "arcade_tetris", "title": "Tetris", "console": "Arcade", "badge": "ARCADE", "cover": "fotos web/tetris logo .jpg", "year": "1984", "dev": "Alexey Pajitnov"},
-        {"id": "arcade_spaceinvaders", "title": "Space Invaders", "console": "Arcade", "badge": "ARCADE", "cover": "fotos web/space nvaders.jpg", "year": "1978", "dev": "Taito"},
-    ]
-    for ca in classic_arcades:
-        games.append({
-            "id": ca["id"],
-            "title": ca["title"],
-            "console": ca["console"],
-            "badge": ca["badge"],
-            "type": "libretro",
-            "core": "cores/mame2003_plus_libretro.dylib",
-            "rom": "roms/mame/simpsons.zip",
-            "cover": ca["cover"],
-            "year": ca["year"],
-            "developer": ca["dev"],
-            "desc": f"Hito histórico arcade preservado en la consola: {ca['title']}",
-            "installed": True,
-        })
-
-    # 2. ROMs SNES
+    # 1. ROMs SNES
     snes_dir = roms_dir / "snes"
     if snes_dir.exists():
         for f in sorted(snes_dir.glob("*.*")):

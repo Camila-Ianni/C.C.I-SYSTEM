@@ -713,15 +713,16 @@ class HomeView(QWidget):
         ]
         self.hero_game = mario_candidates[0] if mario_candidates else (ALL_GAMES[0] if ALL_GAMES else {"title": "Super Mario Bros", "console": "SNES"})
 
-        # Cargar arte del Hero (versión limpia sin botón horneado)
+        # Cargar arte del Hero (foto oficial de fotos juegos/)
         hero_pix = None
-        hero_art_path = ROOT / "assets_omnidash" / "mockup_cards" / "hero_mario_clean.png"
-        if not hero_art_path.exists():
-            hero_art_path = ROOT / "assets_omnidash" / "mockup_cards" / "hero_mario.png"
-        if not hero_art_path.exists():
-            hero_art_path = ROOT / "fotos web" / "super mario.jpg"
-        if hero_art_path.exists():
-            hero_pix = QPixmap(str(hero_art_path))
+        if self.hero_game and self.hero_game.get("cover"):
+            cp = ROOT / self.hero_game["cover"]
+            if cp.exists():
+                hero_pix = QPixmap(str(cp))
+        if not hero_pix or hero_pix.isNull():
+            hero_art_path = ROOT / "fotos juegos" / "Super Mario World 2- Yoshi's Island.jpg"
+            if hero_art_path.exists():
+                hero_pix = QPixmap(str(hero_art_path))
 
         self.hero_card = AcrylicGlassCard(
             self,
@@ -791,46 +792,40 @@ class HomeView(QWidget):
         self.hero_card.setCursor(Qt.PointingHandCursor)
         main_row.addWidget(self.hero_card)
 
-        # --- B. GRID DE 6 TARJETAS (2 FILAS x 3 COLUMNAS) ---
+        # --- B. GRID DE 6 TARJETAS (2 FILAS x 3 COLUMNAS - FOTOS JUEGOS OFICIALES) ---
         grid_items_data = [
             (
-                "Super Mario Bros",
-                "grid_mario.png",
-                "fotos juegos/Super Mario World 2- Yoshi's Island.jpg",
+                "Super Mario All-Stars",
+                "fotos juegos/Super Mario All-Stars Online.jpeg",
                 QColor(0, 210, 255, 190),
                 QColor(0, 210, 255, 230),
             ),
             (
-                "Metal Slug",
-                "grid_metalslug.png",
+                "Metal Slug 2",
                 "fotos juegos/Metal Slug 2- Super Vehicle-001:II.jpg",
                 QColor(255, 159, 28, 190),
                 QColor(255, 159, 28, 230),
             ),
             (
-                "The Legend Of Zelda",
-                "grid_zelda.png",
+                "The Legend of Zelda",
                 "fotos juegos/The Legend of Zelda- Ocarina of Time.jpg",
                 QColor(255, 215, 0, 190),
                 QColor(255, 215, 0, 230),
             ),
             (
                 "Donkey Kong 64",
-                "grid_donkeykong.png",
                 "fotos juegos/Donkey Kong 64.jpg",
                 QColor(46, 204, 113, 190),
                 QColor(46, 204, 113, 230),
             ),
             (
                 "Castlevania - Symphony of the Night",
-                "grid_castlevania.png",
                 "fotos juegos/Castlevania- Symphony of the Night.webp",
                 QColor(230, 57, 70, 190),
                 QColor(230, 57, 70, 230),
             ),
             (
                 "Mario Kart DS",
-                "grid_mariokart.png",
                 "fotos juegos/Mario Kart DS.jpg",
                 QColor(112, 214, 255, 190),
                 QColor(112, 214, 255, 230),
@@ -843,16 +838,16 @@ class HomeView(QWidget):
         grid_layout.setSpacing(14)
 
         self.grid_cards = []
-        for idx, (title, mock_file, fallback, glow_col, border_col) in enumerate(grid_items_data):
-            img_path = ROOT / "assets_omnidash" / "mockup_cards" / mock_file
-            if not img_path.exists():
-                img_path = ROOT / fallback
+        for idx, (title, cover_rel, glow_col, border_col) in enumerate(grid_items_data):
+            img_path = ROOT / cover_rel
             card_pix = QPixmap(str(img_path)) if img_path.exists() else None
 
             # Buscar juego real en ALL_GAMES
             matched_game = next((g for g in ALL_GAMES if title.lower() in g.get("title", "").lower()), None)
             if not matched_game:
-                matched_game = {"title": title, "console": "Retro", "cover": fallback}
+                matched_game = {"title": title, "console": "Retro", "cover": cover_rel}
+            elif not card_pix:
+                card_pix = resolve_game_cover(matched_game)
 
             card = AcrylicGlassCard(
                 self,
@@ -1078,14 +1073,13 @@ def resolve_game_cover(game: dict) -> QPixmap | None:
     # 3. Fallbacks secundarios de títulos y clásicos
     title = (game.get("title") or "").lower()
     priority_map = [
-        ("da vinci", ROOT / "assets_omnidash" / "covers" / "elden.png"),
-        ("asteroids", ROOT / "fotos web" / "asteroids.jpg"),
-        ("tetris", ROOT / "fotos web" / "tetris logo .jpg"),
-        ("space invaders", ROOT / "fotos web" / "space nvaders.jpg"),
         ("super mario", ROOT / "fotos juegos" / "Super Mario World 2- Yoshi's Island.jpg"),
         ("zelda", ROOT / "fotos juegos" / "The Legend of Zelda- Ocarina of Time.jpg"),
         ("metal slug", ROOT / "fotos juegos" / "Metal Slug 2- Super Vehicle-001:II.jpg"),
         ("castlevania", ROOT / "fotos juegos" / "Castlevania- Symphony of the Night.webp"),
+        ("donkey kong", ROOT / "fotos juegos" / "Donkey Kong 64.jpg"),
+        ("pac-man", ROOT / "fotos juegos" / "Pac-Man.png"),
+        ("god of war", ROOT / "fotos juegos" / "God of War.jpg"),
     ]
     for key, path in priority_map:
         if key in title and path.exists():
@@ -1389,7 +1383,7 @@ class LibraryView(QWidget):
             ("Nintendo DS", "nds", "nds_dual.png"),
             ("Neo-Geo", "neo", "games.png"),
             ("Game Boy Advance", "gba", "desktop.png"),
-            ("C.C.I.", "cci", "controller_outline.png"),
+            ("Nintendo Wii", "wii", "controller_outline.png"),
         ]
 
         self.cat_buttons = []
@@ -1511,18 +1505,18 @@ class LibraryView(QWidget):
                 background: transparent;
             }
             QScrollBar:vertical {
-                background: transparent;
-                width: 8px;
+                background: rgba(10, 20, 32, 0.4);
+                width: 10px;
                 margin: 4px 2px 4px 0px;
-                border-radius: 4px;
+                border-radius: 5px;
             }
             QScrollBar::handle:vertical {
-                background: rgba(166, 176, 184, 0.4);
-                min-height: 40px;
-                border-radius: 4px;
+                background: rgba(166, 176, 184, 0.65);
+                min-height: 48px;
+                border-radius: 5px;
             }
             QScrollBar::handle:vertical:hover {
-                background: rgba(39, 189, 231, 0.85);
+                background: rgba(39, 189, 231, 0.95);
             }
             QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical,
             QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {
@@ -1555,40 +1549,43 @@ class LibraryView(QWidget):
 
         self._filter_games()
 
+    def wheelEvent(self, event):
+        self.scroll.verticalScrollBar().setValue(
+            self.scroll.verticalScrollBar().value() - event.angleDelta().y()
+        )
+        event.accept()
+
     def _get_prioritized_games(self, games: list[dict]) -> list[dict]:
-        """Ordena los 8 juegos emblemáticos en la cuadrícula 4x2 inicial según la referencia."""
+        """Ordena los 69 juegos de la consola colocando clásicos representativos al inicio."""
         def match_game(target: str, g: dict) -> bool:
             t = g.get("title", "").lower().replace("-", " ")
-            if target == "da vinci": return "da vinci" in t
-            if target == "asteroids": return "asteroids" in t
             if target == "mario": return "super mario" in t and "kart" not in t and "64" not in t and "world" not in t and "collection" not in t
             if target == "zelda": return "zelda" in t
-            if target == "pacman": return "pac man" in t or "pacman" in t
-            if target == "tetris": return "tetris" in t
-            if target == "space invaders": return "space invader" in t
             if target == "metal slug": return "metal slug" in t
+            if target == "pacman": return "pac man" in t or "pacman" in t
+            if target == "donkey": return "donkey kong" in t and "64" in t
+            if target == "castlevania": return "castlevania" in t
+            if target == "kart": return "mario kart" in t
+            if target == "god of war": return "god of war" in t and "ii" not in t and "chains" not in t and "ghost" not in t
             return False
 
         top_targets = [
-            "da vinci",
-            "asteroids",
             "mario",
             "zelda",
+            "metal slug",
             "pacman",
-            "tetris",
-            "space invaders",
-            "metal slug"
+            "donkey",
+            "castlevania",
+            "kart",
+            "god of war",
         ]
         priority_games = []
-        remaining_games = []
         for target in top_targets:
             found = next((g for g in games if match_game(target, g) and g not in priority_games), None)
             if found:
                 priority_games.append(found)
-        for g in games:
-            if g not in priority_games:
-                remaining_games.append(g)
-        return priority_games + remaining_games
+        remaining = [g for g in games if g not in priority_games]
+        return priority_games + remaining
 
     def _update_cat_button_styles(self):
         for b, code in self.cat_buttons:
@@ -1664,8 +1661,8 @@ class LibraryView(QWidget):
                 plat_match = ("neo" in console or badge == "neo-geo")
             elif code == "gba":
                 plat_match = ("gba" in console or "advance" in console or badge == "gba")
-            elif code == "cci":
-                plat_match = ("c.c.i" in console or badge == "cci")
+            elif code == "wii":
+                plat_match = ("wii" in console or badge == "wii")
             else:
                 plat_match = (code in console or code in badge)
 

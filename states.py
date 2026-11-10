@@ -503,9 +503,12 @@ class BootState(VideoState):
 class IntroAvatarState(VideoState):
     """ESTADO 'INTRO_AVATAR': Reproduce Cami_speaking_in_pixel_art_1080p_20261027145337.mp4 con audio y pasa a USER_SELECT al terminar."""
     def __init__(self, state_machine):
+        video = "Cami_speaking_in_pixel_art_1080p_20261027145337.mp4"
+        if not os.path.exists(video) and os.path.exists("CCI_INTRO.mp4"):
+            video = "CCI_INTRO.mp4"
         super().__init__(
             state_machine,
-            video_path="Cami_speaking_in_pixel_art_1080p_20261027145337.mp4",
+            video_path=video,
             next_state_name="USER_SELECT",
             allow_skip=True
         )
