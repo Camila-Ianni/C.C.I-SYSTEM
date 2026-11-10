@@ -1033,6 +1033,13 @@ def resolve_game_cover(game: dict) -> QPixmap | None:
         ("street fighter", ROOT / "fotos web" / "Street_Fighter_old_logo.png"),
         ("megaman", ROOT / "fotos web" / "megaman.jpg"),
         ("pokemon", ROOT / "fotos web" / "pokemon.webp"),
+        ("bratz", ROOT / "roms/nds/6148 - Bratz Fashion Boutique (U)(frieNDS).jpg"),
+        ("lego", ROOT / "roms/nds/1633 - Cover.png"),
+        ("star wars", ROOT / "roms/nds/1633 - Cover.png"),
+        ("god of war", ROOT / "assets_ps4/img/god.png"),
+        ("barbie", ROOT / "assets_omnidash/covers/sega.webp"),
+        ("disney", ROOT / "assets_omnidash/covers/far-cry.webp"),
+        ("simpsons", ROOT / "assets_omnidash/covers/battlefield.webp"),
     ]
     for key, path in priority_map:
         if key in title and path.exists():
@@ -1313,8 +1320,9 @@ class LibraryView(QWidget):
         self.current_plat_code = "todas"
 
         platforms = [
-            ("Todas (68)", "todas", "grid.png"),
+            (f"Todas ({len(ALL_GAMES)})", "todas", "grid.png"),
             ("Super Nintendo", "super", "xbox_controller.png"),
+            ("Game Boy Advance", "gba", "desktop.png"),
             ("Arcade MAME", "arcade", "calculator.png"),
             ("Nintendo 64", "64", "xbox_controller.png"),
             ("PlayStation 1", "playstation", "games_filled.png"),

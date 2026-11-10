@@ -129,6 +129,15 @@ COLOR_COVERS = {
     "death": "assets_ps4/img/death.png",
     "tomb": "assets_ps4/img/tomb.png",
     "fifa": "assets_ps4/img/fifa.png",
+    "bratz": "roms/nds/6148 - Bratz Fashion Boutique (U)(frieNDS).jpg",
+    "lego": "roms/nds/1633 - Cover.png",
+    "star wars": "roms/nds/1633 - Cover.png",
+    "god": "assets_ps4/img/god.png",
+    "sparta": "assets_ps4/img/god.png",
+    "olympus": "assets_ps4/img/god.png",
+    "barbie": "assets_omnidash/covers/sega.webp",
+    "disney": "assets_omnidash/covers/far-cry.webp",
+    "simpsons": "fotos web/Street_Fighter_old_logo.png",
 }
 
 
@@ -205,18 +214,20 @@ def load_all_games() -> list[dict]:
     if mame_dir.exists():
         for f in sorted(mame_dir.glob("*.zip")):
             clean_name = f.stem.upper()
+            if f.stem.lower() == "simpsons":
+                clean_name = "The Simpsons Arcade"
             cov = pick_color_cover(clean_name, "ARCADE")
             games.append({
                 "id": f"mame_{f.stem}",
-                "title": f"Arcade: {clean_name}",
+                "title": f"Arcade: {clean_name}" if not clean_name.startswith("The") else clean_name,
                 "console": "Arcade",
                 "badge": "ARCADE",
                 "type": "libretro",
                 "core": "cores/mame2003_plus_libretro.dylib",
                 "rom": str(f.relative_to(ROOT)),
                 "cover": cov,
-                "year": "1996",
-                "developer": "SNK / Capcom / Midway",
+                "year": "1991",
+                "developer": "Konami",
                 "desc": f"Cabina recreativa arcade clásica preservada a 60 FPS estables: {clean_name}"
             })
 
@@ -265,11 +276,26 @@ def load_all_games() -> list[dict]:
     if nds_dir.exists():
         for f in sorted(nds_dir.rglob("*.nds")):
             clean_name = f.stem.split("(")[0].split("[")[0].strip()
+            num_prefix = ""
             if " - " in clean_name:
                 parts = clean_name.split(" - ", 1)
                 if parts[0].isdigit():
+                    num_prefix = parts[0]
                     clean_name = parts[1].strip()
-            cov = pick_color_cover(clean_name, "NDS")
+
+            # Buscar carátula local si viene desempaquetada
+            cov = None
+            if num_prefix:
+                cov_cand = f.parent / f"{num_prefix} - Cover.png"
+                if cov_cand.exists():
+                    cov = str(cov_cand.relative_to(ROOT))
+            if not cov:
+                cov_cand = f.parent / f"{f.stem}.jpg"
+                if cov_cand.exists():
+                    cov = str(cov_cand.relative_to(ROOT))
+            if not cov:
+                cov = pick_color_cover(clean_name, "NDS")
+
             games.append({
                 "id": f"nds_{f.stem}",
                 "title": clean_name,
@@ -282,6 +308,30 @@ def load_all_games() -> list[dict]:
                 "year": "2005",
                 "developer": "Nintendo",
                 "desc": f"Doble pantalla interactiva de Nintendo DS: {clean_name}"
+            })
+
+    # 6b. ROMs Game Boy Advance (GBA)
+    gba_dir = roms_dir / "gba"
+    if gba_dir.exists():
+        for f in sorted(gba_dir.glob("*.gba")):
+            clean_name = f.stem.split("(")[0].split("[")[0].strip()
+            if " - " in clean_name:
+                parts = clean_name.split(" - ", 1)
+                if parts[0].isdigit():
+                    clean_name = parts[1].strip()
+            cov = pick_color_cover(clean_name, "GBA")
+            games.append({
+                "id": f"gba_{f.stem}",
+                "title": clean_name,
+                "console": "Game Boy Advance",
+                "badge": "GBA",
+                "type": "libretro",
+                "core": "cores/vba_next_libretro.dylib",
+                "rom": str(f.relative_to(ROOT)),
+                "cover": cov,
+                "year": "2004",
+                "developer": "Nintendo / Various",
+                "desc": f"Clásico de 32-Bit Game Boy Advance: {clean_name}"
             })
 
     # 7. ROMs Neo-Geo
