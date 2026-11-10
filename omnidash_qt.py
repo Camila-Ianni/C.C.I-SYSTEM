@@ -222,6 +222,7 @@ class AcrylicGlassCard(QFrame):
         border_color: QColor | None = None,
         show_specular: bool = True,
         bg_image: QPixmap | None = None,
+        inner_padding: int = 0,
     ):
         super().__init__(parent)
         self.border_radius = border_radius
@@ -231,6 +232,7 @@ class AcrylicGlassCard(QFrame):
         self.border_color = border_color
         self.show_specular = show_specular
         self.bg_image = bg_image
+        self.inner_padding = inner_padding
         self.is_hovered = False
         self.is_focused = False
         self.setAttribute(Qt.WA_Hover, is_interactive)
@@ -316,18 +318,8 @@ class AcrylicGlassCard(QFrame):
 
         active = self.is_hovered or self.is_focused
 
-        # 1.5 Imagen de carátula / portada del juego (si existe)
-        if self.bg_image and not self.bg_image.isNull():
-            scaled_bg = self.bg_image.scaled(w, h, Qt.KeepAspectRatioByExpanding, Qt.SmoothTransformation)
-            sx = max(0, (scaled_bg.width() - w) // 2)
-            sy = max(0, (scaled_bg.height() - h) // 2)
-            painter.drawPixmap(0, 0, scaled_bg, sx, sy, w, h)
-            # Película de contraste translúcida sobre el arte
-            tint = QColor(0, 0, 0, 35 if active else 60)
-            painter.fillRect(0, 0, w, h, tint)
-
-        # 2. Capa translúcida adaptativa según el brillo del fondo (si no tiene imagen propia)
-        elif not drawn_blur:
+        # 2. Capa translúcida adaptativa de cristal base según el brillo del fondo
+        if not drawn_blur:
             fallback_col = QColor(14, 20, 32, 210) if WALLPAPER_IS_DARK else QColor(10, 55, 95, 210)
             painter.fillRect(0, 0, w, h, fallback_col)
         elif WALLPAPER_IS_DARK:
@@ -343,35 +335,65 @@ class AcrylicGlassCard(QFrame):
             painter.fillRect(0, 0, w, h, aqua_film)
             painter.fillRect(0, 0, w, h, aqua_sheen)
 
-        # 3. Reflejo especular Liquid Glass (curva o gradiente superior)
+        # 2.5 Arte del juego inset (Borde de cristal transparente alrededor de la imagen)
+        if self.bg_image and not self.bg_image.isNull():
+            pad = max(0, self.inner_padding)
+            if pad > 0:
+                iw = max(10, w - 2 * pad)
+                ih = max(10, h - 2 * pad)
+                irad = max(6, self.border_radius - pad // 2)
+
+                inner_path = QPainterPath()
+                inner_path.addRoundedRect(pad, pad, iw, ih, irad, irad)
+
+                painter.save()
+                painter.setClipPath(inner_path)
+                scaled_bg = self.bg_image.scaled(iw, ih, Qt.KeepAspectRatioByExpanding, Qt.SmoothTransformation)
+                sx = max(0, (scaled_bg.width() - iw) // 2)
+                sy = max(0, (scaled_bg.height() - ih) // 2)
+                painter.drawPixmap(pad, pad, scaled_bg, sx, sy, iw, ih)
+                # Sutil película para contraste
+                painter.fillRect(pad, pad, iw, ih, QColor(0, 0, 0, 25 if active else 45))
+                painter.restore()
+
+                # Línea interior sutil en el marco del arte
+                painter.setPen(QPen(QColor(255, 255, 255, 75), 1.0))
+                painter.drawPath(inner_path)
+            else:
+                scaled_bg = self.bg_image.scaled(w, h, Qt.KeepAspectRatioByExpanding, Qt.SmoothTransformation)
+                sx = max(0, (scaled_bg.width() - w) // 2)
+                sy = max(0, (scaled_bg.height() - h) // 2)
+                painter.drawPixmap(0, 0, scaled_bg, sx, sy, w, h)
+                tint = QColor(0, 0, 0, 35 if active else 60)
+                painter.fillRect(0, 0, w, h, tint)
+
+        # 3. Reflejo especular Liquid Glass (curva o gradiente superior sobre todo el cristal)
         if self.show_specular:
             spec_h = int(h * 0.45)
             if spec_h > 8:
                 spec_grad = QLinearGradient(0, 0, 0, spec_h)
-                spec_grad.setColorAt(0.0, QColor(255, 255, 255, 70 if active else 40))
-                spec_grad.setColorAt(0.4, QColor(255, 255, 255, 18))
+                spec_grad.setColorAt(0.0, QColor(255, 255, 255, 75 if active else 45))
+                spec_grad.setColorAt(0.35, QColor(255, 255, 255, 20))
                 spec_grad.setColorAt(1.0, QColor(255, 255, 255, 0))
                 painter.fillRect(0, 0, w, spec_h, QBrush(spec_grad))
 
         # 4. Línea de brillo inset superior (hairline de cristal líquido)
-        painter.setPen(QColor(255, 255, 255, 175 if active else 120))
+        painter.setPen(QColor(255, 255, 255, 195 if active else 135))
         painter.drawLine(self.border_radius, 1, w - self.border_radius, 1)
 
         painter.restore()
 
-        # 5. Borde luminoso exterior (Glow & Glass Rim)
+        # 5. Borde transparente con ligero brillo blanco luminoso exterior
         if self.border_color:
-            b_col = self.border_color
-            if not active:
-                b_col = QColor(b_col.red(), b_col.green(), b_col.blue(), 170)
-            painter.setPen(QPen(b_col, 2.0 if active else 1.2))
+            b_col = self.border_color if active else QColor(255, 255, 255, 185)
+            painter.setPen(QPen(b_col, 2.0 if active else 1.4))
         elif active:
             if WALLPAPER_IS_DARK:
                 painter.setPen(QPen(QColor(0, 210, 255, 250), 2.2))
             else:
                 painter.setPen(QPen(QColor(0, 180, 255, 250), 2.2))
         else:
-            painter.setPen(QPen(QColor(255, 255, 255, 125), 1.0))
+            painter.setPen(QPen(QColor(255, 255, 255, 185), 1.3))
 
         painter.drawPath(path)
 
@@ -602,7 +624,7 @@ class HomeView(QWidget):
         super().__init__(parent)
         self.setFocusPolicy(Qt.StrongFocus)
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(36, 42, 36, 18)
+        layout.setContentsMargins(36, 80, 36, 18)
         layout.setSpacing(10)
 
         # 1. FILA PRINCIPAL: Botón Izq + Hero Card + Grid 2x3 + Botón Der
@@ -641,8 +663,9 @@ class HomeView(QWidget):
             glow_radius=22,
             border_color=QColor(0, 210, 255, 240),
             bg_image=hero_pix,
+            inner_padding=10,
         )
-        self.hero_card.setFixedSize(370, 320)
+        self.hero_card.setFixedSize(370, 310)
         hero_layout = QVBoxLayout(self.hero_card)
         hero_layout.setContentsMargins(16, 14, 16, 16)
 
@@ -757,8 +780,9 @@ class HomeView(QWidget):
                 glow_radius=18,
                 border_color=border_col,
                 bg_image=card_pix,
+                inner_padding=8,
             )
-            card.setFixedSize(205, 148)
+            card.setFixedSize(205, 144)
             card.mousePressEvent = lambda _, gm=matched_game: self.open_details.emit(gm)
             card.setCursor(Qt.PointingHandCursor)
 
