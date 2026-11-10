@@ -1913,156 +1913,447 @@ class GameDetailsView(QWidget):
 
 
 # ==============================================================================
-# 4. VISTA DE AJUSTES (SETTINGS - 1:1 AERO-SETTINGS.JPG)
+# 4. VISTA DE AJUSTES (SETTINGS - 1:1 REDISEÑO FRUTIGER AERO / DARK GLASS)
 # ==============================================================================
+class WallpaperThumbnailCard(QFrame):
+    clicked = Signal()
+
+    def __init__(self, card_id: str, title: str, image_path: Path | None, is_picker: bool = False, parent=None):
+        super().__init__(parent)
+        self.card_id = card_id
+        self.title = title
+        self.image_path = image_path
+        self.is_picker = is_picker
+        self.is_selected = False
+        self.is_hovered = False
+        self.setCursor(Qt.PointingHandCursor)
+        self.setFixedHeight(116)
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+        self.setAttribute(Qt.WA_Hover, True)
+
+        self._pixmap = None
+        if image_path and image_path.exists():
+            self._pixmap = QPixmap(str(image_path))
+
+        self.shadow = QGraphicsDropShadowEffect(self)
+        self.shadow.setOffset(0, 0)
+        self.shadow.setBlurRadius(16)
+        self.shadow.setColor(QColor(53, 204, 245, 0))
+        self.setGraphicsEffect(self.shadow)
+
+    def set_selected(self, selected: bool):
+        self.is_selected = selected
+        if selected:
+            self.shadow.setColor(QColor(53, 204, 245, 170))
+            self.shadow.setBlurRadius(20)
+        else:
+            self.shadow.setColor(QColor(0, 0, 0, 50))
+            self.shadow.setBlurRadius(10)
+        self.update()
+
+    def enterEvent(self, event):
+        self.is_hovered = True
+        if not self.is_selected:
+            self.shadow.setColor(QColor(255, 255, 255, 60))
+            self.shadow.setBlurRadius(14)
+        self.update()
+        super().enterEvent(event)
+
+    def leaveEvent(self, event):
+        self.is_hovered = False
+        if not self.is_selected:
+            self.shadow.setColor(QColor(0, 0, 0, 50))
+            self.shadow.setBlurRadius(10)
+        self.update()
+        super().leaveEvent(event)
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            self.clicked.emit()
+        super().mousePressEvent(event)
+
+    def paintEvent(self, event):
+        p = QPainter(self)
+        p.setRenderHint(QPainter.Antialiasing)
+        p.setRenderHint(QPainter.SmoothPixmapTransform)
+
+        w = self.width()
+        h = self.height()
+        radius = 20
+
+        clip_path = QPainterPath()
+        clip_path.addRoundedRect(1, 1, w - 2, h - 2, radius, radius)
+
+        if self.is_picker:
+            bg_col = QColor(25, 42, 60, 200) if self.is_hovered else QColor(16, 28, 42, 170)
+            p.fillPath(clip_path, QBrush(bg_col))
+
+            ico_path = ROOT / "assets_omnidash" / "icons" / "image_picker.png"
+            if not ico_path.exists():
+                ico_path = ROOT / "assets_omnidash" / "icons" / "image.png"
+            if ico_path.exists():
+                ico = QPixmap(str(ico_path)).scaled(30, 30, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+                p.drawPixmap((w - 30) // 2, (h - 56) // 2, ico)
+
+            p.setPen(QColor(255, 255, 255, 240))
+            p.setFont(QFont("Helvetica Neue", 12, QFont.Bold))
+            p.drawText(0, h // 2 + 12, w, 24, Qt.AlignHCenter | Qt.AlignVCenter, self.title)
+        else:
+            p.save()
+            p.setClipPath(clip_path)
+            if self._pixmap and not self._pixmap.isNull():
+                scaled = self._pixmap.scaled(w, h, Qt.KeepAspectRatioByExpanding, Qt.SmoothTransformation)
+                sx = max(0, (scaled.width() - w) // 2)
+                sy = max(0, (scaled.height() - h) // 2)
+                p.drawPixmap(0, 0, scaled, sx, sy, w, h)
+            else:
+                p.fillRect(0, 0, w, h, QColor(30, 45, 60))
+            p.restore()
+
+            if self.is_selected:
+                chk_path = ROOT / "assets_omnidash" / "icons" / "check_circle_cyan.png"
+                if chk_path.exists():
+                    chk_pix = QPixmap(str(chk_path)).scaled(24, 24, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+                    p.drawPixmap(w - 34, 10, chk_pix)
+                else:
+                    p.setPen(QPen(QColor(53, 204, 245), 2))
+                    p.setBrush(QBrush(QColor(10, 24, 38, 200)))
+                    p.drawEllipse(w - 34, 10, 24, 24)
+                    p.drawLine(w - 28, 22, w - 24, 26)
+                    p.drawLine(w - 24, 26, w - 16, 17)
+
+        if self.is_selected:
+            p.setPen(QPen(QColor(53, 204, 245), 2.2))
+        elif self.is_hovered:
+            p.setPen(QPen(QColor(255, 255, 255, 140), 1.5))
+        else:
+            p.setPen(QPen(QColor(255, 255, 255, 38), 1.0))
+        p.setBrush(Qt.NoBrush)
+        p.drawRoundedRect(1, 1, w - 2, h - 2, radius, radius)
+
+
 class SettingsView(QWidget):
     wallpaper_changed = Signal(str)
 
     def __init__(self, parent=None):
         super().__init__(parent)
         layout = QHBoxLayout(self)
-        layout.setContentsMargins(48, 20, 48, 24)
-        layout.setSpacing(24)
+        layout.setContentsMargins(44, 12, 44, 20)
+        layout.setSpacing(20)
 
-        # Panel Izquierdo: Categorías (.as-cats)
-        self.cats_panel = AcrylicGlassCard(self, border_radius=16)
-        self.cats_panel.setFixedWidth(280)
-        cats_lay = QVBoxLayout(self.cats_panel)
-        cats_lay.setContentsMargins(18, 18, 18, 18)
-        cats_lay.setSpacing(10)
+        # 1. Panel Lateral Izquierdo: Ajustes (354 x 718 px)
+        self.sidebar = AcrylicGlassCard(
+            self,
+            border_radius=30,
+            border_color=QColor(166, 176, 184, 100),
+            glow_color=QColor(0, 0, 0, 70),
+            glow_radius=12
+        )
+        self.sidebar.setFixedWidth(354)
+        self.sidebar.setFixedHeight(718)
+        side_layout = QVBoxLayout(self.sidebar)
+        side_layout.setContentsMargins(20, 20, 20, 20)
+        side_layout.setSpacing(10)
 
-        c_title = QLabel("Settings")
-        c_title.setStyleSheet("font-size: 20px; font-weight: 800; color: #ffffff;")
-        c_sub = QLabel("Customise console, display, audio")
-        c_sub.setStyleSheet("font-size: 11px; color: #a5d8ff;")
-        cats_lay.addWidget(c_title)
-        cats_lay.addWidget(c_sub)
-        cats_lay.addSpacing(8)
+        # Cabecera del Sidebar: Icono Gear + Título + Subtítulo
+        s_hdr = QHBoxLayout()
+        s_hdr.setSpacing(14)
+        gear_lbl = QLabel()
+        gear_path = ROOT / "assets_omnidash" / "icons" / "settings.png"
+        if gear_path.exists():
+            gear_lbl.setPixmap(QPixmap(str(gear_path)).scaled(44, 44, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+        s_hdr.addWidget(gear_lbl)
 
+        s_text_lay = QVBoxLayout()
+        s_text_lay.setSpacing(2)
+        s_title = QLabel("Ajustes")
+        s_title.setStyleSheet("font-size: 24px; font-weight: 800; color: #ffffff;")
+        s_sub = QLabel("Personalizá tu consola")
+        s_sub.setStyleSheet("font-size: 13px; color: #8da2b5; font-weight: 500;")
+        s_text_lay.addWidget(s_title)
+        s_text_lay.addWidget(s_sub)
+        s_hdr.addLayout(s_text_lay)
+        s_hdr.addStretch(1)
+        side_layout.addLayout(s_hdr)
+        side_layout.addSpacing(6)
+
+        # 8 Botones de Categorías
         categories = [
-            ("Appearance", "paint_brush"),
-            ("Display & sound", "speaker_2"),
-            ("Controllers & headsets", "xbox_controller"),
-            ("Notifications", "alert"),
-            ("Library & emulation", "games"),
-            ("Profile & system", "person"),
-            ("Accessibility", "accessibility"),
-            ("System", "desktop"),
+            ("Apariencia", "display_monitor"),
+            ("Pantalla y sonido", "speaker_2"),
+            ("Controles y accesorios", "xbox_controller"),
+            ("Notificaciones", "alert"),
+            ("Biblioteca y emulación", "games"),
+            ("Perfil y sistema", "person"),
+            ("Accesibilidad", "accessibility"),
+            ("Sistema", "desktop"),
         ]
 
         self.cat_btns = []
-        for name, icon in categories:
-            btn = QPushButton(f"  {name}")
+        for i, (name, icon_name) in enumerate(categories):
+            btn = QPushButton(f"   {name}")
             btn.setCursor(Qt.PointingHandCursor)
-            ip = ROOT / "assets_omnidash" / "icons" / f"{icon}.png"
+            btn.setFixedHeight(54)
+            btn.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+            
+            ip = ROOT / "assets_omnidash" / "icons" / f"{icon_name}.png"
             if ip.exists():
                 btn.setIcon(QIcon(str(ip)))
-                btn.setIconSize(QSize(18, 18))
-            btn.setStyleSheet("""
-                QPushButton {
-                    text-align: left;
-                    padding: 9px 14px;
-                    border: 1px solid transparent;
-                    border-radius: 10px;
-                    background: rgba(255, 255, 255, 15);
-                    color: #ffffff;
-                    font-size: 12px;
-                    font-weight: 600;
-                }
-                QPushButton:hover {
-                    border: 1px solid rgba(255, 255, 255, 180);
-                    background: rgba(255, 255, 255, 45);
-                }
-            """)
-            cats_lay.addWidget(btn)
+                btn.setIconSize(QSize(22, 22))
+
+            if i == 0:
+                btn.setStyleSheet("""
+                    QPushButton {
+                        text-align: left;
+                        padding-left: 18px;
+                        border: 1.5px solid #35CCF5;
+                        border-radius: 20px;
+                        background: rgba(14, 45, 68, 0.85);
+                        color: #ffffff;
+                        font-size: 14px;
+                        font-weight: 700;
+                    }
+                """)
+                btn_glow = QGraphicsDropShadowEffect(btn)
+                btn_glow.setOffset(0, 0)
+                btn_glow.setColor(QColor(53, 204, 245, 110))
+                btn_glow.setBlurRadius(14)
+                btn.setGraphicsEffect(btn_glow)
+            else:
+                btn.setStyleSheet("""
+                    QPushButton {
+                        text-align: left;
+                        padding-left: 18px;
+                        border: 1px solid rgba(255, 255, 255, 0.08);
+                        border-radius: 20px;
+                        background: rgba(20, 32, 45, 0.5);
+                        color: #ffffff;
+                        font-size: 14px;
+                        font-weight: 600;
+                    }
+                    QPushButton:hover {
+                        border: 1px solid rgba(255, 255, 255, 0.3);
+                        background: rgba(28, 48, 68, 0.7);
+                    }
+                """)
+            btn.clicked.connect(lambda _, idx=i: self._on_cat_clicked(idx))
+            side_layout.addWidget(btn)
             self.cat_btns.append(btn)
 
-        cats_lay.addStretch(1)
-        layout.addWidget(self.cats_panel)
+        side_layout.addStretch(1)
+        layout.addWidget(self.sidebar)
 
-        # Panel Derecho: Configuración Activa (.as-page)
-        self.page_panel = AcrylicGlassCard(self, border_radius=16)
-        page_lay = QVBoxLayout(self.page_panel)
-        page_lay.setContentsMargins(28, 24, 28, 24)
-        page_lay.setSpacing(16)
+        # 2. Panel Principal de Configuración: Perfil y Apariencia
+        self.content_panel = AcrylicGlassCard(
+            self,
+            border_radius=30,
+            border_color=QColor(166, 176, 184, 100),
+            glow_color=QColor(0, 0, 0, 80),
+            glow_radius=14
+        )
+        self.content_panel.setFixedHeight(718)
+        content_lay = QVBoxLayout(self.content_panel)
+        content_lay.setContentsMargins(28, 22, 28, 22)
+        content_lay.setSpacing(16)
 
-        p_head = QLabel("Profile & Appearance")
-        p_head.setStyleSheet("font-size: 18px; font-weight: 700; color: #ffffff;")
-        page_lay.addWidget(p_head)
+        # Cabecera: Icono Paleta + Perfil y Apariencia + Subtítulo
+        c_hdr = QHBoxLayout()
+        c_hdr.setSpacing(14)
+        pal_lbl = QLabel()
+        pal_path = ROOT / "assets_omnidash" / "icons" / "palette_outline.png"
+        if pal_path.exists():
+            pal_lbl.setPixmap(QPixmap(str(pal_path)).scaled(44, 44, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+        c_hdr.addWidget(pal_lbl)
 
-        # Sección interactiva de Fondo de Pantalla (Wallpaper)
-        wp_card = AcrylicGlassCard(self, border_radius=12)
-        wp_lay = QVBoxLayout(wp_card)
-        wp_lay.setContentsMargins(18, 14, 18, 14)
-        wp_lay.setSpacing(10)
+        c_text_lay = QVBoxLayout()
+        c_text_lay.setSpacing(2)
+        c_title = QLabel("Perfil y Apariencia")
+        c_title.setStyleSheet("font-size: 24px; font-weight: 800; color: #ffffff;")
+        c_sub = QLabel("Configurá el aspecto de tu C.C.I.")
+        c_sub.setStyleSheet("font-size: 13px; color: #8da2b5; font-weight: 500;")
+        c_text_lay.addWidget(c_title)
+        c_text_lay.addWidget(c_sub)
+        c_hdr.addLayout(c_text_lay)
+        c_hdr.addStretch(1)
+        content_lay.addLayout(c_hdr)
 
-        wp_header = QHBoxLayout()
-        wp_title = QLabel("Fondo de Pantalla de la Consola")
-        wp_title.setStyleSheet("font-size: 14px; font-weight: 700; color: #ffffff;")
-        wp_header.addWidget(wp_title)
-        wp_header.addStretch(1)
+        # Contenedor de Galería de Fondos de Pantalla
+        wp_container = AcrylicGlassCard(
+            self,
+            border_radius=24,
+            border_color=QColor(255, 255, 255, 30),
+            glow_color=QColor(0, 0, 0, 50),
+            glow_radius=10
+        )
+        wp_container.setFixedHeight(186)
+        wp_box_lay = QVBoxLayout(wp_container)
+        wp_box_lay.setContentsMargins(20, 12, 20, 14)
+        wp_box_lay.setSpacing(10)
+
+        # Fila de Título del Fondo
+        wp_title_row = QHBoxLayout()
+        wp_ico = QLabel()
+        wp_ico_p = ROOT / "assets_omnidash" / "icons" / "image.png"
+        if wp_ico_p.exists():
+            wp_ico.setPixmap(QPixmap(str(wp_ico_p)).scaled(20, 20, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+        wp_title_row.addWidget(wp_ico)
+
+        wp_t_lbl = QLabel("Fondo de pantalla de la consola")
+        wp_t_lbl.setStyleSheet("font-size: 15px; font-weight: 700; color: #ffffff;")
+        wp_title_row.addWidget(wp_t_lbl)
+        wp_title_row.addStretch(1)
+
         self.wp_current_lbl = QLabel("Spider-Man (background.jpg)")
-        self.wp_current_lbl.setStyleSheet("font-size: 12px; color: #bde4ff; font-weight: 600;")
-        wp_header.addWidget(self.wp_current_lbl)
-        wp_lay.addLayout(wp_header)
+        self.wp_current_lbl.setStyleSheet("font-size: 13px; font-weight: 600; color: #a5d8ff;")
+        wp_title_row.addWidget(self.wp_current_lbl)
+        wp_box_lay.addLayout(wp_title_row)
 
-        # Botones de presets rápidos y selector de archivo
-        presets_row = QHBoxLayout()
-        presets_row.setSpacing(10)
+        # Fila de 4 Tarjetas de Wallpapers
+        cards_row = QHBoxLayout()
+        cards_row.setSpacing(14)
 
-        spidey_btn = QPushButton("🕷️ Spider-Man")
-        spidey_btn.setProperty("class", "glassBtn")
-        spidey_btn.setCursor(Qt.PointingHandCursor)
-        spidey_btn.clicked.connect(lambda: self._select_wallpaper(ROOT / "background.jpg", "Spider-Man (background.jpg)"))
-        presets_row.addWidget(spidey_btn)
+        self.cards: list[WallpaperThumbnailCard] = []
 
-        aero_btn = QPushButton("🏝️ Frutiger Aero (Mar)")
-        aero_btn.setProperty("class", "glassBtn")
-        aero_btn.setCursor(Qt.PointingHandCursor)
-        aero_btn.clicked.connect(lambda: self._select_wallpaper(ROOT / "assets_omnidash" / "aero-background.webp", "Frutiger Aero (Mar Soleado)"))
-        presets_row.addWidget(aero_btn)
+        # Card 1: Spider-Man
+        c1 = WallpaperThumbnailCard(
+            "spidey",
+            "Spider-Man",
+            ROOT / "assets_omnidash" / "wallpapers" / "thumb_spidey_clean.jpg"
+        )
+        c1.set_selected(True)
+        c1.clicked.connect(lambda: self._select_wallpaper(ROOT / "background.jpg", "Spider-Man (background.jpg)", "spidey"))
+        cards_row.addWidget(c1)
+        self.cards.append(c1)
 
-        browse_btn = QPushButton("📁 Cambiar Fondo...")
-        browse_btn.setProperty("class", "glassBtn")
-        browse_btn.setCursor(Qt.PointingHandCursor)
-        browse_btn.clicked.connect(self._browse_wallpaper)
-        presets_row.addWidget(browse_btn)
+        # Card 2: Sunset City
+        c2 = WallpaperThumbnailCard(
+            "sunset",
+            "Sunset City",
+            ROOT / "assets_omnidash" / "wallpapers" / "thumb_sunset_exact.jpg"
+        )
+        c2.clicked.connect(lambda: self._select_wallpaper(ROOT / "assets_omnidash" / "wallpapers" / "sunset_city.jpg", "Sunset City (sunset_city.jpg)", "sunset"))
+        cards_row.addWidget(c2)
+        self.cards.append(c2)
 
-        wp_lay.addLayout(presets_row)
-        page_lay.addWidget(wp_card)
+        # Card 3: Night Moon
+        c3 = WallpaperThumbnailCard(
+            "moon",
+            "Night Moon",
+            ROOT / "assets_omnidash" / "wallpapers" / "thumb_moon_exact.jpg"
+        )
+        c3.clicked.connect(lambda: self._select_wallpaper(ROOT / "assets_omnidash" / "wallpapers" / "night_moon.jpg", "Night Moon (night_moon.jpg)", "moon"))
+        cards_row.addWidget(c3)
+        self.cards.append(c3)
 
-        # Opciones interactivas de cristal
+        # Card 4: Cambiar fondo...
+        c4 = WallpaperThumbnailCard("picker", "Cambiar fondo...", None, is_picker=True)
+        c4.clicked.connect(self._browse_wallpaper)
+        cards_row.addWidget(c4)
+        self.cards.append(c4)
+
+        wp_box_lay.addLayout(cards_row)
+        content_lay.addWidget(wp_container)
+
+        # 4 Filas de Configuración Interactivas de Cristal
         settings_rows = [
-            ("Active Player", "Alex (18,450 G, Frutiger Master)"),
-            ("Total Gamerscore", "18,450 G acumulados en 7 plataformas"),
-            ("Libretro Framebuffer", "V-Sync 60 FPS Hardware Glitched = OFF"),
-            ("Audio Sink", "Qt Multimedia Core Stereo (44.1 kHz 16-bit)"),
+            ("person", "Active Player", "Alex (18,450 G, Frutiger Master)"),
+            ("trophy", "Total Gamerscore", "18,450 G acumulados en 7 plataformas"),
+            ("layers_stack", "Libretro Framebuffer", "V-Sync 60 FPS | Hardware Glitched = OFF"),
+            ("sound_wave", "Audio Sink", "Qt Multimedia Core Stereo (44.1 kHz 16-bit)"),
         ]
 
-        for title, val in settings_rows:
-            row_card = AcrylicGlassCard(self, border_radius=10, is_interactive=True)
-            row_card.setFixedHeight(56)
-            r_lay = QHBoxLayout(row_card)
-            r_lay.setContentsMargins(18, 6, 18, 6)
+        for icon_id, title, val in settings_rows:
+            row_frame = AcrylicGlassCard(
+                self,
+                border_radius=22,
+                border_color=QColor(255, 255, 255, 24),
+                glow_color=QColor(0, 0, 0, 40),
+                is_interactive=True
+            )
+            row_frame.setFixedHeight(64)
+            r_lay = QHBoxLayout(row_frame)
+            r_lay.setContentsMargins(20, 0, 20, 0)
+            r_lay.setSpacing(14)
 
-            t_l = QLabel(title)
-            t_l.setStyleSheet("font-size: 13px; font-weight: 700; color: #ffffff;")
-            v_l = QLabel(val)
-            v_l.setStyleSheet("font-size: 12px; color: #bde4ff; font-weight: 600;")
+            # Icono Izquierdo
+            ico_lbl = QLabel()
+            ico_p = ROOT / "assets_omnidash" / "icons" / f"{icon_id}.png"
+            if ico_p.exists():
+                ico_lbl.setPixmap(QPixmap(str(ico_p)).scaled(24, 24, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+            r_lay.addWidget(ico_lbl)
 
-            r_lay.addWidget(t_l)
+            # Título de Opción
+            t_lbl = QLabel(title)
+            t_lbl.setStyleSheet("font-size: 15px; font-weight: 700; color: #ffffff;")
+            r_lay.addWidget(t_lbl)
+
             r_lay.addStretch(1)
-            r_lay.addWidget(v_l)
 
-            page_lay.addWidget(row_card)
+            # Valor a la derecha
+            v_lbl = QLabel(val)
+            v_lbl.setStyleSheet("font-size: 14px; color: #a5d8ff; font-weight: 500;")
+            r_lay.addWidget(v_lbl)
 
-        page_lay.addStretch(1)
-        layout.addWidget(self.page_panel, 1)
+            # Flecha Chevron >
+            chev_lbl = QLabel()
+            chev_p = ROOT / "assets_omnidash" / "icons" / "chevron_right.png"
+            if chev_p.exists():
+                chev_lbl.setPixmap(QPixmap(str(chev_p)).scaled(16, 16, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+            else:
+                chev_lbl.setText(">")
+                chev_lbl.setStyleSheet("font-size: 16px; color: rgba(255, 255, 255, 0.4);")
+            r_lay.addWidget(chev_lbl)
 
-    def _select_wallpaper(self, path, label: str):
+            content_lay.addWidget(row_frame)
+
+        content_lay.addStretch(1)
+        layout.addWidget(self.content_panel, 1)
+
+    def _on_cat_clicked(self, active_idx: int):
+        for i, btn in enumerate(self.cat_btns):
+            if i == active_idx:
+                btn.setStyleSheet("""
+                    QPushButton {
+                        text-align: left;
+                        padding-left: 18px;
+                        border: 1.5px solid #35CCF5;
+                        border-radius: 20px;
+                        background: rgba(14, 45, 68, 0.85);
+                        color: #ffffff;
+                        font-size: 14px;
+                        font-weight: 700;
+                    }
+                """)
+                btn_glow = QGraphicsDropShadowEffect(btn)
+                btn_glow.setOffset(0, 0)
+                btn_glow.setColor(QColor(53, 204, 245, 110))
+                btn_glow.setBlurRadius(14)
+                btn.setGraphicsEffect(btn_glow)
+            else:
+                btn.setGraphicsEffect(None)
+                btn.setStyleSheet("""
+                    QPushButton {
+                        text-align: left;
+                        padding-left: 18px;
+                        border: 1px solid rgba(255, 255, 255, 0.08);
+                        border-radius: 20px;
+                        background: rgba(20, 32, 45, 0.5);
+                        color: #ffffff;
+                        font-size: 14px;
+                        font-weight: 600;
+                    }
+                    QPushButton:hover {
+                        border: 1px solid rgba(255, 255, 255, 0.3);
+                        background: rgba(28, 48, 68, 0.7);
+                    }
+                """)
+
+    def _select_wallpaper(self, path, label: str, card_id: str = "custom"):
         p = Path(path).resolve()
         if p.exists():
             self.wp_current_lbl.setText(label)
+            for c in self.cards:
+                c.set_selected(c.card_id == card_id)
             self.wallpaper_changed.emit(str(p))
 
     def _browse_wallpaper(self):
@@ -2073,7 +2364,10 @@ class SettingsView(QWidget):
             "Imágenes (*.png *.jpg *.jpeg *.webp *.bmp *.tif)"
         )
         if file_path:
-            self._select_wallpaper(file_path, Path(file_path).name)
+            p = Path(file_path).resolve()
+            for c in self.cards:
+                c.set_selected(False)
+            self._select_wallpaper(p, p.name, "custom")
 
 
 # ==============================================================================
