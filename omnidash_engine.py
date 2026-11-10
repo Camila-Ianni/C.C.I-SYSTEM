@@ -105,10 +105,12 @@ class OmniDashEngine:
                 except Exception:
                     pass
 
-        # Cargar fondo oficial Frutiger Aero y pre-calcular desenfoque acrílico real con Pillow
+        # Cargar fondo de la consola (prioriza background.jpg subido por el usuario)
         self.bg_surf = None
         self.bg_blurred_surf = None
-        aero_bg = ROOT / "assets_omnidash" / "aero-background.webp"
+        aero_bg = ROOT / "background.jpg"
+        if not aero_bg.exists():
+            aero_bg = ROOT / "assets_omnidash" / "aero-background.webp"
         if aero_bg.exists():
             try:
                 loaded = pygame.image.load(str(aero_bg)).convert()

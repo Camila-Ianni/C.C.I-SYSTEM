@@ -23,7 +23,7 @@ from PySide6.QtGui import (
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QStackedWidget,
     QLabel, QPushButton, QLineEdit, QScrollArea, QGridLayout, QFrame, QSizePolicy,
-    QProgressBar, QSlider
+    QProgressBar, QSlider, QFileDialog
 )
 
 from cci_console import CATALOG, UserData
@@ -889,6 +889,8 @@ class GameDetailsView(QWidget):
 # 4. VISTA DE AJUSTES (SETTINGS - 1:1 AERO-SETTINGS.JPG)
 # ==============================================================================
 class SettingsView(QWidget):
+    wallpaper_changed = Signal(str)
+
     def __init__(self, parent=None):
         super().__init__(parent)
         layout = QHBoxLayout(self)
@@ -955,11 +957,52 @@ class SettingsView(QWidget):
         self.page_panel = AcrylicGlassCard(self, border_radius=16)
         page_lay = QVBoxLayout(self.page_panel)
         page_lay.setContentsMargins(28, 24, 28, 24)
-        page_lay.setSpacing(18)
+        page_lay.setSpacing(16)
 
-        p_head = QLabel("Profile & System")
+        p_head = QLabel("Profile & Appearance")
         p_head.setStyleSheet("font-size: 18px; font-weight: 700; color: #ffffff;")
         page_lay.addWidget(p_head)
+
+        # Sección interactiva de Fondo de Pantalla (Wallpaper)
+        wp_card = AcrylicGlassCard(self, border_radius=12)
+        wp_lay = QVBoxLayout(wp_card)
+        wp_lay.setContentsMargins(18, 14, 18, 14)
+        wp_lay.setSpacing(10)
+
+        wp_header = QHBoxLayout()
+        wp_title = QLabel("Fondo de Pantalla de la Consola")
+        wp_title.setStyleSheet("font-size: 14px; font-weight: 700; color: #ffffff;")
+        wp_header.addWidget(wp_title)
+        wp_header.addStretch(1)
+        self.wp_current_lbl = QLabel("Spider-Man (background.jpg)")
+        self.wp_current_lbl.setStyleSheet("font-size: 12px; color: #b6f55a; font-weight: 600;")
+        wp_header.addWidget(self.wp_current_lbl)
+        wp_lay.addLayout(wp_header)
+
+        # Botones de presets rápidos y selector de archivo
+        presets_row = QHBoxLayout()
+        presets_row.setSpacing(10)
+
+        spidey_btn = QPushButton("🕷️ Spider-Man")
+        spidey_btn.setProperty("class", "glassBtn")
+        spidey_btn.setCursor(Qt.PointingHandCursor)
+        spidey_btn.clicked.connect(lambda: self._select_wallpaper(ROOT / "background.jpg", "Spider-Man (background.jpg)"))
+        presets_row.addWidget(spidey_btn)
+
+        aero_btn = QPushButton("🏝️ Frutiger Aero (Mar)")
+        aero_btn.setProperty("class", "glassBtn")
+        aero_btn.setCursor(Qt.PointingHandCursor)
+        aero_btn.clicked.connect(lambda: self._select_wallpaper(ROOT / "assets_omnidash" / "aero-background.webp", "Frutiger Aero (Mar Soleado)"))
+        presets_row.addWidget(aero_btn)
+
+        browse_btn = QPushButton("📁 Cambiar Fondo...")
+        browse_btn.setProperty("class", "glassBtn")
+        browse_btn.setCursor(Qt.PointingHandCursor)
+        browse_btn.clicked.connect(self._browse_wallpaper)
+        presets_row.addWidget(browse_btn)
+
+        wp_lay.addLayout(presets_row)
+        page_lay.addWidget(wp_card)
 
         # Opciones interactivas de cristal
         settings_rows = [
@@ -967,14 +1010,13 @@ class SettingsView(QWidget):
             ("Total Gamerscore", "18,450 G acumulados en 7 plataformas"),
             ("Libretro Framebuffer", "V-Sync 60 FPS Hardware Glitched = OFF"),
             ("Audio Sink", "Qt Multimedia Core Stereo (44.1 kHz 16-bit)"),
-            ("Theme Style", "Frutiger Aero — Xbox Sunny Island Sea"),
         ]
 
         for title, val in settings_rows:
             row_card = AcrylicGlassCard(self, border_radius=10, is_interactive=True)
-            row_card.setFixedHeight(64)
+            row_card.setFixedHeight(56)
             r_lay = QHBoxLayout(row_card)
-            r_lay.setContentsMargins(18, 8, 18, 8)
+            r_lay.setContentsMargins(18, 6, 18, 6)
 
             t_l = QLabel(title)
             t_l.setStyleSheet("font-size: 13px; font-weight: 700; color: #ffffff;")
@@ -989,6 +1031,22 @@ class SettingsView(QWidget):
 
         page_lay.addStretch(1)
         layout.addWidget(self.page_panel, 1)
+
+    def _select_wallpaper(self, path, label: str):
+        p = Path(path).resolve()
+        if p.exists():
+            self.wp_current_lbl.setText(label)
+            self.wallpaper_changed.emit(str(p))
+
+    def _browse_wallpaper(self):
+        file_path, _ = QFileDialog.getOpenFileName(
+            self,
+            "Seleccionar Fondo de Pantalla",
+            str(ROOT),
+            "Imágenes (*.png *.jpg *.jpeg *.webp *.bmp *.tif)"
+        )
+        if file_path:
+            self._select_wallpaper(file_path, Path(file_path).name)
 
 
 # ==============================================================================
@@ -1150,9 +1208,11 @@ class OmniDashMainWindow(QMainWindow):
         self.resize(1280, 720)
         self.setMinimumSize(1024, 600)
 
-        # Cargar fondo marino Frutiger Aero
+        # Cargar fondo predeterminado (prioriza background.jpg subido por el usuario)
         self.bg_pixmap = None
-        bg_path = ROOT / "assets_omnidash" / "aero-background.webp"
+        bg_path = ROOT / "background.jpg"
+        if not bg_path.exists():
+            bg_path = ROOT / "assets_omnidash" / "aero-background.webp"
         if bg_path.exists():
             self.bg_pixmap = QPixmap(str(bg_path))
 
@@ -1198,6 +1258,14 @@ class OmniDashMainWindow(QMainWindow):
 
         self.details_view.back_to_library.connect(lambda: self.switch_view("LIBRARY"))
         self.details_view.launch_game.connect(self.launch_game)
+
+        self.settings_view.wallpaper_changed.connect(self.set_wallpaper)
+
+    def set_wallpaper(self, path: str):
+        p = Path(path).resolve()
+        if p.exists():
+            self.bg_pixmap = QPixmap(str(p))
+            self.update()
 
     def paintEvent(self, event):
         painter = QPainter(self)
