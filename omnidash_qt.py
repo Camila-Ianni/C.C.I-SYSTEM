@@ -626,7 +626,7 @@ class OmniDashNavBar(QWidget):
 
 
 # ==============================================================================
-# 1. VISTA DE INICIO (HOME REDESIGN - LIQUID GLASS & GLOW CARDS)
+# 1. VISTA DE INICIO (HOME REDESIGN - PERSONAL DASHBOARD & RECENT ACTIVITY)
 # ==============================================================================
 class HomeView(QWidget):
     launch_game = Signal(dict)
@@ -636,395 +636,515 @@ class HomeView(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setFocusPolicy(Qt.StrongFocus)
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(56, 2, 56, 22)
-        layout.setSpacing(0)
+        self.setAttribute(Qt.WA_TranslucentBackground, True)
 
-        # 0. PERFIL DE USUARIO ALEX (Debajo del logotipo C.C.I. SYSTEM en el margen izquierdo)
-        profile_row = QHBoxLayout()
-        profile_row.setContentsMargins(0, 0, 0, 0)
+        self.layout = QVBoxLayout(self)
+        self.layout.setContentsMargins(52, 10, 52, 22)
+        self.layout.setSpacing(14)
 
-        self.profile_card = AcrylicGlassCard(
-            self,
-            border_radius=26,
-            is_interactive=True,
-            glow_color=QColor(53, 200, 241, 60),
-            glow_radius=14,
-            border_color=QColor(145, 165, 179, 90),
-        )
-        self.profile_card.setFixedSize(240, 52)
-        p_lay = QHBoxLayout(self.profile_card)
-        p_lay.setContentsMargins(8, 4, 16, 4)
-        p_lay.setSpacing(10)
+        # ----------------------------------------------------------------------
+        # 1. SECCIÓN DE SALUDO Y BIENVENIDA (1:1 con Referencia)
+        # ----------------------------------------------------------------------
+        greet_row = QHBoxLayout()
+        greet_row.setContentsMargins(0, 0, 0, 0)
+        greet_row.setSpacing(14)
+        greet_row.setAlignment(Qt.AlignVCenter)
 
-        av_lbl = QLabel()
-        av_p = ROOT / "assets_omnidash" / "spidey_avatar.png"
-        if av_p.exists():
-            raw_av = QPixmap(str(av_p))
-            av_lbl.setPixmap(get_rounded_pixmap(raw_av, 42, 42, 21))
-        p_lay.addWidget(av_lbl)
-
-        name_v = QVBoxLayout()
-        name_v.setSpacing(1)
-        name_lbl = QLabel("Alex  <span style='color: #00ff88; font-size: 13px;'>●</span>")
-        name_lbl.setStyleSheet("font-size: 14px; font-weight: 700; color: #ffffff;")
-        pts_lbl = QLabel("18,450 G")
-        pts_lbl.setStyleSheet("font-size: 12px; font-weight: 600; color: #bde4ff;")
-        name_v.addWidget(name_lbl)
-        name_v.addWidget(pts_lbl)
-        p_lay.addLayout(name_v)
-
-        self.profile_card.mousePressEvent = lambda _: self.navigate_to.emit("PROFILE")
-        self.profile_card.setCursor(Qt.PointingHandCursor)
-        profile_row.addWidget(self.profile_card)
-        profile_row.addStretch(1)
-        layout.addLayout(profile_row)
-        layout.addSpacing(8)
-
-        # 1. FILA PRINCIPAL: Botón Izq + Hero Card + Grid 3x2 + Botón Der
-        main_row = QHBoxLayout()
-        main_row.setSpacing(14)
-        main_row.setAlignment(Qt.AlignCenter)
-
-        # Botón Flecha Izquierda Circular de Cristal
-        self.left_arrow = QPushButton("<")
-        self.left_arrow.setFixedSize(42, 42)
-        self.left_arrow.setCursor(Qt.PointingHandCursor)
-        self.left_arrow.setStyleSheet("""
-            QPushButton {
-                background: rgba(10, 20, 35, 140);
-                border: 1.6px solid rgba(255, 255, 255, 160);
-                border-radius: 21px;
-                color: #ffffff;
-                font-size: 18px;
-                font-weight: 700;
-            }
-            QPushButton:hover {
-                background: rgba(53, 200, 241, 160);
-                border: 1.6px solid #35C8F1;
-            }
+        # Barra vertical cyan luminosa
+        self.cyan_bar = QFrame()
+        self.cyan_bar.setFixedSize(4, 46)
+        self.cyan_bar.setStyleSheet("""
+            background: #00D9FF;
+            border-radius: 2px;
         """)
-        main_row.addWidget(self.left_arrow)
+        bar_glow = QGraphicsDropShadowEffect(self.cyan_bar)
+        bar_glow.setColor(QColor(0, 217, 255, 230))
+        bar_glow.setBlurRadius(16)
+        bar_glow.setOffset(0, 0)
+        self.cyan_bar.setGraphicsEffect(bar_glow)
+        greet_row.addWidget(self.cyan_bar)
 
-        # --- A. HERO CARD (SUPER MARIO BROS - 60 FPS) ---
-        mario_candidates = [
-            g for g in ALL_GAMES
-            if "mario" in g.get("title", "").lower() and "kart" not in g.get("title", "").lower()
-        ]
-        self.hero_game = mario_candidates[0] if mario_candidates else (ALL_GAMES[0] if ALL_GAMES else {"title": "Super Mario Bros", "console": "SNES"})
+        # Textos de saludo dinámico
+        greet_v = QVBoxLayout()
+        greet_v.setSpacing(2)
+        greet_v.setContentsMargins(0, 0, 0, 0)
 
-        hero_art_path = ROOT / "assets_omnidash" / "mockup_cards" / "hero_mario_2x.png"
-        if not hero_art_path.exists():
-            hero_art_path = ROOT / "assets_omnidash" / "mockup_cards" / "hero_mario.png"
-        hero_pix = QPixmap(str(hero_art_path)) if hero_art_path.exists() else None
+        username = "Alex"
+        self.title_lbl = QLabel(f"¡Hola, {username}!")
+        self.title_lbl.setStyleSheet("font-size: 28px; font-weight: 800; color: #FFFFFF; letter-spacing: 0.5px;")
 
-        self.hero_card = AcrylicGlassCard(
-            self,
-            border_radius=34,
-            is_interactive=True,
-            glow_color=QColor(53, 200, 241, 230),
-            glow_radius=26,
-            border_color=QColor(53, 200, 241, 240),
-            bg_image=hero_pix,
-            inner_padding=0,
-        )
-        self.hero_card._orig_border_color = QColor(145, 165, 179, 140)
-        self.hero_card._orig_glow_color = QColor(145, 165, 179, 80)
-        self.hero_card._orig_glow_radius = 18
-        self.hero_card.setFixedSize(485, 416)
-        hero_layout = QVBoxLayout(self.hero_card)
-        hero_layout.setContentsMargins(16, 12, 16, 18)
+        self.sub_lbl = QLabel("Tu centro de juegos, comunidades y amigos.")
+        self.sub_lbl.setStyleSheet("font-size: 14px; font-weight: 500; color: #BDD4E4;")
 
-        # Botón Favorito (Corazón) en esquina superior derecha
-        h_top_row = QHBoxLayout()
-        h_top_row.addStretch(1)
-        self.fav_btn = QPushButton("")
-        self.fav_btn.setFixedSize(38, 38)
-        self.fav_btn.setCursor(Qt.PointingHandCursor)
-        self.fav_btn.setStyleSheet("""
-            QPushButton {
-                background: transparent;
-                border: none;
-            }
-            QPushButton:hover {
-                background: rgba(255, 75, 110, 60);
-                border: 1.5px solid rgba(255, 255, 255, 180);
-                border-radius: 19px;
-            }
-        """)
-        h_top_row.addWidget(self.fav_btn)
-        hero_layout.addLayout(h_top_row)
-        hero_layout.addStretch(1)
+        greet_v.addWidget(self.title_lbl)
+        greet_v.addWidget(self.sub_lbl)
+        greet_row.addLayout(greet_v)
+        greet_row.addStretch(1)
 
-        # Botón Flotante Liquid Glass "▶ Iniciar (60 FPS)"
-        h_bot_row = QHBoxLayout()
-        h_bot_row.addStretch(1)
-        self.play_btn = QPushButton("")
-        self.play_btn.setFixedSize(262, 54)
-        self.play_btn.setCursor(Qt.PointingHandCursor)
-        self.play_btn.setStyleSheet("""
-            QPushButton {
-                background: transparent;
-                border: none;
-            }
-            QPushButton:hover {
-                background: rgba(53, 200, 241, 40);
-                border: 1.6px solid rgba(255, 255, 255, 180);
-                border-radius: 27px;
-            }
-        """)
-        self.play_btn.clicked.connect(lambda: self.launch_game.emit(self.hero_game))
-        h_bot_row.addWidget(self.play_btn)
-        h_bot_row.addStretch(1)
-        hero_layout.addLayout(h_bot_row)
+        self.layout.addLayout(greet_row)
 
-        self.hero_card.mousePressEvent = lambda _: self.launch_game.emit(self.hero_game)
-        self.hero_card.setCursor(Qt.PointingHandCursor)
-        main_row.addWidget(self.hero_card)
+        # ----------------------------------------------------------------------
+        # 2. CUATRO WIDGETS PRINCIPALES (Row 1)
+        # ----------------------------------------------------------------------
+        main_widgets_row = QHBoxLayout()
+        main_widgets_row.setSpacing(18)
 
-        # --- B. GRID DE 6 TARJETAS (2 FILAS x 3 COLUMNAS - MOCKUP EXACTO) ---
-        grid_items_data = [
-            (
-                "Super Mario",
-                "assets_omnidash/mockup_cards/grid_mario_2x.png",
-                QColor(53, 200, 241, 150),
-                QColor(145, 165, 179, 140),
-            ),
-            (
-                "Metal Slug",
-                "assets_omnidash/mockup_cards/grid_metalslug_2x.png",
-                QColor(255, 159, 28, 150),
-                QColor(145, 165, 179, 140),
-            ),
-            (
-                "The Legend of Zelda",
-                "assets_omnidash/mockup_cards/grid_zelda_2x.png",
-                QColor(255, 215, 0, 150),
-                QColor(145, 165, 179, 140),
-            ),
-            (
-                "Donkey Kong 64",
-                "assets_omnidash/mockup_cards/grid_donkeykong_2x.png",
-                QColor(46, 204, 113, 150),
-                QColor(145, 165, 179, 140),
-            ),
-            (
-                "Castlevania",
-                "assets_omnidash/mockup_cards/grid_castlevania_2x.png",
-                QColor(230, 57, 70, 150),
-                QColor(145, 165, 179, 140),
-            ),
-            (
-                "Mario Kart DS",
-                "assets_omnidash/mockup_cards/grid_mariokart_2x.png",
-                QColor(53, 200, 241, 150),
-                QColor(145, 165, 179, 140),
-            ),
-        ]
-
-        grid_container = QWidget()
-        grid_layout = QGridLayout(grid_container)
-        grid_layout.setContentsMargins(0, 0, 0, 0)
-        grid_layout.setSpacing(16)
-
-        self.grid_cards = []
-        for idx, (title, cover_rel, glow_col, border_col) in enumerate(grid_items_data):
-            img_path = ROOT / cover_rel
-            card_pix = QPixmap(str(img_path)) if img_path.exists() else None
-
-            # Buscar juego real en ALL_GAMES
-            matched_game = next((g for g in ALL_GAMES if title.lower() in g.get("title", "").lower()), None)
-            if not matched_game:
-                matched_game = {"title": title, "console": "Retro", "cover": cover_rel}
-            elif not card_pix:
-                card_pix = resolve_game_cover(matched_game)
-
-            card = AcrylicGlassCard(
-                self,
-                border_radius=24,
-                is_interactive=True,
-                glow_color=glow_col,
-                glow_radius=18,
-                border_color=border_col,
-                bg_image=card_pix,
-                inner_padding=0,
-            )
-            card._orig_border_color = border_col
-            card._orig_glow_color = glow_col
-            card._orig_glow_radius = 18
-            card.setFixedSize(236, 198)
-            card.mousePressEvent = lambda _, gm=matched_game: self.open_details.emit(gm)
-            card.setCursor(Qt.PointingHandCursor)
-
-            row = idx // 3
-            col = idx % 3
-            grid_layout.addWidget(card, row, col)
-            self.grid_cards.append((card, matched_game))
-
-        main_row.addWidget(grid_container)
-
-        # Botón Flecha Derecha Circular de Cristal
-        self.right_arrow = QPushButton(">")
-        self.right_arrow.setFixedSize(42, 42)
-        self.right_arrow.setCursor(Qt.PointingHandCursor)
-        self.right_arrow.setStyleSheet("""
-            QPushButton {
-                background: rgba(10, 20, 35, 140);
-                border: 1.6px solid rgba(255, 255, 255, 160);
-                border-radius: 21px;
-                color: #ffffff;
-                font-size: 18px;
-                font-weight: 700;
-            }
-            QPushButton:hover {
-                background: rgba(53, 200, 241, 160);
-                border: 1.6px solid #35C8F1;
-            }
-        """)
-        main_row.addWidget(self.right_arrow)
-
-        # Conexión interactiva del carrusel
-        self.carousel_page = 0
-        self.left_arrow.clicked.connect(lambda: self.set_carousel_page(self.carousel_page - 1))
-        self.right_arrow.clicked.connect(lambda: self.set_carousel_page(self.carousel_page + 1))
-
-        layout.addLayout(main_row)
-        layout.addSpacing(10)
-
-        # 2. INDICADORES DE CARRUSEL (PUNTOS • • • •)
-        dots_box = QHBoxLayout()
-        dots_box.setSpacing(8)
-        dots_box.setAlignment(Qt.AlignCenter)
-
-        self.dots = []
-        for i in range(4):
-            dot = QLabel()
-            if i == 0:
-                dot.setFixedSize(32, 6)
-                dot.setStyleSheet("background: #ffffff; border-radius: 3px;")
-            else:
-                dot.setFixedSize(6, 6)
-                dot.setStyleSheet("background: rgba(145, 165, 179, 120); border-radius: 3px;")
-            dots_box.addWidget(dot)
-            self.dots.append(dot)
-
-        layout.addLayout(dots_box)
-        layout.addSpacing(16)
-
-        # 3. FILA INFERIOR: 4 TARJETAS ANCHAS DE CRISTAL LÍQUIDO CON GLOW TEMÁTICO
-        bot_row = QHBoxLayout()
-        bot_row.setSpacing(18)
-
-        cards_data = [
+        widgets_data = [
             (
                 "Mis juegos y apps",
                 f"{len(ALL_GAMES)} juegos listos para jugar",
                 "LIBRARY",
-                "apps_grid",
-                QColor(53, 200, 241, 140),
-                QColor(145, 165, 179, 110),
+                "controller_outline_white.png",
+                QColor(0, 217, 255, 220),
+                QColor(0, 217, 255, 140),
             ),
             (
                 "Amigos",
                 "Seeker & Night Raid • 3 en línea",
                 "COMMUNITY",
-                "friends_duo",
-                QColor(53, 200, 241, 140),
-                QColor(145, 165, 179, 110),
+                "friends_outline.png",
+                QColor(60, 160, 240, 200),
+                QColor(60, 160, 240, 120),
             ),
             (
                 "GAME PASS",
                 "Descubre cientos de juegos",
                 "LIBRARY",
-                "xbox_gamepass",
-                QColor(50, 216, 117, 180),
-                QColor(50, 216, 117, 210),
+                "xbox_gamepass_white.png",
+                QColor(0, 210, 120, 230),
+                QColor(0, 210, 120, 140),
             ),
             (
                 "Logros",
                 "18,450 G • 110 trofeos",
                 "PROFILE",
-                "trophy",
-                QColor(167, 122, 228, 180),
-                QColor(167, 122, 228, 210),
+                "trophy_white.png",
+                QColor(180, 100, 255, 230),
+                QColor(180, 100, 255, 140),
             ),
         ]
 
-        self.util_cards = []
-        for title, subtitle, dest, icon_name, glow_c, border_c in cards_data:
+        self.main_cards = []
+        for title, subtitle, dest, icon_file, border_c, glow_c in widgets_data:
             c = AcrylicGlassCard(
                 self,
-                border_radius=22,
+                border_radius=28,
                 is_interactive=True,
                 glow_color=glow_c,
-                glow_radius=18,
+                glow_radius=20,
                 border_color=border_c,
             )
             c._orig_border_color = border_c
             c._orig_glow_color = glow_c
-            c._orig_glow_radius = 18
-            c.setFixedHeight(90)
+            c._orig_glow_radius = 20
+            c.setFixedHeight(160)
+
             c_lay = QHBoxLayout(c)
-            c_lay.setContentsMargins(18, 8, 18, 8)
-            c_lay.setSpacing(14)
+            c_lay.setContentsMargins(18, 16, 18, 16)
+            c_lay.setSpacing(0)
 
-            # Icono temático
-            ico_lbl = QLabel()
-            ipath = ROOT / "assets_omnidash" / "icons" / f"{icon_name}.png"
-            if not ipath.exists():
-                ipath = ROOT / "assets_omnidash" / "icons" / "grid.png"
-            if ipath.exists():
-                ico_lbl.setPixmap(QPixmap(str(ipath)).scaled(34, 34, Qt.KeepAspectRatio, Qt.SmoothTransformation))
-            c_lay.addWidget(ico_lbl)
+            # Espaciador izquierdo balanceador para centrado perfecto de textos
+            dummy_l = QWidget()
+            dummy_l.setFixedWidth(24)
+            c_lay.addWidget(dummy_l)
 
-            # Textos
-            txt_box = QVBoxLayout()
-            txt_box.setSpacing(2)
-            t_lbl = QLabel(title)
-            t_lbl.setStyleSheet("font-size: 14px; font-weight: 800; color: #F4F6F8;")
-            s_lbl = QLabel(subtitle)
-            s_lbl.setStyleSheet("font-size: 11px; font-weight: 500; color: #BDD4E4;")
-            txt_box.addWidget(t_lbl)
-            txt_box.addWidget(s_lbl)
-            c_lay.addLayout(txt_box)
+            # Columna central con Icono, Título y Subtítulo centrados
+            center_v = QVBoxLayout()
+            center_v.setContentsMargins(0, 0, 0, 0)
+            center_v.setSpacing(6)
+            center_v.setAlignment(Qt.AlignCenter)
 
-            c_lay.addStretch(1)
+            ico_l = QLabel()
+            ico_l.setAlignment(Qt.AlignCenter)
+            ico_p = ROOT / "assets_omnidash" / "icons" / "dashboard" / icon_file
+            if not ico_p.exists():
+                ico_p = ROOT / "assets_omnidash" / "icons" / "grid.png"
+            if ico_p.exists():
+                ico_l.setPixmap(QPixmap(str(ico_p)).scaled(42, 42, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+            center_v.addWidget(ico_l)
 
-            # Chevron indicador derecha
-            chev_lbl = QLabel("›")
-            chev_lbl.setStyleSheet("font-size: 22px; font-weight: 600; color: #BDD4E4;")
-            c_lay.addWidget(chev_lbl)
+            t_l = QLabel(title)
+            t_l.setAlignment(Qt.AlignCenter)
+            t_l.setStyleSheet("font-size: 16px; font-weight: 800; color: #FFFFFF;")
+            center_v.addWidget(t_l)
+
+            s_l = QLabel(subtitle)
+            s_l.setAlignment(Qt.AlignCenter)
+            s_l.setStyleSheet("font-size: 12px; font-weight: 500; color: #BDD4E4;")
+            center_v.addWidget(s_l)
+
+            c_lay.addLayout(center_v, 1)
+
+            # Chevron indicador a la derecha
+            chev_l = QLabel("›")
+            chev_l.setFixedWidth(24)
+            chev_l.setAlignment(Qt.AlignCenter)
+            chev_l.setStyleSheet("font-size: 26px; font-weight: 600; color: #BDD4E4;")
+            c_lay.addWidget(chev_l)
 
             c.mousePressEvent = lambda _, d=dest: self.navigate_to.emit(d)
             c.setCursor(Qt.PointingHandCursor)
-            self.util_cards.append(c)
-            bot_row.addWidget(c)
+            self.main_cards.append(c)
+            main_widgets_row.addWidget(c, 1)
 
-        layout.addLayout(bot_row)
+        self.layout.addLayout(main_widgets_row)
 
-        # Stretch inferior para fijar la distancia y que el suelo mojado quede visible abajo
-        layout.addStretch(2)
+        # ----------------------------------------------------------------------
+        # 3. ACTIVIDAD RECIENTE (Header + Carrusel de 3 Tarjetas + Paginación)
+        # ----------------------------------------------------------------------
+        # Header
+        act_header = QHBoxLayout()
+        act_header.setContentsMargins(0, 6, 0, 2)
+        act_header.setSpacing(10)
+        act_header.setAlignment(Qt.AlignVCenter)
 
-        # Sistema de navegación por teclado unificado
-        self.nav_items: list[tuple[AcrylicGlassCard, callable]] = []
-        self.nav_items.append((self.hero_card, lambda: self.launch_game.emit(self.hero_game)))
-        for card, gm in self.grid_cards:
-            self.nav_items.append((card, lambda g=gm: self.open_details.emit(g)))
-        for idx, (_, _, dest, _, _, _) in enumerate(cards_data):
-            self.nav_items.append((self.util_cards[idx], lambda d=dest: self.navigate_to.emit(d)))
+        clock_ico = QLabel()
+        clock_p = ROOT / "assets_omnidash" / "icons" / "dashboard" / "clock_outline.png"
+        if clock_p.exists():
+            clock_ico.setPixmap(QPixmap(str(clock_p)).scaled(24, 24, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+        act_header.addWidget(clock_ico)
 
-        self.focus_idx = 0
-        self._update_focus()
+        act_title = QLabel("Actividad reciente")
+        act_title.setStyleSheet("font-size: 20px; font-weight: 800; color: #FFFFFF;")
+        act_header.addWidget(act_title)
+        act_header.addStretch(1)
+        self.layout.addLayout(act_header)
 
-    def set_carousel_page(self, page: int):
-        self.carousel_page = page % 4
-        for i, dot in enumerate(self.dots):
-            if i == self.carousel_page:
-                dot.setFixedSize(32, 6)
-                dot.setStyleSheet("background: #ffffff; border-radius: 3px;")
+        # Fila de carrusel: Flecha Izq + 3 Tarjetas + Flecha Der
+        recent_row = QHBoxLayout()
+        recent_row.setSpacing(14)
+        recent_row.setAlignment(Qt.AlignCenter)
+
+        self.left_arrow = QPushButton("<")
+        self.left_arrow.setFixedSize(42, 42)
+        self.left_arrow.setCursor(Qt.PointingHandCursor)
+        self.left_arrow.setStyleSheet("""
+            QPushButton {
+                background: rgba(10, 20, 35, 150);
+                border: 1.6px solid rgba(255, 255, 255, 140);
+                border-radius: 21px;
+                color: #ffffff;
+                font-size: 18px;
+                font-weight: 700;
+            }
+            QPushButton:hover {
+                background: rgba(0, 217, 255, 160);
+                border: 1.6px solid #00D9FF;
+            }
+        """)
+        recent_row.addWidget(self.left_arrow)
+
+        # Datos de juegos recientes en 3 páginas (Mockup 1:1)
+        self.recent_pages_data = [
+            # Página 0 (Mockup Exacto)
+            [
+                ("Metal Slug 2", "Jugado hoy", "assets_omnidash/mockup_cards/thumb_recent_mslug2.png", "mame_mslug2", True),
+                ("Castlevania: SOTN", "Jugado ayer", "assets_omnidash/mockup_cards/thumb_recent_castlevania.png", "ps1_Castlevania - Symphony of the Night (USA)", False),
+                ("Mario Kart DS", "Jugado hace 2 días", "assets_omnidash/mockup_cards/thumb_recent_mariokart.png", "nds_0168 - Mario Kart DS (U)(SCZ)", False),
+            ],
+            # Página 1
+            [
+                ("Super Mario World", "Jugado hace 3 días", "fotos juegos/Super Mario World 2- Yoshi's Island.jpg", "snes_smw", False),
+                ("Zelda: Ocarina", "Jugado la semana pasada", "fotos juegos/The Legend of Zelda- Ocarina of Time.jpg", "n64_zelda", False),
+                ("Donkey Kong 64", "Jugado hace 2 semanas", "fotos juegos/Donkey Kong 64.jpg", "n64_dk64", False),
+            ],
+            # Página 2
+            [
+                ("Pac-Man", "Jugado hace 2 semanas", "fotos juegos/Pac-Man.png", "arcade_pacman", False),
+                ("God of War", "Jugado el mes pasado", "fotos juegos/God of War.jpg", "ps2_gow", False),
+                ("Sonic 4", "Jugado el mes pasado", "fotos juegos/Sonic The Hedgehog 4- Episode 1.jpg", "wii_sonic", False),
+            ]
+        ]
+
+        self.recent_page = 0
+        self.recent_cards_widgets = []
+
+        for slot_idx in range(3):
+            c = AcrylicGlassCard(
+                self,
+                border_radius=24,
+                is_interactive=True,
+                glow_color=QColor(0, 217, 255, 180) if slot_idx == 0 else QColor(145, 165, 179, 70),
+                glow_radius=22 if slot_idx == 0 else 14,
+                border_color=QColor(0, 217, 255, 240) if slot_idx == 0 else QColor(145, 165, 179, 130),
+            )
+            c._orig_border_color = QColor(0, 217, 255, 240) if slot_idx == 0 else QColor(145, 165, 179, 130)
+            c._orig_glow_color = QColor(0, 217, 255, 180) if slot_idx == 0 else QColor(145, 165, 179, 70)
+            c._orig_glow_radius = 22 if slot_idx == 0 else 14
+            c.setFixedHeight(126)
+
+            c_lay = QHBoxLayout(c)
+            c_lay.setContentsMargins(14, 12, 18, 12)
+            c_lay.setSpacing(16)
+
+            # Miniatura de portada redondeada
+            thumb_l = QLabel()
+            thumb_l.setFixedSize(94, 94)
+            c_lay.addWidget(thumb_l)
+
+            # VBox Textos
+            txt_v = QVBoxLayout()
+            txt_v.setContentsMargins(0, 0, 0, 0)
+            txt_v.setSpacing(3)
+            txt_v.setAlignment(Qt.AlignVCenter)
+
+            title_l = QLabel()
+            title_l.setStyleSheet("font-size: 16px; font-weight: 800; color: #FFFFFF;")
+            sub_l = QLabel()
+            sub_l.setStyleSheet("font-size: 13px; font-weight: 500; color: #BDD4E4;")
+
+            txt_v.addWidget(title_l)
+            txt_v.addWidget(sub_l)
+            c_lay.addLayout(txt_v, 1)
+
+            # Botón circular de reproducción ▶
+            play_btn = QPushButton("▶")
+            play_btn.setFixedSize(42, 42)
+            play_btn.setCursor(Qt.PointingHandCursor)
+            play_btn.setStyleSheet("""
+                QPushButton {
+                    background: rgba(10, 25, 45, 180);
+                    border: 1.5px solid rgba(255, 255, 255, 160);
+                    border-radius: 21px;
+                    color: #FFFFFF;
+                    font-size: 14px;
+                    padding-left: 2px;
+                }
+                QPushButton:hover {
+                    background: rgba(0, 217, 255, 180);
+                    border: 1.5px solid #00D9FF;
+                    color: #FFFFFF;
+                }
+            """)
+            c_lay.addWidget(play_btn)
+
+            slot_data = {
+                "card": c,
+                "thumb_lbl": thumb_l,
+                "title_lbl": title_l,
+                "sub_lbl": sub_l,
+                "play_btn": play_btn,
+                "game": None
+            }
+            self.recent_cards_widgets.append(slot_data)
+            recent_row.addWidget(c, 1)
+
+        self.right_arrow = QPushButton(">")
+        self.right_arrow.setFixedSize(42, 42)
+        self.right_arrow.setCursor(Qt.PointingHandCursor)
+        self.right_arrow.setStyleSheet("""
+            QPushButton {
+                background: rgba(10, 20, 35, 150);
+                border: 1.6px solid rgba(255, 255, 255, 140);
+                border-radius: 21px;
+                color: #ffffff;
+                font-size: 18px;
+                font-weight: 700;
+            }
+            QPushButton:hover {
+                background: rgba(0, 217, 255, 160);
+                border: 1.6px solid #00D9FF;
+            }
+        """)
+        recent_row.addWidget(self.right_arrow)
+
+        self.layout.addLayout(recent_row)
+
+        # Indicadores de página de Actividad reciente (Pills & Dots)
+        dots_box = QHBoxLayout()
+        dots_box.setSpacing(8)
+        dots_box.setAlignment(Qt.AlignCenter)
+        self.dots = []
+        for i in range(3):
+            dot = QLabel()
+            if i == 0:
+                dot.setFixedSize(30, 6)
+                dot.setStyleSheet("background: #00D9FF; border-radius: 3px;")
             else:
                 dot.setFixedSize(6, 6)
                 dot.setStyleSheet("background: rgba(145, 165, 179, 120); border-radius: 3px;")
+            dots_box.addWidget(dot)
+            self.dots.append(dot)
+        self.layout.addLayout(dots_box)
+
+        # Conectar flechas de carrusel
+        self.left_arrow.clicked.connect(lambda: self.set_recent_page(self.recent_page - 1))
+        self.right_arrow.clicked.connect(lambda: self.set_recent_page(self.recent_page + 1))
+
+        # Poblar slots de la página actual
+        self._update_recent_slots()
+
+        # ----------------------------------------------------------------------
+        # 4. TRES WIDGETS INFERIORES DE NOVEDADES
+        # ----------------------------------------------------------------------
+        news_row = QHBoxLayout()
+        news_row.setSpacing(18)
+
+        news_data = [
+            (
+                "Novedades en C.C.I.",
+                "Actualizaciones, eventos y comunidad",
+                "COMMUNITY",
+                "megaphone_outline.png",
+                False
+            ),
+            (
+                "Eventos y torneos",
+                "Participa y compite con la comunidad",
+                "COMMUNITY",
+                "calendar_outline.png",
+                False
+            ),
+            (
+                "Transmisiones en vivo",
+                "3 transmisiones activas",
+                "COMMUNITY",
+                "live_signal.png",
+                True  # Etiqueta roja EN VIVO
+            ),
+        ]
+
+        self.news_cards = []
+        for title, subtitle, dest, icon_file, is_live in news_data:
+            c = AcrylicGlassCard(
+                self,
+                border_radius=24,
+                is_interactive=True,
+                glow_color=QColor(145, 165, 179, 70),
+                glow_radius=14,
+                border_color=QColor(145, 165, 179, 120),
+            )
+            c._orig_border_color = QColor(145, 165, 179, 120)
+            c._orig_glow_color = QColor(145, 165, 179, 70)
+            c._orig_glow_radius = 14
+            c.setFixedHeight(110)
+
+            c_lay = QHBoxLayout(c)
+            c_lay.setContentsMargins(20, 14, 22, 14)
+            c_lay.setSpacing(16)
+
+            # Icono a la izquierda
+            ico_l = QLabel()
+            ico_p = ROOT / "assets_omnidash" / "icons" / "dashboard" / icon_file
+            if ico_p.exists():
+                ico_l.setPixmap(QPixmap(str(ico_p)).scaled(38, 38, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+            c_lay.addWidget(ico_l)
+
+            # Columna de texto
+            txt_v = QVBoxLayout()
+            txt_v.setContentsMargins(0, 0, 0, 0)
+            txt_v.setSpacing(3)
+            txt_v.setAlignment(Qt.AlignVCenter)
+
+            if is_live:
+                t_row = QHBoxLayout()
+                t_row.setContentsMargins(0, 0, 0, 0)
+                t_row.setSpacing(8)
+                t_row.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
+
+                t_lbl = QLabel(title)
+                t_lbl.setStyleSheet("font-size: 15px; font-weight: 800; color: #FFFFFF;")
+                t_row.addWidget(t_lbl)
+
+                live_badge = QLabel("EN VIVO")
+                live_badge.setStyleSheet("""
+                    background: #E94B56;
+                    color: #FFFFFF;
+                    font-size: 10px;
+                    font-weight: 800;
+                    border-radius: 6px;
+                    padding: 2px 7px;
+                """)
+                t_row.addWidget(live_badge)
+                txt_v.addLayout(t_row)
+            else:
+                t_lbl = QLabel(title)
+                t_lbl.setStyleSheet("font-size: 15px; font-weight: 800; color: #FFFFFF;")
+                txt_v.addWidget(t_lbl)
+
+            s_lbl = QLabel(subtitle)
+            s_lbl.setStyleSheet("font-size: 12px; font-weight: 500; color: #BDD4E4;")
+            txt_v.addWidget(s_lbl)
+
+            c_lay.addLayout(txt_v, 1)
+
+            # Chevron indicador a la derecha
+            chev_l = QLabel("›")
+            chev_l.setStyleSheet("font-size: 24px; font-weight: 600; color: #BDD4E4;")
+            c_lay.addWidget(chev_l)
+
+            c.mousePressEvent = lambda _, d=dest: self.navigate_to.emit(d)
+            c.setCursor(Qt.PointingHandCursor)
+            self.news_cards.append(c)
+            news_row.addWidget(c, 1)
+
+        self.layout.addLayout(news_row)
+
+        # Stretch final para que el suelo mojado y pies de Spider-Man queden visibles
+        self.layout.addStretch(1)
+
+        # Sistema de foco por teclado unificado
+        self.focus_idx = 0
+        self.nav_items = []
+        for c in self.main_cards:
+            self.nav_items.append((c, lambda card=c: card.mousePressEvent(None)))
+        for slot in self.recent_cards_widgets:
+            self.nav_items.append((slot["card"], lambda s=slot: self.launch_game.emit(s["game"]) if s["game"] else None))
+        for c in self.news_cards:
+            self.nav_items.append((c, lambda card=c: card.mousePressEvent(None)))
+
+        self._update_focus()
+
+    def set_recent_page(self, page: int):
+        self.recent_page = page % len(self.recent_pages_data)
+        for i, dot in enumerate(self.dots):
+            if i == self.recent_page:
+                dot.setFixedSize(30, 6)
+                dot.setStyleSheet("background: #00D9FF; border-radius: 3px;")
+            else:
+                dot.setFixedSize(6, 6)
+                dot.setStyleSheet("background: rgba(145, 165, 179, 120); border-radius: 3px;")
+        self._update_recent_slots()
+
+    def _update_recent_slots(self):
+        page_items = self.recent_pages_data[self.recent_page]
+        for slot_idx, (title, sub, img_rel, game_id, is_active) in enumerate(page_items):
+            slot = self.recent_cards_widgets[slot_idx]
+            slot["title_lbl"].setText(title)
+            slot["sub_lbl"].setText(sub)
+
+            # Buscar juego real en ALL_GAMES
+            matched = next((g for g in ALL_GAMES if g.get("id") == game_id), None)
+            if not matched:
+                matched = next((g for g in ALL_GAMES if title.lower() in g.get("title", "").lower()), None)
+            if not matched:
+                matched = {"title": title, "console": "Retro", "cover": img_rel}
+            slot["game"] = matched
+
+            # Cargar imagen redondeada
+            img_p = ROOT / img_rel
+            if img_p.exists():
+                raw = QPixmap(str(img_p))
+                slot["thumb_lbl"].setPixmap(get_rounded_pixmap(raw, 94, 94, 16))
+
+            # Conectar botón de play y clic de tarjeta
+            slot["card"].mousePressEvent = lambda _, gm=matched: self.launch_game.emit(gm)
+            if slot.get("connected"):
+                try:
+                    slot["play_btn"].clicked.disconnect()
+                except Exception:
+                    pass
+            slot["play_btn"].clicked.connect(lambda _, gm=matched: self.launch_game.emit(gm))
+            slot["connected"] = True
+
+            # Borde activo de la primera tarjeta en la página 0
+            if slot_idx == 0 and self.recent_page == 0:
+                slot["card"].border_color = QColor(0, 217, 255, 240)
+                slot["card"].set_glow(QColor(0, 217, 255, 180), 22)
+            else:
+                slot["card"].border_color = QColor(145, 165, 179, 130)
+                slot["card"].set_glow(QColor(145, 165, 179, 70), 14)
+            slot["card"].update()
 
     def _update_focus(self):
         for idx, (card, _) in enumerate(self.nav_items):
@@ -1032,8 +1152,8 @@ class HomeView(QWidget):
             card.set_focused(is_active)
             if hasattr(card, "_orig_border_color"):
                 if is_active:
-                    card.border_color = QColor(53, 200, 241, 245)
-                    card.set_glow(QColor(53, 200, 241, 220), 24)
+                    card.border_color = QColor(0, 217, 255, 245)
+                    card.set_glow(QColor(0, 217, 255, 220), 24)
                 else:
                     card.border_color = card._orig_border_color
                     card.set_glow(card._orig_glow_color, card._orig_glow_radius)
@@ -1044,12 +1164,14 @@ class HomeView(QWidget):
         w = self.width()
         if w <= 0:
             return
-        s = min(max(0.72, w / 1672.0), 1.15)
-        self.hero_card.setFixedSize(int(485 * s), int(416 * s))
-        for card, _ in self.grid_cards:
-            card.setFixedSize(int(236 * s), int(198 * s))
-        for c in self.util_cards:
-            c.setFixedHeight(int(90 * s))
+        s = min(max(0.75, w / 1672.0), 1.15)
+        for c in self.main_cards:
+            c.setFixedHeight(int(160 * s))
+        for slot in self.recent_cards_widgets:
+            slot["card"].setFixedHeight(int(126 * s))
+            slot["thumb_lbl"].setFixedSize(int(94 * s), int(94 * s))
+        for c in self.news_cards:
+            c.setFixedHeight(int(110 * s))
 
     def handle_key(self, key: int) -> bool:
         if key in (Qt.Key_Left, Qt.Key_A):
@@ -1063,15 +1185,23 @@ class HomeView(QWidget):
                 self._update_focus()
                 return True
         elif key in (Qt.Key_Down, Qt.Key_S):
-            if self.focus_idx <= 6:
-                # Salto de la fila superior a la fila inferior de utilidades
-                self.focus_idx = min(len(self.nav_items) - 1, 7 + (self.focus_idx * 4 // 7))
+            if self.focus_idx < 4:
+                # Salto de fila 1 (0..3) a fila 2 (4..6)
+                self.focus_idx = min(6, 4 + (self.focus_idx * 3 // 4))
+                self._update_focus()
+                return True
+            elif 4 <= self.focus_idx < 7:
+                # Salto de fila 2 (4..6) a fila 3 (7..9)
+                self.focus_idx = min(9, 7 + (self.focus_idx - 4))
                 self._update_focus()
                 return True
         elif key in (Qt.Key_Up, Qt.Key_W):
-            if self.focus_idx >= 7:
-                # Salto de la fila inferior a la fila superior
-                self.focus_idx = min(6, (self.focus_idx - 7) * 7 // 4)
+            if 7 <= self.focus_idx <= 9:
+                self.focus_idx = 4 + (self.focus_idx - 7)
+                self._update_focus()
+                return True
+            elif 4 <= self.focus_idx <= 6:
+                self.focus_idx = (self.focus_idx - 4) * 4 // 3
                 self._update_focus()
                 return True
         elif key in (Qt.Key_Return, Qt.Key_Enter, Qt.Key_Space):
