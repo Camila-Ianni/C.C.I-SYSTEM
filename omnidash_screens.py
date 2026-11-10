@@ -118,23 +118,22 @@ COLOR_COVERS = {
     "lego": "assets_omnidash/covers/lego.webp",
     "farcry": "assets_omnidash/covers/far-cry.webp",
     # PlayStation / Colección Moderna
-    "elden": "assets_ps4/img/elden.png",
-    "red": "assets_ps4/img/red.png",
-    "destiny": "assets_ps4/img/destiny.png",
-    "spider": "assets_ps4/img/spider.png",
-    "god": "assets_ps4/img/god.png",
-    "horizon": "assets_ps4/img/horizon.png",
-    "last": "assets_ps4/img/last.png",
-    "mafia": "assets_ps4/img/mafia.png",
-    "death": "assets_ps4/img/death.png",
-    "tomb": "assets_ps4/img/tomb.png",
-    "fifa": "assets_ps4/img/fifa.png",
+    "elden": "assets_omnidash/covers/elden.png",
+    "red": "assets_omnidash/covers/red.png",
+    "destiny": "assets_omnidash/covers/destiny.png",
+    "spider": "assets_omnidash/covers/spider.png",
+    "god": "assets_omnidash/covers/god.png",
+    "horizon": "assets_omnidash/covers/horizon.png",
+    "last": "assets_omnidash/covers/last.png",
+    "mafia": "assets_omnidash/covers/mafia.png",
+    "death": "assets_omnidash/covers/death.png",
+    "tomb": "assets_omnidash/covers/tomb.png",
+    "fifa": "assets_omnidash/covers/fifa.png",
     "bratz": "roms/nds/6148 - Bratz Fashion Boutique (U)(frieNDS).jpg",
     "lego": "roms/nds/1633 - Cover.png",
     "star wars": "roms/nds/1633 - Cover.png",
-    "god": "assets_ps4/img/god.png",
-    "sparta": "assets_ps4/img/god.png",
-    "olympus": "assets_ps4/img/god.png",
+    "sparta": "assets_omnidash/covers/god.png",
+    "olympus": "assets_omnidash/covers/god.png",
     "barbie": "assets_omnidash/covers/sega.webp",
     "disney": "assets_omnidash/covers/far-cry.webp",
     "simpsons": "fotos web/Street_Fighter_old_logo.png",
@@ -153,7 +152,7 @@ def pick_color_cover(name: str, console: str) -> str:
     elif console == "N64":
         return "fotos web/The_Legend_of_Zelda_film_logo.jpg"
     elif console == "PS1":
-        return "assets_ps4/img/red.png"
+        return "assets_omnidash/covers/red.png"
     elif console == "ARCADE":
         return "fotos web/metal slug.jpg"
     elif console == "NDS":
@@ -163,7 +162,7 @@ def pick_color_cover(name: str, console: str) -> str:
     elif console == "NEO-GEO":
         return "assets_omnidash/covers/sega.webp"
     else:
-        return "assets_ps4/img/elden.png"
+        return "assets_omnidash/covers/elden.png"
 
 
 def load_all_games() -> list[dict]:

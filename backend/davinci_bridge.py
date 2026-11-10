@@ -15,8 +15,10 @@ from typing import Any, Dict, List, Optional, Tuple
 
 import pygame
 
-# Asegurar que el directorio de Davinci-Fighter esté disponible para importación canónica
-DAVINCI_DIR = Path(__file__).resolve().parent.parent / "Davinci-Fighter"
+# Asegurar que el núcleo ligero de simulación de Davinci esté disponible para importación canónica
+DAVINCI_DIR = Path(__file__).resolve().parent / "davinci_core"
+if not DAVINCI_DIR.exists():
+    DAVINCI_DIR = Path(__file__).resolve().parent.parent / "Davinci-Fighter"
 if str(DAVINCI_DIR) not in sys.path:
     sys.path.insert(0, str(DAVINCI_DIR))
 

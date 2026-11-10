@@ -1021,7 +1021,7 @@ def resolve_game_cover(game: dict) -> QPixmap | None:
     title = game.get("title", "").lower()
 
     priority_map = [
-        ("da vinci", ROOT / "assets_ps4" / "img" / "elden.png"),
+        ("da vinci", ROOT / "assets_omnidash" / "covers" / "elden.png"),
         ("asteroids", ROOT / "fotos web" / "asteroids.jpg"),
         ("super mario", ROOT / "fotos web" / "super mario.jpg"),
         ("zelda", ROOT / "fotos web" / "The_Legend_of_Zelda_film_logo.jpg"),
@@ -1042,7 +1042,7 @@ def resolve_game_cover(game: dict) -> QPixmap | None:
         ("bratz", ROOT / "roms/nds/6148 - Bratz Fashion Boutique (U)(frieNDS).jpg"),
         ("lego", ROOT / "roms/nds/1633 - Cover.png"),
         ("star wars", ROOT / "roms/nds/1633 - Cover.png"),
-        ("god of war", ROOT / "assets_ps4/img/god.png"),
+        ("god of war", ROOT / "assets_omnidash/covers/god.png"),
         ("barbie", ROOT / "assets_omnidash/covers/sega.webp"),
         ("disney", ROOT / "assets_omnidash/covers/far-cry.webp"),
         ("simpsons", ROOT / "assets_omnidash/covers/battlefield.webp"),
