@@ -11,6 +11,8 @@ from __future__ import annotations
 import os
 import sys
 import time
+import re
+import sqlite3
 from pathlib import Path
 from datetime import datetime
 
@@ -23,7 +25,7 @@ from PySide6.QtGui import (
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QStackedWidget,
     QLabel, QPushButton, QLineEdit, QScrollArea, QGridLayout, QFrame, QSizePolicy,
-    QProgressBar, QSlider, QFileDialog, QGraphicsDropShadowEffect
+    QProgressBar, QSlider, QFileDialog, QGraphicsDropShadowEffect, QDialog
 )
 
 from cci_console import CATALOG, UserData
@@ -2108,126 +2110,796 @@ class LibraryView(QWidget):
 
 
 # ==============================================================================
-# 3. VISTA DE DETALLES DEL JUEGO (GAME DETAILS)
+# 3. VISTA DE DETALLES DEL JUEGO (GAME DETAILS - GAMING CONSOLE REDESIGN)
 # ==============================================================================
+class ScreenshotViewerModal(QDialog):
+    """Visor modal de capturas de videojuego en alta definición."""
+    def __init__(self, img_path: str, parent=None):
+        super().__init__(parent)
+        self.setWindowFlags(Qt.FramelessWindowHint | Qt.Dialog)
+        self.setAttribute(Qt.WA_TranslucentBackground, True)
+        self.resize(1120, 700)
+
+        main_lay = QVBoxLayout(self)
+        main_lay.setContentsMargins(0, 0, 0, 0)
+
+        container = QFrame(self)
+        container.setStyleSheet("""
+            QFrame {
+                background: rgba(5, 12, 22, 0.95);
+                border: 1.5px solid rgba(0, 217, 255, 0.45);
+                border-radius: 20px;
+            }
+        """)
+        c_lay = QVBoxLayout(container)
+        c_lay.setContentsMargins(22, 16, 22, 20)
+
+        # Barra superior con título y botón cerrar
+        top = QHBoxLayout()
+        t_lbl = QLabel("Captura del Videojuego")
+        t_lbl.setStyleSheet("font-size: 16px; font-weight: 800; color: #FFFFFF;")
+        top.addWidget(t_lbl)
+        top.addStretch(1)
+
+        close_btn = QPushButton("✕")
+        close_btn.setFixedSize(36, 36)
+        close_btn.setCursor(Qt.PointingHandCursor)
+        close_btn.setStyleSheet("""
+            QPushButton {
+                background: rgba(255, 255, 255, 0.1);
+                border: 1px solid rgba(255, 255, 255, 0.2);
+                border-radius: 18px;
+                color: #FFFFFF;
+                font-size: 16px;
+                font-weight: 700;
+            }
+            QPushButton:hover {
+                background: rgba(233, 75, 86, 0.85);
+                border: 1px solid #E94B56;
+            }
+        """)
+        close_btn.clicked.connect(self.accept)
+        top.addWidget(close_btn)
+        c_lay.addLayout(top)
+
+        # Imagen central
+        img_lbl = QLabel()
+        img_lbl.setAlignment(Qt.AlignCenter)
+        p = Path(img_path)
+        if p.exists():
+            pix = QPixmap(str(p))
+            img_lbl.setPixmap(pix.scaled(1060, 600, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+        c_lay.addWidget(img_lbl, 1)
+
+        main_lay.addWidget(container)
+
+    def keyPressEvent(self, event):
+        if event.key() in (Qt.Key_Escape, Qt.Key_Backspace):
+            self.accept()
+        else:
+            super().keyPressEvent(event)
+
+
+class GameHeroBanner(QFrame):
+    """Hero cinematográfico con degradado Dark Glass, carátula 3D, badges y botones JUGAR/FAVORITO."""
+    back_clicked = Signal()
+    play_clicked = Signal()
+    fav_clicked = Signal()
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setFixedHeight(340)
+        self.bg_pixmap = None
+        self.is_favorite = False
+
+        self.layout = QVBoxLayout(self)
+        self.layout.setContentsMargins(28, 18, 28, 22)
+        self.layout.setSpacing(14)
+
+        # 1. Barra superior: Botón Volver
+        top_bar = QHBoxLayout()
+        self.back_btn = QPushButton("  ←   Volver a la Biblioteca")
+        self.back_btn.setCursor(Qt.PointingHandCursor)
+        self.back_btn.setFixedHeight(38)
+        self.back_btn.setStyleSheet("""
+            QPushButton {
+                background: rgba(10, 25, 45, 0.65);
+                border: 1.2px solid rgba(255, 255, 255, 0.22);
+                border-radius: 19px;
+                color: #D2E6F5;
+                font-size: 13px;
+                font-weight: 700;
+                padding: 0 16px;
+            }
+            QPushButton:hover {
+                background: rgba(0, 217, 255, 0.25);
+                border: 1.2px solid #00D9FF;
+                color: #FFFFFF;
+            }
+        """)
+        self.back_btn.clicked.connect(self.back_clicked.emit)
+        top_bar.addWidget(self.back_btn)
+        top_bar.addStretch(1)
+        self.layout.addLayout(top_bar)
+
+        # 2. Contenido Hero (Carátula 3D + Metadatos + Acciones)
+        hero_row = QHBoxLayout()
+        hero_row.setSpacing(28)
+        hero_row.setAlignment(Qt.AlignVCenter)
+
+        # Carátula 3D flotante
+        self.cover_lbl = QLabel()
+        self.cover_lbl.setFixedSize(220, 220)
+        self.cover_lbl.setAlignment(Qt.AlignCenter)
+        self.cover_lbl.setStyleSheet("""
+            background: rgba(6, 14, 24, 0.85);
+            border: 1.8px solid rgba(255, 255, 255, 0.25);
+            border-radius: 18px;
+        """)
+        cov_shadow = QGraphicsDropShadowEffect(self.cover_lbl)
+        cov_shadow.setColor(QColor(0, 0, 0, 160))
+        cov_shadow.setBlurRadius(24)
+        cov_shadow.setOffset(0, 6)
+        self.cover_lbl.setGraphicsEffect(cov_shadow)
+        hero_row.addWidget(self.cover_lbl)
+
+        # Columna de Metadatos y Botones
+        meta_v = QVBoxLayout()
+        meta_v.setSpacing(10)
+        meta_v.setAlignment(Qt.AlignVCenter)
+
+        # Fila de Badges
+        badges_row = QHBoxLayout()
+        badges_row.setSpacing(10)
+        badges_row.setAlignment(Qt.AlignLeft)
+
+        self.platform_badge = QLabel("SNES")
+        self.platform_badge.setStyleSheet("""
+            background: rgba(0, 217, 255, 0.18);
+            border: 1.2px solid #00D9FF;
+            border-radius: 8px;
+            color: #00D9FF;
+            font-size: 11px;
+            font-weight: 800;
+            padding: 3px 10px;
+            letter-spacing: 1px;
+        """)
+        badges_row.addWidget(self.platform_badge)
+
+        self.ready_badge = QLabel("●  LISTO PARA JUGAR")
+        self.ready_badge.setStyleSheet("""
+            background: rgba(0, 230, 118, 0.15);
+            border: 1.2px solid rgba(0, 230, 118, 0.5);
+            border-radius: 8px;
+            color: #00E676;
+            font-size: 11px;
+            font-weight: 800;
+            padding: 3px 10px;
+        """)
+        badges_row.addWidget(self.ready_badge)
+        badges_row.addStretch(1)
+        meta_v.addLayout(badges_row)
+
+        # Título del videojuego
+        self.title_lbl = QLabel("Super Mario All-Stars")
+        self.title_lbl.setStyleSheet("""
+            font-size: 32px;
+            font-weight: 900;
+            color: #FFFFFF;
+            letter-spacing: 0.5px;
+        """)
+        meta_v.addWidget(self.title_lbl)
+
+        # Subtítulo (Consola • Desarrollador • Año)
+        self.meta_lbl = QLabel("Super Nintendo  •  Nintendo EAD  •  1992")
+        self.meta_lbl.setStyleSheet("""
+            font-size: 14px;
+            font-weight: 600;
+            color: #A8C8DE;
+        """)
+        meta_v.addWidget(self.meta_lbl)
+
+        # Botones de Acción: JUGAR + FAVORITO
+        actions_row = QHBoxLayout()
+        actions_row.setSpacing(16)
+        actions_row.setAlignment(Qt.AlignLeft)
+
+        self.play_btn = QPushButton("   ▶   JUGAR AHORA")
+        self.play_btn.setCursor(Qt.PointingHandCursor)
+        self.play_btn.setFixedSize(210, 48)
+        self.play_btn.setStyleSheet("""
+            QPushButton {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #00E5FF, stop:1 #0088CC);
+                border: 1.5px solid #80F4FF;
+                border-radius: 24px;
+                color: #FFFFFF;
+                font-size: 14px;
+                font-weight: 900;
+                letter-spacing: 0.5px;
+            }
+            QPushButton:hover {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:1, stop:0 #33ECFF, stop:1 #009FE8);
+                border: 1.8px solid #FFFFFF;
+            }
+            QPushButton:pressed {
+                background: #0077B3;
+            }
+        """)
+        play_glow = QGraphicsDropShadowEffect(self.play_btn)
+        play_glow.setColor(QColor(0, 217, 255, 180))
+        play_glow.setBlurRadius(20)
+        play_glow.setOffset(0, 0)
+        self.play_btn.setGraphicsEffect(play_glow)
+        self.play_btn.clicked.connect(self.play_clicked.emit)
+        actions_row.addWidget(self.play_btn)
+
+        self.fav_btn = QPushButton("  ♡   Añadir a Favoritos")
+        self.fav_btn.setCursor(Qt.PointingHandCursor)
+        self.fav_btn.setFixedHeight(48)
+        self.fav_btn.setStyleSheet("""
+            QPushButton {
+                background: rgba(14, 30, 50, 0.7);
+                border: 1.5px solid rgba(255, 255, 255, 0.25);
+                border-radius: 24px;
+                color: #E0EEF8;
+                font-size: 13px;
+                font-weight: 700;
+                padding: 0 20px;
+            }
+            QPushButton:hover {
+                background: rgba(255, 51, 102, 0.2);
+                border: 1.5px solid #FF3366;
+                color: #FFFFFF;
+            }
+        """)
+        self.fav_btn.clicked.connect(self.fav_clicked.emit)
+        actions_row.addWidget(self.fav_btn)
+
+        actions_row.addStretch(1)
+        meta_v.addLayout(actions_row)
+
+        hero_row.addLayout(meta_v, 1)
+        self.layout.addLayout(hero_row)
+
+    def set_favorite_state(self, is_fav: bool):
+        self.is_favorite = is_fav
+        if is_fav:
+            self.fav_btn.setText("  ♥   En Favoritos")
+            self.fav_btn.setStyleSheet("""
+                QPushButton {
+                    background: rgba(255, 51, 102, 0.25);
+                    border: 1.5px solid #FF3366;
+                    border-radius: 24px;
+                    color: #FF5588;
+                    font-size: 13px;
+                    font-weight: 800;
+                    padding: 0 20px;
+                }
+                QPushButton:hover {
+                    background: rgba(255, 51, 102, 0.4);
+                    color: #FFFFFF;
+                }
+            """)
+        else:
+            self.fav_btn.setText("  ♡   Añadir a Favoritos")
+            self.fav_btn.setStyleSheet("""
+                QPushButton {
+                    background: rgba(14, 30, 50, 0.7);
+                    border: 1.5px solid rgba(255, 255, 255, 0.25);
+                    border-radius: 24px;
+                    color: #E0EEF8;
+                    font-size: 13px;
+                    font-weight: 700;
+                    padding: 0 20px;
+                }
+                QPushButton:hover {
+                    background: rgba(0, 217, 255, 0.2);
+                    border: 1.5px solid #00D9FF;
+                    color: #FFFFFF;
+                }
+            """)
+
+    def set_backdrop(self, pix: QPixmap | None):
+        self.bg_pixmap = pix
+        self.update()
+
+    def paintEvent(self, event):
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+        painter.setRenderHint(QPainter.SmoothPixmapTransform)
+        w, h = self.width(), self.height()
+
+        path = QPainterPath()
+        path.addRoundedRect(0, 0, w, h, 24, 24)
+        painter.setClipPath(path)
+
+        # 1. Pintar fondo de imagen si existe
+        if self.bg_pixmap and not self.bg_pixmap.isNull():
+            scaled = self.bg_pixmap.scaled(w, h, Qt.KeepAspectRatioByExpanding, Qt.SmoothTransformation)
+            sx = (scaled.width() - w) // 2
+            sy = (scaled.height() - h) // 2
+            painter.drawPixmap(0, 0, scaled.copy(sx, sy, w, h))
+
+        # 2. Gradiente cinemático Dark Glass (Oscurecer izquierda y abajo)
+        grad_h = QLinearGradient(0, 0, w, 0)
+        grad_h.setColorAt(0.0, QColor(6, 12, 20, 245))
+        grad_h.setColorAt(0.45, QColor(6, 12, 20, 215))
+        grad_h.setColorAt(1.0, QColor(6, 12, 20, 110))
+        painter.fillRect(0, 0, w, h, QBrush(grad_h))
+
+        grad_v = QLinearGradient(0, 0, 0, h)
+        grad_v.setColorAt(0.0, QColor(6, 12, 20, 120))
+        grad_v.setColorAt(0.7, QColor(6, 12, 20, 180))
+        grad_v.setColorAt(1.0, QColor(6, 12, 20, 255))
+        painter.fillRect(0, 0, w, h, QBrush(grad_v))
+
+        # Borde exterior luminoso
+        pen = painter.pen()
+        pen.setColor(QColor(145, 175, 195, 80))
+        pen.setWidthF(1.2)
+        painter.setPen(pen)
+        painter.drawRoundedRect(0.6, 0.6, w - 1.2, h - 1.2, 24, 24)
+
+
 class GameDetailsView(QWidget):
+    """Ficha Oficial del Videojuego rediseñada con estética de consola gaming moderna (Dark Glass)."""
     launch_game = Signal(dict)
     back_to_library = Signal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self.game = {}
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(48, 20, 48, 24)
+        self.setAttribute(Qt.WA_TranslucentBackground, True)
 
-        self.panel = AcrylicGlassCard(self, border_radius=18)
-        p_layout = QVBoxLayout(self.panel)
-        p_layout.setContentsMargins(28, 24, 28, 24)
-        p_layout.setSpacing(18)
+        main_layout = QVBoxLayout(self)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setSpacing(0)
 
-        # Barra superior con Volver
-        top_bar = QHBoxLayout()
-        back_btn = QPushButton("  Volver")
-        back_btn.setProperty("class", "glassBtn")
-        back_btn.setCursor(Qt.PointingHandCursor)
-        ip = ROOT / "assets_omnidash" / "icons" / "home.png"
-        if ip.exists():
-            back_btn.setIcon(QIcon(str(ip)))
-        back_btn.clicked.connect(self.back_to_library.emit)
-        top_bar.addWidget(back_btn)
-        top_bar.addStretch(1)
-        p_layout.addLayout(top_bar)
+        # Scroll Area fluida sin barras toscas
+        self.scroll = QScrollArea(self)
+        self.scroll.setWidgetResizable(True)
+        self.scroll.setFrameShape(QFrame.NoFrame)
+        self.scroll.setAttribute(Qt.WA_TranslucentBackground, True)
+        self.scroll.viewport().setAttribute(Qt.WA_TranslucentBackground, True)
+        self.scroll.setStyleSheet("""
+            QScrollBar:vertical {
+                background: rgba(5, 12, 20, 0.4);
+                width: 8px;
+                border-radius: 4px;
+                margin: 0px;
+            }
+            QScrollBar::handle:vertical {
+                background: rgba(0, 217, 255, 0.4);
+                min-height: 30px;
+                border-radius: 4px;
+            }
+            QScrollBar::handle:vertical:hover {
+                background: #00D9FF;
+            }
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+                height: 0px;
+            }
+        """)
 
-        # Contenido dividido en 2 columnas
-        content_row = QHBoxLayout()
-        content_row.setSpacing(32)
+        scroll_widget = QWidget()
+        scroll_widget.setAttribute(Qt.WA_TranslucentBackground, True)
+        self.content_vbox = QVBoxLayout(scroll_widget)
+        self.content_vbox.setContentsMargins(52, 14, 52, 40)
+        self.content_vbox.setSpacing(22)
 
-        # Columna Izquierda: Carátula Grande + Botón Play Gel
-        left_box = QVBoxLayout()
-        self.cover_lbl = QLabel()
-        self.cover_lbl.setFixedSize(280, 280)
-        self.cover_lbl.setStyleSheet("border-radius: 12px; background: rgba(0,0,0,120); border: 2px solid rgba(255,255,255,100);")
-        self.cover_lbl.setScaledContents(True)
-        left_box.addWidget(self.cover_lbl)
+        # 1. Hero del Videojuego
+        self.hero = GameHeroBanner(self)
+        self.hero.back_clicked.connect(self.back_to_library.emit)
+        self.hero.play_clicked.connect(lambda: self.launch_game.emit(self.game))
+        self.hero.fav_clicked.connect(self._toggle_favorite)
+        self.content_vbox.addWidget(self.hero)
 
-        self.play_btn = QPushButton("▶  JUGAR AHORA (60 FPS)")
-        self.play_btn.setProperty("class", "playGelBtn")
-        self.play_btn.setCursor(Qt.PointingHandCursor)
-        self.play_btn.clicked.connect(lambda: self.launch_game.emit(self.game))
-        left_box.addWidget(self.play_btn)
-        left_box.addStretch(1)
-        content_row.addLayout(left_box)
+        # 2. Panel de Información (Descripción + Cuadrícula de Especificaciones)
+        self.info_card = AcrylicGlassCard(
+            self,
+            border_radius=22,
+            border_color=QColor(145, 175, 195, 90),
+            glow_color=QColor(0, 0, 0, 60),
+            glow_radius=14
+        )
+        info_lay = QVBoxLayout(self.info_card)
+        info_lay.setContentsMargins(26, 22, 26, 22)
+        info_lay.setSpacing(16)
 
-        # Columna Derecha: Metadatos y Capacidades
-        right_box = QVBoxLayout()
-        right_box.setSpacing(14)
+        info_header = QLabel("Información del videojuego")
+        info_header.setStyleSheet("font-size: 18px; font-weight: 800; color: #FFFFFF;")
+        info_lay.addWidget(info_header)
 
-        self.title_lbl = QLabel("Título del Juego")
-        self.title_lbl.setStyleSheet("font-size: 24px; font-weight: 800; color: #ffffff;")
-        right_box.addWidget(self.title_lbl)
+        self.desc_lbl = QLabel()
+        self.desc_lbl.setWordWrap(True)
+        self.desc_lbl.setStyleSheet("font-size: 14px; font-weight: 500; color: #CCE2F2; line-height: 1.5;")
+        info_lay.addWidget(self.desc_lbl)
 
-        self.meta_lbl = QLabel("Consola • Desarrollador • 2024")
-        self.meta_lbl.setStyleSheet("font-size: 14px; color: #bde4ff; font-weight: 600;")
-        right_box.addWidget(self.meta_lbl)
+        # Fila de chips de especificaciones
+        specs_row = QHBoxLayout()
+        specs_row.setSpacing(14)
 
-        # Chips de capacidades
-        caps_card = AcrylicGlassCard(self, border_radius=12)
-        caps_layout = QHBoxLayout(caps_card)
-        caps_layout.setContentsMargins(14, 10, 14, 10)
-        caps = ["Single Player", "60 FPS V-Sync", "Controller Support", "Full HD Audio", "State Save"]
-        for c in caps:
-            lbl = QLabel(c)
-            lbl.setStyleSheet("background: rgba(31, 134, 214, 180); border: 1px solid rgba(255,255,255,120); border-radius: 10px; padding: 4px 10px; font-size: 11px; font-weight: 600;")
-            caps_layout.addWidget(lbl)
-        caps_layout.addStretch(1)
-        right_box.addWidget(caps_card)
+        self.spec_cards = {}
+        for key, title, icon_symbol in [
+            ("genre", "GÉNERO", "🎮"),
+            ("platform", "PLATAFORMA", "🕹️"),
+            ("developer", "DESARROLLADOR", "🏢"),
+            ("release", "LANZAMIENTO", "📅"),
+            ("players", "JUGADORES", "👥"),
+        ]:
+            c = QFrame()
+            c.setStyleSheet("""
+                QFrame {
+                    background: rgba(12, 26, 44, 0.7);
+                    border: 1px solid rgba(255, 255, 255, 0.15);
+                    border-radius: 12px;
+                    padding: 8px 12px;
+                }
+            """)
+            c_lay = QVBoxLayout(c)
+            c_lay.setContentsMargins(4, 4, 4, 4)
+            c_lay.setSpacing(4)
 
-        # Descripción
-        desc_card = AcrylicGlassCard(self, border_radius=12)
-        desc_lay = QVBoxLayout(desc_card)
-        desc_lay.setContentsMargins(16, 12, 16, 12)
-        d_title = QLabel("Descripción Oficial")
-        d_title.setStyleSheet("font-size: 13px; font-weight: 700; color: #ffffff;")
-        self.desc_txt = QLabel("Preservado para C.C.I. SYSTEM.")
-        self.desc_txt.setStyleSheet("font-size: 12px; color: #cbe6ff; line-height: 1.4;")
-        self.desc_txt.setWordWrap(True)
-        desc_lay.addWidget(d_title)
-        desc_lay.addWidget(self.desc_txt)
-        right_box.addWidget(desc_card)
+            h = QLabel(f"{icon_symbol}  {title}")
+            h.setStyleSheet("font-size: 11px; font-weight: 800; color: #00D9FF; letter-spacing: 0.5px;")
+            v = QLabel("—")
+            v.setStyleSheet("font-size: 13px; font-weight: 700; color: #FFFFFF;")
+            c_lay.addWidget(h)
+            c_lay.addWidget(v)
+            self.spec_cards[key] = (c, v)
+            specs_row.addWidget(c, 1)
 
-        # Info del Core
-        core_card = AcrylicGlassCard(self, border_radius=12)
-        core_lay = QVBoxLayout(core_card)
-        core_lay.setContentsMargins(16, 12, 16, 12)
-        self.core_info = QLabel("Libretro Core: Native C.C.I. Engine")
-        self.core_info.setStyleSheet("font-size: 12px; color: #bde4ff;")
-        self.rom_info = QLabel("ROM Path: Builtin")
-        self.rom_info.setStyleSheet("font-size: 12px; color: #bde4ff;")
-        cert = QLabel("✓ Certificado 60 FPS Low-Latency Framebuffer")
-        cert.setStyleSheet("font-size: 11px; color: #bde4ff; font-weight: 700;")
-        core_lay.addWidget(self.core_info)
-        core_lay.addWidget(self.rom_info)
-        core_lay.addWidget(cert)
-        right_box.addWidget(core_card)
+        info_lay.addLayout(specs_row)
+        self.content_vbox.addWidget(self.info_card)
 
-        right_box.addStretch(1)
-        content_row.addLayout(right_box, 1)
+        # 3. Galería de Capturas («Capturas del juego»)
+        self.gallery_card = AcrylicGlassCard(
+            self,
+            border_radius=22,
+            border_color=QColor(145, 175, 195, 90),
+            glow_color=QColor(0, 0, 0, 60),
+            glow_radius=14
+        )
+        gal_lay = QVBoxLayout(self.gallery_card)
+        gal_lay.setContentsMargins(26, 22, 26, 22)
+        gal_lay.setSpacing(16)
 
-        p_layout.addLayout(content_row)
-        layout.addWidget(self.panel)
+        gal_header = QLabel("📷   Capturas del juego")
+        gal_header.setStyleSheet("font-size: 18px; font-weight: 800; color: #FFFFFF;")
+        gal_lay.addWidget(gal_header)
+
+        self.shots_row = QHBoxLayout()
+        self.shots_row.setSpacing(16)
+        gal_lay.addLayout(self.shots_row)
+        self.content_vbox.addWidget(self.gallery_card)
+
+        # 4. Sección «Tu actividad»
+        self.activity_card = AcrylicGlassCard(
+            self,
+            border_radius=22,
+            border_color=QColor(145, 175, 195, 90),
+            glow_color=QColor(0, 0, 0, 60),
+            glow_radius=14
+        )
+        act_lay = QVBoxLayout(self.activity_card)
+        act_lay.setContentsMargins(26, 22, 26, 22)
+        act_lay.setSpacing(16)
+
+        act_header = QLabel("🎮   Tu actividad")
+        act_header.setStyleSheet("font-size: 18px; font-weight: 800; color: #FFFFFF;")
+        act_lay.addWidget(act_header)
+
+        act_cards_row = QHBoxLayout()
+        act_cards_row.setSpacing(16)
+
+        self.act_items = {}
+        for key, title, icon_s in [
+            ("last_played", "ÚLTIMA PARTIDA", "⏱️"),
+            ("time_played", "TIEMPO JUGADO", "⏳"),
+            ("sessions", "SESIONES", "🚀"),
+            ("save_status", "DATOS GUARDADOS", "💾"),
+        ]:
+            c = QFrame()
+            c.setStyleSheet("""
+                QFrame {
+                    background: rgba(12, 26, 44, 0.7);
+                    border: 1px solid rgba(255, 255, 255, 0.15);
+                    border-radius: 14px;
+                    padding: 10px 14px;
+                }
+            """)
+            c_lay = QVBoxLayout(c)
+            c_lay.setContentsMargins(4, 4, 4, 4)
+            c_lay.setSpacing(5)
+
+            h = QLabel(f"{icon_s}  {title}")
+            h.setStyleSheet("font-size: 11px; font-weight: 800; color: #8CC4E8; letter-spacing: 0.5px;")
+            v = QLabel("—")
+            v.setStyleSheet("font-size: 15px; font-weight: 800; color: #FFFFFF;")
+            c_lay.addWidget(h)
+            c_lay.addWidget(v)
+            self.act_items[key] = (c, v)
+            act_cards_row.addWidget(c, 1)
+
+        act_lay.addLayout(act_cards_row)
+        self.content_vbox.addWidget(self.activity_card)
+
+        # 5. Información Técnica y Emulación (Plegable)
+        self.tech_wrap = QWidget()
+        tech_v = QVBoxLayout(self.tech_wrap)
+        tech_v.setContentsMargins(0, 0, 0, 0)
+        tech_v.setSpacing(10)
+
+        self.tech_toggle_btn = QPushButton("  ⚙   Información técnica y emulación    ▼ Desplegar")
+        self.tech_toggle_btn.setCursor(Qt.PointingHandCursor)
+        self.tech_toggle_btn.setFixedHeight(44)
+        self.tech_toggle_btn.setStyleSheet("""
+            QPushButton {
+                background: rgba(10, 20, 35, 0.75);
+                border: 1.2px solid rgba(255, 255, 255, 0.2);
+                border-radius: 22px;
+                color: #A0C5DE;
+                font-size: 13px;
+                font-weight: 700;
+                padding-left: 18px;
+                text-align: left;
+            }
+            QPushButton:hover {
+                background: rgba(0, 217, 255, 0.15);
+                border: 1.2px solid #00D9FF;
+                color: #FFFFFF;
+            }
+        """)
+        self.tech_toggle_btn.clicked.connect(self._toggle_tech_info)
+        tech_v.addWidget(self.tech_toggle_btn)
+
+        self.tech_content_card = AcrylicGlassCard(
+            self,
+            border_radius=18,
+            border_color=QColor(145, 175, 195, 80),
+            glow_color=QColor(0, 0, 0, 50),
+            glow_radius=10
+        )
+        self.tech_content_card.setVisible(False)
+        t_lay = QVBoxLayout(self.tech_content_card)
+        t_lay.setContentsMargins(24, 18, 24, 18)
+        t_lay.setSpacing(10)
+
+        self.tech_grid = QGridLayout()
+        self.tech_grid.setHorizontalSpacing(24)
+        self.tech_grid.setVerticalSpacing(8)
+
+        self.core_val = QLabel()
+        self.rom_val = QLabel()
+        self.fmt_val = QLabel()
+        self.status_val = QLabel()
+        self.id_val = QLabel()
+        self.source_val = QLabel()
+
+        fields = [
+            ("Emulador / Núcleo:", self.core_val),
+            ("Ruta de archivo ROM:", self.rom_val),
+            ("Formato / Tipo:", self.fmt_val),
+            ("Estado de verificación:", self.status_val),
+            ("Identificador de juego:", self.id_val),
+            ("Metadatos / Fuente:", self.source_val),
+        ]
+
+        for row_idx, (lbl_txt, val_lbl) in enumerate(fields):
+            l = QLabel(lbl_txt)
+            l.setStyleSheet("font-size: 12px; font-weight: 700; color: #8AB4CC;")
+            val_lbl.setStyleSheet("font-size: 12px; font-weight: 600; color: #E8F4FC;")
+            self.tech_grid.addWidget(l, row_idx, 0)
+            self.tech_grid.addWidget(val_lbl, row_idx, 1)
+
+        t_lay.addLayout(self.tech_grid)
+        tech_v.addWidget(self.tech_content_card)
+        self.content_vbox.addWidget(self.tech_wrap)
+
+        self.scroll.setWidget(scroll_widget)
+        main_layout.addWidget(self.scroll)
+
+    def _toggle_tech_info(self):
+        show = not self.tech_content_card.isVisible()
+        self.tech_content_card.setVisible(show)
+        if show:
+            self.tech_toggle_btn.setText("  ⚙   Información técnica y emulación    ▲ Plegar")
+        else:
+            self.tech_toggle_btn.setText("  ⚙   Información técnica y emulación    ▼ Desplegar")
+
+    def _is_game_favorite(self, game_id: str) -> bool:
+        db_path = ROOT / ".cci-user-data" / "cci_system.sqlite3"
+        if not db_path.exists():
+            return False
+        try:
+            with sqlite3.connect(db_path) as conn:
+                cur = conn.cursor()
+                cur.execute("CREATE TABLE IF NOT EXISTS user_favorites (game_id TEXT PRIMARY KEY, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)")
+                cur.execute("SELECT 1 FROM user_favorites WHERE game_id = ?", (game_id,))
+                return cur.fetchone() is not None
+        except Exception:
+            return False
+
+    def _toggle_favorite(self):
+        gid = self.game.get("id")
+        if not gid:
+            return
+        curr = self._is_game_favorite(gid)
+        db_path = ROOT / ".cci-user-data" / "cci_system.sqlite3"
+        try:
+            with sqlite3.connect(db_path) as conn:
+                cur = conn.cursor()
+                cur.execute("CREATE TABLE IF NOT EXISTS user_favorites (game_id TEXT PRIMARY KEY, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)")
+                if curr:
+                    cur.execute("DELETE FROM user_favorites WHERE game_id = ?", (gid,))
+                    new_state = False
+                else:
+                    cur.execute("INSERT OR REPLACE INTO user_favorites (game_id) VALUES (?)", (gid,))
+                    new_state = True
+            self.hero.set_favorite_state(new_state)
+        except Exception:
+            pass
+
+    def _find_screenshots(self, title: str, current_cover: str) -> list[str]:
+        words = [w for w in re.findall(r'[A-Za-z0-9]+', title.lower()) if len(w) > 2 and w not in ('the', 'and', 'for', 'all', 'edition', 'version')]
+        results = []
+        fj = ROOT / 'fotos juegos'
+        fw = ROOT / 'fotos web'
+        candidates = []
+        if fj.exists():
+            candidates.extend(list(fj.glob('*.*')))
+        if fw.exists():
+            candidates.extend(list(fw.glob('*.*')))
+
+        for c in candidates:
+            if c.suffix.lower() not in ('.jpg', '.png', '.webp', '.jpeg'):
+                continue
+            rel = str(c.relative_to(ROOT))
+            if rel == current_cover:
+                continue
+            stem = c.stem.lower()
+            matches = sum(1 for w in words if w in stem)
+            if matches >= 1 and (len(words) == 1 or matches >= 2 or (words and words[0] in stem)):
+                if rel not in results:
+                    results.append((matches, rel))
+
+        results.sort(key=lambda x: -x[0])
+        return [r[1] for r in results[:4]]
 
     def load_game(self, game: dict):
         self.game = game
-        self.title_lbl.setText(game.get("title", "Game"))
-        self.meta_lbl.setText(f"{game.get('console', 'Retro')}  •  {game.get('developer', 'Official')}  •  {game.get('year', '2024')}")
-        self.desc_txt.setText(game.get("desc", "Official title preserved for C.C.I. SYSTEM Virtual Console."))
-        self.core_info.setText(f"Libretro Core: {game.get('core', 'Native C.C.I. Engine')}")
-        self.rom_info.setText(f"ROM Path: {game.get('rom', 'Builtin')}")
+        title = game.get("title", "Game")
+        console = game.get("console", "Retro")
+        badge = game.get("badge", "ROM")
+        developer = game.get("developer", "Nintendo / Official")
+        year = str(game.get("year", "2024"))
+        desc = game.get("desc", "Videojuego oficial preservado para la consola virtual C.C.I. SYSTEM a 60 FPS estables.")
 
+        # 1. Hero
+        self.hero.title_lbl.setText(title)
+        self.hero.platform_badge.setText(badge)
+        self.hero.meta_lbl.setText(f"{console}  •  {developer}  •  {year}")
+
+        # Favorito
+        gid = game.get("id", "")
+        self.hero.set_favorite_state(self._is_game_favorite(gid))
+
+        # Portada y Backdrop
         cov = game.get("cover")
         if cov and (ROOT / cov).exists():
             raw_pix = QPixmap(str(ROOT / cov))
-            self.cover_lbl.setPixmap(get_rounded_pixmap(raw_pix, 280, 280, 12))
+            self.hero.cover_lbl.setPixmap(get_rounded_pixmap(raw_pix, 220, 220, 16))
+            self.hero.set_backdrop(raw_pix)
+        else:
+            self.hero.cover_lbl.clear()
+            self.hero.set_backdrop(None)
+
+        # 2. Información
+        self.desc_lbl.setText(desc)
+        # Spec cards
+        genre_val = game.get("genre", "Plataformas / Acción")
+        self.spec_cards["genre"][1].setText(genre_val)
+        self.spec_cards["platform"][1].setText(console)
+        self.spec_cards["developer"][1].setText(developer)
+        self.spec_cards["release"][1].setText(year)
+        self.spec_cards["players"][1].setText(game.get("players", "1–2 Jugadores"))
+
+        # 3. Capturas de juego
+        shots = self._find_screenshots(title, cov or "")
+        while self.shots_row.count():
+            item = self.shots_row.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+
+        if shots:
+            self.gallery_card.setVisible(True)
+            for shot_path in shots:
+                card = QFrame()
+                card.setCursor(Qt.PointingHandCursor)
+                card.setFixedSize(220, 128)
+                card.setStyleSheet("""
+                    QFrame {
+                        background: rgba(0, 0, 0, 0.6);
+                        border: 1.5px solid rgba(255, 255, 255, 0.2);
+                        border-radius: 14px;
+                    }
+                    QFrame:hover {
+                        border: 1.8px solid #00D9FF;
+                    }
+                """)
+                c_lay = QVBoxLayout(card)
+                c_lay.setContentsMargins(4, 4, 4, 4)
+                lbl = QLabel()
+                lbl.setAlignment(Qt.AlignCenter)
+                sp = ROOT / shot_path
+                if sp.exists():
+                    p = QPixmap(str(sp))
+                    lbl.setPixmap(get_rounded_pixmap(p, 212, 120, 10))
+                c_lay.addWidget(lbl)
+                card.mousePressEvent = lambda _, path=shot_path: self._open_screenshot_viewer(path)
+                self.shots_row.addWidget(card)
+            self.shots_row.addStretch(1)
+        else:
+            self.gallery_card.setVisible(False)
+
+        # 4. Tu Actividad
+        self._load_user_activity(gid)
+
+        # 5. Información Técnica
+        core_str = game.get("core", "Libretro Native Engine")
+        rom_str = game.get("rom", "Almacenamiento Local")
+        self.core_val.setText(core_str)
+        self.rom_val.setText(rom_str)
+        self.id_val.setText(gid)
+        self.source_val.setText(game.get("metadata_source", "Header ROM Extractor"))
+
+        ext = Path(rom_str).suffix if rom_str else ".bin"
+        self.fmt_val.setText(f"ROM Cartridge ({ext.upper()}) · 60 FPS Engine")
+
+        # Comprobar integridad con scanner
+        from backend.games.scanner_service import GameLibraryScannerService
+        ok, msg = GameLibraryScannerService.get_instance().verify_game_file(gid)
+        if ok:
+            self.status_val.setText("✓ ROM y Núcleo verificados (Listo para jugar a 60 FPS)")
+            self.status_val.setStyleSheet("font-size: 12px; font-weight: 700; color: #00E676;")
+        else:
+            self.status_val.setText(f"⚠ {msg}")
+            self.status_val.setStyleSheet("font-size: 12px; font-weight: 700; color: #FFAA00;")
+
+    def _open_screenshot_viewer(self, rel_path: str):
+        full = ROOT / rel_path
+        if full.exists():
+            dlg = ScreenshotViewerModal(str(full), self)
+            dlg.exec()
+
+    def _load_user_activity(self, game_id: str):
+        db_path = ROOT / ".cci-user-data" / "cci_system.sqlite3"
+        last_played = "Sin registrar aún"
+        time_played = "0h 0m"
+        launches = "0 sesiones"
+        save_status = "Sin datos guardados"
+
+        if db_path.exists():
+            try:
+                with sqlite3.connect(db_path) as conn:
+                    cur = conn.cursor()
+                    cur.execute("SELECT seconds, launches, last_played FROM game_stats WHERE game_id = ?", (game_id,))
+                    row = cur.fetchone()
+                    if row:
+                        sec = row[0] or 0
+                        h = sec // 3600
+                        m = (sec % 3600) // 60
+                        time_played = f"{h}h {m}m"
+                        launches = f"{row[1] or 0} sesiones"
+                        if row[2]:
+                            last_played = str(row[2])
+            except Exception:
+                pass
+
+        self.act_items["last_played"][1].setText(last_played)
+        self.act_items["time_played"][1].setText(time_played)
+        self.act_items["sessions"][1].setText(launches)
+        self.act_items["save_status"][1].setText(save_status)
 
     def handle_key(self, key: int) -> bool:
         if key in (Qt.Key_Return, Qt.Key_Enter, Qt.Key_Space):
