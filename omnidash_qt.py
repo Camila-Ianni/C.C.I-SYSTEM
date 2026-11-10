@@ -630,8 +630,11 @@ class HomeView(QWidget):
         super().__init__(parent)
         self.setFocusPolicy(Qt.StrongFocus)
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(36, 50, 36, 38)
+        layout.setContentsMargins(36, 10, 36, 18)
         layout.setSpacing(0)
+
+        # Stretch superior armónico que evita que los bloques se separen
+        layout.addStretch(1)
 
         # 1. FILA PRINCIPAL: Botón Izq + Hero Card + Grid 2x3 + Botón Der
         main_row = QHBoxLayout()
@@ -639,9 +642,22 @@ class HomeView(QWidget):
 
         # Botón Flecha Izquierda Circular de Cristal
         self.left_arrow = QPushButton("<")
-        self.left_arrow.setProperty("class", "circleGlassBtn")
-        self.left_arrow.setFixedSize(38, 38)
+        self.left_arrow.setFixedSize(34, 34)
         self.left_arrow.setCursor(Qt.PointingHandCursor)
+        self.left_arrow.setStyleSheet("""
+            QPushButton {
+                background: rgba(10, 20, 35, 160);
+                border: 1.5px solid rgba(255, 255, 255, 170);
+                border-radius: 17px;
+                color: #ffffff;
+                font-size: 16px;
+                font-weight: 700;
+            }
+            QPushButton:hover {
+                background: rgba(0, 180, 255, 160);
+                border: 1.5px solid #ffffff;
+            }
+        """)
         main_row.addWidget(self.left_arrow)
 
         # --- A. HERO CARD (SUPER MARIO BROS - 60 FPS) ---
@@ -666,32 +682,32 @@ class HomeView(QWidget):
             border_radius=22,
             is_interactive=True,
             glow_color=QColor(0, 210, 255, 175),
-            glow_radius=22,
+            glow_radius=20,
             border_color=QColor(0, 210, 255, 240),
             bg_image=hero_pix,
-            inner_padding=10,
+            inner_padding=8,
         )
-        self.hero_card.setFixedSize(370, 310)
+        self.hero_card.setFixedSize(320, 250)
         hero_layout = QVBoxLayout(self.hero_card)
-        hero_layout.setContentsMargins(16, 14, 16, 16)
+        hero_layout.setContentsMargins(14, 12, 14, 14)
 
         # Botón Favorito (Corazón) en esquina superior derecha
         h_top_row = QHBoxLayout()
         h_top_row.addStretch(1)
         self.fav_btn = QPushButton("♡")
-        self.fav_btn.setFixedSize(34, 34)
+        self.fav_btn.setFixedSize(32, 32)
         self.fav_btn.setCursor(Qt.PointingHandCursor)
         self.fav_btn.setStyleSheet("""
             QPushButton {
-                background: rgba(10, 20, 35, 150);
+                background: rgba(10, 20, 35, 160);
                 border: 1.5px solid rgba(255, 255, 255, 170);
-                border-radius: 17px;
+                border-radius: 16px;
                 color: #ffffff;
-                font-size: 17px;
+                font-size: 16px;
                 font-weight: 700;
             }
             QPushButton:hover {
-                background: rgba(255, 75, 110, 180);
+                background: rgba(255, 75, 110, 190);
                 border: 1.5px solid #ffffff;
             }
         """)
@@ -703,9 +719,23 @@ class HomeView(QWidget):
         h_bot_row = QHBoxLayout()
         h_bot_row.addStretch(1)
         self.play_btn = QPushButton(" ▶   Iniciar (60 FPS)")
-        self.play_btn.setProperty("class", "heroPlayBtn")
-        self.play_btn.setFixedSize(210, 42)
+        self.play_btn.setFixedSize(190, 36)
         self.play_btn.setCursor(Qt.PointingHandCursor)
+        self.play_btn.setStyleSheet("""
+            QPushButton {
+                background: rgba(10, 18, 32, 180);
+                border: 1.5px solid rgba(255, 255, 255, 215);
+                border-radius: 18px;
+                color: #ffffff;
+                font-size: 12px;
+                font-weight: 700;
+                padding: 4px 14px;
+            }
+            QPushButton:hover {
+                background: rgba(0, 180, 255, 170);
+                border: 1.5px solid #ffffff;
+            }
+        """)
         self.play_btn.clicked.connect(lambda: self.launch_game.emit(self.hero_game))
         h_bot_row.addWidget(self.play_btn)
         h_bot_row.addStretch(1)
@@ -764,7 +794,7 @@ class HomeView(QWidget):
         grid_container = QWidget()
         grid_layout = QGridLayout(grid_container)
         grid_layout.setContentsMargins(0, 0, 0, 0)
-        grid_layout.setSpacing(12)
+        grid_layout.setSpacing(10)
 
         self.grid_cards = []
         for idx, (title, mock_file, fallback, glow_col, border_col) in enumerate(grid_items_data):
@@ -783,12 +813,12 @@ class HomeView(QWidget):
                 border_radius=18,
                 is_interactive=True,
                 glow_color=glow_col,
-                glow_radius=18,
+                glow_radius=16,
                 border_color=border_col,
                 bg_image=card_pix,
-                inner_padding=8,
+                inner_padding=6,
             )
-            card.setFixedSize(205, 144)
+            card.setFixedSize(170, 120)
             card.mousePressEvent = lambda _, gm=matched_game: self.open_details.emit(gm)
             card.setCursor(Qt.PointingHandCursor)
 
@@ -801,13 +831,26 @@ class HomeView(QWidget):
 
         # Botón Flecha Derecha Circular de Cristal
         self.right_arrow = QPushButton(">")
-        self.right_arrow.setProperty("class", "circleGlassBtn")
-        self.right_arrow.setFixedSize(38, 38)
+        self.right_arrow.setFixedSize(34, 34)
         self.right_arrow.setCursor(Qt.PointingHandCursor)
+        self.right_arrow.setStyleSheet("""
+            QPushButton {
+                background: rgba(10, 20, 35, 160);
+                border: 1.5px solid rgba(255, 255, 255, 170);
+                border-radius: 17px;
+                color: #ffffff;
+                font-size: 16px;
+                font-weight: 700;
+            }
+            QPushButton:hover {
+                background: rgba(0, 180, 255, 160);
+                border: 1.5px solid #ffffff;
+            }
+        """)
         main_row.addWidget(self.right_arrow)
 
         layout.addLayout(main_row)
-        layout.addSpacing(10)
+        layout.addSpacing(8)
 
         # 2. INDICADORES DE CARRUSEL (PUNTOS • • • •)
         dots_box = QHBoxLayout()
@@ -826,18 +869,18 @@ class HomeView(QWidget):
             dots_box.addWidget(dot)
 
         layout.addLayout(dots_box)
-        layout.addSpacing(14)
+        layout.addSpacing(10)
 
         # 3. FILA INFERIOR: 4 TARJETAS ANCHAS DE CRISTAL LÍQUIDO CON GLOW TEMÁTICO
         bot_row = QHBoxLayout()
-        bot_row.setSpacing(14)
+        bot_row.setSpacing(12)
 
         cards_data = [
             (
                 "Mis juegos y apps",
                 f"{len(ALL_GAMES)} juegos listos para jugar",
                 "LIBRARY",
-                "apps_list",
+                "grid",
                 QColor(0, 168, 255, 160),
                 QColor(0, 168, 255, 230),
             ),
@@ -877,23 +920,23 @@ class HomeView(QWidget):
                 glow_radius=18,
                 border_color=border_c,
             )
-            c.setFixedHeight(74)
+            c.setFixedHeight(68)
             c_lay = QHBoxLayout(c)
-            c_lay.setContentsMargins(16, 8, 16, 8)
+            c_lay.setContentsMargins(14, 6, 14, 6)
             c_lay.setSpacing(12)
 
             # Icono temático
             ico_lbl = QLabel()
             ipath = ROOT / "assets_omnidash" / "icons" / f"{icon_name}.png"
             if ipath.exists():
-                ico_lbl.setPixmap(QPixmap(str(ipath)).scaled(28, 28, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+                ico_lbl.setPixmap(QPixmap(str(ipath)).scaled(26, 26, Qt.KeepAspectRatio, Qt.SmoothTransformation))
             c_lay.addWidget(ico_lbl)
 
             # Textos
             txt_box = QVBoxLayout()
-            txt_box.setSpacing(2)
+            txt_box.setSpacing(1)
             t_lbl = QLabel(title)
-            t_lbl.setStyleSheet("font-size: 14px; font-weight: 700; color: #ffffff;")
+            t_lbl.setStyleSheet("font-size: 13px; font-weight: 700; color: #ffffff;")
             s_lbl = QLabel(subtitle)
             s_lbl.setStyleSheet("font-size: 11px; color: #bde4ff;")
             txt_box.addWidget(t_lbl)
@@ -904,7 +947,7 @@ class HomeView(QWidget):
 
             # Chevron indicador derecha
             chev_lbl = QLabel("›")
-            chev_lbl.setStyleSheet("font-size: 22px; font-weight: 600; color: rgba(255, 255, 255, 190);")
+            chev_lbl.setStyleSheet("font-size: 20px; font-weight: 600; color: rgba(255, 255, 255, 190);")
             c_lay.addWidget(chev_lbl)
 
             c.mousePressEvent = lambda _, d=dest: self.navigate_to.emit(d)
@@ -913,7 +956,9 @@ class HomeView(QWidget):
             bot_row.addWidget(c)
 
         layout.addLayout(bot_row)
-        layout.addSpacing(28)
+
+        # Stretch inferior para fijar la distancia y que el suelo mojado quede visible abajo
+        layout.addStretch(2)
 
         # Sistema de navegación por teclado unificado
         self.nav_items: list[tuple[AcrylicGlassCard, callable]] = []
@@ -1748,7 +1793,7 @@ class OmniDashMainWindow(QMainWindow):
                 or getattr(self, "_cached_bg_path", None) != self.bg_path
             ):
                 scaled = self.bg_pixmap.scaled(
-                    pw, ph, Qt.KeepAspectRatioByExpanding, Qt.SmoothTransformation
+                    pw, ph, Qt.IgnoreAspectRatio, Qt.SmoothTransformation
                 )
                 scaled.setDevicePixelRatio(dpr)
                 self._cached_bg = scaled
