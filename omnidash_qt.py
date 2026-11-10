@@ -41,7 +41,7 @@ WALLPAPER_IS_DARK: bool = True
 
 
 def update_global_blurred_wallpaper(path: str | Path, target_size: tuple[int, int] = (1280, 720)):
-    """Calcula el desenfoque óptico del fondo (Backdrop Blur) y detecta si es oscuro o claro."""
+    """Calcula el desenfoque óptico del fondo (Backdrop Blur) en resolución HiDPI 4K."""
     global GLOBAL_BLURRED_BG, WALLPAPER_IS_DARK
     p = Path(path).resolve()
     if not p.exists():
@@ -55,11 +55,17 @@ def update_global_blurred_wallpaper(path: str | Path, target_size: tuple[int, in
         lum = 0.299 * avg_r + 0.587 * avg_g + 0.114 * avg_b
         WALLPAPER_IS_DARK = (lum < 100)
 
-        tw, th = max(100, target_size[0]), max(100, target_size[1])
-        pil_blurred = pil_img.resize((tw, th)).filter(ImageFilter.GaussianBlur(radius=10))
+        # Muestreo HiDPI Retina (2x) para preservar la nitidez 4K del cristal
+        dpr = 2.0
+        tw, th = max(200, int(target_size[0] * dpr)), max(200, int(target_size[1] * dpr))
+        pil_blurred = pil_img.resize((tw, th), Image.Resampling.LANCZOS).filter(
+            ImageFilter.GaussianBlur(radius=int(10 * dpr))
+        )
         raw_bytes = pil_blurred.tobytes("raw", "RGB")
         qimg = QImage(raw_bytes, tw, th, tw * 3, QImage.Format_RGB888)
-        GLOBAL_BLURRED_BG = QPixmap.fromImage(qimg)
+        pix = QPixmap.fromImage(qimg)
+        pix.setDevicePixelRatio(dpr)
+        GLOBAL_BLURRED_BG = pix
     except Exception as err:
         print(f"[OmniDash-Qt] Error actualizando desenfoque de fondo: {err}")
 
@@ -624,8 +630,8 @@ class HomeView(QWidget):
         super().__init__(parent)
         self.setFocusPolicy(Qt.StrongFocus)
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(36, 80, 36, 18)
-        layout.setSpacing(10)
+        layout.setContentsMargins(36, 50, 36, 38)
+        layout.setSpacing(0)
 
         # 1. FILA PRINCIPAL: Botón Izq + Hero Card + Grid 2x3 + Botón Der
         main_row = QHBoxLayout()
@@ -801,7 +807,7 @@ class HomeView(QWidget):
         main_row.addWidget(self.right_arrow)
 
         layout.addLayout(main_row)
-        layout.addSpacing(6)
+        layout.addSpacing(10)
 
         # 2. INDICADORES DE CARRUSEL (PUNTOS • • • •)
         dots_box = QHBoxLayout()
@@ -871,7 +877,7 @@ class HomeView(QWidget):
                 glow_radius=18,
                 border_color=border_c,
             )
-            c.setFixedHeight(76)
+            c.setFixedHeight(74)
             c_lay = QHBoxLayout(c)
             c_lay.setContentsMargins(16, 8, 16, 8)
             c_lay.setSpacing(12)
@@ -907,6 +913,7 @@ class HomeView(QWidget):
             bot_row.addWidget(c)
 
         layout.addLayout(bot_row)
+        layout.addSpacing(28)
 
         # Sistema de navegación por teclado unificado
         self.nav_items: list[tuple[AcrylicGlassCard, callable]] = []
@@ -1709,6 +1716,7 @@ class OmniDashMainWindow(QMainWindow):
         if p.exists():
             self.bg_path = p
             self.bg_pixmap = QPixmap(str(p))
+            self._cached_bg = None
             update_global_blurred_wallpaper(p, (self.width(), self.height()))
             self.update()
             for child in self.findChildren(AcrylicGlassCard):
@@ -1716,6 +1724,7 @@ class OmniDashMainWindow(QMainWindow):
 
     def resizeEvent(self, event):
         super().resizeEvent(event)
+        self._cached_bg = None
         if hasattr(self, "bg_path") and self.bg_path:
             update_global_blurred_wallpaper(self.bg_path, (self.width(), self.height()))
             self.update()
@@ -1724,9 +1733,29 @@ class OmniDashMainWindow(QMainWindow):
 
     def paintEvent(self, event):
         painter = QPainter(self)
-        if self.bg_pixmap:
-            scaled = self.bg_pixmap.scaled(self.size(), Qt.KeepAspectRatioByExpanding, Qt.SmoothTransformation)
-            painter.drawPixmap(0, 0, scaled)
+        painter.setRenderHint(QPainter.Antialiasing)
+        painter.setRenderHint(QPainter.SmoothPixmapTransform)
+        if self.bg_pixmap and not self.bg_pixmap.isNull():
+            # Renderizado nativo 4K Ultra-HD para pantallas Retina HiDPI
+            dpr = self.devicePixelRatioF() if hasattr(self, "devicePixelRatioF") else float(self.devicePixelRatio())
+            pw = max(100, int(self.width() * dpr))
+            ph = max(100, int(self.height() * dpr))
+
+            if (
+                not hasattr(self, "_cached_bg")
+                or self._cached_bg is None
+                or getattr(self, "_cached_bg_size", None) != (pw, ph)
+                or getattr(self, "_cached_bg_path", None) != self.bg_path
+            ):
+                scaled = self.bg_pixmap.scaled(
+                    pw, ph, Qt.KeepAspectRatioByExpanding, Qt.SmoothTransformation
+                )
+                scaled.setDevicePixelRatio(dpr)
+                self._cached_bg = scaled
+                self._cached_bg_size = (pw, ph)
+                self._cached_bg_path = self.bg_path
+
+            painter.drawPixmap(0, 0, self._cached_bg)
         else:
             painter.fillRect(self.rect(), QColor(10, 45, 80))
 
