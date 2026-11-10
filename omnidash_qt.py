@@ -31,7 +31,7 @@ from cci_users import UserManager
 from retro_core_runner import LibretroRunner
 from backend.communities.repository import CommunitiesRepository
 from backend.communities.service import CommunitiesService
-from omnidash_screens import ALL_GAMES
+from omnidash_screens import ALL_GAMES, OFFICIAL_GAME_COVERS
 
 ROOT = Path(__file__).resolve().parent
 
@@ -796,42 +796,42 @@ class HomeView(QWidget):
             (
                 "Super Mario Bros",
                 "grid_mario.png",
-                "fotos web/super mario.jpg",
+                "fotos juegos/Super Mario World 2- Yoshi's Island.jpg",
                 QColor(0, 210, 255, 190),
                 QColor(0, 210, 255, 230),
             ),
             (
                 "Metal Slug",
                 "grid_metalslug.png",
-                "fotos web/metal slug.jpg",
+                "fotos juegos/Metal Slug 2- Super Vehicle-001:II.jpg",
                 QColor(255, 159, 28, 190),
                 QColor(255, 159, 28, 230),
             ),
             (
                 "The Legend Of Zelda",
                 "grid_zelda.png",
-                "fotos web/The_Legend_of_Zelda_film_logo.jpg",
+                "fotos juegos/The Legend of Zelda- Ocarina of Time.jpg",
                 QColor(255, 215, 0, 190),
                 QColor(255, 215, 0, 230),
             ),
             (
                 "Donkey Kong 64",
                 "grid_donkeykong.png",
-                "fotos web/donkeykong.jpg",
+                "fotos juegos/Donkey Kong 64.jpg",
                 QColor(46, 204, 113, 190),
                 QColor(46, 204, 113, 230),
             ),
             (
                 "Castlevania - Symphony of the Night",
                 "grid_castlevania.png",
-                "fotos web/castlevania.webp",
+                "fotos juegos/Castlevania- Symphony of the Night.webp",
                 QColor(230, 57, 70, 190),
                 QColor(230, 57, 70, 230),
             ),
             (
                 "Mario Kart DS",
                 "grid_mariokart.png",
-                "fotos web/super mario.jpg",
+                "fotos juegos/Mario Kart DS.jpg",
                 QColor(112, 214, 255, 190),
                 QColor(112, 214, 255, 230),
             ),
@@ -1058,42 +1058,40 @@ class HomeView(QWidget):
 # 2. VISTA DE BIBLIOTECA (LIBRARY REDESIGN - LIQUID GLASS & SIDEBAR)
 # ==============================================================================
 def resolve_game_cover(game: dict) -> QPixmap | None:
-    """Busca y resuelve la carátula en alta definición para el juego."""
-    title = game.get("title", "").lower()
+    """Busca y resuelve la carátula oficial en alta definición para el juego."""
+    # 1. Carátula oficial asignada directamente
+    cov = game.get("cover")
+    if cov and (ROOT / cov).exists():
+        pm = QPixmap(str(ROOT / cov))
+        if not pm.isNull():
+            return pm
+
+    # 2. Búsqueda por ID oficial en fotos juegos/
+    gid = game.get("id")
+    if gid and gid in OFFICIAL_GAME_COVERS:
+        cand = ROOT / OFFICIAL_GAME_COVERS[gid]
+        if cand.exists():
+            pm = QPixmap(str(cand))
+            if not pm.isNull():
+                return pm
+
+    # 3. Fallbacks secundarios de títulos y clásicos
+    title = (game.get("title") or "").lower()
     priority_map = [
         ("da vinci", ROOT / "assets_omnidash" / "covers" / "elden.png"),
         ("asteroids", ROOT / "fotos web" / "asteroids.jpg"),
-        ("super mario", ROOT / "fotos web" / "super mario.jpg"),
-        ("zelda", ROOT / "fotos web" / "The_Legend_of_Zelda_film_logo.jpg"),
-        ("pac-man", ROOT / "fotos web" / "pac man.jpg"),
-        ("pacman", ROOT / "fotos web" / "pac man.jpg"),
         ("tetris", ROOT / "fotos web" / "tetris logo .jpg"),
         ("space invaders", ROOT / "fotos web" / "space nvaders.jpg"),
-        ("metal slug", ROOT / "fotos web" / "metal slug.jpg"),
-        ("simpson", ROOT / "assets_omnidash" / "covers" / "simpsons_arcade.png"),
-        ("chains of olympus", ROOT / "assets_omnidash" / "covers" / "gow_chains.png"),
-        ("ghost of sparta", ROOT / "assets_omnidash" / "covers" / "gow_sparta.png"),
-        ("god of war ii", ROOT / "assets_omnidash" / "covers" / "gow_2.png"),
-        ("god of war", ROOT / "assets_omnidash" / "covers" / "gow_ps2.png"),
-        ("13 wishes", ROOT / "assets_omnidash" / "covers" / "mh_13_wishes.png"),
-        ("ghoul spirit", ROOT / "assets_omnidash" / "covers" / "mh_ghoul_spirit.png"),
-        ("roller maze", ROOT / "assets_omnidash" / "covers" / "mh_roller.png"),
-        ("herbie", ROOT / "assets_omnidash" / "covers" / "herbie.png"),
-        ("barbie", ROOT / "assets_omnidash" / "covers" / "barbie_princess.png"),
-        ("disney", ROOT / "assets_omnidash" / "covers" / "disney_girls.png"),
-        ("bratz", ROOT / "roms/nds/6148 - Bratz Fashion Boutique (U)(frieNDS).jpg"),
-        ("lego", ROOT / "roms/nds/1633 - Cover.png"),
-        ("star wars", ROOT / "roms/nds/1633 - Cover.png"),
-        ("donkey", ROOT / "fotos web" / "donkeykong.jpg"),
-        ("castlevania", ROOT / "fotos web" / "castlevania.webp"),
+        ("super mario", ROOT / "fotos juegos" / "Super Mario World 2- Yoshi's Island.jpg"),
+        ("zelda", ROOT / "fotos juegos" / "The Legend of Zelda- Ocarina of Time.jpg"),
+        ("metal slug", ROOT / "fotos juegos" / "Metal Slug 2- Super Vehicle-001:II.jpg"),
+        ("castlevania", ROOT / "fotos juegos" / "Castlevania- Symphony of the Night.webp"),
     ]
     for key, path in priority_map:
         if key in title and path.exists():
-            return QPixmap(str(path))
-
-    cov = game.get("cover")
-    if cov and (ROOT / cov).exists():
-        return QPixmap(str(ROOT / cov))
+            pm = QPixmap(str(path))
+            if not pm.isNull():
+                return pm
 
     return None
 

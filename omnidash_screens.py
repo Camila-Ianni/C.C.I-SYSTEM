@@ -145,6 +145,113 @@ COLOR_COVERS = {
     "herbie": "assets_omnidash/covers/herbie.png",
 }
 
+# ==============================================================================
+# CARÁTULAS OFICIALES EN ALTA RESOLUCIÓN (FOTOS JUEGOS - 69 TÍTULOS CURADOS)
+# ==============================================================================
+OFFICIAL_GAME_COVERS = {
+    # SNES
+    "snes_Aladdin (U) [!]": "fotos juegos/Aladdin.jpg",
+    "snes_BS Mario Collection 3 (J)": "fotos juegos/BS Mario Collection 3.webp",
+    "snes_Donkey Kong Country (U) (V1.2) [!]": "fotos juegos/Donkey Kong Country.jpg",
+    "snes_Donkey Kong Country 2 - Diddy's Kong Quest (U) (V1.1) [!]": "fotos juegos/Donkey Kong Country 2- Diddy's Kong Quest.webp",
+    "snes_Donkey Kong Country 3 - Dixie Kong's Double Trouble (U) [!]": "fotos juegos/Donkey Kong Country 3- Dixie Kong's Double Trouble.jpg",
+    "snes_Doom (USA)": "fotos juegos/Doom.jpg",
+    "snes_Kirby Super Star (U) [!]": "fotos juegos/Kirby Super Star.webp",
+    "snes_Legend of Zelda, The - A Link to the Past (U) [!]": "fotos juegos/The Legend of Zelda- A Link to the Past.jpg",
+    "snes_Megaman X3 (USA)": "fotos juegos/Mega Man X3.png",
+    "snes_Mortal Kombat (USA)": "fotos juegos/Mortal Kombat.webp",
+    "snes_Sonic the Hedgehog 4 (World) (Unl)": "fotos juegos/Sonic the Hedgehog 4.jpg",
+    "snes_Street Fighter II - The World Warrior (Europe)": "fotos juegos/Street Fighter II- The World Warrior.jpg",
+    "snes_Street Fighter II Turbo - Hyper Fighting (USA)": "fotos juegos/Street Fighter II Turbo- Hyper Fighting.webp",
+    "snes_Sunset Riders (USA)": "fotos juegos/Sunset Riders.jpeg",
+    "snes_Super Bomberman 4": "fotos juegos/Super Bomberman 4.webp",
+    "snes_Super Mario All-Stars (U) [!]": "fotos juegos/Super Mario All-Stars Online.jpeg",
+    "snes_Super Mario All-Stars + Super Mario World (USA)": "fotos juegos/Super Mario All-Stars + Super Mario World.webp",
+    "snes_Super Mario Kart (U) [!]": "fotos juegos/Super Mario Kart.jpg",
+    "snes_Super Mario World 2 - Yoshi's Island (U) (V1.1)": "fotos juegos/Super Mario World 2- Yoshi's Island.jpg",
+    "snes_Super Metroid (JU) [!]": "fotos juegos/Super Metroid.jpg",
+    "snes_Ultimate Mortal Kombat 3 (USA)": "fotos juegos/Ultimate Mortal Kombat 3.jpeg",
+
+    # MAME / ARCADE
+    "mame_crusnusa": "fotos juegos/Cruis'n USA.jpg",
+    "mame_ffightub": "fotos juegos/Final Fight.jpg",
+    "mame_mslug2": "fotos juegos/Metal Slug 2- Super Vehicle-001:II.jpg",
+    "mame_mslug6": "fotos juegos/Metal Slug 6.png",
+    "mame_mvscu": "fotos juegos/Marvel vs. Capcom- Clash of Super Heroes.png",
+    "mame_pacman": "fotos juegos/Pac-Man.png",
+    "mame_simpsons": "fotos juegos/The Simpsons.webp",
+
+    # N64
+    "n64_Donkey Kong 64 (U) [!]": "fotos juegos/Donkey Kong 64.jpg",
+    "n64_Mario Kart 64 (E) (V1.1) [!]": "fotos juegos/Mario Kart 64.jpg",
+    "n64_Super Smash Bros. (U) [!]": "fotos juegos/Super Smash Bros..png",
+    "n64_Super Mario 64 (U) [!]": "fotos juegos/Super Mario 64.jpg",
+    "n64_Legend of Zelda, The - Ocarina of Time (U) (V1.2) [!]": "fotos juegos/The Legend of Zelda- Ocarina of Time.jpg",
+
+    # PS1
+    "ps1_Castlevania - Symphony of the Night (USA)": "fotos juegos/Castlevania- Symphony of the Night.webp",
+    "ps1_Crash Bandicoot (USA)": "fotos juegos/Crash Bandicoot.png",
+    "ps1_Crash Bandicoot - Warped (USA)": "fotos juegos/Crash Bandicoot 3- Warped.webp",
+    "ps1_Metal Slug X (USA)": "fotos juegos/Metal Slug X.jpg",
+    "ps1_Resident Evil (USA)": "fotos juegos/Resident Evil.webp",
+    "ps1_Resident Evil 2 (USA) (Disc 2)": "fotos juegos/Resident Evil 2.jpg",
+    "ps1_Yu-Gi-Oh! Forbidden Memories (USA)": "fotos juegos/Yu-Gi-Oh! Forbidden Memories.webp",
+
+    # NDS
+    "nds_0168 - Mario Kart DS (U)(SCZ)": "fotos juegos/Mario Kart DS.jpg",
+    "nds_0389 - Animal Crossing - Wild World (E)(Legacy)": "fotos juegos/Animal Crossing- Wild World.webp",
+    "nds_0434 - New Super Mario Bros. (U)(Psyfer)": "fotos juegos/New Super Mario Bros..jpg",
+    "nds_0827 - Bratz - Forever Diamondz (E)(WRG)": "fotos juegos/Bratz- Forever Diamondz.jpeg",
+    "nds_1633 - LEGO Star Wars - The Complete Saga (E)(EXiMiUS)": "fotos juegos/LEGO Star Wars- The Complete Saga.jpg",
+    "nds_1740 - Bratz - 4 Real (E)(EXiMiUS)": "fotos juegos/Bratz 4 Real.jpeg",
+    "nds_2988 - Bratz - Girlz Really Rock (E)(XenoPhobia)": "fotos juegos/Bratz- Girlz Really Rock.webp",
+    "nds_6148 - Bratz Fashion Boutique (U)(frieNDS)": "fotos juegos/Bratz- Fashion Boutique.jpg",
+    "nds_Pokemon White Version 2 (DSi Enhanced)(U)(frieNDS)": "fotos juegos/Pokémon White 2.jpg",
+
+    # GBA
+    "gba_1645 - Barbie as the Princess and the Pauper (U)(Chameleon)": "fotos juegos/Barbie as the Princess and the Pauper.jpg",
+    "gba_1955 - Disney's Girls Pack (E)(Independent)": "fotos juegos/Disney's Girls Pack.jpeg",
+
+    # Neo-Geo
+    "neogeo_pbobblen": "fotos juegos/Puzzle Bobble- Bust-A-Move.jpg",
+    "neogeo_snowbro2": "fotos juegos/Snow Bros. 2.png",
+    "neogeo_ssideki2": "fotos juegos/Super Sidekicks 2- The World Championship.png",
+
+    # Wii
+    "wii_Wii Sports [RSPE01]": "fotos juegos/Wii Sports.webp",
+
+    # On-Demand (Instalador Base < 1 GB)
+    "gow_ps2_1": "fotos juegos/God of War.jpg",
+    "gow_ps2_2": "fotos juegos/God of War II.jpg",
+    "gow_psp_chains": "fotos juegos/God of War- Chains of Olympus.jpg",
+    "gow_psp_sparta": "fotos juegos/God of War- Ghost of Sparta.webp",
+    "wii_monster_high": "fotos juegos/Monster High- 13 Wishes.webp",
+    "nds_mh_13_wishes": "fotos juegos/Monster High- 13 Wishes.jpg",
+    "nds_mh_ghoul_spirit": "fotos juegos/Monster High- Ghoul Spirit.jpg",
+    "nds_mh_roller_maze": "fotos juegos/Monster High- Skultimate Roller Maze.jpg",
+    "gba_herbie": "fotos juegos/Disney's Herbie- Fully Loaded.webp",
+    "nds_kirby_ultra": "fotos juegos/Kirby Super Star Ultra.webp",
+    "nds_lego_marvel": "fotos juegos/LEGO Marvel Super Heroes- Universe in Peril.jpg",
+    "nds_pokemon_black": "fotos juegos/Pokémon Black Version.jpg",
+    "ps1_re3_nemesis": "fotos juegos/Resident Evil 3- Nemesis.webp",
+    "arcade_wonderboy": "fotos juegos/Wonder Boy.jpg",
+}
+
+ARCADE_TITLE_BEAUTIFY = {
+    "mame_crusnusa": "Cruis'n USA",
+    "mame_ffightub": "Final Fight",
+    "mame_mslug2": "Metal Slug 2",
+    "mame_mslug6": "Metal Slug 6",
+    "mame_mvscu": "Marvel vs. Capcom: Clash of Super Heroes",
+    "mame_pacman": "Pac-Man",
+    "mame_simpsons": "The Simpsons Arcade",
+    "neogeo_pbobblen": "Puzzle Bobble / Bust-A-Move",
+    "neogeo_snowbro2": "Snow Bros. 2",
+    "neogeo_ssideki2": "Super Sidekicks 2: The World Championship",
+    "snes_Legend of Zelda, The - A Link to the Past (U) [!]": "The Legend of Zelda: A Link to the Past",
+    "n64_Legend of Zelda, The - Ocarina of Time (U) (V1.2) [!]": "The Legend of Zelda: Ocarina of Time",
+}
+
 
 def pick_color_cover(name: str, console: str) -> str:
     n = name.lower()
@@ -559,8 +666,103 @@ def load_all_games() -> list[dict]:
             "size": "16 MB",
             "download_url": "https://www.retrostic.com/es/roms/gba/disney-s-herbie-fully-loaded-13238",
         },
+        {
+            "id": "nds_kirby_ultra",
+            "title": "Kirby Super Star Ultra",
+            "console": "Nintendo DS",
+            "badge": "NDS",
+            "type": "on_demand",
+            "core": "cores/melonds_libretro.dylib",
+            "rom": None,
+            "cover": "fotos juegos/Kirby Super Star Ultra.webp",
+            "year": "2008",
+            "developer": "HAL Laboratory / Nintendo",
+            "desc": "Remake ampliado para Nintendo DS del legendario juego de SNES con minijuegos táctiles.",
+            "installed": False,
+            "on_demand": True,
+            "size": "128 MB",
+            "download_url": "https://www.retrostic.com/es/roms/nds/kirby-super-star-ultra-75618",
+        },
+        {
+            "id": "nds_lego_marvel",
+            "title": "LEGO Marvel Super Heroes: Universe in Peril",
+            "console": "Nintendo DS",
+            "badge": "NDS",
+            "type": "on_demand",
+            "core": "cores/melonds_libretro.dylib",
+            "rom": "roms/nds/6325 - LEGO Marvel Super Heroes Universe in Peril (U)(ABSTRAKT).7z",
+            "cover": "fotos juegos/LEGO Marvel Super Heroes- Universe in Peril.jpg",
+            "year": "2013",
+            "developer": "TT Games / Warner Bros.",
+            "desc": "Únete a Iron Man, Spider-Man, Hulk y más héroes de Marvel para detener a Loki.",
+            "installed": False,
+            "on_demand": True,
+            "size": "64 MB",
+            "download_url": "https://www.retrostic.com/es/roms/nds/lego-marvel-super-heroes-universe-in-peril-75704",
+        },
+        {
+            "id": "nds_pokemon_black",
+            "title": "Pokémon Black Version",
+            "console": "Nintendo DS",
+            "badge": "NDS",
+            "type": "on_demand",
+            "core": "cores/melonds_libretro.dylib",
+            "rom": None,
+            "cover": "fotos juegos/Pokémon Black Version.jpg",
+            "year": "2010",
+            "developer": "Game Freak / Nintendo",
+            "desc": "Quinta generación de Pokémon en la región de Teselia con Reshiram y el Equipo Plasma.",
+            "installed": False,
+            "on_demand": True,
+            "size": "256 MB",
+            "download_url": "https://www.retrostic.com/es/roms/nds/pokemon-black-version-76901",
+        },
+        {
+            "id": "ps1_re3_nemesis",
+            "title": "Resident Evil 3: Nemesis",
+            "console": "PlayStation 1",
+            "badge": "PS1",
+            "type": "on_demand",
+            "core": "cores/mednafen_psx_hw_libretro.dylib",
+            "rom": "roms/ps1/Resident Evil 3 - Nemesis (E) [SLES-02529].bin.ecm",
+            "cover": "fotos juegos/Resident Evil 3- Nemesis.webp",
+            "year": "1999",
+            "developer": "Capcom",
+            "desc": "Jill Valentine intenta escapar de Raccoon City mientras el implacable Nemesis la persigue.",
+            "installed": False,
+            "on_demand": True,
+            "size": "450 MB",
+            "download_url": "https://www.retrostic.com/es/roms/ps-1/resident-evil-3-nemesis-81498",
+        },
+        {
+            "id": "arcade_wonderboy",
+            "title": "Wonder Boy",
+            "console": "Arcade",
+            "badge": "ARCADE",
+            "type": "on_demand",
+            "core": "cores/mame2003_plus_libretro.dylib",
+            "rom": None,
+            "cover": "fotos juegos/Wonder Boy.jpg",
+            "year": "1986",
+            "developer": "Escape / Sega",
+            "desc": "Clásico arcade de plataformas y acción de desplazamiento lateral rescatando a Tina.",
+            "installed": False,
+            "on_demand": True,
+            "size": "12 MB",
+            "download_url": "https://www.retrostic.com/es/roms/mame/wonder-boy-52014",
+        },
     ]
     games.extend(on_demand_games)
+
+    # Aplicar carátulas oficiales en alta definición de fotos juegos/ y embellecer títulos
+    for g in games:
+        gid = g.get("id")
+        if gid in OFFICIAL_GAME_COVERS:
+            cov_rel = OFFICIAL_GAME_COVERS[gid]
+            if (ROOT / cov_rel).exists():
+                g["cover"] = cov_rel
+        if gid in ARCADE_TITLE_BEAUTIFY:
+            g["title"] = ARCADE_TITLE_BEAUTIFY[gid]
 
     return games
 
@@ -573,7 +775,7 @@ FEATURED_RECENT = [
         "title": "Super Mario World",
         "subtitle": "Super Nintendo • 16-Bit",
         "badge": "SNES",
-        "cover": "fotos web/super mario.jpg",
+        "cover": "fotos juegos/Super Mario World 2- Yoshi's Island.jpg",
         "core": "cores/snes9x_libretro.dylib",
         "rom": "roms/snes/Super Mario World 2 - Yoshi's Island (U) (V1.1).smc",
         "desc": "El pináculo del género de plataformas 2D con Yoshi y los 96 niveles de Dinosaur Land.",
@@ -582,10 +784,10 @@ FEATURED_RECENT = [
     },
     {
         "id": "rec_zelda",
-        "title": "The Legend of Zelda",
+        "title": "The Legend of Zelda: Ocarina of Time",
         "subtitle": "Nintendo 64 • 60 FPS",
         "badge": "N64",
-        "cover": "fotos web/The_Legend_of_Zelda_film_logo.jpg",
+        "cover": "fotos juegos/The Legend of Zelda- Ocarina of Time.jpg",
         "core": "cores/mupen64plus_next_libretro.dylib",
         "rom": "roms/n64/Super Mario 64 (U) [!].z64",
         "desc": "Aventura épica atemporal en las tierras de Hyrule.",
@@ -597,7 +799,7 @@ FEATURED_RECENT = [
         "title": "Metal Slug 2",
         "subtitle": "Arcade MAME • Neo-Geo",
         "badge": "ARCADE",
-        "cover": "fotos web/metal slug.jpg",
+        "cover": "fotos juegos/Metal Slug 2- Super Vehicle-001:II.jpg",
         "core": "cores/mame2003_plus_libretro.dylib",
         "rom": "roms/mame/mslug2.zip",
         "desc": "Acción frenética 'run and gun' con animaciones pixel art legendarias.",
@@ -609,7 +811,7 @@ FEATURED_RECENT = [
         "title": "Pokémon White 2",
         "subtitle": "Nintendo DS • DSi Enhanced",
         "badge": "NDS",
-        "cover": "fotos web/pokemon.webp",
+        "cover": "fotos juegos/Pokémon White 2.jpg",
         "core": "cores/melonds_libretro.dylib",
         "rom": "roms/nds/Pokemon White Version 2/Pokemon White Version 2 (DSi Enhanced)(U)(frieNDS).nds",
         "desc": "Regresa a la región de Teselia dos años después con nuevos líderes de gimnasio.",
@@ -618,10 +820,10 @@ FEATURED_RECENT = [
     },
     {
         "id": "rec_castlevania",
-        "title": "Castlevania: SotN",
+        "title": "Castlevania: Symphony of the Night",
         "subtitle": "PlayStation 1 • CD Audio",
         "badge": "PS1",
-        "cover": "fotos web/castlevania.webp",
+        "cover": "fotos juegos/Castlevania- Symphony of the Night.webp",
         "core": "cores/mednafen_psx_hw_libretro.dylib",
         "rom": "roms/ps1/Castlevania - Symphony of the Night (USA).cue",
         "desc": "La obra maestra de Koji Igarashi que definió el género Metroidvania.",
@@ -630,10 +832,10 @@ FEATURED_RECENT = [
     },
     {
         "id": "rec_sonic",
-        "title": "Sonic The Hedgehog",
-        "subtitle": "Sega Genesis • 16-Bit",
-        "badge": "SEGA",
-        "cover": "assets_omnidash/covers/sonic.webp",
+        "title": "Sonic the Hedgehog 4",
+        "subtitle": "Super Nintendo • 16-Bit",
+        "badge": "SNES",
+        "cover": "fotos juegos/Sonic the Hedgehog 4.jpg",
         "core": "cores/snes9x_libretro.dylib",
         "rom": "roms/snes/Doom (USA).sfc",
         "desc": "Velocidad Supersónica a través de Green Hill Zone.",
