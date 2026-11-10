@@ -18,7 +18,7 @@ from PySide6.QtCore import (
     Qt, QSize, QTimer, QRectF, QPropertyAnimation, QEasingCurve, Signal, Slot, QPoint
 )
 from PySide6.QtGui import (
-    QColor, QFont, QIcon, QPainter, QPainterPath, QPixmap, QLinearGradient, QBrush, QPen, QImage
+    QColor, QFont, QIcon, QPainter, QPainterPath, QPixmap, QLinearGradient, QBrush, QPen, QImage, QPalette
 )
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QStackedWidget,
@@ -2563,39 +2563,49 @@ class ChannelSidebar(AcrylicGlassCard):
         layout.setSpacing(8)
 
         self.banner_frame = QFrame()
-        self.banner_frame.setFixedHeight(120)
+        self.banner_frame.setFixedHeight(124)
         b_lay = QVBoxLayout(self.banner_frame)
-        b_lay.setContentsMargins(12, 12, 12, 10)
-        b_lay.setSpacing(2)
+        b_lay.setContentsMargins(0, 0, 0, 8)
+        b_lay.setSpacing(6)
 
-        banner_path = ROOT / "assets_omnidash" / "communities" / "banner_seeker_hub.jpg"
+        banner_path = ROOT / "assets_omnidash" / "communities" / "banner_moon_skyline_2x.png"
         if not banner_path.exists():
-            banner_path = ROOT / "assets_omnidash" / "wallpapers" / "sunset_city.jpg"
+            banner_path = ROOT / "assets_omnidash" / "communities" / "banner_seeker_hub.jpg"
 
-        self.banner_frame.setStyleSheet(f"""
-            QFrame {{
-                background-image: url("{str(banner_path)}");
-                background-position: center;
-                border-radius: 14px;
-                border: 1px solid rgba(255, 255, 255, 0.2);
-            }}
-        """)
+        img_lbl = QLabel()
+        img_lbl.setFixedHeight(68)
+        if banner_path.exists():
+            bpm = QPixmap(str(banner_path)).scaled(282, 68, Qt.KeepAspectRatioByExpanding, Qt.SmoothTransformation)
+            img_lbl.setPixmap(get_rounded_pixmap(bpm, 282, 68, 14))
+        b_lay.addWidget(img_lbl)
+
+        info_box = QVBoxLayout()
+        info_box.setContentsMargins(12, 0, 12, 0)
+        info_box.setSpacing(2)
 
         t_row = QHBoxLayout()
         self.c_name_lbl = QLabel("Seeker Hub Central")
-        self.c_name_lbl.setStyleSheet("font-size: 15px; font-weight: 800; color: #ffffff; background: transparent;")
+        self.c_name_lbl.setStyleSheet("font-size: 15px; font-weight: 800; color: #ffffff;")
         t_row.addWidget(self.c_name_lbl)
         t_row.addStretch(1)
 
         chev = QLabel("∨")
-        chev.setStyleSheet("font-size: 12px; font-weight: 800; color: #ffffff; background: transparent;")
+        chev.setStyleSheet("font-size: 13px; font-weight: 800; color: #BDD4E4;")
         t_row.addWidget(chev)
-        b_lay.addLayout(t_row)
+        info_box.addLayout(t_row)
 
-        self.c_members_lbl = QLabel("● 14 en línea · 42 miembros")
-        self.c_members_lbl.setStyleSheet("font-size: 11px; font-weight: 600; color: #a5d8ff; background: transparent;")
-        b_lay.addWidget(self.c_members_lbl)
-        b_lay.addStretch(1)
+        self.c_members_lbl = QLabel("●  14 en línea  •  42 miembros")
+        self.c_members_lbl.setStyleSheet("font-size: 11px; font-weight: 600; color: #32D875;")
+        info_box.addWidget(self.c_members_lbl)
+        b_lay.addLayout(info_box)
+
+        self.banner_frame.setStyleSheet("""
+            QFrame {
+                background: rgba(14, 28, 44, 0.75);
+                border-radius: 14px;
+                border: 1px solid rgba(145, 165, 179, 0.3);
+            }
+        """)
 
         layout.addWidget(self.banner_frame)
 
@@ -2756,32 +2766,13 @@ class StreamCard(AcrylicGlassCard):
         layout.setContentsMargins(12, 10, 16, 10)
         layout.setSpacing(16)
 
-        self.thumb_frame = QFrame()
-        self.thumb_frame.setFixedSize(210, 120)
-        t_lay = QVBoxLayout(self.thumb_frame)
-        t_lay.setContentsMargins(8, 8, 8, 8)
-
-        b_row = QHBoxLayout()
-        live_lbl = QLabel("EN VIVO")
-        live_lbl.setStyleSheet("background: #E94B56; color: #ffffff; font-size: 10px; font-weight: 800; border-radius: 4px; padding: 2px 6px;")
-        b_row.addWidget(live_lbl)
-        b_row.addStretch(1)
-
-        v_lbl = QLabel(f"👁 {viewers}")
-        v_lbl.setStyleSheet("background: rgba(0, 0, 0, 0.6); color: #ffffff; font-size: 11px; font-weight: 700; border-radius: 4px; padding: 2px 6px;")
-        b_row.addWidget(v_lbl)
-        t_lay.addLayout(b_row)
-        t_lay.addStretch(1)
-
-        self.thumb_frame.setStyleSheet(f"""
-            QFrame {{
-                background-image: url("{str(thumb_path)}");
-                background-position: center;
-                border-radius: 12px;
-                border: 1px solid rgba(255, 255, 255, 0.25);
-            }}
-        """)
-        layout.addWidget(self.thumb_frame)
+        self.thumb_lbl = QLabel()
+        self.thumb_lbl.setFixedSize(220, 112)
+        if thumb_path.exists():
+            pm = QPixmap(str(thumb_path)).scaled(220, 112, Qt.KeepAspectRatioByExpanding, Qt.SmoothTransformation)
+            self.thumb_lbl.setPixmap(get_rounded_pixmap(pm, 220, 112, 12))
+        self.thumb_lbl.setStyleSheet("border-radius: 12px; border: 1px solid rgba(255, 255, 255, 0.25);")
+        layout.addWidget(self.thumb_lbl)
 
         info_lay = QVBoxLayout()
         info_lay.setContentsMargins(0, 6, 0, 6)
@@ -2855,16 +2846,18 @@ class StreamCard(AcrylicGlassCard):
 
 
 class ChatMessageWidget(QWidget):
-    def __init__(self, author: str, time_str: str, text: str, avatar_path: Path, has_crown: bool = False, parent=None):
+    def __init__(self, author: str, time_str: str, text: str, avatar_path: Path, has_crown: bool = False, is_blue_author: bool = False, parent=None):
         super().__init__(parent)
+        self.setAttribute(Qt.WA_TranslucentBackground, True)
+        self.setStyleSheet("background: transparent;")
         layout = QHBoxLayout(self)
-        layout.setContentsMargins(8, 6, 8, 6)
-        layout.setSpacing(12)
+        layout.setContentsMargins(6, 6, 6, 6)
+        layout.setSpacing(14)
 
         av_lbl = QLabel()
-        av_lbl.setFixedSize(36, 36)
+        av_lbl.setFixedSize(46, 46)
         if avatar_path.exists():
-            av_lbl.setPixmap(get_rounded_pixmap(QPixmap(str(avatar_path)), 36, 36, 18))
+            av_lbl.setPixmap(get_rounded_pixmap(QPixmap(str(avatar_path)), 46, 46, 23))
         layout.addWidget(av_lbl, 0, Qt.AlignTop)
 
         content_lay = QVBoxLayout()
@@ -2874,47 +2867,52 @@ class ChatMessageWidget(QWidget):
         hdr_row.setSpacing(6)
 
         name_lbl = QLabel(author)
-        name_lbl.setStyleSheet("font-size: 13px; font-weight: 800; color: #ffffff;")
+        name_color = "#35C8F1" if is_blue_author else "#ffffff"
+        name_lbl.setStyleSheet(f"font-size: 15px; font-weight: 800; color: {name_color};")
         hdr_row.addWidget(name_lbl)
 
         if has_crown:
-            cr_lbl = QLabel()
-            cr_p = ROOT / "assets_omnidash" / "icons" / "crown.png"
-            if cr_p.exists():
-                cr_lbl.setPixmap(QPixmap(str(cr_p)).scaled(14, 14, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+            cr_lbl = QLabel("👑")
+            cr_lbl.setStyleSheet("font-size: 13px; color: #ffd700;")
             hdr_row.addWidget(cr_lbl)
 
         t_lbl = QLabel(time_str)
-        t_lbl.setStyleSheet("font-size: 11px; color: #7f95a6; font-weight: 500;")
+        t_lbl.setStyleSheet("font-size: 12px; color: #BDD4E4; font-weight: 600;")
         hdr_row.addWidget(t_lbl)
         hdr_row.addStretch(1)
         content_lay.addLayout(hdr_row)
 
         txt_lbl = QLabel(text)
-        txt_lbl.setStyleSheet("font-size: 13px; color: #F4F6F8; line-height: 1.4;")
+        txt_lbl.setStyleSheet("font-size: 14px; font-weight: 500; color: #F4F6F8; line-height: 1.4;")
         txt_lbl.setWordWrap(True)
         content_lay.addWidget(txt_lbl)
 
         layout.addLayout(content_lay, 1)
 
 
-class CentralChatWidget(QWidget):
+class CentralChatWidget(AcrylicGlassCard):
     message_sent = Signal(str)
 
     def __init__(self, parent=None):
-        super().__init__(parent)
+        super().__init__(
+            parent,
+            border_radius=22,
+            border_color=QColor(93, 116, 131, 80),
+            glow_color=QColor(0, 0, 0, 50),
+            glow_radius=10,
+        )
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(8, 0, 8, 4)
+        layout.setContentsMargins(16, 12, 16, 14)
         layout.setSpacing(8)
 
         c_hdr = QHBoxLayout()
-        c_hdr.setContentsMargins(8, 4, 8, 8)
+        c_hdr.setContentsMargins(4, 2, 4, 6)
         c_hdr.setSpacing(10)
 
         t_box = QVBoxLayout()
         t_box.setSpacing(2)
         self.c_title = QLabel("# general")
-        self.c_title.setStyleSheet("font-size: 17px; font-weight: 800; color: #ffffff;")
+        self.c_title.setStyleSheet("font-size: 18px; font-weight: 800; color: #ffffff;")
         self.c_topic = QLabel("Conversación general de la comunidad.")
         self.c_topic.setStyleSheet("font-size: 12px; color: #BDD4E4;")
         t_box.addWidget(self.c_title)
@@ -2924,17 +2922,17 @@ class CentralChatWidget(QWidget):
 
         for ico_name in ["bell_badge", "pin", "friends_duo", "more_horizontal"]:
             b = QPushButton()
-            b.setFixedSize(30, 30)
+            b.setFixedSize(32, 32)
             b.setCursor(Qt.PointingHandCursor)
             ip = ROOT / "assets_omnidash" / "icons" / f"{ico_name}.png"
             if ip.exists():
                 b.setIcon(QIcon(str(ip)))
-                b.setIconSize(QSize(16, 16))
+                b.setIconSize(QSize(18, 18))
             b.setStyleSheet("""
                 QPushButton {
                     background: transparent;
                     border: none;
-                    border-radius: 6px;
+                    border-radius: 8px;
                 }
                 QPushButton:hover {
                     background: rgba(255, 255, 255, 0.1);
@@ -2946,17 +2944,48 @@ class CentralChatWidget(QWidget):
 
         sep = QFrame()
         sep.setFixedHeight(1)
-        sep.setStyleSheet("background: rgba(145, 165, 179, 0.2);")
+        sep.setStyleSheet("background: rgba(145, 165, 179, 0.22);")
         layout.addWidget(sep)
 
         self.scroll = QScrollArea()
         self.scroll.setWidgetResizable(True)
-        self.scroll.setStyleSheet("QScrollArea { border: none; background: transparent; }")
+        self.scroll.setStyleSheet("""
+            QScrollArea, QScrollArea > QWidget > QWidget {
+                border: none;
+                background: transparent;
+            }
+            QScrollBar:vertical {
+                background: rgba(10, 20, 30, 0.3);
+                width: 6px;
+                margin: 0px;
+                border-radius: 3px;
+            }
+            QScrollBar::handle:vertical {
+                background: rgba(145, 165, 179, 0.4);
+                min-height: 24px;
+                border-radius: 3px;
+            }
+            QScrollBar::handle:vertical:hover {
+                background: rgba(53, 200, 241, 0.7);
+            }
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+                height: 0px;
+            }
+        """)
+        self.scroll.viewport().setStyleSheet("background: transparent;")
+        self.scroll.viewport().setAttribute(Qt.WA_TranslucentBackground, True)
+        self.scroll.setAttribute(Qt.WA_TranslucentBackground, True)
+        pal = self.scroll.viewport().palette()
+        pal.setColor(QPalette.Base, Qt.transparent)
+        pal.setColor(QPalette.Window, Qt.transparent)
+        self.scroll.viewport().setPalette(pal)
 
         self.msgs_container = QWidget()
+        self.msgs_container.setStyleSheet("background: transparent;")
+        self.msgs_container.setAttribute(Qt.WA_TranslucentBackground, True)
         self.msgs_layout = QVBoxLayout(self.msgs_container)
-        self.msgs_layout.setContentsMargins(6, 10, 6, 10)
-        self.msgs_layout.setSpacing(10)
+        self.msgs_layout.setContentsMargins(4, 8, 4, 8)
+        self.msgs_layout.setSpacing(12)
 
         self._load_initial_messages()
 
@@ -2965,32 +2994,32 @@ class CentralChatWidget(QWidget):
         layout.addWidget(self.scroll, 1)
 
         comp_frame = QFrame()
-        comp_frame.setFixedHeight(55)
+        comp_frame.setFixedHeight(52)
         comp_frame.setStyleSheet("""
             QFrame {
-                background: rgba(18, 38, 56, 0.85);
+                background: rgba(14, 28, 42, 0.75);
                 border: 1.5px solid rgba(145, 165, 179, 0.35);
-                border-radius: 14px;
+                border-radius: 26px;
             }
         """)
         comp_lay = QHBoxLayout(comp_frame)
-        comp_lay.setContentsMargins(10, 0, 10, 0)
+        comp_lay.setContentsMargins(8, 0, 12, 0)
         comp_lay.setSpacing(8)
 
         add_b = QPushButton("+")
-        add_b.setFixedSize(28, 28)
+        add_b.setFixedSize(34, 34)
         add_b.setCursor(Qt.PointingHandCursor)
         add_b.setStyleSheet("""
             QPushButton {
-                background: rgba(255, 255, 255, 0.1);
-                border-radius: 14px;
-                font-size: 16px;
+                background: rgba(255, 255, 255, 0.08);
+                border-radius: 17px;
+                font-size: 18px;
                 font-weight: 700;
                 color: #ffffff;
-                border: none;
+                border: 1px solid rgba(255, 255, 255, 0.15);
             }
             QPushButton:hover {
-                background: rgba(255, 255, 255, 0.25);
+                background: rgba(255, 255, 255, 0.22);
             }
         """)
         comp_lay.addWidget(add_b)
@@ -3003,6 +3032,7 @@ class CentralChatWidget(QWidget):
                 border: none;
                 color: #ffffff;
                 font-size: 13px;
+                padding-left: 4px;
             }
         """)
         self.msg_input.returnPressed.connect(self._send_current_message)
@@ -3011,26 +3041,24 @@ class CentralChatWidget(QWidget):
         emojis = [("smile", "😊"), ("image", "🖼️"), ("gift", "🎁")]
         for _, em_char in emojis:
             eb = QPushButton(em_char)
-            eb.setFixedSize(28, 28)
+            eb.setFixedSize(30, 30)
             eb.setCursor(Qt.PointingHandCursor)
-            eb.setStyleSheet("QPushButton { background: transparent; border: none; font-size: 14px; } QPushButton:hover { background: rgba(255, 255, 255, 0.1); border-radius: 6px; }")
+            eb.setStyleSheet("QPushButton { background: transparent; border: none; font-size: 15px; } QPushButton:hover { background: rgba(255, 255, 255, 0.1); border-radius: 8px; }")
             comp_lay.addWidget(eb)
 
-        send_b = QPushButton()
-        send_b.setFixedSize(30, 30)
+        send_b = QPushButton("➤")
+        send_b.setFixedSize(34, 34)
         send_b.setCursor(Qt.PointingHandCursor)
-        send_p = ROOT / "assets_omnidash" / "icons" / "paper_plane.png"
-        if send_p.exists():
-            send_b.setIcon(QIcon(str(send_p)))
-            send_b.setIconSize(QSize(15, 15))
         send_b.setStyleSheet("""
             QPushButton {
-                background: #35C8F1;
-                border-radius: 15px;
-                border: none;
+                background: rgba(53, 200, 241, 0.2);
+                border: 1.5px solid #35C8F1;
+                border-radius: 17px;
+                font-size: 14px;
+                color: #35C8F1;
             }
             QPushButton:hover {
-                background: #60d7f7;
+                background: rgba(53, 200, 241, 0.45);
             }
         """)
         send_b.clicked.connect(self._send_current_message)
@@ -3050,7 +3078,8 @@ class CentralChatWidget(QWidget):
         m2 = ChatMessageWidget(
             "Alex", "Hoy a las 21:15",
             "¡Yo me prendo! ¿Armamos sala? 🎮",
-            ROOT / "assets_omnidash" / "spidey_avatar.png"
+            ROOT / "assets_omnidash" / "spidey_avatar.png",
+            is_blue_author=True
         )
         self.msgs_layout.addWidget(m2)
 
@@ -3079,7 +3108,7 @@ class CentralChatWidget(QWidget):
         if not txt:
             return
         self.msg_input.clear()
-        m = ChatMessageWidget("Alex", "Ahora", txt, ROOT / "assets_omnidash" / "spidey_avatar.png")
+        m = ChatMessageWidget("Alex", "Ahora", txt, ROOT / "assets_omnidash" / "spidey_avatar.png", is_blue_author=True)
         count = self.msgs_layout.count()
         self.msgs_layout.insertWidget(count - 1, m)
         try:
@@ -3098,49 +3127,61 @@ class CentralChatWidget(QWidget):
 class MemberItemWidget(QWidget):
     def __init__(self, name: str, status_text: str, is_online: bool, avatar_path: Path, has_crown: bool = False, parent=None):
         super().__init__(parent)
+        self.setAttribute(Qt.WA_TranslucentBackground, True)
+        self.setStyleSheet("background: transparent;")
         layout = QHBoxLayout(self)
-        layout.setContentsMargins(6, 4, 6, 4)
-        layout.setSpacing(10)
+        layout.setContentsMargins(4, 4, 4, 4)
+        layout.setSpacing(12)
 
-        av_container = QFrame()
-        av_container.setFixedSize(32, 32)
-        av_lay = QVBoxLayout(av_container)
-        av_lay.setContentsMargins(0, 0, 0, 0)
+        av_container = QWidget()
+        av_container.setFixedSize(40, 40)
+        av_container.setAttribute(Qt.WA_TranslucentBackground, True)
+        av_container.setStyleSheet("background: transparent;")
 
-        av_lbl = QLabel()
+        av_lbl = QLabel(av_container)
+        av_lbl.setGeometry(0, 0, 36, 36)
         if avatar_path.exists():
-            av_lbl.setPixmap(get_rounded_pixmap(QPixmap(str(avatar_path)), 30, 30, 15))
-        av_lay.addWidget(av_lbl)
+            av_lbl.setPixmap(get_rounded_pixmap(QPixmap(str(avatar_path)), 36, 36, 18))
+
+        dot = QLabel(av_container)
+        dot.setGeometry(25, 25, 12, 12)
+        if not is_online:
+            dot_col = "#7f95a6"
+        elif "stream" in status_text.lower() or "transmitiendo" in status_text.lower():
+            dot_col = "#A77AE4"
+        else:
+            dot_col = "#32D875"
+        dot.setStyleSheet(f"background: {dot_col}; border: 2px solid #102638; border-radius: 6px;")
 
         layout.addWidget(av_container)
 
         info = QVBoxLayout()
-        info.setSpacing(1)
+        info.setSpacing(2)
 
         n_row = QHBoxLayout()
         n_row.setSpacing(4)
         nl = QLabel(name)
-        nl.setStyleSheet("font-size: 13px; font-weight: 700; color: #ffffff;")
+        nl.setStyleSheet(f"font-size: 14px; font-weight: 700; color: {'#ffffff' if is_online else '#91A5B3'};")
         n_row.addWidget(nl)
 
         if has_crown:
-            cr = QLabel()
-            cr_p = ROOT / "assets_omnidash" / "icons" / "crown.png"
-            if cr_p.exists():
-                cr.setPixmap(QPixmap(str(cr_p)).scaled(13, 13, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+            cr = QLabel("👑")
+            cr.setStyleSheet("font-size: 12px; color: #ffd700;")
             n_row.addWidget(cr)
 
         n_row.addStretch(1)
         info.addLayout(n_row)
 
         st = QLabel(status_text)
-        if "stream" in status_text.lower() or "transmitiendo" in status_text.lower():
+        if not is_online:
+            st_color = "#657C8D"
+        elif "stream" in status_text.lower() or "transmitiendo" in status_text.lower():
             st_color = "#A77AE4"
         elif "jugando" in status_text.lower() or "partida" in status_text.lower():
             st_color = "#32D875"
         else:
             st_color = "#7f95a6"
-        st.setStyleSheet(f"font-size: 11px; color: {st_color};")
+        st.setStyleSheet(f"font-size: 11px; font-weight: 500; color: {st_color};")
         info.addWidget(st)
 
         layout.addLayout(info, 1)
@@ -3153,28 +3194,68 @@ class RightPanel(QWidget):
         super().__init__(parent)
         self.setFixedWidth(305)
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(8, 4, 8, 6)
-        layout.setSpacing(10)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(12)
+
+        # Contenedor de Miembros en Dark Glass
+        self.members_card = AcrylicGlassCard(
+            self,
+            border_radius=20,
+            border_color=QColor(93, 116, 131, 80),
+            glow_color=QColor(0, 0, 0, 45),
+            glow_radius=10,
+        )
+        mem_lay = QVBoxLayout(self.members_card)
+        mem_lay.setContentsMargins(12, 12, 12, 12)
+        mem_lay.setSpacing(6)
 
         m_scroll = QScrollArea()
         m_scroll.setWidgetResizable(True)
-        m_scroll.setStyleSheet("QScrollArea { border: none; background: transparent; }")
+        m_scroll.setStyleSheet("""
+            QScrollArea, QScrollArea > QWidget > QWidget {
+                border: none;
+                background: transparent;
+            }
+            QScrollBar:vertical {
+                background: rgba(10, 20, 30, 0.3);
+                width: 6px;
+                margin: 0px;
+                border-radius: 3px;
+            }
+            QScrollBar::handle:vertical {
+                background: rgba(145, 165, 179, 0.4);
+                min-height: 20px;
+                border-radius: 3px;
+            }
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+                height: 0px;
+            }
+        """)
+        m_scroll.viewport().setStyleSheet("background: transparent;")
+        m_scroll.viewport().setAttribute(Qt.WA_TranslucentBackground, True)
+        m_scroll.setAttribute(Qt.WA_TranslucentBackground, True)
+        pal_m = m_scroll.viewport().palette()
+        pal_m.setColor(QPalette.Base, Qt.transparent)
+        pal_m.setColor(QPalette.Window, Qt.transparent)
+        m_scroll.viewport().setPalette(pal_m)
 
         m_container = QWidget()
+        m_container.setStyleSheet("background: transparent;")
+        m_container.setAttribute(Qt.WA_TranslucentBackground, True)
         m_lay = QVBoxLayout(m_container)
         m_lay.setContentsMargins(0, 0, 0, 0)
-        m_lay.setSpacing(4)
+        m_lay.setSpacing(6)
 
         on_hdr = QLabel("●  En línea — 14")
         on_hdr.setStyleSheet("font-size: 12px; font-weight: 800; color: #32D875; padding: 4px 6px;")
         m_lay.addWidget(on_hdr)
 
         online_members = [
-            ("Alex", "Jugando: Metal Slug 2", ROOT / "assets_omnidash" / "spidey_avatar.png", False),
-            ("Enni", "En stream", ROOT / "assets_omnidash" / "communities" / "avatar_enni.png", True),
-            ("Miku", "Transmitiendo", ROOT / "assets_omnidash" / "communities" / "avatar_miku.png", False),
-            ("Lau", "Jugando: Tetris", ROOT / "assets_omnidash" / "communities" / "avatar_lau.png", False),
-            ("Rami", "En partida", ROOT / "assets_omnidash" / "communities" / "avatar_rami.png", False),
+            ("Alex", "🎮 Jugando: Metal Slug 2", ROOT / "assets_omnidash" / "spidey_avatar.png", False),
+            ("Enni", "📺 En stream", ROOT / "assets_omnidash" / "communities" / "avatar_enni.png", True),
+            ("Miku", "📶 Transmitiendo", ROOT / "assets_omnidash" / "communities" / "avatar_miku.png", False),
+            ("Lau", "🎮 Jugando: Tetris", ROOT / "assets_omnidash" / "communities" / "avatar_lau.png", False),
+            ("Rami", "🎮 En partida", ROOT / "assets_omnidash" / "communities" / "avatar_rami.png", False),
         ]
         for name, st, av, crown in online_members:
             m_lay.addWidget(MemberItemWidget(name, st, True, av, has_crown=crown))
@@ -3194,7 +3275,8 @@ class RightPanel(QWidget):
 
         m_lay.addStretch(1)
         m_scroll.setWidget(m_container)
-        layout.addWidget(m_scroll, 1)
+        mem_lay.addWidget(m_scroll)
+        layout.addWidget(self.members_card, 1)
 
         self.voice_panel = AcrylicGlassCard(
             self,
