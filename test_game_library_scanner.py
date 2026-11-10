@@ -1,16 +1,19 @@
-"""test_game_library_scanner.py - Suite de Pruebas Automatizadas para GameLibraryScannerService.
-Verifica escaneo de biblioteca, integridad, deduplicación, metadatos y ausencia de URLs no autorizadas.
-100% Python estándar con unittest.
+"""test_game_library_scanner.py - Suite Completa de Pruebas Unitarias para GameLibraryScannerService.
+Valida arquitectura no invasiva, escaneo asíncrono, metadatos, deduplicación, SQLite y aislamiento con fixtures.
 Autora: Camila Carolina Ianni
 """
 from __future__ import annotations
 
+import os
+import sqlite3
+import tempfile
+import time
 import unittest
 from pathlib import Path
 
 from backend.games.scanner_service import GameLibraryScannerService
 from backend.games.rom_metadata import ROMMetadataExtractor
-from omnidash_screens import ALL_GAMES, load_all_games
+from omnidash_screens import ALL_GAMES
 
 
 class TestGameLibraryScannerService(unittest.TestCase):
@@ -22,70 +25,157 @@ class TestGameLibraryScannerService(unittest.TestCase):
         inst2 = GameLibraryScannerService.get_instance()
         self.assertIs(inst1, inst2, "GameLibraryScannerService debe ser Singleton.")
 
-    def test_02_catalog_count_and_parity(self):
+    def test_02_catalog_count_and_contract(self):
         games = self.service.get_games()
         self.assertGreaterEqual(len(games), 69, "El catálogo debe contener al menos 69 juegos.")
-        self.assertEqual(len(games), len(ALL_GAMES), "Paridad 1:1 requerida con ALL_GAMES.")
+        self.assertEqual(len(games), len(ALL_GAMES), "Paridad requerida con ALL_GAMES.")
 
-    def test_03_contract_structure(self):
         required_keys = {"id", "title", "console", "badge", "core", "rom", "cover", "year", "desc", "installed"}
-        for g in self.service.get_games():
+        for g in games:
             missing = required_keys - set(g.keys())
-            self.assertEqual(missing, set(), f"Juego {g.get('id')} carece de claves obligatorias: {missing}")
-            self.assertTrue(isinstance(g["id"], str) and g["id"], "ID debe ser string no vacío.")
-            self.assertTrue(isinstance(g["title"], str) and g["title"], "Title debe ser string no vacío.")
+            self.assertEqual(missing, set(), f"Juego {g.get('id')} carece de claves requeridas: {missing}")
+            self.assertTrue(g["id"] and isinstance(g["id"], str))
+            self.assertTrue(g["title"] and isinstance(g["title"], str))
 
-    def test_04_no_unauthorized_download_urls(self):
+    def test_03_no_unauthorized_download_urls_and_neutral_catalog(self):
         for g in self.service.get_games():
             self.assertNotIn("download_url", g, f"Juego {g.get('id')} contiene 'download_url' no autorizada.")
             for val in g.values():
                 if isinstance(val, str):
-                    self.assertNotIn("retrostic", val.lower(), f"Juego {g.get('id')} tiene URL externa no autorizada: {val}")
+                    self.assertNotIn("retrostic", val.lower(), f"Encontrado enlace de terceros: {val}")
+            if g.get("on_demand"):
+                self.assertNotIn("vault_status", g, "No deben emplearse claims de autorización legal no probados.")
+                self.assertEqual(g.get("catalog_type"), "remote_metadata")
 
-    def test_05_installed_games_physical_verification(self):
-        # Metal Slug 2 (Arcade MAME)
-        ok, msg = self.service.verify_game_file("mame_mslug2")
-        self.assertTrue(ok, f"mame_mslug2 debe estar verificado: {msg}")
+    def test_04_header_extractors_integration(self):
+        # Verificar que los metadatos de cabecera fueron llamados e integrados
+        games = self.service.get_games()
+        installed_snes = [g for g in games if g.get("badge") == "SNES" and g.get("installed")]
+        self.assertTrue(len(installed_snes) > 0)
+        has_internal_title = any(g.get("internal_title") for g in installed_snes)
+        self.assertTrue(has_internal_title, "Debe existir al menos un título interno extraído por cabecera.")
 
-        # Super Mario World 2 - Yoshi's Island (SNES)
-        ok_yoshi, msg_yoshi = self.service.verify_game_file("snes_Super Mario World 2 - Yoshi's Island (U) (V1.1)")
-        self.assertTrue(ok_yoshi, f"Yoshi's Island debe estar verificado: {msg_yoshi}")
-
-    def test_06_on_demand_vault_integrity(self):
-        gow = self.service.get_game_by_id("gow_ps2_1")
-        self.assertIsNotNone(gow, "God of War PS2 debe estar en el catálogo On-Demand.")
-        self.assertTrue(gow.get("on_demand"), "Debe tener bandera on_demand=True.")
-        self.assertFalse(gow.get("installed"), "Debe tener bandera installed=False.")
-        self.assertEqual(gow.get("vault_status"), "authorized", "Debe pertenecer a la bóveda autorizada.")
-
-        # Verificar que verify_game_file rechace ejecución directa si no está instalado
-        ok, msg = self.service.verify_game_file("gow_ps2_1")
-        self.assertFalse(ok, "Juego On-Demand sin instalar no debe verificar como ejecutable.")
-        self.assertIn("On-Demand", msg)
-
-    def test_07_metadata_clean_title(self):
-        raw = "0168 - Mario Kart DS (U)(SCZ)"
+        # Limpieza de títulos
+        raw = "0168 - Mario Kart DS (U)(SCZ) [!]"
         cleaned = ROMMetadataExtractor.clean_display_title(raw)
         self.assertEqual(cleaned, "Mario Kart DS")
+        reg, rev = ROMMetadataExtractor.extract_region_and_revision(raw)
+        self.assertEqual(reg, "USA")
 
-        raw_snes = "Super Mario World 2 - Yoshi's Island (U) (V1.1) [!]"
-        cleaned_snes = ROMMetadataExtractor.clean_display_title(raw_snes)
-        self.assertEqual(cleaned_snes, "Super Mario World 2 - Yoshi's Island")
+    def test_05_dynamic_directory_and_scan_fixture(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            tmp_path = Path(tmp_dir)
+            snes_dir = tmp_path / "snes"
+            snes_dir.mkdir(parents=True)
 
-    def test_08_ps1_cue_integrity_validator(self):
-        cue_path = Path("roms/ps1/Castlevania - Symphony of the Night (USA).cue")
-        if cue_path.exists():
-            ok, msg = ROMMetadataExtractor.verify_cue_bin_integrity(cue_path)
-            self.assertTrue(ok, f"Castlevania CUE debe ser íntegro: {msg}")
+            # Crear ROM ficticia con cabecera mínima SNES
+            mock_rom = snes_dir / "Super Test Adventure (USA).sfc"
+            dummy_data = bytearray(0x8000)
+            # Título interno en LoROM offset 0x7FC0
+            dummy_data[0x7FC0 : 0x7FD5] = b"SUPER TEST ADVENTURE"
+            mock_rom.write_bytes(dummy_data)
 
-    def test_09_hot_refresh_stability(self):
-        before = len(self.service.get_games())
-        refreshed = self.service.refresh()
-        self.assertEqual(before, len(refreshed), "Refresh en caliente debe ser estable y consistente.")
+            # Probar registrar directorio configurable
+            added = self.service.add_scan_directory(tmp_path)
+            self.assertTrue(added, "add_scan_directory debe aceptar directorio válido.")
+            self.assertIn(str(tmp_path.resolve()), self.service.get_scan_directories())
 
-    def test_10_sqlite_sync(self):
-        count = self.service.sync_to_sqlite()
-        self.assertGreaterEqual(count, 69, "Debe sincronizar al menos 69 juegos a SQLite.")
+            # Escanear
+            scanned = self.service.scan_all()
+            found = [g for g in scanned if "super test adventure" in g.get("title", "").lower()]
+            self.assertTrue(len(found) >= 1, "El scanner debe detectar la ROM del directorio temporal.")
+
+            # Limpiar directorio configurable
+            removed = self.service.remove_scan_directory(tmp_path)
+            self.assertTrue(removed)
+
+    def test_06_non_destructive_deduplication(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            tmp_path = Path(tmp_dir)
+            snes_dir = tmp_path / "snes"
+            snes_dir.mkdir(parents=True)
+
+            # Mismo juego en dos regiones diferentes (USA y Europe)
+            rom_us = snes_dir / "Chrono Game (USA).sfc"
+            rom_eu = snes_dir / "Chrono Game (Europe).sfc"
+            rom_us.write_bytes(b"\x00" * 1024)
+            rom_eu.write_bytes(b"\x00" * 1024)
+
+            self.service.add_scan_directory(tmp_path)
+            scanned = self.service.scan_all()
+
+            chrono_games = [g for g in scanned if "chrono game" in g.get("title", "").lower()]
+            # No deben ser fusionados destructivamente si tienen diferente región
+            self.assertEqual(len(chrono_games), 2, "Variantes regionales deben preservarse.")
+            self.service.remove_scan_directory(tmp_path)
+
+    def test_07_cue_bin_missing_file_detection(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            tmp_path = Path(tmp_dir)
+            cue_file = tmp_path / "Corrupted.cue"
+            cue_file.write_text('FILE "MissingTrack01.bin" BINARY\n  TRACK 01 MODE2/2352\n', encoding="utf-8")
+
+            ok, msg = ROMMetadataExtractor.verify_cue_bin_integrity(cue_file)
+            self.assertFalse(ok, "CUE con archivo BIN faltante debe fallar la verificación.")
+            self.assertIn("MissingTrack01.bin", msg)
+
+    def test_08_async_scan_worker(self):
+        completed_signal = []
+        progress_signal = []
+
+        def on_prog(done, total, name):
+            progress_signal.append((done, total))
+
+        def on_comp(games):
+            completed_signal.append(len(games))
+
+        self.service.scan_async(on_progress=on_prog, on_complete=on_comp)
+
+        # Esperar al hilo en segundo plano con timeout seguro
+        t0 = time.time()
+        while not completed_signal and time.time() - t0 < 5.0:
+            time.sleep(0.05)
+
+        self.assertTrue(len(completed_signal) > 0, "El escaneo asíncrono debe invocar on_complete.")
+        self.assertGreaterEqual(completed_signal[0], 69)
+
+    def test_09_sqlite_transactional_sync_and_reconciliation(self):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            db_path = Path(tmp_dir) / "test_cci.sqlite3"
+            count = self.service.sync_to_sqlite(db_path)
+            self.assertGreaterEqual(count, 69)
+
+            # Verificar tabla y contenido en SQLite
+            with sqlite3.connect(db_path) as conn:
+                cur = conn.cursor()
+                cur.execute("SELECT COUNT(*) FROM installed_roms WHERE available = 1")
+                avail_count = cur.fetchone()[0]
+                self.assertGreaterEqual(avail_count, 50)
+
+                # Simular reconciliación: insertar registro obsoleto
+                cur.execute("""
+                    INSERT INTO installed_roms (id, title, console, badge, core, on_demand, available)
+                    VALUES ('phantom_rom', 'Ghost Game', 'SNES', 'SNES', 'core.dylib', 0, 1)
+                """)
+
+            # Sincronizar de nuevo: el registro ausente debe quedar reconciliado a available=0
+            self.service.sync_to_sqlite(db_path)
+            with sqlite3.connect(db_path) as conn:
+                cur = conn.cursor()
+                cur.execute("SELECT available FROM installed_roms WHERE id = 'phantom_rom'")
+                st = cur.fetchone()[0]
+                self.assertEqual(st, 0, "Registro ausente debe reconciliarse con available=0.")
+
+    def test_10_launch_pre_verification_security(self):
+        # 1. Juego físico verificado
+        ok, msg = self.service.verify_game_file("mame_mslug2")
+        self.assertTrue(ok, f"Metal Slug 2 debe ser verificado: {msg}")
+
+        # 2. Juego remoto sin instalar debe denegar lanzamiento directo
+        gow = self.service.get_game_by_id("gow_ps2_1")
+        self.assertIsNotNone(gow)
+        ok_gow, msg_gow = self.service.verify_game_file("gow_ps2_1")
+        self.assertFalse(ok_gow, "Juego On-Demand sin instalar debe denegar ejecución.")
 
 
 if __name__ == "__main__":

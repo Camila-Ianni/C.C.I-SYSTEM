@@ -4064,8 +4064,17 @@ class OmniDashMainWindow(QMainWindow):
         core = game.get("core")
         rom = game.get("rom")
         title = game.get("title", "Game")
+        gid = game.get("id")
 
         if core and rom:
+            # H-08: Verificación física de integridad de ROM y Core antes de invocar Libretro
+            if gid:
+                from backend.games.scanner_service import GameLibraryScannerService
+                ok, msg = GameLibraryScannerService.get_instance().verify_game_file(gid)
+                if not ok:
+                    print(f"[OmniDash-Qt] Verificación de lanzamiento denegada para {title}: {msg}")
+                    return
+
             print(f"[OmniDash-Qt] Lanzando emulador Libretro 60 FPS: {title} ({core})...")
             try:
                 runner = LibretroRunner(

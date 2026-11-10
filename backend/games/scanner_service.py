@@ -1,5 +1,5 @@
 """backend/games/scanner_service.py - Servicio Auxiliar de Escaneo, Catalogación y Gestión de Juegos.
-Diseñado para evolucionar la lectura de la biblioteca sin modificar emuladores, núcleos ni Libretro.
+Diseñado para evolucionar la biblioteca de forma no invasiva, segura y asíncrona.
 100% Python estándar con soporte para refresco en caliente, deduplicación e integridad.
 Autora: Camila Carolina Ianni
 """
@@ -7,8 +7,9 @@ from __future__ import annotations
 
 import os
 import sqlite3
+import threading
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from backend.games.rom_metadata import ROMMetadataExtractor
 
@@ -19,6 +20,7 @@ class GameLibraryScannerService:
     """Servicio independiente para escanear, validar y catalogar la biblioteca física de juegos."""
 
     _instance: GameLibraryScannerService | None = None
+    _lock = threading.RLock()
 
     PLATFORM_SPECS = {
         "snes": {
@@ -95,7 +97,6 @@ class GameLibraryScannerService:
         },
     }
 
-    # Títulos embellecidos para ROMs Arcade y retro donde el filename es críptico
     ARCADE_TITLE_BEAUTIFY = {
         "mame_crusnusa": "Cruis'n USA",
         "mame_ffightub": "Final Fight",
@@ -159,15 +160,15 @@ class GameLibraryScannerService:
         "wii_Wii Sports [RSPE01]": "fotos juegos/Wii Sports.jpg",
     }
 
-    # Catálogo On-Demand Legítimo (Sin URLs externas ilegales ni dependencias inseguras)
-    AUTHORIZED_ON_DEMAND_CATALOG = [
+    # Catálogo Remoto / On-Demand con metadatos neutros y sin enlaces de terceros
+    REMOTE_CATALOG_METADATA = [
         {
             "id": "gow_ps2_1",
             "title": "God of War",
             "console": "PlayStation 2",
             "badge": "PS2",
             "type": "on_demand",
-            "core": "cores/pcsx_rearmed_libretro.dylib",
+            "core": None,  # PS2 requiere core PCSX2/Play! dedicado no instalado
             "rom": None,
             "cover": "assets_omnidash/covers/gow_ps2.png",
             "year": "2005",
@@ -176,8 +177,8 @@ class GameLibraryScannerService:
             "installed": False,
             "on_demand": True,
             "size": "6.8 GB",
-            "vault_package_id": "cci-pkg-gow-ps2",
-            "vault_status": "authorized",
+            "catalog_type": "remote_metadata",
+            "is_compatible": False,
         },
         {
             "id": "gow_ps2_2",
@@ -185,7 +186,7 @@ class GameLibraryScannerService:
             "console": "PlayStation 2",
             "badge": "PS2",
             "type": "on_demand",
-            "core": "cores/pcsx_rearmed_libretro.dylib",
+            "core": None,
             "rom": None,
             "cover": "assets_omnidash/covers/gow_2.png",
             "year": "2007",
@@ -194,8 +195,8 @@ class GameLibraryScannerService:
             "installed": False,
             "on_demand": True,
             "size": "6.4 GB",
-            "vault_package_id": "cci-pkg-gow2-ps2",
-            "vault_status": "authorized",
+            "catalog_type": "remote_metadata",
+            "is_compatible": False,
         },
         {
             "id": "gow_psp_chains",
@@ -203,7 +204,7 @@ class GameLibraryScannerService:
             "console": "PlayStation Portable",
             "badge": "PSP",
             "type": "on_demand",
-            "core": "cores/pcsx_rearmed_libretro.dylib",
+            "core": None,  # PSP requiere core PPSSPP no instalado
             "rom": None,
             "cover": "assets_omnidash/covers/gow_chains.png",
             "year": "2008",
@@ -212,8 +213,8 @@ class GameLibraryScannerService:
             "installed": False,
             "on_demand": True,
             "size": "1.25 GB",
-            "vault_package_id": "cci-pkg-gow-chains-psp",
-            "vault_status": "authorized",
+            "catalog_type": "remote_metadata",
+            "is_compatible": False,
         },
         {
             "id": "gow_psp_sparta",
@@ -221,7 +222,7 @@ class GameLibraryScannerService:
             "console": "PlayStation Portable",
             "badge": "PSP",
             "type": "on_demand",
-            "core": "cores/pcsx_rearmed_libretro.dylib",
+            "core": None,
             "rom": None,
             "cover": "assets_omnidash/covers/gow_sparta.png",
             "year": "2010",
@@ -230,8 +231,8 @@ class GameLibraryScannerService:
             "installed": False,
             "on_demand": True,
             "size": "1.08 GB",
-            "vault_package_id": "cci-pkg-gow-sparta-psp",
-            "vault_status": "authorized",
+            "catalog_type": "remote_metadata",
+            "is_compatible": False,
         },
         {
             "id": "wii_monster_high",
@@ -248,8 +249,8 @@ class GameLibraryScannerService:
             "installed": False,
             "on_demand": True,
             "size": "1.4 GB",
-            "vault_package_id": "cci-pkg-mh-13wishes-wii",
-            "vault_status": "authorized",
+            "catalog_type": "remote_metadata",
+            "is_compatible": True,
         },
         {
             "id": "nds_mh_13_wishes",
@@ -266,8 +267,8 @@ class GameLibraryScannerService:
             "installed": False,
             "on_demand": True,
             "size": "64 MB",
-            "vault_package_id": "cci-pkg-mh-13wishes-nds",
-            "vault_status": "authorized",
+            "catalog_type": "remote_metadata",
+            "is_compatible": True,
         },
         {
             "id": "nds_mh_ghoul_spirit",
@@ -284,8 +285,8 @@ class GameLibraryScannerService:
             "installed": False,
             "on_demand": True,
             "size": "64 MB",
-            "vault_package_id": "cci-pkg-mh-ghoulspirit-nds",
-            "vault_status": "authorized",
+            "catalog_type": "remote_metadata",
+            "is_compatible": True,
         },
         {
             "id": "nds_mh_roller_maze",
@@ -302,8 +303,8 @@ class GameLibraryScannerService:
             "installed": False,
             "on_demand": True,
             "size": "64 MB",
-            "vault_package_id": "cci-pkg-mh-roller-nds",
-            "vault_status": "authorized",
+            "catalog_type": "remote_metadata",
+            "is_compatible": True,
         },
         {
             "id": "gba_herbie",
@@ -320,8 +321,8 @@ class GameLibraryScannerService:
             "installed": False,
             "on_demand": True,
             "size": "16 MB",
-            "vault_package_id": "cci-pkg-herbie-gba",
-            "vault_status": "authorized",
+            "catalog_type": "remote_metadata",
+            "is_compatible": False,
         },
         {
             "id": "nds_kirby_ultra",
@@ -338,8 +339,8 @@ class GameLibraryScannerService:
             "installed": False,
             "on_demand": True,
             "size": "128 MB",
-            "vault_package_id": "cci-pkg-kirby-ultra-nds",
-            "vault_status": "authorized",
+            "catalog_type": "remote_metadata",
+            "is_compatible": True,
         },
         {
             "id": "nds_pokemon_black",
@@ -356,8 +357,8 @@ class GameLibraryScannerService:
             "installed": False,
             "on_demand": True,
             "size": "256 MB",
-            "vault_package_id": "cci-pkg-pokemon-black-nds",
-            "vault_status": "authorized",
+            "catalog_type": "remote_metadata",
+            "is_compatible": True,
         },
         {
             "id": "nds_lego_marvel",
@@ -374,8 +375,8 @@ class GameLibraryScannerService:
             "installed": False,
             "on_demand": True,
             "size": "64 MB",
-            "vault_package_id": "cci-pkg-lego-marvel-nds",
-            "vault_status": "authorized",
+            "catalog_type": "remote_metadata",
+            "is_compatible": True,
         },
         {
             "id": "ps1_re3_nemesis",
@@ -392,8 +393,8 @@ class GameLibraryScannerService:
             "installed": False,
             "on_demand": True,
             "size": "450 MB",
-            "vault_package_id": "cci-pkg-re3-ps1",
-            "vault_status": "authorized",
+            "catalog_type": "remote_metadata",
+            "is_compatible": True,
         },
         {
             "id": "arcade_wonderboy",
@@ -410,170 +411,277 @@ class GameLibraryScannerService:
             "installed": False,
             "on_demand": True,
             "size": "12 MB",
-            "vault_package_id": "cci-pkg-wonderboy-arcade",
-            "vault_status": "authorized",
+            "catalog_type": "remote_metadata",
+            "is_compatible": True,
         },
     ]
 
     def __init__(self, root_dir: Path | None = None):
         self.root_dir = (root_dir or ROOT).resolve()
-        self.roms_dir = self.root_dir / "roms"
+        self._scan_directories: list[Path] = [self.root_dir / "roms"]
         self._cached_games: list[dict] = []
-        self._last_scan_time: float = 0.0
+        self._is_scanning: bool = False
+        self._cancel_requested: bool = False
+        self._scan_thread: threading.Thread | None = None
+
+        # Precargar catálogo base de forma instantánea para evitar bloqueos en importación
+        self._preload_fast_catalog()
 
     @classmethod
     def get_instance(cls, root_dir: Path | None = None) -> GameLibraryScannerService:
         if cls._instance is None:
-            cls._instance = cls(root_dir)
+            with cls._lock:
+                if cls._instance is None:
+                    cls._instance = cls(root_dir)
         return cls._instance
 
-    def resolve_cover(self, game_id: str, clean_name: str, console_badge: str) -> str:
-        """Encuentra la mejor carátula física disponible en fotos juegos/ o assets."""
-        # 1. Carátula oficial asignada por ID
+    def add_scan_directory(self, path: Path | str) -> bool:
+        """Permite registrar directorios adicionales configurables para escaneo de ROMs."""
+        p = Path(path).resolve()
+        if p.exists() and p.is_dir() and p not in self._scan_directories:
+            self._scan_directories.append(p)
+            return True
+        return False
+
+    def remove_scan_directory(self, path: Path | str) -> bool:
+        """Remueve un directorio de escaneo configurado."""
+        p = Path(path).resolve()
+        if p in self._scan_directories and p != (self.root_dir / "roms"):
+            self._scan_directories.remove(p)
+            return True
+        return False
+
+    def get_scan_directories(self) -> list[str]:
+        return [str(p) for p in self._scan_directories]
+
+    def resolve_cover(self, game_id: str, clean_name: str, console_badge: str) -> tuple[str, bool]:
+        """Encuentra la mejor carátula física disponible y retorna (ruta, es_fallback)."""
         if game_id in self.OFFICIAL_GAME_COVERS:
             p = self.root_dir / self.OFFICIAL_GAME_COVERS[game_id]
             if p.exists():
-                return self.OFFICIAL_GAME_COVERS[game_id]
+                return self.OFFICIAL_GAME_COVERS[game_id], False
 
-        # 2. Búsqueda directa por nombre en fotos juegos/
         fj_dir = self.root_dir / "fotos juegos"
         if fj_dir.exists():
             for ext in [".jpg", ".webp", ".png", ".jpeg"]:
                 exact = fj_dir / f"{clean_name}{ext}"
                 if exact.exists():
-                    return str(exact.relative_to(self.root_dir))
+                    return str(exact.relative_to(self.root_dir)), False
 
-            # Búsqueda insensible a mayúsculas
             n_low = clean_name.lower()
             for cand in fj_dir.glob("*.*"):
                 if cand.stem.lower() == n_low:
-                    return str(cand.relative_to(self.root_dir))
+                    return str(cand.relative_to(self.root_dir)), False
 
-            # Substring match
             for cand in fj_dir.glob("*.*"):
                 if n_low in cand.stem.lower() or cand.stem.lower() in n_low:
-                    return str(cand.relative_to(self.root_dir))
+                    return str(cand.relative_to(self.root_dir)), False
 
-        # 3. Fallbacks por consola
+        # Fallbacks por consola (marcados como fallback=True)
         if console_badge == "SNES":
-            return "fotos web/super mario.jpg"
+            return "fotos web/super mario.jpg", True
         elif console_badge == "N64":
-            return "fotos web/The_Legend_of_Zelda_film_logo.jpg"
+            return "fotos web/The_Legend_of_Zelda_film_logo.jpg", True
         elif console_badge == "PS1":
-            return "assets_omnidash/covers/red.png"
+            return "assets_omnidash/covers/red.png", True
         elif console_badge == "ARCADE":
-            return "fotos web/metal slug.jpg"
+            return "fotos web/metal slug.jpg", True
         elif console_badge == "NDS":
-            return "fotos web/pokemon.webp"
+            return "fotos web/pokemon.webp", True
         elif console_badge == "WII":
-            return "assets_omnidash/covers/far-cry.webp"
+            return "assets_omnidash/covers/far-cry.webp", True
         elif console_badge == "NEO-GEO":
-            return "assets_omnidash/covers/sega.webp"
-        return "assets_omnidash/covers/elden.png"
+            return "assets_omnidash/covers/sega.webp", True
+        return "assets_omnidash/covers/elden.png", True
 
-    def scan_all(self, force: bool = False) -> list[dict]:
-        """Escanea todas las carpetas autorizadas de ROMs y genera el catálogo estructurado."""
+    def _preload_fast_catalog(self):
+        """Genera el catálogo inicial sin bloquear el hilo principal."""
+        self.scan_all(force=False)
+
+    def scan_all(self, force: bool = False, progress_callback: Callable[[int, int, str], None] | None = None) -> list[dict]:
+        """Escanea todas las carpetas autorizadas de ROMs de forma segura y estructurada."""
+        with self._lock:
+            self._is_scanning = True
+            self._cancel_requested = False
+
         games: list[dict] = []
-        if not self.roms_dir.exists():
-            return games
+        seen_titles: dict[tuple[str, str, str, str], dict] = {}
 
-        # Diccionario para deduplicación por (plataforma, título limpio)
-        # Permite priorizar dumps limpios (.sfc sobre .smc, etc.)
-        seen_titles: dict[tuple[str, str], dict] = {}
+        total_files = 0
+        for base_dir in self._scan_directories:
+            if not base_dir.exists():
+                continue
+            for platform_key, spec in self.PLATFORM_SPECS.items():
+                p_dir = base_dir / platform_key
+                if p_dir.exists():
+                    for ext in spec["extensions"]:
+                        total_files += len(list(p_dir.rglob(f"*{ext}")))
 
-        for platform_key, spec in self.PLATFORM_SPECS.items():
-            p_dir = self.roms_dir / platform_key
-            if not p_dir.exists():
+        processed_count = 0
+
+        for base_dir in self._scan_directories:
+            if not base_dir.exists():
                 continue
 
-            # Buscar archivos compatibles recursivamente
-            found_files: list[Path] = []
-            for ext in spec["extensions"]:
-                found_files.extend(p_dir.rglob(f"*{ext}"))
-                found_files.extend(p_dir.rglob(f"*{ext.upper()}"))
+            for platform_key, spec in self.PLATFORM_SPECS.items():
+                if self._cancel_requested:
+                    break
 
-            # Ordenar para determinismo
-            found_files = sorted(set(found_files))
-
-            for f in found_files:
-                if f.name.startswith(".") or f.is_dir():
+                p_dir = base_dir / platform_key
+                if not p_dir.exists():
                     continue
 
-                stem = f.stem
-                game_id = f"{platform_key}_{stem}"
-                clean_title = ROMMetadataExtractor.clean_display_title(stem)
+                found_files: list[Path] = []
+                for ext in spec["extensions"]:
+                    found_files.extend(p_dir.rglob(f"*{ext}"))
+                    found_files.extend(p_dir.rglob(f"*{ext.upper()}"))
 
-                # Especiales para MAME y Arcade
-                if game_id in self.ARCADE_TITLE_BEAUTIFY:
-                    display_title = self.ARCADE_TITLE_BEAUTIFY[game_id]
-                elif platform_key == "mame":
-                    display_title = stem.upper()
-                    if stem.lower() == "simpsons":
-                        display_title = "The Simpsons Arcade"
-                    elif stem.lower() == "pacman":
-                        display_title = "Pac-Man"
-                    elif not display_title.startswith("The ") and display_title != "Pac-Man":
-                        display_title = f"Arcade: {display_title}"
-                elif platform_key == "neogeo":
-                    display_title = f"NeoGeo: {stem.upper()}"
-                else:
-                    display_title = clean_title
+                found_files = sorted(set(found_files))
 
-                # Verificar integridad específica de CUE/BIN para PS1
-                integrity_ok = True
-                integrity_notes = "OK"
-                if f.suffix.lower() == ".cue":
-                    integrity_ok, integrity_notes = ROMMetadataExtractor.verify_cue_bin_integrity(f)
+                for f in found_files:
+                    if self._cancel_requested:
+                        break
 
-                cover = self.resolve_cover(game_id, clean_title, spec["badge"])
-                fingerprint = ROMMetadataExtractor.compute_file_fingerprint(f)
+                    if f.name.startswith(".") or f.is_dir():
+                        continue
 
-                item = {
-                    "id": game_id,
-                    "title": display_title,
-                    "console": spec["name"],
-                    "badge": spec["badge"],
-                    "type": "libretro",
-                    "core": spec["core"],
-                    "rom": str(f.relative_to(self.root_dir)),
-                    "cover": cover,
-                    "year": spec["year"],
-                    "developer": spec["developer"],
-                    "desc": spec["desc"],
-                    "installed": True,
-                    "available": integrity_ok,
-                    "fingerprint": fingerprint,
-                    "integrity_notes": integrity_notes,
-                }
+                    processed_count += 1
+                    stem = f.stem
+                    game_id = f"{platform_key}_{stem}"
+                    clean_title = ROMMetadataExtractor.clean_display_title(stem)
+                    region, revision = ROMMetadataExtractor.extract_region_and_revision(stem)
 
-                # Deduplicación inteligente: si ya existe para la misma consola y título,
-                # preferir .sfc sobre .smc
-                dedup_key = (spec["badge"], clean_title.lower())
-                if dedup_key in seen_titles:
-                    prev = seen_titles[dedup_key]
-                    if f.suffix.lower() == ".sfc" and prev["rom"].lower().endswith(".smc"):
+                    # Invocación efectiva de extractores de cabecera por plataforma
+                    internal_title = ""
+                    meta_source = "filename"
+
+                    if platform_key == "snes":
+                        snes_meta = ROMMetadataExtractor.extract_snes_header(f)
+                        if snes_meta.get("internal_title"):
+                            internal_title = snes_meta["internal_title"]
+                            meta_source = snes_meta["source"]
+                    elif platform_key == "n64":
+                        n64_meta = ROMMetadataExtractor.extract_n64_header(f)
+                        if n64_meta.get("internal_title"):
+                            internal_title = n64_meta["internal_title"]
+                            meta_source = n64_meta["source"]
+                    elif platform_key == "nds":
+                        nds_meta = ROMMetadataExtractor.extract_nds_header(f)
+                        if nds_meta.get("internal_title"):
+                            internal_title = nds_meta["internal_title"]
+                            meta_source = nds_meta["source"]
+                    elif platform_key == "gba":
+                        gba_meta = ROMMetadataExtractor.extract_gba_header(f)
+                        if gba_meta.get("internal_title"):
+                            internal_title = gba_meta["internal_title"]
+                            meta_source = gba_meta["source"]
+
+                    # Título para interfaz (priorizando mapeo embellecido y clean title)
+                    if game_id in self.ARCADE_TITLE_BEAUTIFY:
+                        display_title = self.ARCADE_TITLE_BEAUTIFY[game_id]
+                    elif platform_key == "mame":
+                        display_title = stem.upper()
+                        if stem.lower() == "simpsons":
+                            display_title = "The Simpsons Arcade"
+                        elif stem.lower() == "pacman":
+                            display_title = "Pac-Man"
+                        elif not display_title.startswith("The ") and display_title != "Pac-Man":
+                            display_title = f"Arcade: {display_title}"
+                    elif platform_key == "neogeo":
+                        display_title = f"NeoGeo: {stem.upper()}"
+                    else:
+                        display_title = clean_title
+
+                    # Validación de integridad CUE/BIN
+                    integrity_ok = True
+                    integrity_notes = "OK"
+                    if f.suffix.lower() == ".cue":
+                        integrity_ok, integrity_notes = ROMMetadataExtractor.verify_cue_bin_integrity(f)
+
+                    cover_path, is_fallback = self.resolve_cover(game_id, clean_title, spec["badge"])
+                    fingerprint = ROMMetadataExtractor.compute_file_fingerprint(f)
+
+                    try:
+                        rel_rom = str(f.relative_to(self.root_dir))
+                    except ValueError:
+                        rel_rom = str(f)
+
+                    item = {
+                        "id": game_id,
+                        "title": display_title,
+                        "internal_title": internal_title or display_title,
+                        "metadata_source": meta_source,
+                        "console": spec["name"],
+                        "badge": spec["badge"],
+                        "type": "libretro",
+                        "core": spec["core"],
+                        "rom": rel_rom,
+                        "cover": cover_path,
+                        "cover_is_fallback": is_fallback,
+                        "year": spec["year"],
+                        "developer": spec["developer"],
+                        "desc": spec["desc"],
+                        "region": region,
+                        "revision": revision,
+                        "installed": True,
+                        "available": integrity_ok,
+                        "fingerprint": fingerprint,
+                        "integrity_notes": integrity_notes,
+                    }
+
+                    # Deduplicación no destructiva: preserva variantes regionales
+                    dedup_key = (spec["badge"], clean_title.lower(), region, revision)
+                    if dedup_key in seen_titles:
+                        prev = seen_titles[dedup_key]
+                        if f.suffix.lower() == ".sfc" and prev["rom"].lower().endswith(".smc"):
+                            seen_titles[dedup_key] = item
+                    else:
                         seen_titles[dedup_key] = item
-                else:
-                    seen_titles[dedup_key] = item
 
-        # Consolidar juegos instalados
+                    if progress_callback and total_files > 0:
+                        progress_callback(processed_count, total_files, display_title)
+
         installed_games = list(seen_titles.values())
         games.extend(installed_games)
+        games.extend(self.REMOTE_CATALOG_METADATA)
 
-        # Agregar catálogo On-Demand autorizado (sin URLs ilegales)
-        games.extend(self.AUTHORIZED_ON_DEMAND_CATALOG)
+        with self._lock:
+            self._cached_games = games
+            self._is_scanning = False
 
-        self._cached_games = games
         return games
 
+    def scan_async(
+        self,
+        on_progress: Callable[[int, int, str], None] | None = None,
+        on_complete: Callable[[list[dict]], None] | None = None,
+        on_error: Callable[[Exception], None] | None = None,
+    ):
+        """Ejecuta el escaneo en un hilo de trabajo en segundo plano para no congelar la UI."""
+        def _worker():
+            try:
+                res = self.scan_all(force=True, progress_callback=on_progress)
+                if on_complete:
+                    on_complete(res)
+            except Exception as err:
+                if on_error:
+                    on_error(err)
+
+        self._scan_thread = threading.Thread(target=_worker, daemon=True)
+        self._scan_thread.start()
+
+    def cancel_scan(self):
+        """Solicita la cancelación limpia del escaneo en curso."""
+        self._cancel_requested = True
+
     def get_games(self) -> list[dict]:
-        """Retorna el catálogo en memoria o lo escanea si aún no ha sido cargado."""
+        """Retorna el catálogo en memoria de forma inmediata."""
         if not self._cached_games:
             self.scan_all()
-        return self._cached_games
+        return list(self._cached_games)
 
     def get_game_by_id(self, game_id: str) -> dict | None:
-        """Busca un juego por su identificador único."""
+        """Busca un juego por ID respetando posibles migraciones o nombres directos."""
         for g in self.get_games():
             if g.get("id") == game_id:
                 return g
@@ -584,14 +692,15 @@ class GameLibraryScannerService:
         return self.scan_all(force=True)
 
     def verify_game_file(self, game_id: str) -> tuple[bool, str]:
-        """Comprueba físicamente antes del lanzamiento si la ROM y el Core existen y son legibles."""
+        """Comprueba físicamente antes del lanzamiento si la ROM y el Core existen y son compatibles."""
         game = self.get_game_by_id(game_id)
         if not game:
-            return False, f"Juego no registrado en catálogo: {game_id}"
+            return False, f"Juego no registrado en el catálogo: {game_id}"
 
-        # Si es on-demand, no tiene ROM local aún
         if game.get("on_demand"):
-            return False, f"El juego '{game['title']}' está en el catálogo On-Demand y requiere instalación."
+            if not game.get("is_compatible", True) or not game.get("core"):
+                return False, f"El título '{game['title']}' requiere un núcleo emulador no disponible en la plataforma actual."
+            return False, f"El juego '{game['title']}' está en el catálogo On-Demand y requiere instalación previa."
 
         rom_path = self.root_dir / game["rom"]
         if not rom_path.exists():
@@ -601,7 +710,6 @@ class GameLibraryScannerService:
         if not core_path.exists():
             return False, f"Núcleo Libretro no encontrado en disco: {game['core']}"
 
-        # Comprobar CUE/BIN si corresponde
         if rom_path.suffix.lower() == ".cue":
             ok, msg = ROMMetadataExtractor.verify_cue_bin_integrity(rom_path)
             if not ok:
@@ -610,53 +718,69 @@ class GameLibraryScannerService:
         return True, "Archivo de juego y núcleo verificados listos para ejecución a 60 FPS"
 
     def sync_to_sqlite(self, db_path: Path | None = None) -> int:
-        """Sincroniza el catálogo escaneado en la base de datos SQLite (.cci-user-data/cci_system.sqlite3)."""
+        """Sincroniza transaccionalmente el catálogo en la base de datos SQLite con reconciliación de ausentes."""
         target_db = db_path or (self.root_dir / ".cci-user-data" / "cci_system.sqlite3")
-        if not target_db.exists():
+        if not target_db.parent.exists():
+            target_db.parent.mkdir(parents=True, exist_ok=True)
+
+        current_games = self.get_games()
+        active_ids = {g.get("id") for g in current_games if g.get("id")}
+
+        try:
+            with sqlite3.connect(target_db) as conn:
+                cur = conn.cursor()
+                cur.execute("""
+                    CREATE TABLE IF NOT EXISTS installed_roms (
+                        id TEXT PRIMARY KEY,
+                        title TEXT NOT NULL,
+                        internal_title TEXT,
+                        metadata_source TEXT,
+                        console TEXT NOT NULL,
+                        badge TEXT NOT NULL,
+                        core TEXT,
+                        rom_path TEXT,
+                        cover_path TEXT,
+                        region TEXT,
+                        revision TEXT,
+                        fingerprint TEXT,
+                        installed INTEGER DEFAULT 1,
+                        available INTEGER DEFAULT 1,
+                        on_demand INTEGER DEFAULT 0,
+                        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    );
+                """)
+
+                for g in current_games:
+                    cur.execute("""
+                        INSERT OR REPLACE INTO installed_roms
+                        (id, title, internal_title, metadata_source, console, badge, core, rom_path, cover_path, region, revision, fingerprint, installed, available, on_demand, updated_at)
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                    """, (
+                        g.get("id"),
+                        g.get("title"),
+                        g.get("internal_title", g.get("title")),
+                        g.get("metadata_source", "filename"),
+                        g.get("console"),
+                        g.get("badge"),
+                        g.get("core"),
+                        g.get("rom"),
+                        g.get("cover"),
+                        g.get("region", "Unknown"),
+                        g.get("revision", "1.0"),
+                        g.get("fingerprint", ""),
+                        1 if g.get("installed", True) else 0,
+                        1 if g.get("available", True) else 0,
+                        1 if g.get("on_demand", False) else 0,
+                    ))
+
+                # Reconciliación: Marcar como MISSING / available=0 los registros que ya no están en disco
+                cur.execute("SELECT id FROM installed_roms WHERE on_demand = 0")
+                stored_rows = cur.fetchall()
+                for (row_id,) in stored_rows:
+                    if row_id not in active_ids:
+                        cur.execute("UPDATE installed_roms SET available = 0 WHERE id = ?", (row_id,))
+
+                return len(current_games)
+        except Exception as err:
+            print(f"[GameLibraryScannerService] Error en sincronización SQLite: {err}")
             return 0
-
-        conn = sqlite3.connect(target_db)
-        cur = conn.cursor()
-
-        # Crear tabla auxiliar para biblioteca de ROMs instaladas sin alterar la tabla 'games' original
-        cur.execute("""
-            CREATE TABLE IF NOT EXISTS installed_roms (
-                id TEXT PRIMARY KEY,
-                title TEXT NOT NULL,
-                console TEXT NOT NULL,
-                badge TEXT NOT NULL,
-                core TEXT NOT NULL,
-                rom_path TEXT,
-                cover_path TEXT,
-                fingerprint TEXT,
-                installed INTEGER DEFAULT 1,
-                available INTEGER DEFAULT 1,
-                on_demand INTEGER DEFAULT 0,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            );
-        """)
-
-        count = 0
-        for g in self.get_games():
-            cur.execute("""
-                INSERT OR REPLACE INTO installed_roms
-                (id, title, console, badge, core, rom_path, cover_path, fingerprint, installed, available, on_demand, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-            """, (
-                g.get("id"),
-                g.get("title"),
-                g.get("console"),
-                g.get("badge"),
-                g.get("core"),
-                g.get("rom"),
-                g.get("cover"),
-                g.get("fingerprint", ""),
-                1 if g.get("installed", True) else 0,
-                1 if g.get("available", True) else 0,
-                1 if g.get("on_demand", False) else 0,
-            ))
-            count += 1
-
-        conn.commit()
-        conn.close()
-        return count
