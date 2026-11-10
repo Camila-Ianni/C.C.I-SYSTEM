@@ -602,7 +602,7 @@ class HomeView(QWidget):
         super().__init__(parent)
         self.setFocusPolicy(Qt.StrongFocus)
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(36, 6, 36, 16)
+        layout.setContentsMargins(36, 42, 36, 18)
         layout.setSpacing(10)
 
         # 1. FILA PRINCIPAL: Botón Izq + Hero Card + Grid 2x3 + Botón Der
@@ -623,9 +623,11 @@ class HomeView(QWidget):
         ]
         self.hero_game = mario_candidates[0] if mario_candidates else (ALL_GAMES[0] if ALL_GAMES else {"title": "Super Mario Bros", "console": "SNES"})
 
-        # Cargar arte del Hero
+        # Cargar arte del Hero (versión limpia sin botón horneado)
         hero_pix = None
-        hero_art_path = ROOT / "assets_omnidash" / "mockup_cards" / "hero_mario.png"
+        hero_art_path = ROOT / "assets_omnidash" / "mockup_cards" / "hero_mario_clean.png"
+        if not hero_art_path.exists():
+            hero_art_path = ROOT / "assets_omnidash" / "mockup_cards" / "hero_mario.png"
         if not hero_art_path.exists():
             hero_art_path = ROOT / "fotos web" / "super mario.jpg"
         if hero_art_path.exists():
@@ -640,7 +642,7 @@ class HomeView(QWidget):
             border_color=QColor(0, 210, 255, 240),
             bg_image=hero_pix,
         )
-        self.hero_card.setFixedSize(370, 330)
+        self.hero_card.setFixedSize(370, 320)
         hero_layout = QVBoxLayout(self.hero_card)
         hero_layout.setContentsMargins(16, 14, 16, 16)
 
@@ -756,7 +758,7 @@ class HomeView(QWidget):
                 border_color=border_col,
                 bg_image=card_pix,
             )
-            card.setFixedSize(205, 154)
+            card.setFixedSize(205, 148)
             card.mousePressEvent = lambda _, gm=matched_game: self.open_details.emit(gm)
             card.setCursor(Qt.PointingHandCursor)
 
@@ -775,6 +777,7 @@ class HomeView(QWidget):
         main_row.addWidget(self.right_arrow)
 
         layout.addLayout(main_row)
+        layout.addSpacing(6)
 
         # 2. INDICADORES DE CARRUSEL (PUNTOS • • • •)
         dots_box = QHBoxLayout()
@@ -793,6 +796,7 @@ class HomeView(QWidget):
             dots_box.addWidget(dot)
 
         layout.addLayout(dots_box)
+        layout.addSpacing(14)
 
         # 3. FILA INFERIOR: 4 TARJETAS ANCHAS DE CRISTAL LÍQUIDO CON GLOW TEMÁTICO
         bot_row = QHBoxLayout()
