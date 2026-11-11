@@ -375,7 +375,16 @@ _EXACT_GAME_MAP: dict[str, list[tuple[str, str]]] = {
 
 def resolve_playable_engine(game_id: str, title: str = "", genre: str = "", rom_arg: str = "") -> tuple[Path, Path]:
     """Devuelve (core_path, rom_path) apuntando a un núcleo Libretro C/C++ y una ROM comercial real existente."""
-    # 1. Si rom_arg apunta a una ROM física real (que no sea contenedor CCI_PKG_V2), usarla directamente
+    # 1. Mapeo exacto por ID de los 90 juegos del catálogo oficial
+    gid = str(game_id or "").strip()
+    if gid in _EXACT_GAME_MAP:
+        for core_stem, rel_rom in _EXACT_GAME_MAP[gid]:
+            cp = _resolve_core_path(core_stem)
+            rp = PLAYABLE_ROMS_DIR / rel_rom
+            if cp.exists() and rp.exists():
+                return cp, rp
+
+    # 2. Si rom_arg apunta a una ROM Libretro directa (.nds, .smc, .sfc, .cue), usarla
     if rom_arg:
         cand_rom = Path(rom_arg) if Path(rom_arg).is_absolute() else (ROOT / rom_arg)
         if cand_rom.exists() and cand_rom.is_file():
@@ -389,11 +398,6 @@ def resolve_playable_engine(game_id: str, title: str = "", genre: str = "", rom_
                         ".smc": "snes9x_libretro",
                         ".sfc": "snes9x_libretro",
                         ".cue": "pcsx_rearmed_libretro",
-                        ".bin": "pcsx_rearmed_libretro",
-                        ".iso": "pcsx_rearmed_libretro",
-                        ".zip": "mame2003_plus_libretro",
-                        ".z64": "mupen64plus_next_libretro",
-                        ".n64": "mupen64plus_next_libretro",
                     }
                     if ext in ext_map:
                         cp = _resolve_core_path(ext_map[ext])
@@ -401,15 +405,6 @@ def resolve_playable_engine(game_id: str, title: str = "", genre: str = "", rom_
                             return cp, cand_rom
             except Exception:
                 pass
-
-    # 2. Mapeo exacto por ID de catálogo
-    gid = str(game_id or "").strip()
-    if gid in _EXACT_GAME_MAP:
-        for core_stem, rel_rom in _EXACT_GAME_MAP[gid]:
-            cp = _resolve_core_path(core_stem)
-            rp = PLAYABLE_ROMS_DIR / rel_rom
-            if cp.exists() and rp.exists():
-                return cp, rp
 
     # 3. Mapeo inteligente por franquicia/género si el ID es personalizado
     text = f"{gid} {title} {genre}".lower()
