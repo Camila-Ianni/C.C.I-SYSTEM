@@ -5093,6 +5093,9 @@ class RightPanel(QWidget):
     voice_toggled = Signal(str, bool)
     self_presence_changed = Signal(str, str)       # status, activity_visibility
     member_moderation_requested = Signal(str, str)  # user_id, action
+    soundboard_play_requested = Signal(str)         # sound_id
+    soundboard_stop_requested = Signal()
+    soundboard_upload_requested = Signal(str)       # file_path
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -5257,10 +5260,10 @@ class RightPanel(QWidget):
         v_lay.addLayout(src_row)
 
         ctrls_row = QHBoxLayout()
-        ctrls_row.setSpacing(12)
+        ctrls_row.setSpacing(8)
 
         self.mic_btn = QPushButton()
-        self.mic_btn.setFixedSize(44, 44)
+        self.mic_btn.setFixedSize(40, 40)
         self.mic_btn.setCursor(Qt.PointingHandCursor)
         self.mic_muted = False
         self._update_mic_style()
@@ -5268,7 +5271,7 @@ class RightPanel(QWidget):
         ctrls_row.addWidget(self.mic_btn)
 
         self.headset_btn = QPushButton()
-        self.headset_btn.setFixedSize(44, 44)
+        self.headset_btn.setFixedSize(40, 40)
         self.headset_btn.setCursor(Qt.PointingHandCursor)
         self.headset_muted = False
         self._update_headset_style()
@@ -5276,7 +5279,7 @@ class RightPanel(QWidget):
         ctrls_row.addWidget(self.headset_btn)
 
         self.screen_btn = QPushButton()
-        self.screen_btn.setFixedSize(44, 44)
+        self.screen_btn.setFixedSize(40, 40)
         self.screen_btn.setCursor(Qt.PointingHandCursor)
         self.screen_btn.setToolTip("Compartir pantalla o ventana en vivo (LiveKit WebRTC)")
         self.screen_active = False
@@ -5284,17 +5287,29 @@ class RightPanel(QWidget):
         self.screen_btn.clicked.connect(self._toggle_screen)
         ctrls_row.addWidget(self.screen_btn)
 
+        self.soundboard_btn = QPushButton("🔊")
+        self.soundboard_btn.setFixedSize(40, 40)
+        self.soundboard_btn.setCursor(Qt.PointingHandCursor)
+        self.soundboard_btn.setToolTip("Abrir Soundboard RTC")
+        self.soundboard_btn.setStyleSheet(
+            "QPushButton { background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.18); "
+            "border-radius: 20px; color: #ffffff; font-size: 15px; } "
+            "QPushButton:hover { background: rgba(53, 200, 241, 0.25); }"
+        )
+        self.soundboard_btn.clicked.connect(self._toggle_soundboard_drawer)
+        ctrls_row.addWidget(self.soundboard_btn)
+
         self.dc_btn = QPushButton()
-        self.dc_btn.setFixedSize(44, 44)
+        self.dc_btn.setFixedSize(40, 40)
         self.dc_btn.setCursor(Qt.PointingHandCursor)
         dc_p = ROOT / "assets_omnidash" / "icons" / "phone_disconnect.png"
         if dc_p.exists():
             self.dc_btn.setIcon(QIcon(str(dc_p)))
-            self.dc_btn.setIconSize(QSize(20, 20))
+            self.dc_btn.setIconSize(QSize(18, 18))
         self.dc_btn.setStyleSheet("""
             QPushButton {
                 background: #E94B56;
-                border-radius: 22px;
+                border-radius: 20px;
                 border: none;
             }
             QPushButton:hover {
@@ -5305,8 +5320,58 @@ class RightPanel(QWidget):
         ctrls_row.addWidget(self.dc_btn)
 
         v_lay.addLayout(ctrls_row)
+
+        # Drawer colapsable de Soundboard RTC (P1-C)
+        self.soundboard_drawer = QFrame()
+        self.soundboard_drawer.setStyleSheet(
+            "QFrame { background: rgba(8, 18, 28, 0.78); border: 1px solid rgba(145,165,179,0.22); "
+            "border-radius: 12px; }"
+        )
+        sb_lay = QVBoxLayout(self.soundboard_drawer)
+        sb_lay.setContentsMargins(8, 8, 8, 8)
+        sb_lay.setSpacing(6)
+
+        sb_hdr = QHBoxLayout()
+        sb_hdr.setSpacing(4)
+        sb_title = QLabel("Soundboard RTC")
+        sb_title.setStyleSheet("font-size: 11px; font-weight: 800; color: #35C8F1; border: none;")
+        sb_hdr.addWidget(sb_title)
+        sb_hdr.addStretch(1)
+
+        self.sb_stop_btn = QPushButton("Detener")
+        self.sb_stop_btn.setCursor(Qt.PointingHandCursor)
+        self.sb_stop_btn.setStyleSheet(
+            "QPushButton { background: rgba(233,75,86,0.22); border: 1px solid rgba(233,75,86,0.5); "
+            "border-radius: 6px; color: #ffd6d9; font-size: 10px; font-weight: 700; padding: 2px 6px; }"
+        )
+        self.sb_stop_btn.clicked.connect(self.soundboard_stop_requested.emit)
+        sb_hdr.addWidget(self.sb_stop_btn)
+
+        self.sb_upload_btn = QPushButton("+ MP3")
+        self.sb_upload_btn.setCursor(Qt.PointingHandCursor)
+        self.sb_upload_btn.setStyleSheet(
+            "QPushButton { background: rgba(53,200,241,0.18); border: 1px solid rgba(53,200,241,0.45); "
+            "border-radius: 6px; color: #BDD4E4; font-size: 10px; font-weight: 700; padding: 2px 6px; }"
+        )
+        self.sb_upload_btn.clicked.connect(self._on_sb_upload_clicked)
+        sb_hdr.addWidget(self.sb_upload_btn)
+        sb_lay.addLayout(sb_hdr)
+
+        self.sb_grid = QGridLayout()
+        self.sb_grid.setSpacing(5)
+        sb_lay.addLayout(self.sb_grid)
+
+        self.sb_status_lbl = QLabel("Listo para transmitir efectos por voz RTC.")
+        self.sb_status_lbl.setWordWrap(True)
+        self.sb_status_lbl.setStyleSheet("font-size: 10px; color: #9fc2d8; border: none;")
+        sb_lay.addWidget(self.sb_status_lbl)
+
+        self.soundboard_drawer.setVisible(False)
+        v_lay.addWidget(self.soundboard_drawer)
+
         layout.addWidget(self.voice_panel)
         self.voice_panel.setVisible(False)
+        self.set_soundboard_sounds([])
         self.set_members([])
 
     def set_members(self, members: list[dict], presence: Optional[dict[str, dict]] = None):
@@ -5492,9 +5557,9 @@ class RightPanel(QWidget):
             self.mic_btn.setIcon(QIcon(str(mic_p)))
             self.mic_btn.setIconSize(QSize(18, 18))
         if self.mic_muted:
-            self.mic_btn.setStyleSheet("QPushButton { background: rgba(233, 75, 86, 0.85); border: 1.5px solid #E94B56; border-radius: 22px; }")
+            self.mic_btn.setStyleSheet("QPushButton { background: rgba(233, 75, 86, 0.85); border: 1.5px solid #E94B56; border-radius: 20px; }")
         else:
-            self.mic_btn.setStyleSheet("QPushButton { background: rgba(255, 255, 255, 0.12); border: 1.5px solid rgba(255, 255, 255, 0.25); border-radius: 22px; } QPushButton:hover { background: rgba(255, 255, 255, 0.25); }")
+            self.mic_btn.setStyleSheet("QPushButton { background: rgba(255, 255, 255, 0.12); border: 1.5px solid rgba(255, 255, 255, 0.25); border-radius: 20px; } QPushButton:hover { background: rgba(255, 255, 255, 0.25); }")
 
     def _toggle_headset(self):
         self.headset_muted = not self.headset_muted
@@ -5507,9 +5572,9 @@ class RightPanel(QWidget):
             self.headset_btn.setIcon(QIcon(str(hs_p)))
             self.headset_btn.setIconSize(QSize(18, 18))
         if self.headset_muted:
-            self.headset_btn.setStyleSheet("QPushButton { background: rgba(120, 120, 120, 0.6); border: 1.5px solid #888888; border-radius: 22px; }")
+            self.headset_btn.setStyleSheet("QPushButton { background: rgba(120, 120, 120, 0.6); border: 1.5px solid #888888; border-radius: 20px; }")
         else:
-            self.headset_btn.setStyleSheet("QPushButton { background: rgba(255, 255, 255, 0.12); border: 1.5px solid rgba(255, 255, 255, 0.25); border-radius: 22px; } QPushButton:hover { background: rgba(255, 255, 255, 0.25); }")
+            self.headset_btn.setStyleSheet("QPushButton { background: rgba(255, 255, 255, 0.12); border: 1.5px solid rgba(255, 255, 255, 0.25); border-radius: 20px; } QPushButton:hover { background: rgba(255, 255, 255, 0.25); }")
 
     def _toggle_screen(self):
         if not self._media_ready:
@@ -5534,13 +5599,67 @@ class RightPanel(QWidget):
             self.screen_btn.setIcon(QIcon(str(sc_p)))
             self.screen_btn.setIconSize(QSize(18, 18))
         if self.screen_active and self._media_ready:
-            self.screen_btn.setStyleSheet("QPushButton { background: rgba(53, 200, 241, 0.3); border: 1.5px solid #35C8F1; border-radius: 22px; }")
+            self.screen_btn.setStyleSheet("QPushButton { background: rgba(53, 200, 241, 0.3); border: 1.5px solid #35C8F1; border-radius: 20px; }")
         else:
-            self.screen_btn.setStyleSheet("QPushButton { background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.18); border-radius: 22px; } QPushButton:hover { background: rgba(255, 255, 255, 0.2); }")
+            self.screen_btn.setStyleSheet("QPushButton { background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.18); border-radius: 20px; } QPushButton:hover { background: rgba(255, 255, 255, 0.2); }")
 
     def _disconnect_voice(self):
+        self.soundboard_drawer.setVisible(False)
         self.voice_panel.hide()
         self.voice_toggled.emit("disconnect", False)
+
+    def _toggle_soundboard_drawer(self):
+        vis = not self.soundboard_drawer.isVisible()
+        self.soundboard_drawer.setVisible(vis)
+
+    def set_soundboard_sounds(self, sounds: list[dict]):
+        while self.sb_grid.count():
+            item = self.sb_grid.takeAt(0)
+            w = item.widget() if item else None
+            if w is not None:
+                w.deleteLater()
+
+        items = list(sounds or [])
+        if not items:
+            from backend.communities.sound_audio import SOUNDBOARD_PRESETS
+            items = [dict(p) for p in SOUNDBOARD_PRESETS]
+
+        for idx, snd in enumerate(items[:8]):
+            sid = str(snd.get("id") or "")
+            icon = str(snd.get("icon") or "🔊")
+            title = str(snd.get("title") or sid)
+            btn = QPushButton(f"{icon} {title}")
+            btn.setProperty("sound_id", sid)
+            btn.setCursor(Qt.PointingHandCursor)
+            btn.setFixedHeight(28)
+            btn.setStyleSheet(
+                "QPushButton { background: rgba(255,255,255,0.08); border: 1px solid rgba(145,165,179,0.28); "
+                "border-radius: 7px; color: #ffffff; font-size: 11px; font-weight: 700; padding: 2px 6px; } "
+                "QPushButton:hover { background: rgba(53,200,241,0.26); border-color: #35C8F1; }"
+            )
+            btn.clicked.connect(self._on_sb_pad_clicked)
+            self.sb_grid.addWidget(btn, idx // 2, idx % 2)
+
+    def _on_sb_pad_clicked(self):
+        sender = self.sender()
+        sid = str(sender.property("sound_id") or "") if sender is not None else ""
+        if sid:
+            self.soundboard_play_requested.emit(sid)
+
+    def _on_sb_upload_clicked(self):
+        path, _ = QFileDialog.getOpenFileName(
+            self,
+            "Subir efecto MP3 al Soundboard",
+            "",
+            "Audio MP3 (*.mp3)",
+        )
+        if path:
+            self.soundboard_upload_requested.emit(path)
+
+    def set_soundboard_feedback(self, text: str, is_error: bool = False):
+        color = "#ffb3b8" if is_error else "#32D875"
+        self.sb_status_lbl.setStyleSheet(f"font-size: 10px; color: {color}; border: none;")
+        self.sb_status_lbl.setText(text)
 
 
 def _styled_input(placeholder: str = "", password: bool = False) -> QLineEdit:
@@ -5996,6 +6115,9 @@ class CommunityInteriorView(AcrylicGlassCard):
         self.right_panel.voice_toggled.connect(self._on_voice_toggled)
         self.right_panel.self_presence_changed.connect(self._on_self_presence_changed)
         self.right_panel.member_moderation_requested.connect(self._on_member_moderation_requested)
+        self.right_panel.soundboard_play_requested.connect(self._on_soundboard_play_requested)
+        self.right_panel.soundboard_stop_requested.connect(self._on_soundboard_stop_requested)
+        self.right_panel.soundboard_upload_requested.connect(self._on_soundboard_upload_requested)
         body_row.addWidget(self.right_panel)
 
         main_lay.addLayout(body_row, 1)
@@ -6021,8 +6143,18 @@ class CommunityInteriorView(AcrylicGlassCard):
         ctrl.remote_video_frame_received.connect(self._on_remote_video_frame)
         ctrl.remote_stream_ended.connect(self._on_remote_stream_ended)
         ctrl.active_streams_updated.connect(self._on_active_streams_updated)
+        ctrl.soundboard_loaded.connect(self.right_panel.set_soundboard_sounds)
+        ctrl.soundboard_event.connect(self._on_soundboard_event)
         ctrl.realtime_status_changed.connect(self.chat_area.set_realtime_status)
         ctrl.error_occurred.connect(self.chat_area.show_error)
+        if getattr(ctrl, "active_voice_channel", None):
+            self._on_voice_state_changed(
+                ctrl._build_voice_state(
+                    ctrl.active_voice_channel,
+                    getattr(ctrl, "_active_voice_cred", None),
+                    bool(getattr(ctrl, "_active_voice_reachable", False)),
+                )
+            )
 
     def _load_attachment_bytes(self, attachment_id: str) -> Optional[bytes]:
         if not self.controller or not self.controller.session:
@@ -6322,6 +6454,13 @@ class CommunityInteriorView(AcrylicGlassCard):
                     self.right_panel.set_capture_sources(self.controller.get_stream_sources())
                 except Exception:
                     pass
+                try:
+                    self.controller.load_soundboard_async(
+                        community_id=(self.controller.active_community or {}).get("id"),
+                        on_error=lambda _e: None,
+                    )
+                except Exception:
+                    pass
             active_s = next(
                 (s for s in self.controller.active_streams if str(s.get("channel_id")) == ch_id),
                 None,
@@ -6413,6 +6552,44 @@ class CommunityInteriorView(AcrylicGlassCard):
             self.chat_area.show_error(
                 "Compartir pantalla requiere captura + publicación de video WebRTC LiveKit (P1-B)."
             )
+
+    def _on_soundboard_play_requested(self, sound_id: str):
+        if not self.controller:
+            return
+        self.right_panel.set_soundboard_feedback("Inyectando efecto en audio WebRTC...")
+        self.controller.play_soundboard_effect_async(
+            sound_id=sound_id,
+            on_done=lambda res: self.right_panel.set_soundboard_feedback(
+                f"🔊 Transmitiendo por RTC: {res.get('title', sound_id)}"
+            ),
+            on_error=lambda exc: self.right_panel.set_soundboard_feedback(exc.message, is_error=True),
+        )
+
+    def _on_soundboard_stop_requested(self):
+        if not self.controller:
+            return
+        self.controller.stop_soundboard_effect()
+        self.right_panel.set_soundboard_feedback("Reproducción soundboard detenida.")
+
+    def _on_soundboard_upload_requested(self, file_path: str):
+        if not self.controller:
+            return
+        self.right_panel.set_soundboard_feedback("Subiendo efecto MP3...")
+        self.controller.upload_sound_file_async(
+            file_path=file_path,
+            on_done=lambda snd: self.right_panel.set_soundboard_feedback(
+                f"✅ Efecto agregado: {snd.get('title', 'MP3')}"
+            ),
+            on_error=lambda exc: self.right_panel.set_soundboard_feedback(exc.message, is_error=True),
+        )
+
+    def _on_soundboard_event(self, payload: dict):
+        action = str(payload.get("action") or "")
+        title = str(payload.get("title") or payload.get("sound_id") or "Efecto")
+        if action == "played":
+            self.right_panel.set_soundboard_feedback(f"🔊 Sonando en sala RTC: {title}")
+        elif action == "stopped":
+            self.right_panel.set_soundboard_feedback(f"Efecto detenido: {title}")
 
     def open_create_community_dialog(self):
         if not self.controller or not self.controller.session:

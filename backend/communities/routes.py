@@ -1290,6 +1290,13 @@ def list_community_sounds_route(community_id: str):
         return jsonify({"error": str(e)}), 404
 
 
+@communities_bp.route("/sounds/presets", methods=["GET"])
+@require_auth
+def list_sound_presets_route():
+    presets = get_service().list_sound_presets()
+    return jsonify({"presets": presets}), 200
+
+
 @communities_bp.route("/sounds/<sound_id>", methods=["GET"])
 @require_auth
 def get_sound_route(sound_id: str):
@@ -1297,6 +1304,19 @@ def get_sound_route(sound_id: str):
     try:
         sound = get_service().get_sound(actor_id=user_id, sound_id=sound_id)
         return jsonify(sound), 200
+    except PermissionError as e:
+        return jsonify({"error": str(e)}), 403
+    except LookupError as e:
+        return jsonify({"error": str(e)}), 404
+
+
+@communities_bp.route("/sounds/<sound_id>/audio", methods=["GET"])
+@require_auth
+def get_sound_audio_route(sound_id: str):
+    user_id = g.current_user["user_id"]
+    try:
+        audio_path = get_service().get_sound_audio_path(actor_id=user_id, sound_id=sound_id)
+        return send_file(audio_path, mimetype="audio/mpeg", download_name=f"{sound_id}.mp3")
     except PermissionError as e:
         return jsonify({"error": str(e)}), 403
     except LookupError as e:
@@ -1374,22 +1394,9 @@ def list_favorites_route():
     return jsonify({"favorites": favorites}), 200
 
 
-@communities_bp.route("/sounds/<sound_id>/play-authorize", methods=["POST"])
-@require_auth
-def authorize_sound_play_route(sound_id: str):
-    user_id = g.current_user["user_id"]
-    data = request.get_json() or {}
-    channel_id = data.get("channel_id")
-
-    if not channel_id:
-        return jsonify({"error": "channel_id requerido"}), 400
-
+def _run_sound_auth_route(fn):
     try:
-        result = get_service().authorize_sound_play(
-            actor_id=user_id,
-            sound_id=sound_id,
-            channel_id=channel_id,
-        )
+        result = fn()
         CommunityMetricsCollector.get_instance().increment("communities_soundboard_plays_total")
         return jsonify(result), 200
     except SoundCooldownError as e:
@@ -1406,6 +1413,43 @@ def authorize_sound_play_route(sound_id: str):
         return jsonify({"error": str(e)}), 400
     except LookupError as e:
         return jsonify({"error": str(e)}), 404
+
+
+@communities_bp.route("/sounds/<sound_id>/play-authorize", methods=["POST"])
+@require_auth
+def authorize_sound_play_route(sound_id: str):
+    user_id = g.current_user["user_id"]
+    data = request.get_json() or {}
+    channel_id = data.get("channel_id")
+
+    if not channel_id:
+        return jsonify({"error": "channel_id requerido"}), 400
+
+    return _run_sound_auth_route(
+        lambda: get_service().authorize_sound_play(
+            actor_id=user_id,
+            sound_id=sound_id,
+            channel_id=channel_id,
+        )
+    )
+
+
+@communities_bp.route("/channels/<channel_id>/soundboard/authorize-preset", methods=["POST"])
+@require_auth
+def authorize_sound_preset_route(channel_id: str):
+    user_id = g.current_user["user_id"]
+    data = request.get_json() or {}
+    preset_id = str(data.get("preset_id") or data.get("sound_id") or "").strip()
+    if not preset_id:
+        return jsonify({"error": "preset_id requerido"}), 400
+
+    return _run_sound_auth_route(
+        lambda: get_service().authorize_preset_play(
+            actor_id=user_id,
+            preset_id=preset_id,
+            channel_id=channel_id,
+        )
+    )
 
 
 # =============================================================================

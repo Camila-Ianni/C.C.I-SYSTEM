@@ -97,6 +97,11 @@ class TestCommunitiesQtP0(unittest.TestCase):
             os.environ["CCI_COMMUNITIES_DB_PATH"] = cls._old_comm_db_env
         cls._tmp_dir.cleanup()
 
+    def tearDown(self):
+        import gc
+        self.app.processEvents()
+        gc.collect()
+
     def _pump_events_until(self, predicate, timeout_s: float = 4.0) -> bool:
         deadline = time.time() + timeout_s
         while time.time() < deadline:
@@ -137,8 +142,10 @@ class TestCommunitiesQtP0(unittest.TestCase):
             with self.assertRaises(CommunityApiError):
                 ctrl.refresh_communities()
         finally:
-            ctrl.realtime.disconnect_sync()
+            ctrl.shutdown()
             view.close()
+            view.deleteLater()
+            self.app.processEvents()
 
     def test_02_two_users_e2e_auth_invite_realtime_chat_and_persistence(self):
         from backend.communities.desktop_client import CommunityController
@@ -245,10 +252,13 @@ class TestCommunitiesQtP0(unittest.TestCase):
             msgs_after = ctrl_b.api.list_messages(torneos_id)
             self.assertTrue(any(m.get("content") == "Hola Bob en tiempo real!" for m in msgs_after))
         finally:
-            ctrl_a.realtime.disconnect_sync()
-            ctrl_b.realtime.disconnect_sync()
+            ctrl_a.shutdown()
+            ctrl_b.shutdown()
             view_a.close()
             view_b.close()
+            view_a.deleteLater()
+            view_b.deleteLater()
+            self.app.processEvents()
 
     def test_03_voice_honest_state_no_fake_peers_or_live_toggle(self):
         import requests
@@ -292,8 +302,10 @@ class TestCommunitiesQtP0(unittest.TestCase):
             self.app.processEvents()
             self.assertFalse(rp.screen_active)
         finally:
-            ctrl.realtime.disconnect_sync()
+            ctrl.shutdown()
             view.close()
+            view.deleteLater()
+            self.app.processEvents()
 
     def test_04_groups_ui_no_false_success_on_errors(self):
         import groups_ui
@@ -346,6 +358,8 @@ class TestCommunitiesQtP0(unittest.TestCase):
             self.assertNotIn("Alex", win.nav_bar.nav_player_lbl.text())
         finally:
             win.close()
+            win.deleteLater()
+            self.app.processEvents()
 
     def test_06_foreign_server_on_port_does_not_cause_404_on_register(self):
         from http.server import BaseHTTPRequestHandler, HTTPServer

@@ -10,6 +10,7 @@ Reemplaza los datos demo y fallbacks simulados de la interfaz desktop Qt por:
 from __future__ import annotations
 
 from dataclasses import dataclass
+import base64
 import json
 import logging
 import os
@@ -453,18 +454,24 @@ class CommunityApiClient:
             )
         return dict(data.get("attachment") or {})
 
-    def download_attachment_bytes(self, attachment_id: str) -> bytes:
-        url = f"{self.api_url}/api/v1/attachments/{attachment_id}"
+    def _download_bytes(self, path: str, label: str = "recurso") -> bytes:
+        url = f"{self.api_url}{path}"
         hdrs = {}
         if self.token:
             hdrs["Authorization"] = f"Bearer {self.token}"
         try:
             resp = self._http.get(url, headers=hdrs, timeout=self.timeout)
         except requests.RequestException as exc:
-            raise CommunityApiError(f"Error descargando adjunto: {exc}", status_code=0) from exc
+            raise CommunityApiError(f"Error descargando {label}: {exc}", status_code=0) from exc
         if resp.status_code >= 400:
-            raise CommunityApiError(f"Adjunto no disponible (HTTP {resp.status_code})", status_code=resp.status_code)
+            raise CommunityApiError(
+                f"{label.capitalize()} no disponible (HTTP {resp.status_code})",
+                status_code=resp.status_code,
+            )
         return bytes(resp.content)
+
+    def download_attachment_bytes(self, attachment_id: str) -> bytes:
+        return self._download_bytes(f"/api/v1/attachments/{attachment_id}", label="adjunto")
 
     def edit_message(self, channel_id: str, message_id: str, content: str) -> Dict[str, Any]:
         data = self._request(
@@ -610,6 +617,59 @@ class CommunityApiClient:
         data = self._request("GET", f"/api/v1/channels/{channel_id}/stream")
         return data.get("stream")
 
+    def list_sound_presets(self) -> List[Dict[str, Any]]:
+        data = self._request("GET", "/api/v1/sounds/presets")
+        return list(data.get("presets") or [])
+
+    def list_community_sounds(self, community_id: str, search: Optional[str] = None) -> List[Dict[str, Any]]:
+        params = {"search": search} if search else None
+        data = self._request("GET", f"/api/v1/communities/{community_id}/sounds", params=params)
+        return list(data.get("sounds") or [])
+
+    def upload_sound(
+        self,
+        title: str,
+        file_bytes: bytes,
+        owner_type: str = "community",
+        owner_id: Optional[str] = None,
+        category_id: Optional[str] = None,
+        volume_scale: float = 1.0,
+        cooldown_seconds: int = 5,
+    ) -> Dict[str, Any]:
+        body: Dict[str, Any] = {
+            "owner_type": owner_type,
+            "title": title,
+            "file_base64": base64.b64encode(file_bytes).decode("ascii"),
+            "volume_scale": float(volume_scale),
+            "cooldown_seconds": int(cooldown_seconds),
+        }
+        if owner_id:
+            body["owner_id"] = owner_id
+        if category_id:
+            body["category_id"] = category_id
+        return self._request("POST", "/api/v1/sounds", json_body=body)
+
+    def authorize_sound_play(self, sound_id: str, channel_id: str) -> Dict[str, Any]:
+        return self._request(
+            "POST",
+            f"/api/v1/sounds/{sound_id}/play-authorize",
+            json_body={"channel_id": channel_id},
+        )
+
+    def authorize_sound_preset(self, channel_id: str, preset_id: str) -> Dict[str, Any]:
+        return self._request(
+            "POST",
+            f"/api/v1/channels/{channel_id}/soundboard/authorize-preset",
+            json_body={"preset_id": preset_id},
+        )
+
+    def download_sound_audio(self, sound_id: str) -> bytes:
+        return self._download_bytes(f"/api/v1/sounds/{sound_id}/audio", label="audio de soundboard")
+
+    def delete_sound(self, sound_id: str) -> bool:
+        data = self._request("DELETE", f"/api/v1/sounds/{sound_id}")
+        return bool(data.get("deleted"))
+
 
 class CommunityRealtimeBridge(QObject):
     """Cliente Socket.IO en hilo separado que despacha eventos vía señales Qt."""
@@ -633,6 +693,8 @@ class CommunityRealtimeBridge(QObject):
     stream_started = Signal(dict)
     stream_paused = Signal(dict)
     stream_ended = Signal(dict)
+    sound_played = Signal(dict)
+    sound_stopped = Signal(dict)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -768,6 +830,16 @@ class CommunityRealtimeBridge(QObject):
             if isinstance(data, dict):
                 self.stream_ended.emit(data)
 
+        @sio.on("sound.played")
+        def on_sound_played(data):
+            if isinstance(data, dict):
+                self.sound_played.emit(data)
+
+        @sio.on("sound.stopped")
+        def on_sound_stopped(data):
+            if isinstance(data, dict):
+                self.sound_stopped.emit(data)
+
         with self._lock:
             self._sio = sio
 
@@ -874,6 +946,28 @@ class CommunityRealtimeBridge(QObject):
         if channel_id:
             self._emit_socket("community:stream:stop", {"channel_id": channel_id})
 
+    def emit_sound_play(
+        self,
+        channel_id: str,
+        sound_id: str,
+        title: str = "",
+        volume_scale: float = 1.0,
+    ) -> None:
+        if channel_id and sound_id:
+            self._emit_socket("community:sound:play", {
+                "channel_id": channel_id,
+                "sound_id": sound_id,
+                "title": title,
+                "volume_scale": float(volume_scale),
+            })
+
+    def emit_sound_stop(self, channel_id: str, sound_id: str) -> None:
+        if channel_id and sound_id:
+            self._emit_socket("community:sound:stop", {
+                "channel_id": channel_id,
+                "sound_id": sound_id,
+            })
+
     def disconnect_sync(self) -> None:
         self._stop_flag = True
         with self._lock:
@@ -956,6 +1050,8 @@ class CommunityController(QObject):
     remote_video_frame_received = Signal(str, int, int, bytes)
     remote_stream_ended = Signal(str)
     active_streams_updated = Signal(list)
+    soundboard_loaded = Signal(list)
+    soundboard_event = Signal(dict)
     realtime_status_changed = Signal(bool, str)
     error_occurred = Signal(str)
 
@@ -1015,6 +1111,8 @@ class CommunityController(QObject):
         self.active_stream_session: Optional[Dict[str, Any]] = None
         self._stream_watching_channel_id: Optional[str] = None
         self.active_streams: List[Dict[str, Any]] = []
+        self.active_soundboard_sounds: List[Dict[str, Any]] = []
+        self._sound_audio_cache: Dict[str, bytes] = {}
         self.active_friends: List[Dict[str, Any]] = []
         self.incoming_friend_requests: List[Dict[str, Any]] = []
         self.active_activity_feed: List[Dict[str, Any]] = []
@@ -1059,6 +1157,8 @@ class CommunityController(QObject):
         self.realtime.stream_started.connect(self._on_rt_stream_started)
         self.realtime.stream_paused.connect(self._on_rt_stream_paused)
         self.realtime.stream_ended.connect(self._on_rt_stream_ended)
+        self.realtime.sound_played.connect(self._on_rt_sound_played)
+        self.realtime.sound_stopped.connect(self._on_rt_sound_stopped)
 
     # ------------------------------------------------------------------
     # Infraestructura Asíncrona para evitar bloqueo del hilo Qt GUI (P0-02)
@@ -1447,6 +1547,8 @@ class CommunityController(QObject):
         self.active_channels = []
         self.active_channel = None
         self.active_members = []
+        self.active_soundboard_sounds = []
+        self._sound_audio_cache.clear()
         self.active_voice_channel = None
         self._active_voice_cred = None
         self._active_voice_reachable = False
@@ -1610,6 +1712,8 @@ class CommunityController(QObject):
             self.active_channels = []
             self.active_channel = None
             self.active_members = []
+        self.active_soundboard_sounds = []
+        self._sound_audio_cache.clear()
         self.refresh_communities()
 
     def open_community(self, community_id: str) -> Dict[str, Any]:
@@ -2617,6 +2721,225 @@ class CommunityController(QObject):
     def push_screen_audio_frame(self, samples: Any) -> bool:
         return self.voice_engine.push_screen_audio_frame(samples)
 
+    # ------------------------------------------------------------------
+    # Soundboard RTC (P1-C)
+    # ------------------------------------------------------------------
+    def load_soundboard(self, community_id: Optional[str] = None) -> List[Dict[str, Any]]:
+        if not self.session:
+            raise CommunityApiError("Sesión no iniciada.", status_code=401)
+        presets = [dict(p, is_preset=True) for p in self.api.list_sound_presets()]
+        cid = str(community_id or (self.active_community or {}).get("id") or "")
+        uploaded: List[Dict[str, Any]] = []
+        if cid:
+            try:
+                for item in self.api.list_community_sounds(cid):
+                    entry = dict(item)
+                    entry["is_preset"] = False
+                    uploaded.append(entry)
+            except Exception:
+                uploaded = []
+        combined = presets + uploaded
+        self.active_soundboard_sounds = combined
+        self.soundboard_loaded.emit(list(combined))
+        return combined
+
+    def load_soundboard_async(
+        self,
+        community_id: Optional[str] = None,
+        on_done: Optional[Callable[[List[Dict[str, Any]]], None]] = None,
+        on_error: Optional[Callable[[CommunityApiError], None]] = None,
+    ) -> int:
+        return self.run_async(
+            "load_soundboard",
+            lambda: self.load_soundboard(community_id=community_id),
+            on_success=on_done,
+            on_error=on_error,
+            category="soundboard_load",
+        )
+
+    def upload_sound_file(
+        self,
+        file_path: str,
+        title: Optional[str] = None,
+        owner_type: str = "community",
+        community_id: Optional[str] = None,
+        volume_scale: float = 1.0,
+        cooldown_seconds: int = 5,
+    ) -> Dict[str, Any]:
+        if not self.session:
+            raise CommunityApiError("Sesión no iniciada.", status_code=401)
+        p = Path(file_path)
+        if not p.is_file():
+            raise CommunityApiError("Archivo de audio no encontrado.", status_code=400)
+        file_bytes = p.read_bytes()
+        cid = str(community_id or (self.active_community or {}).get("id") or "")
+        created = self.api.upload_sound(
+            title=(title or p.stem or "Sonido").strip(),
+            file_bytes=file_bytes,
+            owner_type=owner_type,
+            owner_id=cid if owner_type == "community" else None,
+            volume_scale=volume_scale,
+            cooldown_seconds=cooldown_seconds,
+        )
+        sid = str(created.get("id") or "")
+        if sid:
+            self._sound_audio_cache[sid] = file_bytes
+        self.load_soundboard(community_id=cid or None)
+        return created
+
+    def upload_sound_file_async(
+        self,
+        file_path: str,
+        title: Optional[str] = None,
+        owner_type: str = "community",
+        community_id: Optional[str] = None,
+        on_done: Optional[Callable[[Dict[str, Any]], None]] = None,
+        on_error: Optional[Callable[[CommunityApiError], None]] = None,
+    ) -> int:
+        return self.run_async(
+            "upload_sound",
+            lambda: self.upload_sound_file(
+                file_path=file_path,
+                title=title,
+                owner_type=owner_type,
+                community_id=community_id,
+            ),
+            on_success=on_done,
+            on_error=on_error,
+            category="soundboard_upload",
+        )
+
+    def _prepare_soundboard_effect_worker(
+        self,
+        sound_id: str,
+        target_channel_id: str,
+        volume_scale: Optional[float],
+    ) -> Tuple[Dict[str, Any], Any, float]:
+        from backend.communities.sound_audio import (
+            decode_audio_bytes_to_pcm,
+            get_soundboard_preset,
+            synthesize_preset_pcm,
+        )
+
+        preset = get_soundboard_preset(sound_id)
+        if preset is not None:
+            auth = self.api.authorize_sound_preset(target_channel_id, str(preset["id"]))
+            vol = float(volume_scale if volume_scale is not None else auth.get("volume_scale", 0.75))
+            pcm = synthesize_preset_pcm(
+                str(preset["id"]),
+                volume_scale=vol,
+                sample_rate=self.voice_engine.SAMPLE_RATE,
+            )
+            return auth, pcm, vol
+
+        auth = self.api.authorize_sound_play(sound_id, target_channel_id)
+        vol = float(volume_scale if volume_scale is not None else auth.get("volume_scale", 1.0))
+        cached = self._sound_audio_cache.get(sound_id)
+        if cached is None:
+            cached = self.api.download_sound_audio(sound_id)
+            self._sound_audio_cache[sound_id] = cached
+        try:
+            pcm = decode_audio_bytes_to_pcm(
+                cached,
+                volume_scale=vol,
+                target_sample_rate=self.voice_engine.SAMPLE_RATE,
+            )
+        except Exception as exc:
+            raise CommunityApiError(
+                f"No se pudo decodificar el audio '{auth.get('title') or sound_id}': {exc}",
+                status_code=422,
+                code="AUDIO_DECODE_FAILED",
+            ) from exc
+        return auth, pcm, vol
+
+    def play_soundboard_effect(
+        self,
+        sound_id: str,
+        channel_id: Optional[str] = None,
+        volume_scale: Optional[float] = None,
+    ) -> Dict[str, Any]:
+        if not self.session:
+            raise CommunityApiError("Sesión no iniciada.", status_code=401)
+        ch = self.active_voice_channel
+        target_id = str(channel_id or (ch or {}).get("id") or "")
+        if not target_id or not self.voice_engine.is_connected:
+            raise CommunityApiError("Conéctate a un canal de voz antes de usar el soundboard.", status_code=400)
+        if not self.voice_engine.media_transport_active:
+            raise CommunityApiError(
+                "Transporte WebRTC LiveKit no activo para transmitir audio del soundboard.",
+                status_code=503,
+                code="RTC_MEDIA_UNAVAILABLE",
+            )
+        if self.voice_engine.is_muted or self.voice_engine.is_deafened:
+            raise CommunityApiError(
+                "Desactiva silencio/ensordecido para reproducir efectos en el canal de voz.",
+                status_code=400,
+                code="VOICE_MUTED",
+            )
+
+        auth, pcm, eff_vol = self._prepare_soundboard_effect_worker(sound_id, target_id, volume_scale)
+        eff_id = str(auth.get("sound_id") or sound_id)
+        title = str(auth.get("title") or eff_id)
+        injected = self.voice_engine.play_soundboard_pcm(
+            pcm,
+            sound_id=eff_id,
+            title=title,
+            volume_scale=1.0,
+        )
+        if not injected:
+            raise CommunityApiError(
+                self.voice_engine.last_error or "No se pudo inyectar el efecto en el track RTC.",
+                status_code=503,
+                code="RTC_SOUNDBOARD_FAILED",
+            )
+        self.realtime.emit_sound_play(target_id, eff_id, title=title, volume_scale=eff_vol)
+        res = {
+            **auth,
+            "channel_id": target_id,
+            "rtc_injected": True,
+            "user_id": self.session.user_id,
+        }
+        self.soundboard_event.emit({"action": "played", **res})
+        return res
+
+    def play_soundboard_effect_async(
+        self,
+        sound_id: str,
+        channel_id: Optional[str] = None,
+        volume_scale: Optional[float] = None,
+        on_done: Optional[Callable[[Dict[str, Any]], None]] = None,
+        on_error: Optional[Callable[[CommunityApiError], None]] = None,
+    ) -> int:
+        return self.run_async(
+            "play_soundboard",
+            lambda: self.play_soundboard_effect(
+                sound_id=sound_id,
+                channel_id=channel_id,
+                volume_scale=volume_scale,
+            ),
+            on_success=on_done,
+            on_error=on_error,
+            category="soundboard_play",
+        )
+
+    def stop_soundboard_effect(
+        self,
+        sound_id: Optional[str] = None,
+        channel_id: Optional[str] = None,
+    ) -> int:
+        active_id = sound_id or self.voice_engine._active_sound_id
+        removed = self.voice_engine.stop_soundboard_audio(sound_id=sound_id)
+        ch_id = str(channel_id or (self.active_voice_channel or {}).get("id") or "")
+        if removed > 0 and ch_id and active_id and self.session:
+            self.realtime.emit_sound_stop(ch_id, str(active_id))
+            self.soundboard_event.emit({
+                "action": "stopped",
+                "channel_id": ch_id,
+                "sound_id": str(active_id),
+                "user_id": self.session.user_id,
+            })
+        return removed
+
     def _on_rt_connected(self) -> None:
         self.realtime_status_changed.emit(True, "Realtime Socket.IO conectado")
         # Recuperación automática tras reconexión fuera del hilo GUI sin duplicar
@@ -2805,3 +3128,11 @@ class CommunityController(QObject):
                     watching=False,
                 )
             )
+
+    def _on_rt_sound_played(self, payload: Dict[str, Any]) -> None:
+        if isinstance(payload, dict):
+            self.soundboard_event.emit({"action": "played", **payload})
+
+    def _on_rt_sound_stopped(self, payload: Dict[str, Any]) -> None:
+        if isinstance(payload, dict):
+            self.soundboard_event.emit({"action": "stopped", **payload})

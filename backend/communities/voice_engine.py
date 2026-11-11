@@ -157,6 +157,14 @@ class DesktopVoiceEngine:
         self._tx_frames_sent: int = 0
         self._rx_frames_received: int = 0
 
+        # Estado y mezcla RTC de Soundboard (P1-C)
+        self._soundboard_lock = threading.Lock()
+        self._soundboard_clips: List[Dict[str, Any]] = []
+        self._local_sb_queue: Deque[np.ndarray] = deque(maxlen=400)
+        self._soundboard_tx_frames: int = 0
+        self._active_sound_id: Optional[str] = None
+        self.on_soundboard_state_changed: Optional[Callable[[bool, Optional[str]], None]] = None
+
     def set_identity(self, user_id: str, username: str) -> None:
         """Actualiza la identidad autenticada del usuario local sin simular peers."""
         self.user_id = str(user_id)
@@ -644,10 +652,114 @@ class DesktopVoiceEngine:
                 except Exception:
                     break
 
+    def _has_active_soundboard(self) -> bool:
+        with self._soundboard_lock:
+            return bool(self._soundboard_clips)
+
+    def _consume_soundboard_chunk(self, n_samples: int) -> Optional[np.ndarray]:
+        ended_ids: List[str] = []
+        acc: Optional[np.ndarray] = None
+        still_active_id: Optional[str] = None
+        with self._soundboard_lock:
+            if not self._soundboard_clips:
+                return None
+            remaining_clips: List[Dict[str, Any]] = []
+            for clip in self._soundboard_clips:
+                samples = clip["samples"]
+                off = int(clip["offset"])
+                total = int(samples.size)
+                if off < total:
+                    take = min(n_samples, total - off)
+                    seg = samples[off:off + take]
+                    if acc is None:
+                        acc = np.zeros(n_samples, dtype=np.int32)
+                    acc[:take] += seg.astype(np.int32)
+                    clip["offset"] = off + take
+                if int(clip["offset"]) < total:
+                    remaining_clips.append(clip)
+                    still_active_id = str(clip.get("sound_id") or "")
+                else:
+                    ended_ids.append(str(clip.get("sound_id") or ""))
+            self._soundboard_clips = remaining_clips
+            self._active_sound_id = still_active_id
+
+        if ended_ids and not still_active_id:
+            cb = self.on_soundboard_state_changed
+            if cb is not None:
+                try:
+                    cb(False, None)
+                except Exception:
+                    pass
+            self._notify_state_changed()
+
+        if acc is None:
+            return None
+        np.clip(acc, -32768, 32767, out=acc)
+        return acc.astype(np.int16)
+
     async def _outbound_sender_loop(self) -> None:
-        await self._drain_audio_queue_loop(
-            self._outbound_queue, "_outbound_wakeup", "_audio_source", respect_mute=True
-        )
+        lk_rtc = _get_livekit_rtc()
+        wakeup = self._outbound_wakeup
+        if wakeup is None or lk_rtc is None:
+            return
+        next_sb_tick: Optional[float] = None
+        while not self._stop_rtc:
+            if not self._outbound_queue and not self._has_active_soundboard():
+                next_sb_tick = None
+                await wakeup.wait()
+                wakeup.clear()
+                continue
+            while not self._stop_rtc and (self._outbound_queue or self._has_active_soundboard()):
+                src = self._audio_source
+                if src is None or self.is_muted or self.is_deafened:
+                    self._outbound_queue.clear()
+                    self.stop_soundboard_audio()
+                    next_sb_tick = None
+                    break
+                mic_chunk = self._outbound_queue.popleft() if self._outbound_queue else None
+                sb_chunk = self._consume_soundboard_chunk(self.FRAME_SAMPLES)
+                if mic_chunk is None and sb_chunk is None:
+                    next_sb_tick = None
+                    break
+                if mic_chunk is None:
+                    now = time.monotonic()
+                    if next_sb_tick is None:
+                        next_sb_tick = now
+                    else:
+                        delay = next_sb_tick - now
+                        if delay > 0.001:
+                            await asyncio.sleep(delay)
+                            if self._stop_rtc or self._audio_source is None:
+                                break
+                    next_sb_tick += self.FRAME_MS / 1000.0
+                    pcm = sb_chunk
+                else:
+                    next_sb_tick = None
+                    if len(mic_chunk) != self.FRAME_SAMPLES:
+                        fixed = np.zeros(self.FRAME_SAMPLES, dtype=np.int16)
+                        take = min(len(mic_chunk), self.FRAME_SAMPLES)
+                        fixed[:take] = mic_chunk[:take]
+                        mic_chunk = fixed
+                    if sb_chunk is not None:
+                        mixed = mic_chunk.astype(np.int32) + sb_chunk.astype(np.int32)
+                        np.clip(mixed, -32768, 32767, out=mixed)
+                        pcm = mixed.astype(np.int16)
+                    else:
+                        pcm = mic_chunk
+
+                frame = lk_rtc.AudioFrame(
+                    pcm.tobytes(),
+                    self.SAMPLE_RATE,
+                    self.CHANNELS,
+                    self.FRAME_SAMPLES,
+                )
+                try:
+                    await src.capture_frame(frame)
+                    self._tx_frames_sent += 1
+                    if sb_chunk is not None:
+                        self._soundboard_tx_frames += 1
+                except Exception:
+                    break
 
     async def _screen_audio_sender_loop(self) -> None:
         await self._drain_audio_queue_loop(
@@ -784,6 +896,141 @@ class DesktopVoiceEngine:
         if not self.media_transport_active:
             return False
         return self._enqueue_audio_samples(arr, self._outbound_queue, self._outbound_wakeup)
+
+    def play_soundboard_pcm(
+        self,
+        samples: np.ndarray,
+        sound_id: str = "soundboard",
+        title: str = "",
+        volume_scale: float = 1.0,
+    ) -> bool:
+        """Inyecta y mezcla audio de soundboard PCM 48kHz mono en el track RTC saliente."""
+        if (
+            not self.is_connected
+            or not self.media_transport_active
+            or not self._can_publish
+            or self._audio_source is None
+            or self._loop is None
+            or self._outbound_wakeup is None
+        ):
+            with self._lock:
+                self.last_error = "Transporte RTC de voz no activo o sin permiso para transmitir audio"
+            return False
+
+        if self.is_muted or self.is_deafened:
+            with self._lock:
+                self.last_error = "Desactiva silencio/ensordecido para transmitir efectos del soundboard"
+            return False
+
+        raw = np.asarray(samples)
+        if raw.size == 0:
+            return False
+        if raw.ndim > 1:
+            raw = np.mean(raw.astype(np.float64), axis=1)
+        vol = max(0.0, min(2.0, float(volume_scale)))
+        if abs(vol - 1.0) > 1e-4:
+            arr = np.clip(raw.astype(np.float64) * vol, -32768.0, 32767.0).astype(np.int16).reshape(-1)
+        else:
+            arr = np.clip(raw, -32768, 32767).astype(np.int16).reshape(-1)
+        if arr.size == 0:
+            return False
+
+        clip = {
+            "sound_id": str(sound_id or "soundboard"),
+            "title": str(title or sound_id or "Soundboard"),
+            "samples": arr,
+            "offset": 0,
+        }
+        with self._soundboard_lock:
+            # Limitar mezcla simultánea a 4 clips activos
+            if len(self._soundboard_clips) >= 4:
+                self._soundboard_clips.pop(0)
+            self._soundboard_clips.append(clip)
+            self._active_sound_id = clip["sound_id"]
+
+        if self._output_stream is not None and not self.is_deafened:
+            with self._playout_lock:
+                for off in range(0, arr.size, self.FRAME_SAMPLES):
+                    chunk = arr[off:off + self.FRAME_SAMPLES]
+                    if chunk.size < self.FRAME_SAMPLES:
+                        padded = np.zeros(self.FRAME_SAMPLES, dtype=np.int16)
+                        padded[:chunk.size] = chunk
+                        chunk = padded
+                    self._local_sb_queue.append(chunk)
+
+        try:
+            self._loop.call_soon_threadsafe(self._outbound_wakeup.set)
+        except Exception:
+            return False
+
+        cb = self.on_soundboard_state_changed
+        if cb is not None:
+            try:
+                cb(True, clip["sound_id"])
+            except Exception:
+                pass
+        self._notify_state_changed()
+        return True
+
+    def play_soundboard_bytes(
+        self,
+        audio_bytes: bytes,
+        sound_id: str = "soundboard",
+        title: str = "",
+        volume_scale: float = 1.0,
+    ) -> bool:
+        """Decodifica audio MP3/WAV y lo mezcla en vivo dentro del track RTC saliente."""
+        from backend.communities.sound_audio import decode_audio_bytes_to_pcm
+
+        try:
+            pcm = decode_audio_bytes_to_pcm(
+                audio_bytes,
+                volume_scale=1.0,
+                target_sample_rate=self.SAMPLE_RATE,
+            )
+        except Exception as exc:
+            with self._lock:
+                self.last_error = f"Error decodificando audio del soundboard: {exc}"
+            return False
+        return self.play_soundboard_pcm(
+            pcm,
+            sound_id=sound_id,
+            title=title,
+            volume_scale=volume_scale,
+        )
+
+    def stop_soundboard_audio(self, sound_id: Optional[str] = None) -> int:
+        """Detiene la inyección RTC de efectos del soundboard activos."""
+        with self._soundboard_lock:
+            before = len(self._soundboard_clips)
+            if sound_id:
+                target = str(sound_id)
+                self._soundboard_clips = [
+                    c for c in self._soundboard_clips if str(c.get("sound_id") or "") != target
+                ]
+            else:
+                self._soundboard_clips.clear()
+            removed = before - len(self._soundboard_clips)
+            self._active_sound_id = (
+                str(self._soundboard_clips[-1].get("sound_id") or "")
+                if self._soundboard_clips
+                else None
+            )
+            still_playing = bool(self._soundboard_clips)
+
+        if not still_playing:
+            with self._playout_lock:
+                self._local_sb_queue.clear()
+
+        if removed > 0:
+            cb = self.on_soundboard_state_changed
+            if cb is not None:
+                try:
+                    cb(still_playing, self._active_sound_id)
+                except Exception:
+                    pass
+            self._notify_state_changed()
+        return removed
 
     def push_screen_audio_frame(self, samples: np.ndarray) -> bool:
         """Inyecta audio de pantalla/juego PCM int16 (48kHz mono) hacia LiveKit SFU."""
@@ -1043,6 +1290,10 @@ class DesktopVoiceEngine:
                     chunk = q.popleft()
                     take = min(frames, len(chunk))
                     mixed[:take] += chunk[:take].astype(np.int32)
+                if self._local_sb_queue:
+                    sb_chunk = self._local_sb_queue.popleft()
+                    take = min(frames, len(sb_chunk))
+                    mixed[:take] += sb_chunk[:take].astype(np.int32)
             np.clip(mixed, -32768, 32767, out=mixed)
             outdata[:frames, 0] = mixed.astype(np.int16)
 
@@ -1094,8 +1345,12 @@ class DesktopVoiceEngine:
         self._outbound_queue.clear()
         self._screen_audio_queue.clear()
         self._video_frame_queue.clear()
+        with self._soundboard_lock:
+            self._soundboard_clips.clear()
+            self._active_sound_id = None
         with self._playout_lock:
             self._playout_queues.clear()
+            self._local_sb_queue.clear()
 
         loop = self._loop
         thread = self._loop_thread
@@ -1231,6 +1486,10 @@ class DesktopVoiceEngine:
             self.packet_loss_pct = None
             self.last_error = None
             self.transport_protocol = "LiveKit WebRTC SFU (Signaling)"
+            self._tx_frames_sent = 0
+            self._rx_frames_received = 0
+            self._soundboard_tx_frames = 0
+            self._active_sound_id = None
             self._participants.clear()
         self._notify_participants_changed()
         self._notify_state_changed()
@@ -1240,6 +1499,7 @@ class DesktopVoiceEngine:
         should_mute = bool(self.is_muted or self.is_deafened)
         if should_mute:
             self._outbound_queue.clear()
+            self.stop_soundboard_audio()
         track = self._local_track
         loop = self._loop
         if track is None or loop is None or not loop.is_running():
@@ -1367,6 +1627,9 @@ class DesktopVoiceEngine:
                 "screen_share_fps": self.screen_share_fps,
                 "screen_tx_frames": self.screen_tx_frames,
                 "screen_rx_frames": self.screen_rx_frames,
+                "soundboard_playing": self._has_active_soundboard(),
+                "soundboard_tx_frames": self._soundboard_tx_frames,
+                "active_sound_id": self._active_sound_id,
                 "participant_count": len(self._participants),
                 "last_error": self.last_error,
             }

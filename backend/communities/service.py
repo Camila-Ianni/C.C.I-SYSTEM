@@ -11,10 +11,15 @@ from __future__ import annotations
 
 import os
 import re
+import threading
 import time
 import uuid
 from typing import Any, Dict, List, Optional, Tuple
 from backend.communities.repository import CommunitiesRepository
+from backend.communities.sound_audio import (
+    SOUNDBOARD_PRESETS,
+    get_soundboard_preset,
+)
 from backend.communities.sound_validator import (
     validate_mp3_payload,
     save_sound_file,
@@ -47,6 +52,8 @@ class CommunitiesService:
 
     def __init__(self, repo: Optional[CommunitiesRepository] = None):
         self._repo = repo
+        self._sound_cooldown_lock = threading.Lock()
+        self._preset_cooldowns: Dict[Tuple[str, str], float] = {}
 
     @property
     def repo(self) -> CommunitiesRepository:
@@ -1387,13 +1394,93 @@ class CommunitiesService:
 
         return {
             "authorized": True,
+            "is_preset": False,
             "sound_id": sound_id,
             "title": sound["title"],
             "channel_id": channel_id,
             "community_id": community_id,
             "storage_key": sound["storage_key"],
+            "audio_url": f"/api/v1/sounds/{sound_id}/audio",
             "duration_seconds": sound["duration_seconds"],
             "volume_scale": sound["volume_scale"],
+            "cooldown_seconds": cooldown_sec,
+        }
+
+    def get_sound_audio_path(
+        self,
+        actor_id: str,
+        sound_id: str,
+        storage_dir: Optional[str] = None,
+    ) -> str:
+        """Valida permisos de acceso al sonido y resuelve su archivo binario en disco."""
+        from backend.config import config as app_config
+
+        sound = self.get_sound(actor_id=actor_id, sound_id=sound_id)
+        effective_storage_dir = (
+            storage_dir
+            or os.getenv("CCI_SOUNDS_STORAGE_PATH")
+            or str(app_config.sounds_storage_path)
+        )
+        storage_key = str(sound.get("storage_key") or "").strip()
+        filename = os.path.basename(storage_key) if storage_key else f"{sound_id}.mp3"
+        base_abs = os.path.abspath(effective_storage_dir)
+        full_path = os.path.abspath(os.path.join(base_abs, filename))
+        if not full_path.startswith(base_abs + os.sep) or not os.path.isfile(full_path):
+            raise LookupError("Archivo de audio no encontrado en almacenamiento")
+        return full_path
+
+    def list_sound_presets(self) -> List[Dict[str, Any]]:
+        """Devuelve la lista de efectos de soundboard integrados disponibles."""
+        return [dict(item) for item in SOUNDBOARD_PRESETS]
+
+    def authorize_preset_play(
+        self,
+        actor_id: str,
+        preset_id: str,
+        channel_id: str,
+    ) -> Dict[str, Any]:
+        """Autoriza la reproducción de un efecto integrado sobre una sala de voz con RBAC y cooldown."""
+        preset = get_soundboard_preset(preset_id)
+        if not preset:
+            raise LookupError("Preset de soundboard no encontrado")
+
+        chan = self.repo.get_channel(channel_id)
+        if not chan:
+            raise LookupError("Canal de voz no encontrado")
+
+        if chan.get("type") not in ("voice", "stream"):
+            raise ValueError("El canal especificado no es una sala de voz")
+
+        community_id = chan["community_id"]
+        if not self.has_permission(community_id, actor_id, "soundboard.play", channel_id=channel_id):
+            raise PermissionError("Se requiere permiso soundboard.play para reproducir sonidos")
+        if self.repo.is_user_muted(community_id, actor_id):
+            raise PermissionError("Estás silenciado en esta comunidad")
+
+        cooldown_sec = int(preset.get("cooldown_seconds", 3))
+        canon_id = str(preset["id"])
+        now = time.time()
+        with self._sound_cooldown_lock:
+            last_played = self._preset_cooldowns.get((actor_id, canon_id))
+            if last_played is not None:
+                elapsed = now - last_played
+                if elapsed < cooldown_sec:
+                    retry_after = round(cooldown_sec - elapsed, 2)
+                    raise SoundCooldownError(
+                        f"Sonido en enfriamiento. Espera {retry_after}s antes de volver a reproducirlo",
+                        retry_after=retry_after,
+                    )
+            self._preset_cooldowns[(actor_id, canon_id)] = now
+
+        return {
+            "authorized": True,
+            "is_preset": True,
+            "sound_id": canon_id,
+            "title": preset["title"],
+            "channel_id": channel_id,
+            "community_id": community_id,
+            "duration_seconds": preset["duration_seconds"],
+            "volume_scale": preset["volume_scale"],
             "cooldown_seconds": cooldown_sec,
         }
 
