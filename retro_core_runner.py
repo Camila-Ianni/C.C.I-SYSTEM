@@ -241,6 +241,15 @@ class LibretroRunner:
         self.lib.retro_get_system_av_info.restype = None
         self.lib.retro_unload_game.restype = None
         self.lib.retro_run.restype = None
+        try:
+            self.lib.retro_serialize_size.argtypes = []
+            self.lib.retro_serialize_size.restype = ctypes.c_size_t
+            self.lib.retro_serialize.argtypes = [ctypes.c_void_p, ctypes.c_size_t]
+            self.lib.retro_serialize.restype = ctypes.c_bool
+            self.lib.retro_unserialize.argtypes = [ctypes.c_void_p, ctypes.c_size_t]
+            self.lib.retro_unserialize.restype = ctypes.c_bool
+        except Exception:
+            pass
 
     def _setup_callbacks(self):
         self._ctx_reset_type = ctypes.CFUNCTYPE(None)
@@ -540,14 +549,26 @@ class LibretroRunner:
         self.analog_left[0] = -32767 if left else (32767 if right else 0)
         self.analog_left[1] = -32767 if up else (32767 if down else 0)
 
-        self.joypad_state[RETRO_DEVICE_ID_JOYPAD_A] = 1 if is_down(pygame.K_x) or is_down(pygame.K_RETURN) else 0
-        self.joypad_state[RETRO_DEVICE_ID_JOYPAD_B] = 1 if is_down(pygame.K_z) else 0
-        self.joypad_state[RETRO_DEVICE_ID_JOYPAD_X] = 1 if is_down(pygame.K_s) else 0
-        self.joypad_state[RETRO_DEVICE_ID_JOYPAD_Y] = 1 if is_down(pygame.K_a) else 0
-        self.joypad_state[RETRO_DEVICE_ID_JOYPAD_START] = 1 if is_down(pygame.K_RETURN) else 0
-        self.joypad_state[RETRO_DEVICE_ID_JOYPAD_SELECT] = 1 if is_down(pygame.K_RSHIFT) or is_down(pygame.K_LSHIFT) else 0
+        self.joypad_state[RETRO_DEVICE_ID_JOYPAD_A] = (
+            1 if (is_down(pygame.K_x) or is_down(pygame.K_SPACE) or is_down(pygame.K_k)) else 0
+        )
+        self.joypad_state[RETRO_DEVICE_ID_JOYPAD_B] = (
+            1 if (is_down(pygame.K_z) or is_down(pygame.K_j) or is_down(pygame.K_BACKSPACE)) else 0
+        )
+        self.joypad_state[RETRO_DEVICE_ID_JOYPAD_X] = (
+            1 if (is_down(pygame.K_s) or is_down(pygame.K_i) or is_down(pygame.K_c)) else 0
+        )
+        self.joypad_state[RETRO_DEVICE_ID_JOYPAD_Y] = (
+            1 if (is_down(pygame.K_a) or is_down(pygame.K_u) or is_down(pygame.K_v)) else 0
+        )
+        self.joypad_state[RETRO_DEVICE_ID_JOYPAD_START] = (
+            1 if (is_down(pygame.K_RETURN) or is_down(pygame.K_1)) else 0
+        )
+        self.joypad_state[RETRO_DEVICE_ID_JOYPAD_SELECT] = (
+            1 if (is_down(pygame.K_RSHIFT) or is_down(pygame.K_LSHIFT) or is_down(pygame.K_5) or is_down(pygame.K_TAB)) else 0
+        )
         self.joypad_state[RETRO_DEVICE_ID_JOYPAD_L] = 1 if is_down(pygame.K_q) else 0
-        self.joypad_state[RETRO_DEVICE_ID_JOYPAD_R] = 1 if is_down(pygame.K_w) else 0
+        self.joypad_state[RETRO_DEVICE_ID_JOYPAD_R] = 1 if (is_down(pygame.K_w) or is_down(pygame.K_e)) else 0
 
         if joystick and joystick.get_init():
             try:
@@ -576,34 +597,86 @@ class LibretroRunner:
                     self.joypad_state[RETRO_DEVICE_ID_JOYPAD_Y] = 1
                 if num_buttons > 3 and joystick.get_button(3):
                     self.joypad_state[RETRO_DEVICE_ID_JOYPAD_X] = 1
+                if num_buttons > 6 and joystick.get_button(6):
+                    self.joypad_state[RETRO_DEVICE_ID_JOYPAD_SELECT] = 1
                 if num_buttons > 7 and joystick.get_button(7):
                     self.joypad_state[RETRO_DEVICE_ID_JOYPAD_START] = 1
             except Exception:
                 pass
 
+    def update_pointer_from_mouse(self, mx: int, my: int, pressed: bool, view_rect: tuple[int, int, int, int]):
+        dx, dy, dw, dh = view_rect
+        if not pressed or dw <= 0 or dh <= 0:
+            self.pointer_pressed = False
+            self.pointer_x = 0
+            self.pointer_y = 0
+            return
+        if dx <= mx <= dx + dw and dy <= my <= dy + dh:
+            nx = (mx - dx) / float(dw)
+            ny = (my - dy) / float(dh)
+            self.pointer_x = int(max(-32767, min(32767, (nx * 2.0 - 1.0) * 32767)))
+            self.pointer_y = int(max(-32767, min(32767, (ny * 2.0 - 1.0) * 32767)))
+            self.pointer_pressed = True
+        else:
+            self.pointer_pressed = False
+
+    def serialize_state(self) -> bytes | None:
+        if not self.running:
+            return None
+        try:
+            sz = int(self.lib.retro_serialize_size())
+            if sz <= 0:
+                return None
+            buf = ctypes.create_string_buffer(sz)
+            if self.lib.retro_serialize(ctypes.cast(buf, ctypes.c_void_p), sz):
+                return bytes(buf.raw)
+        except Exception:
+            pass
+        return None
+
+    def unserialize_state(self, state_bytes: bytes) -> bool:
+        if not self.running or not state_bytes:
+            return False
+        try:
+            sz = len(state_bytes)
+            buf = ctypes.create_string_buffer(state_bytes, sz)
+            return bool(self.lib.retro_unserialize(ctypes.cast(buf, ctypes.c_void_p), sz))
+        except Exception:
+            return False
+
     def step_frame(self):
         if self.running and not self.paused:
             self.lib.retro_run()
 
-    def render_to(self, target_surface: pygame.Surface, screen_w: int = 1280, screen_h: int = 720):
+    def render_to(
+        self,
+        target_surface: pygame.Surface,
+        screen_w: int = 1280,
+        screen_h: int = 720,
+        top_offset: int = 0,
+        bottom_margin: int = 0,
+    ) -> tuple[int, int, int, int]:
+        avail_h = max(1, screen_h - top_offset - bottom_margin)
         if self.latest_surface:
             sw, sh = self.latest_surface.get_size()
             if self.aspect_ratio > 0.1:
                 eff_w = sh * self.aspect_ratio
-                scale = min(screen_w / max(1.0, eff_w), screen_h / max(1.0, float(sh)))
+                scale = min(screen_w / max(1.0, eff_w), avail_h / max(1.0, float(sh)))
                 dw = max(1, int(eff_w * scale))
                 dh = max(1, int(sh * scale))
             else:
-                scale = min(screen_w / max(1, sw), screen_h / max(1, sh))
+                scale = min(screen_w / max(1, sw), avail_h / max(1, sh))
                 dw = max(1, int(sw * scale))
                 dh = max(1, int(sh * scale))
 
             scaled = pygame.transform.scale(self.latest_surface, (dw, dh))
             dx = (screen_w - dw) // 2
-            dy = (screen_h - dh) // 2
+            dy = top_offset + (avail_h - dh) // 2
 
             target_surface.fill((0, 0, 0))
             target_surface.blit(scaled, (dx, dy))
+            return (dx, dy, dw, dh)
+        return (0, top_offset, screen_w, avail_h)
 
     def unload(self):
         if self.audio_stream:

@@ -41,6 +41,12 @@ roms/switch/
 roms/switch2/
 roms/wii/
 roms/nds/Pokemon White Version 2/
+assets_omnidash/playable_roms/ps1/
+assets_omnidash/playable_roms/mame/mslug6.zip
+assets_omnidash/playable_roms/nds/2696*
+assets_omnidash/playable_roms/nds/5585*
+!assets_omnidash/playable_roms/mame/*.zip
+!assets_omnidash/playable_roms/neogeo/*.zip
 *.iso
 *.wbfs
 *.bin
@@ -63,6 +69,9 @@ storage/
 outputs/
 web/static/downloads/*.zip
 *.zip
+!assets_omnidash/playable_roms/mame/*.zip
+!assets_omnidash/playable_roms/neogeo/*.zip
+assets_omnidash/playable_roms/mame/mslug6.zip
 web/static/downloads/*.dmg
 *.dmg
 web/static/downloads/*.exe
@@ -75,3 +84,4 @@ tools/*.ico
 system/Mupen64plus/
 saves/games/
 
+saves/
