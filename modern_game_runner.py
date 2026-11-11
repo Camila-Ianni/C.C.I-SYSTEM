@@ -486,7 +486,7 @@ def run_modern_game(
         return 1
 
     # Si existe un estado Libretro guardado previamente para este game_id, restaurarlo automáticamente
-    save_dir = storage.get_game_save_dir(game_id)
+    save_dir = storage.game_save_dir(game_id)
     state_file = save_dir / "libretro_state.sav"
     restored_state = False
     if state_file.exists():
