@@ -31,11 +31,52 @@ from backend.auth import (
     check_call_participation,
     unregister_socket,
     authenticate_user_credentials,
+    revoke_access_token,
+)
+from werkzeug.middleware.proxy_fix import ProxyFix
+from backend.security_hardening import (
+    apply_security_headers,
+    auth_rate_limiter,
+    get_client_ip,
+    get_rate_limit,
+    is_rate_limiting_enabled,
 )
 
 # Crear aplicación Flask para el backend de red
 app = Flask(__name__)
 app.config["SECRET_KEY"] = config.secret_key
+app.config["MAX_CONTENT_LENGTH"] = config.max_request_bytes
+app.wsgi_app = ProxyFix(app.wsgi_app, x_for=1, x_proto=1, x_host=1)
+
+
+@app.after_request
+def _inject_security_headers(response):
+    forwarded_proto = str(request.headers.get("X-Forwarded-Proto") or "").lower()
+    is_https = bool(request.is_secure or forwarded_proto == "https")
+    return apply_security_headers(
+        response,
+        path=request.path,
+        is_https=is_https,
+        is_production=(config.env.lower() == "production"),
+    )
+
+
+@app.errorhandler(413)
+def _handle_payload_too_large(_err):
+    return jsonify({
+        "success": False,
+        "error": "El tamaño de la solicitud excede el límite permitido.",
+        "code": "PAYLOAD_TOO_LARGE",
+    }), 413
+
+
+@app.errorhandler(500)
+def _handle_internal_error(_err):
+    return jsonify({
+        "success": False,
+        "error": "Error interno del servidor.",
+        "code": "INTERNAL_ERROR",
+    }), 500
 
 from backend.communities.routes import communities_bp, set_realtime_emitter
 app.register_blueprint(communities_bp, url_prefix="/api/v1")
@@ -174,9 +215,34 @@ signaling_router = WebRTCSignalingRouter(emit_fn=_emit_to)
 # ENDPOINT DE AUTENTICACIÓN CENTRALIZADA Y REGISTRO (P0)
 # ==============================================================================
 
+def _enforce_auth_rate_limit(bucket: str, env_var: str, default_max: int):
+    if not is_rate_limiting_enabled():
+        return None
+    ip = get_client_ip(request)
+    allowed, retry_after = auth_rate_limiter.check(
+        f"{bucket}:{ip}",
+        max_requests=get_rate_limit(env_var, default_max),
+        window_seconds=60.0,
+    )
+    if not allowed:
+        resp = jsonify({
+            "success": False,
+            "error": "Demasiados intentos de autenticación. Intenta nuevamente más tarde.",
+            "code": "RATE_LIMITED",
+            "retry_after": retry_after,
+        })
+        resp.status_code = 429
+        resp.headers["Retry-After"] = str(retry_after)
+        return resp
+    return None
+
+
 @app.route("/api/v1/auth/register", methods=["POST"])
 def register_account():
     """[PÚBLICO] Registra una nueva cuenta de usuario en el sistema."""
+    limited = _enforce_auth_rate_limit("auth_register", "CCI_RATE_LIMIT_REGISTER", 45)
+    if limited is not None:
+        return limited
     cci_database.init_db()
     body = request.get_json(silent=True) or {}
     email = str(body.get("email", "")).strip()
@@ -209,6 +275,9 @@ def issue_auth_token():
     Valida credenciales reales (usuario/email y contraseña o token de cuenta registrado).
     Rechaza solicitudes sin credenciales o con credenciales erróneas (401 Unauthorized).
     """
+    limited = _enforce_auth_rate_limit("auth_login", "CCI_RATE_LIMIT_LOGIN", 30)
+    if limited is not None:
+        return limited
     cci_database.init_db()
     body = request.get_json(silent=True) or {}
     identifier = str(body.get("identifier") or body.get("email") or body.get("user_id") or body.get("username") or "").strip()
@@ -246,6 +315,16 @@ def issue_auth_token():
 def get_authenticated_me():
     """[PROTEGIDO] Retorna la identidad verificada del token Bearer actual."""
     return jsonify({"success": True, "user": g.current_user}), 200
+
+
+@app.route("/api/v1/auth/logout", methods=["POST"])
+@require_auth
+def revoke_current_session_token():
+    """[PROTEGIDO] Revoca el token JWT actual del lado del servidor."""
+    raw_tok = getattr(g, "current_token_raw", None)
+    payload = getattr(g, "current_token_payload", {}) or {}
+    revoke_access_token(raw_tok, exp=payload.get("exp"))
+    return jsonify({"success": True, "revoked": True}), 200
 
 
 # ==============================================================================

@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 import base64
+from http.server import BaseHTTPRequestHandler, HTTPServer
 import json
 import logging
 import os
@@ -19,12 +20,16 @@ import socket
 import threading
 import time
 from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
-from urllib.parse import urlparse
+from urllib.parse import parse_qs, urlparse
+import webbrowser
 import weakref
 
 import requests
 import socketio
 from PySide6.QtCore import QObject, QRunnable, QThreadPool, QTimer, Qt, Signal
+
+from backend.communities.secure_store import SecureTokenStore
+from backend.communities.spotify_oauth import generate_pkce_pair
 
 logger = logging.getLogger(__name__)
 
@@ -275,6 +280,9 @@ class CommunityApiClient:
 
     def get_me(self) -> Dict[str, Any]:
         return self._request("GET", "/api/v1/auth/me")
+
+    def logout(self) -> Dict[str, Any]:
+        return self._request("POST", "/api/v1/auth/logout", json_body={})
 
     def list_communities(self, discover_public: bool = False) -> List[Dict[str, Any]]:
         params = {"visibility": "public"} if discover_public else None
@@ -670,6 +678,57 @@ class CommunityApiClient:
         data = self._request("DELETE", f"/api/v1/sounds/{sound_id}")
         return bool(data.get("deleted"))
 
+    def get_spotify_status(self) -> Dict[str, Any]:
+        return self._request("GET", "/api/v1/integrations/spotify/status")
+
+    def start_spotify_oauth(
+        self,
+        redirect_uri: str,
+        code_challenge: str,
+        share_presence: bool = True,
+        scopes: Optional[Sequence[str]] = None,
+    ) -> Dict[str, Any]:
+        body: Dict[str, Any] = {
+            "redirect_uri": redirect_uri,
+            "code_challenge": code_challenge,
+            "share_presence": bool(share_presence),
+        }
+        if scopes:
+            body["scopes"] = list(scopes)
+        return self._request("POST", "/api/v1/integrations/spotify/oauth/start", json_body=body)
+
+    def exchange_spotify_oauth(
+        self,
+        state: str,
+        code: str,
+        code_verifier: Optional[str] = None,
+        share_presence: Optional[bool] = None,
+    ) -> Dict[str, Any]:
+        body: Dict[str, Any] = {"state": state, "code": code}
+        if code_verifier is not None:
+            body["code_verifier"] = code_verifier
+        if share_presence is not None:
+            body["share_presence"] = bool(share_presence)
+        return self._request("POST", "/api/v1/integrations/spotify/oauth/exchange", json_body=body)
+
+    def update_spotify_preferences(
+        self,
+        opt_in_enabled: Optional[bool] = None,
+        share_presence: Optional[bool] = None,
+    ) -> Dict[str, Any]:
+        body: Dict[str, Any] = {}
+        if opt_in_enabled is not None:
+            body["opt_in_enabled"] = bool(opt_in_enabled)
+        if share_presence is not None:
+            body["share_presence"] = bool(share_presence)
+        return self._request("PATCH", "/api/v1/integrations/spotify/preferences", json_body=body)
+
+    def sync_spotify_playback(self) -> Dict[str, Any]:
+        return self._request("POST", "/api/v1/integrations/spotify/sync-playback", json_body={})
+
+    def revoke_spotify(self) -> Dict[str, Any]:
+        return self._request("POST", "/api/v1/integrations/spotify/revoke", json_body={})
+
 
 class CommunityRealtimeBridge(QObject):
     """Cliente Socket.IO en hilo separado que despacha eventos vía señales Qt."""
@@ -695,6 +754,7 @@ class CommunityRealtimeBridge(QObject):
     stream_ended = Signal(dict)
     sound_played = Signal(dict)
     sound_stopped = Signal(dict)
+    spotify_status_changed = Signal(dict)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -839,6 +899,11 @@ class CommunityRealtimeBridge(QObject):
         def on_sound_stopped(data):
             if isinstance(data, dict):
                 self.sound_stopped.emit(data)
+
+        @sio.on("spotify:status_changed")
+        def on_spotify_status_changed(data):
+            if isinstance(data, dict):
+                self.spotify_status_changed.emit(data)
 
         with self._lock:
             self._sio = sio
@@ -1055,6 +1120,7 @@ class CommunityController(QObject):
     active_streams_updated = Signal(list)
     soundboard_loaded = Signal(list)
     soundboard_event = Signal(dict)
+    spotify_status_changed = Signal(dict)
     realtime_status_changed = Signal(bool, str)
     error_occurred = Signal(str)
 
@@ -1071,6 +1137,7 @@ class CommunityController(QObject):
         super().__init__(parent)
         self.api_url = api_url.rstrip("/")
         self.session_path = session_path or default_session_path()
+        self.token_store = SecureTokenStore(vault_dir=self.session_path.parent / "vault")
         self.api = CommunityApiClient(self.api_url)
         self.realtime = CommunityRealtimeBridge(self)
         self.session: Optional[CommunitySession] = None
@@ -1131,6 +1198,15 @@ class CommunityController(QObject):
         self._active_game_pid: Optional[int] = None
         self._enable_game_watcher: bool = bool(enable_game_watcher)
         self._catalog_synced_to_watcher: bool = False
+        self.spotify_status: Dict[str, Any] = {
+            "connected": False,
+            "opt_in_enabled": False,
+            "share_presence": True,
+            "spotify_user_id": None,
+            "spotify_display_name": None,
+            "scopes": [],
+            "current_track": None,
+        }
         self.last_health: Dict[str, Any] = {}
 
         from backend.communities.game_watcher import GameProcessWatcher
@@ -1187,6 +1263,7 @@ class CommunityController(QObject):
         self.realtime.stream_ended.connect(self._on_rt_stream_ended)
         self.realtime.sound_played.connect(self._on_rt_sound_played)
         self.realtime.sound_stopped.connect(self._on_rt_sound_stopped)
+        self.realtime.spotify_status_changed.connect(self._on_rt_spotify_status_changed)
 
     # ------------------------------------------------------------------
     # Infraestructura Asíncrona para evitar bloqueo del hilo Qt GUI (P0-02)
@@ -1324,6 +1401,38 @@ class CommunityController(QObject):
 
         return self.run_async("check_backend", _work, on_success=_done, category="check_backend")
 
+    def _load_persisted_token(self, sess_path: Optional[Path] = None) -> Optional[str]:
+        """Recupera el JWT desde Keychain/keyring y migra sesiones heredadas en texto plano."""
+        target = sess_path or self.session_path
+        acct_key = self.token_store.build_account_key(target, kind="jwt")
+        stored_tok = self.token_store.get_secret(acct_key)
+        if stored_tok:
+            return str(stored_tok).strip()
+        if not target.exists():
+            return None
+        try:
+            raw = json.loads(target.read_text(encoding="utf-8"))
+        except Exception:
+            return None
+        legacy_tok = str(raw.get("token") or "").strip()
+        if not legacy_tok:
+            return None
+        backend_used = self.token_store.set_secret(acct_key, legacy_tok)
+        migrated_meta = {
+            "version": 2,
+            "api_url": str(raw.get("api_url") or self.api_url),
+            "user_id": str(raw.get("user_id") or ""),
+            "username": str(raw.get("username") or ""),
+            "token_storage": backend_used,
+            "token_ref": acct_key,
+        }
+        target.write_text(json.dumps(migrated_meta), encoding="utf-8")
+        try:
+            os.chmod(target, 0o600)
+        except Exception:
+            pass
+        return legacy_tok
+
     def restore_session(self) -> Optional[CommunitySession]:
         ok, msg = self.check_backend()
         if not ok:
@@ -1337,8 +1446,7 @@ class CommunityController(QObject):
             return None
 
         try:
-            raw = json.loads(self.session_path.read_text(encoding="utf-8"))
-            token = str(raw.get("token") or "").strip()
+            token = str(self._load_persisted_token(self.session_path) or "").strip()
             if not token:
                 raise ValueError("Empty token")
             self.api.set_token(token)
@@ -1401,8 +1509,7 @@ class CommunityController(QObject):
                 return False, msg, active_url, {}, None, None
             if not sess_path.exists():
                 return True, msg, active_url, {}, None, None
-            raw = json.loads(sess_path.read_text(encoding="utf-8"))
-            token = str(raw.get("token") or "").strip()
+            token = str(self._load_persisted_token(sess_path) or "").strip()
             if not token:
                 raise ValueError("Empty token")
             tmp = CommunityApiClient(active_url, timeout=self.api.timeout)
@@ -1571,6 +1678,10 @@ class CommunityController(QObject):
                 self.api.set_presence("offline")
             except Exception:
                 pass
+            try:
+                self.api.logout()
+            except Exception:
+                pass
         self.realtime.disconnect_sync()
         self.api.set_token(None)
         self.session = None
@@ -1591,9 +1702,19 @@ class CommunityController(QObject):
         self.active_notifications = []
         self.unread_notifications_count = 0
         self._last_synced_msg_id = None
+        self.spotify_status = {
+            "connected": False,
+            "opt_in_enabled": False,
+            "share_presence": True,
+            "spotify_user_id": None,
+            "spotify_display_name": None,
+            "scopes": [],
+            "current_track": None,
+        }
         self.clear_saved_session()
         self.stream_state_changed.emit({"live": False, "watching": False, "channel_id": None, "session": None})
         self.voice_state_changed.emit({"connected": False, "channel": None, "media_ready": False, "screen_live": False})
+        self.spotify_status_changed.emit(dict(self.spotify_status))
         self.notifications_updated.emit([], 0)
         self.session_changed.emit(None)
 
@@ -1642,17 +1763,22 @@ class CommunityController(QObject):
         self.session_changed.emit(sess)
         self.presence_self_changed.emit(self.current_presence_status, self.activity_visibility)
         self.refresh_activity_and_notifications_async()
+        self.refresh_spotify_status_async()
 
     def _save_session(self, sess: CommunitySession) -> None:
         try:
             self.session_path.parent.mkdir(parents=True, exist_ok=True)
+            account_key = self.token_store.build_account_key(self.session_path, kind="jwt")
+            backend_used = self.token_store.set_secret(account_key, sess.token)
             self.session_path.write_text(
                 json.dumps(
                     {
+                        "version": 2,
                         "api_url": sess.api_url,
-                        "token": sess.token,
                         "user_id": sess.user_id,
                         "username": sess.username,
+                        "token_storage": backend_used,
+                        "token_ref": account_key,
                     }
                 ),
                 encoding="utf-8",
@@ -1665,6 +1791,11 @@ class CommunityController(QObject):
             logger.warning("Failed to persist desktop session: %s", exc)
 
     def clear_saved_session(self) -> None:
+        try:
+            self.token_store.delete_secret(self.token_store.build_account_key(self.session_path, kind="jwt"))
+            self.token_store.delete_secret(self.token_store.build_account_key(self.session_path, kind="spotify"))
+        except Exception:
+            pass
         try:
             if self.session_path.exists():
                 self.session_path.unlink()
@@ -3407,3 +3538,166 @@ class CommunityController(QObject):
     def _on_rt_sound_stopped(self, payload: Dict[str, Any]) -> None:
         if isinstance(payload, dict):
             self.soundboard_event.emit({"action": "stopped", **payload})
+
+    # ------------------------------------------------------------------
+    # Integración Spotify OAuth 2.0 + PKCE (opt-in / revocable)
+    # ------------------------------------------------------------------
+    def _apply_spotify_status(self, status: Dict[str, Any]) -> Dict[str, Any]:
+        raw = dict(status or {})
+        cleaned = dict(raw.get("spotify")) if isinstance(raw.get("spotify"), dict) else raw
+        self.spotify_status = cleaned
+        self.spotify_status_changed.emit(cleaned)
+        return cleaned
+
+    def refresh_spotify_status(self) -> Dict[str, Any]:
+        if not self.session:
+            return dict(self.spotify_status)
+        return self._apply_spotify_status(self.api.get_spotify_status())
+
+    def refresh_spotify_status_async(self) -> int:
+        if not self.session:
+            return 0
+        return self.run_async(
+            "spotify_status",
+            self.api.get_spotify_status,
+            on_success=self._apply_spotify_status,
+            on_error=lambda _e: None,
+            category="spotify",
+        )
+
+    def start_spotify_oauth_flow(
+        self,
+        redirect_uri: str = "http://127.0.0.1:43821/callback",
+        share_presence: bool = True,
+    ) -> Dict[str, Any]:
+        if not self.session:
+            raise CommunityApiError("Sesión no iniciada.", status_code=401, code="UNAUTHORIZED")
+        verifier, challenge = generate_pkce_pair()
+        payload = self.api.start_spotify_oauth(
+            redirect_uri=redirect_uri,
+            code_challenge=challenge,
+            share_presence=share_presence,
+        )
+        spotify_key = self.token_store.build_account_key(self.session_path, kind="spotify")
+        self.token_store.set_json(
+            spotify_key,
+            {
+                "state": str(payload.get("state") or ""),
+                "code_verifier": verifier,
+                "redirect_uri": redirect_uri,
+                "share_presence": bool(share_presence),
+            },
+        )
+        return payload
+
+    def complete_spotify_oauth_flow(
+        self,
+        state: str,
+        code: str,
+        code_verifier: Optional[str] = None,
+        share_presence: Optional[bool] = None,
+    ) -> Dict[str, Any]:
+        if not self.session:
+            raise CommunityApiError("Sesión no iniciada.", status_code=401, code="UNAUTHORIZED")
+        spotify_key = self.token_store.build_account_key(self.session_path, kind="spotify")
+        verifier = code_verifier
+        pending = self.token_store.get_json(spotify_key) or {}
+        if verifier is None and str(pending.get("state") or "") == str(state or ""):
+            verifier = pending.get("code_verifier")
+            if share_presence is None and "share_presence" in pending:
+                share_presence = bool(pending["share_presence"])
+        try:
+            res = self.api.exchange_spotify_oauth(
+                state=state,
+                code=code,
+                code_verifier=verifier,
+                share_presence=share_presence,
+            )
+            return self._apply_spotify_status(res)
+        finally:
+            self.token_store.delete_secret(spotify_key)
+
+    def connect_spotify_via_loopback(
+        self,
+        share_presence: bool = True,
+        timeout_sec: float = 120.0,
+        open_browser: bool = True,
+    ) -> Dict[str, Any]:
+        """Ejecuta el flujo OAuth PKCE completo levantando callback temporal en 127.0.0.1."""
+        captured: Dict[str, Any] = {}
+        done_ev = threading.Event()
+
+        class _CallbackHandler(BaseHTTPRequestHandler):
+            def do_GET(self):  # noqa: N802
+                qs = parse_qs(urlparse(self.path).query)
+                captured["code"] = (qs.get("code") or [""])[0]
+                captured["state"] = (qs.get("state") or [""])[0]
+                captured["error"] = (qs.get("error") or [""])[0]
+                done_ev.set()
+                msg = (
+                    "<h2>Spotify conectado a OmniDash</h2><p>Ya puedes cerrar esta pestaña.</p>"
+                    if not captured["error"]
+                    else "<h2>Autorización cancelada</h2><p>Puedes cerrar esta pestaña.</p>"
+                )
+                body = f"<!doctype html><html><body style='font-family:sans-serif'>{msg}</body></html>".encode("utf-8")
+                self.send_response(200 if not captured["error"] else 400)
+                self.send_header("Content-Type", "text/html; charset=utf-8")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+
+            def log_message(self, format, *args):  # noqa: A002
+                return
+
+        srv = HTTPServer(("127.0.0.1", 0), _CallbackHandler)
+        srv.timeout = 0.25
+        port = int(srv.server_address[1])
+        redirect_uri = f"http://127.0.0.1:{port}/callback"
+        start_payload = self.start_spotify_oauth_flow(redirect_uri=redirect_uri, share_presence=share_presence)
+
+        def _serve_loop():
+            deadline = time.monotonic() + float(timeout_sec)
+            while not done_ev.is_set() and time.monotonic() < deadline:
+                srv.handle_request()
+
+        srv_thread = threading.Thread(target=_serve_loop, daemon=True, name="CCI-SpotifyCallback")
+        srv_thread.start()
+        try:
+            if open_browser and start_payload.get("authorize_url"):
+                webbrowser.open(str(start_payload["authorize_url"]))
+            if not done_ev.wait(timeout=float(timeout_sec)):
+                raise CommunityApiError("Tiempo de espera agotado esperando callback OAuth de Spotify", 408, "SPOTIFY_TIMEOUT")
+            if captured.get("error"):
+                raise CommunityApiError(f"Spotify rechazó la autorización: {captured['error']}", 400, "SPOTIFY_DENIED")
+            return self.complete_spotify_oauth_flow(
+                state=str(captured.get("state") or ""),
+                code=str(captured.get("code") or ""),
+                share_presence=share_presence,
+            )
+        finally:
+            try:
+                srv.server_close()
+            except Exception:
+                pass
+
+    def set_spotify_preferences(
+        self,
+        opt_in_enabled: Optional[bool] = None,
+        share_presence: Optional[bool] = None,
+    ) -> Dict[str, Any]:
+        res = self.api.update_spotify_preferences(opt_in_enabled=opt_in_enabled, share_presence=share_presence)
+        return self._apply_spotify_status(res)
+
+    def sync_spotify_playback(self) -> Dict[str, Any]:
+        res = self.api.sync_spotify_playback()
+        return self._apply_spotify_status(res)
+
+    def revoke_spotify_connection(self) -> Dict[str, Any]:
+        res = self.api.revoke_spotify()
+        self.token_store.delete_secret(self.token_store.build_account_key(self.session_path, kind="spotify"))
+        return self._apply_spotify_status(res)
+
+    def _on_rt_spotify_status_changed(self, payload: Dict[str, Any]) -> None:
+        if isinstance(payload, dict):
+            self.spotify_status.update(payload)
+            self.spotify_status_changed.emit(dict(self.spotify_status))

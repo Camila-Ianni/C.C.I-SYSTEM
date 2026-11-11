@@ -11,6 +11,13 @@
 {$API_DOMAIN:api.ccisystem.org} {
     tls {$CADDY_TLS_MODE:ops@ccisystem.org}
 
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains"
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "DENY"
+        Referrer-Policy "strict-origin-when-cross-origin"
+    }
+
     # API REST v1 y endpoints del sistema
     handle /api/* {
         reverse_proxy api:5050 {

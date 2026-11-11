@@ -12,15 +12,23 @@ import re
 import socket
 import time
 import uuid
+import html
 from pathlib import Path
 from typing import Any, Callable, Dict, Iterable, List, Optional
 from urllib.parse import urlparse
 from flask import Blueprint, g, jsonify, request, Response, send_file
 from backend.auth import require_auth
 from backend.communities.service import CommunitiesService, SoundCooldownError, StreamLimitError
+from backend.communities.spotify_oauth import SpotifyOAuthError, SpotifyOAuthService
 from backend.communities.stream_adapter import StreamValidationError
 from backend.communities.metrics import CommunityMetricsCollector
 from backend.config import config
+from backend.security_hardening import (
+    auth_rate_limiter,
+    get_client_ip,
+    get_rate_limit,
+    is_rate_limiting_enabled,
+)
 
 communities_bp = Blueprint("communities", __name__)
 
@@ -2003,5 +2011,172 @@ def system_limits_route():
             "stream_max_resolution": "4k",
         }
     }), 200
+
+
+def _enforce_spotify_rate_limit(scope: str, default_limit: int):
+    if not is_rate_limiting_enabled():
+        return None
+    limit = get_rate_limit("CCI_OAUTH_RATE_LIMIT_PER_MIN", default_limit)
+    uid = (getattr(g, "current_user", None) or {}).get("user_id", "anon")
+    key = f"oauth:{scope}:{get_client_ip(request)}:{uid}"
+    allowed, retry_after = auth_rate_limiter.check(key, max_requests=limit, window_seconds=60.0)
+    if allowed:
+        return None
+    resp = jsonify({"error": "Demasiadas solicitudes OAuth; intenta nuevamente en unos segundos."})
+    resp.status_code = 429
+    resp.headers["Retry-After"] = str(retry_after)
+    return resp
+
+
+def _spotify_service() -> SpotifyOAuthService:
+    return SpotifyOAuthService(get_service().repo)
+
+
+def _broadcast_spotify_result(svc: CommunitiesService, user_id: str, result: Dict[str, Any]) -> None:
+    presence = result.get("presence_updated") if isinstance(result.get("presence_updated"), dict) else result.get("presence")
+    if isinstance(presence, dict):
+        _broadcast_presence_to_communities(svc, user_id, presence)
+    spotify_obj = result.get("spotify") if isinstance(result.get("spotify"), dict) else result
+    _emit_realtime(
+        "spotify:status_changed",
+        {
+            "user_id": str(user_id),
+            "connected": bool(spotify_obj.get("connected")),
+            "opt_in_enabled": bool(spotify_obj.get("opt_in_enabled")),
+            "share_presence": bool(spotify_obj.get("share_presence")),
+            "display_name": spotify_obj.get("display_name"),
+            "spotify_display_name": spotify_obj.get("display_name"),
+            "current_track": spotify_obj.get("current_track"),
+            "current_artist": spotify_obj.get("current_artist"),
+            "revoked": bool(result.get("revoked", False)),
+        },
+        room=f"user_{user_id}",
+    )
+
+
+@communities_bp.route("/integrations/spotify/status", methods=["GET"])
+@require_auth
+def spotify_status_route():
+    """Retorna el estado opt-in y metadatos seguros (sin secretos) de Spotify para el usuario."""
+    try:
+        status = _spotify_service().get_status(str(g.current_user["user_id"]))
+        return jsonify(status), 200
+    except SpotifyOAuthError as e:
+        return jsonify({"error": e.message, "code": e.code}), e.status_code
+
+
+@communities_bp.route("/integrations/spotify/oauth/start", methods=["POST"])
+@require_auth
+def spotify_oauth_start_route():
+    """Inicia flujo Authorization Code + PKCE S256 opt-in para vincular Spotify."""
+    limited = _enforce_spotify_rate_limit("spotify_start", 25)
+    if limited is not None:
+        return limited
+    data = request.get_json(silent=True) or {}
+    try:
+        payload = _spotify_service().start_oauth(
+            str(g.current_user["user_id"]),
+            redirect_uri=data.get("redirect_uri"),
+            code_challenge=data.get("code_challenge"),
+            share_presence=data.get("share_presence", True),
+            scopes=data.get("scopes"),
+        )
+        return jsonify(payload), 200
+    except SpotifyOAuthError as e:
+        return jsonify({"error": e.message, "code": e.code}), e.status_code
+
+
+@communities_bp.route("/integrations/spotify/oauth/exchange", methods=["POST"])
+@require_auth
+def spotify_oauth_exchange_route():
+    """Valida state + PKCE code_verifier, canjea el código OAuth y guarda tokens cifrados."""
+    limited = _enforce_spotify_rate_limit("spotify_exchange", 25)
+    if limited is not None:
+        return limited
+    data = request.get_json(silent=True) or {}
+    user_id = str(g.current_user["user_id"])
+    try:
+        res = _spotify_service().complete_oauth(
+            user_id,
+            state=str(data.get("state") or ""),
+            code=str(data.get("code") or ""),
+            code_verifier=data.get("code_verifier"),
+            share_presence=data.get("share_presence"),
+        )
+        _broadcast_spotify_result(get_service(), user_id, res)
+        return jsonify(res), 200
+    except SpotifyOAuthError as e:
+        return jsonify({"error": e.message, "code": e.code}), e.status_code
+
+
+@communities_bp.route("/integrations/spotify/oauth/callback", methods=["GET"])
+def spotify_oauth_callback_route():
+    """Landing HTML segura tras redirección OAuth de Spotify (solo muestra code/state o error)."""
+    err = str(request.args.get("error") or "").strip()
+    state = str(request.args.get("state") or "").strip()
+    code = str(request.args.get("code") or "").strip()
+    if err:
+        body = (
+            "<!doctype html><html><body style='font-family:sans-serif;background:#0e1726;color:#f8fafc;padding:2rem'>"
+            f"<h2>Autorización de Spotify cancelada o fallida</h2><p>{html.escape(err)}</p>"
+            "</body></html>"
+        )
+        return Response(body, status=400, mimetype="text/html")
+    body = (
+        "<!doctype html><html><body style='font-family:sans-serif;background:#0e1726;color:#f8fafc;padding:2rem'>"
+        "<h2>Spotify autorizado en C.C.I. SYSTEM</h2>"
+        "<p>Puedes volver a OmniDash; el intercambio PKCE completará la conexión de forma segura.</p>"
+        f"<p><small>state: <code>{html.escape(state[:64])}</code> &middot; code recibido: {'sí' if code else 'no'}</small></p>"
+        "</body></html>"
+    )
+    return Response(body, status=200, mimetype="text/html")
+
+
+@communities_bp.route("/integrations/spotify/preferences", methods=["PATCH"])
+@require_auth
+def spotify_preferences_route():
+    """Actualiza el consentimiento opt-in (`opt_in_enabled`, `share_presence`) de Spotify."""
+    data = request.get_json(silent=True) or {}
+    user_id = str(g.current_user["user_id"])
+    try:
+        svc = get_service()
+        res = SpotifyOAuthService(svc.repo).update_preferences(
+            user_id,
+            opt_in_enabled=data.get("opt_in_enabled"),
+            share_presence=data.get("share_presence"),
+        )
+        _broadcast_spotify_result(svc, user_id, res)
+        return jsonify(res), 200
+    except SpotifyOAuthError as e:
+        return jsonify({"error": e.message, "code": e.code}), e.status_code
+
+
+@communities_bp.route("/integrations/spotify/sync-playback", methods=["POST"])
+@require_auth
+def spotify_sync_playback_route():
+    """Consulta la canción actual en Spotify (con refresh OAuth automático) y actualiza presencia opt-in."""
+    user_id = str(g.current_user["user_id"])
+    try:
+        svc = get_service()
+        res = SpotifyOAuthService(svc.repo).sync_playback(user_id)
+        _broadcast_spotify_result(svc, user_id, res)
+        return jsonify(res), 200
+    except SpotifyOAuthError as e:
+        return jsonify({"error": e.message, "code": e.code}), e.status_code
+
+
+@communities_bp.route("/integrations/spotify/revoke", methods=["POST"])
+@communities_bp.route("/integrations/spotify", methods=["DELETE"])
+@require_auth
+def spotify_revoke_route():
+    """Revoca inmediatamente los tokens cifrados de Spotify y limpia la presencia musical."""
+    user_id = str(g.current_user["user_id"])
+    try:
+        svc = get_service()
+        res = SpotifyOAuthService(svc.repo).revoke(user_id)
+        _broadcast_spotify_result(svc, user_id, res)
+        return jsonify(res), 200
+    except SpotifyOAuthError as e:
+        return jsonify({"error": e.message, "code": e.code}), e.status_code
 
 

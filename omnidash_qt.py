@@ -6824,6 +6824,13 @@ class CommunityExploreView(QWidget):
         self.join_code_btn.clicked.connect(self._open_join_code_dialog)
         hdr.addWidget(self.join_code_btn)
 
+        self.spotify_btn = QPushButton("🎵 Spotify")
+        self.spotify_btn.setProperty("class", "glassBtn")
+        self.spotify_btn.setCursor(Qt.PointingHandCursor)
+        self.spotify_btn.setToolTip("Conectar, configurar o revocar integración opt-in con Spotify")
+        self.spotify_btn.clicked.connect(self._open_spotify_dialog)
+        hdr.addWidget(self.spotify_btn)
+
         self.refresh_btn = QPushButton("↻ Actualizar")
         self.refresh_btn.setProperty("class", "glassBtn")
         self.refresh_btn.setCursor(Qt.PointingHandCursor)
@@ -6911,6 +6918,8 @@ class CommunityExploreView(QWidget):
         if self.controller:
             self.controller.communities_updated.connect(self.render_communities)
             self.controller.friends_updated.connect(self.render_friends)
+            self.controller.spotify_status_changed.connect(self._render_spotify_button)
+            self._render_spotify_button(getattr(self.controller, "spotify_status", {}) or {})
             self.controller.activity_feed_updated.connect(self.render_activity_feed)
             self.controller.session_changed.connect(self._on_session_changed)
             self.render_friends([], [])
@@ -6979,7 +6988,9 @@ class CommunityExploreView(QWidget):
                     or "offline"
                 ).lower()
                 fgame = f.get("current_game") or f.get("activity_title")
-                desc = f"🎮 {fgame}" if fgame else raw_st
+                atype = str(f.get("activity_type") or "").lower()
+                icon = "🎵" if atype == "listening" else "🎮"
+                desc = f"{icon} {fgame}" if fgame else raw_st
                 lbl = QLabel(f"● @{fname} — {desc}")
                 col = "#32D875" if (fgame or raw_st in ("online", "playing", "in_game")) else "#91A5B3"
                 lbl.setStyleSheet(f"font-size: 12px; color: {col};")
@@ -7126,6 +7137,138 @@ class CommunityExploreView(QWidget):
                 err_lbl.setVisible(True)
 
         join_b.clicked.connect(submit)
+        dlg.exec()
+
+    def _render_spotify_button(self, status: dict):
+        st = dict(status or {})
+        if isinstance(st.get("spotify"), dict):
+            st = dict(st["spotify"])
+        connected = bool(st.get("connected"))
+        opt_in = bool(st.get("opt_in_enabled"))
+        track = st.get("current_track")
+        track_title = track.get("title") if isinstance(track, dict) else (str(track or "").strip() or None)
+        if connected and opt_in and track_title:
+            self.spotify_btn.setText(f"🎵 {str(track_title)[:18]}")
+        elif connected:
+            self.spotify_btn.setText("🎵 Spotify activo" if opt_in else "🎵 Spotify (pausado)")
+        else:
+            self.spotify_btn.setText("🎵 Conectar Spotify")
+
+    def _open_spotify_dialog(self):
+        if not self.controller:
+            return
+        try:
+            st = self.controller.refresh_spotify_status()
+        except Exception:
+            st = dict(getattr(self.controller, "spotify_status", {}) or {})
+        if isinstance(st.get("spotify"), dict):
+            st = dict(st["spotify"])
+
+        dlg = QDialog(self)
+        dlg.setWindowTitle("Spotify OAuth (Opt-in & Revocable)")
+        dlg.setFixedWidth(440)
+        dlg.setStyleSheet("QDialog { background: #0e1e2e; color: #ffffff; } QLabel { color: #ffffff; }")
+        lay = QVBoxLayout(dlg)
+        lay.setSpacing(10)
+
+        connected = bool(st.get("connected"))
+        display_name = st.get("display_name") or st.get("spotify_display_name") or st.get("spotify_user_id") or "Cuenta vinculada"
+        track = st.get("current_track")
+        track_title = track.get("title") if isinstance(track, dict) else (str(track or "").strip() or None)
+        track_artist = track.get("artist") if isinstance(track, dict) else (str(st.get("current_artist") or "").strip() or None)
+        track_desc = (
+            f"Escuchando: {track_title} — {track_artist or ''}".strip(" —")
+            if track_title
+            else "Sin reproducción activa detectada."
+        )
+        summary_lbl = QLabel(
+            f"Estado: {'Conectado (' + str(display_name) + ')' if connected else 'No vinculado'}\n"
+            f"Almacenamiento seguro local: {getattr(self.controller.token_store, 'backend_name', 'keychain')}\n"
+            + (track_desc if connected else "Conecta Spotify solo si deseas compartir lo que escuchas.")
+        )
+        summary_lbl.setWordWrap(True)
+        summary_lbl.setStyleSheet("font-size: 12px; color: #bde6ff;")
+        lay.addWidget(summary_lbl)
+
+        share_chk = QCheckBox("Compartir lo que escucho en mi presencia (opt-in)")
+        share_chk.setChecked(bool(st.get("share_presence", True)))
+        lay.addWidget(share_chk)
+
+        optin_chk = QCheckBox("Mantener sincronización Spotify habilitada")
+        optin_chk.setChecked(bool(st.get("opt_in_enabled", True if not connected else False)))
+        optin_chk.setVisible(connected)
+        lay.addWidget(optin_chk)
+
+        msg_lbl = QLabel("")
+        msg_lbl.setWordWrap(True)
+        msg_lbl.setStyleSheet("color: #ffb3b8; font-size: 12px;")
+        msg_lbl.setVisible(False)
+        lay.addWidget(msg_lbl)
+
+        btns = QHBoxLayout()
+        close_b = QPushButton("Cerrar")
+        close_b.clicked.connect(dlg.reject)
+        btns.addWidget(close_b)
+        btns.addStretch(1)
+
+        if not connected:
+            conn_b = QPushButton("Conectar con Spotify")
+            conn_b.setStyleSheet("background: #1DB954; color: #051624; font-weight: 800; padding: 8px 14px; border-radius: 8px;")
+
+            def _do_connect():
+                try:
+                    self.controller.connect_spotify_via_loopback(share_presence=share_chk.isChecked())
+                    dlg.accept()
+                except Exception as exc:
+                    msg_lbl.setText(str(exc))
+                    msg_lbl.setVisible(True)
+
+            conn_b.clicked.connect(_do_connect)
+            btns.addWidget(conn_b)
+        else:
+            sync_b = QPushButton("Sincronizar")
+            save_b = QPushButton("Guardar")
+            revoke_b = QPushButton("Revocar")
+            revoke_b.setStyleSheet("background: rgba(233,75,86,0.3); border: 1px solid #E94B56; color: #ffd6d9; padding: 6px 12px; border-radius: 8px;")
+
+            def _do_sync():
+                try:
+                    res = self.controller.sync_spotify_playback()
+                    self._render_spotify_button(res)
+                    dlg.accept()
+                except Exception as exc:
+                    msg_lbl.setText(str(exc))
+                    msg_lbl.setVisible(True)
+
+            def _do_save():
+                try:
+                    res = self.controller.set_spotify_preferences(
+                        opt_in_enabled=optin_chk.isChecked(),
+                        share_presence=share_chk.isChecked(),
+                    )
+                    self._render_spotify_button(res)
+                    dlg.accept()
+                except Exception as exc:
+                    msg_lbl.setText(str(exc))
+                    msg_lbl.setVisible(True)
+
+            def _do_revoke():
+                try:
+                    res = self.controller.revoke_spotify_connection()
+                    self._render_spotify_button(res)
+                    dlg.accept()
+                except Exception as exc:
+                    msg_lbl.setText(str(exc))
+                    msg_lbl.setVisible(True)
+
+            sync_b.clicked.connect(_do_sync)
+            save_b.clicked.connect(_do_save)
+            revoke_b.clicked.connect(_do_revoke)
+            btns.addWidget(sync_b)
+            btns.addWidget(save_b)
+            btns.addWidget(revoke_b)
+
+        lay.addLayout(btns)
         dlg.exec()
 
     def _open_create_dialog(self):

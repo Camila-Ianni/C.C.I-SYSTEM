@@ -42,7 +42,7 @@ INSECURE_SECRET_PLACEHOLDERS = {
 }
 
 _PLACEHOLDER_PATTERNS = re.compile(
-    r"(^replace_with_|_replace_me$|replace_with|replace_me|changeme|placeholder|example_secret|your_.*_here)",
+    r"(^replace[-_]with[-_]|[-_]replace[-_]me$|replace[-_]with|replace[-_]me|changeme|placeholder|example[-_]secret|your[-_].*[-_]here)",
     re.IGNORECASE,
 )
 
@@ -89,12 +89,17 @@ class AppConfig:
     livekit_api_secret: str
     recordings_path: Path
     max_recordings_mb: int
+    max_request_bytes: int
+    spotify_client_id: str
+    spotify_client_secret: str
+    spotify_redirect_uri: str
 
     @classmethod
     def validate_production_secrets(cls, env: Optional[str] = None) -> None:
         """
         Valida de forma estricta (fail-fast) que en producción estén configurados
         CCI_SECRET_KEY, LIVEKIT_API_KEY, LIVEKIT_API_SECRET y TURN_SECRET con valores reales.
+        Rechaza también CORS wildcard `*` o secretos Spotify de plantilla en producción.
         Jamás expone el valor del secreto en el mensaje de excepción.
         """
         active_env = (env or os.getenv("CCI_ENV", "development")).strip().lower()
@@ -106,6 +111,8 @@ class AppConfig:
         lk_secret = os.getenv("LIVEKIT_API_SECRET", "").strip()
         turn_secret = (os.getenv("TURN_SECRET") or os.getenv("CCI_TURN_CREDENTIAL") or "").strip()
         require_turn = os.getenv("CCI_REQUIRE_TURN", "true").strip().lower() not in ("false", "0", "no")
+        cors_env = os.getenv("CCI_CORS_ORIGINS", "").strip()
+        spotify_secret = os.getenv("SPOTIFY_CLIENT_SECRET", "").strip()
 
         if is_insecure_or_placeholder_secret(jwt_secret, min_len=32):
             raise RuntimeError(
@@ -122,6 +129,14 @@ class AppConfig:
         if require_turn and is_insecure_or_placeholder_secret(turn_secret, min_len=32):
             raise RuntimeError(
                 "CRITICAL SECURITY ERROR: TURN_SECRET ausente, menor a 32 caracteres o con valor de plantilla en CCI_ENV=production."
+            )
+        if cors_env and "*" in [o.strip() for o in cors_env.split(",") if o.strip()]:
+            raise RuntimeError(
+                "CRITICAL SECURITY ERROR: CCI_CORS_ORIGINS no puede incluir wildcard '*' en CCI_ENV=production."
+            )
+        if spotify_secret and is_insecure_or_placeholder_secret(spotify_secret, min_len=16):
+            raise RuntimeError(
+                "CRITICAL SECURITY ERROR: SPOTIFY_CLIENT_SECRET inválido o con valor de plantilla en CCI_ENV=production."
             )
 
     @classmethod
@@ -178,6 +193,10 @@ class AppConfig:
             livekit_api_secret=os.getenv("LIVEKIT_API_SECRET", "secretkey1234567890abcdef" if not is_prod else ""),
             recordings_path=Path(os.getenv("CCI_RECORDINGS_PATH", str(ROOT / "grabaciones"))),
             max_recordings_mb=int(os.getenv("CCI_MAX_RECORDINGS_STORAGE_MB", "2048")),
+            max_request_bytes=int(os.getenv("CCI_MAX_REQUEST_BYTES", str(16 * 1024 * 1024))),
+            spotify_client_id=os.getenv("SPOTIFY_CLIENT_ID", "").strip(),
+            spotify_client_secret=os.getenv("SPOTIFY_CLIENT_SECRET", "").strip(),
+            spotify_redirect_uri=os.getenv("SPOTIFY_REDIRECT_URI", "").strip(),
         )
 
 

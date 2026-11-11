@@ -15,12 +15,99 @@ import functools
 import hashlib
 import hmac
 import json
+import secrets
+import threading
 import time
 from typing import Any, Callable, Dict, Optional, Tuple
 from flask import g, request, jsonify, session
 from flask_socketio import disconnect
 import cci_database
 from backend.config import config
+
+_REVOCATION_LOCK = threading.Lock()
+_REVOKED_JTIS: Dict[str, float] = {}
+
+
+def _ensure_revocation_table(conn) -> None:
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS revoked_tokens (
+            jti TEXT PRIMARY KEY,
+            exp REAL NOT NULL,
+            revoked_at REAL NOT NULL
+        );
+        """
+    )
+
+
+def revoke_access_token(token_or_jti: Optional[str], exp: Optional[float] = None) -> bool:
+    """Revoca un JWT activo por `jti` (o token crudo) en memoria y SQLite."""
+    raw = str(token_or_jti or "").strip()
+    if not raw:
+        return False
+    jti = raw
+    exp_ts = float(exp) if exp is not None else (time.time() + 86400.0)
+    if "." in raw:
+        parts = raw.split(".")
+        if len(parts) == 3:
+            try:
+                payload = json.loads(_base64url_decode(parts[1]).decode("utf-8"))
+                jti = str(payload.get("jti") or hashlib.sha256(raw.encode("utf-8")).hexdigest()[:24])
+                if payload.get("exp"):
+                    exp_ts = float(payload["exp"])
+            except Exception:
+                jti = hashlib.sha256(raw.encode("utf-8")).hexdigest()[:24]
+    if not jti:
+        return False
+
+    now = time.time()
+    with _REVOCATION_LOCK:
+        # Limpiar expirados en memoria para evitar crecimiento indefinido
+        for k, v in list(_REVOKED_JTIS.items()):
+            if v < now:
+                _REVOKED_JTIS.pop(k, None)
+        _REVOKED_JTIS[jti] = exp_ts
+
+    try:
+        with cci_database.get_db() as conn:
+            _ensure_revocation_table(conn)
+            conn.execute("DELETE FROM revoked_tokens WHERE exp < ?", (now,))
+            conn.execute(
+                "INSERT OR REPLACE INTO revoked_tokens (jti, exp, revoked_at) VALUES (?, ?, ?)",
+                (jti, exp_ts, now),
+            )
+    except Exception:
+        pass
+    return True
+
+
+def is_token_revoked(jti: Optional[str], raw_token: Optional[str] = None) -> bool:
+    now = time.time()
+    candidates = [c for c in (jti, hashlib.sha256(raw_token.encode("utf-8")).hexdigest()[:24] if raw_token else None) if c]
+    if not candidates:
+        return False
+
+    with _REVOCATION_LOCK:
+        for cand in candidates:
+            exp_val = _REVOKED_JTIS.get(cand)
+            if exp_val is not None and exp_val >= now:
+                return True
+
+    try:
+        with cci_database.get_db() as conn:
+            _ensure_revocation_table(conn)
+            for cand in candidates:
+                row = conn.execute(
+                    "SELECT exp FROM revoked_tokens WHERE jti = ? AND exp >= ?",
+                    (cand, now),
+                ).fetchone()
+                if row is not None:
+                    with _REVOCATION_LOCK:
+                        _REVOKED_JTIS[cand] = float(row["exp"])
+                    return True
+    except Exception:
+        pass
+    return False
 
 
 # ==============================================================================
@@ -40,13 +127,15 @@ def _base64url_decode(data: str) -> bytes:
 
 
 def create_access_token(user_id: str, username: str, expires_in_seconds: int = 86400, is_admin: bool = False) -> str:
-    """Genera un token seguro firmado con HMAC-SHA256."""
+    """Genera un token seguro firmado con HMAC-SHA256 con jti único."""
     now = time.time()
     header = {"alg": "HS256", "typ": "JWT"}
     payload = {
         "user_id": str(user_id),
         "username": str(username),
         "is_admin": bool(is_admin),
+        "jti": secrets.token_hex(12),
+        "iss": "cci-system",
         "iat": now,
         "exp": now + expires_in_seconds,
     }
@@ -65,7 +154,7 @@ def create_access_token(user_id: str, username: str, expires_in_seconds: int = 8
 
 
 def verify_access_token(token: str) -> Optional[Dict[str, Any]]:
-    """Valida la firma criptográfica y vigencia temporal del token."""
+    """Valida cabecera JWT, firma criptográfica, vigencia temporal y denylist de revocación."""
     if not token or not isinstance(token, str):
         return None
 
@@ -86,10 +175,17 @@ def verify_access_token(token: str) -> Optional[Dict[str, Any]]:
         return None
 
     try:
+        header = json.loads(_base64url_decode(parts[0]).decode("utf-8"))
+        if not isinstance(header, dict) or header.get("alg") != "HS256" or header.get("typ") != "JWT":
+            return None
         payload_bytes = _base64url_decode(parts[1])
         payload = json.loads(payload_bytes.decode("utf-8"))
-        if payload.get("exp", 0) < time.time():
+        if not isinstance(payload, dict) or not payload.get("user_id"):
+            return None
+        if float(payload.get("exp", 0)) < time.time():
             return None  # Expirado
+        if is_token_revoked(payload.get("jti"), raw_token=token):
+            return None  # Revocado explícitamente
         return payload
     except Exception:
         return None
@@ -181,6 +277,8 @@ def require_auth(fn: Callable) -> Callable:
             "username": str(payload["username"]),
             "is_admin": bool(payload.get("is_admin", False)),
         }
+        g.current_token_raw = token
+        g.current_token_payload = payload
         return fn(*args, **kwargs)
 
     return wrapper

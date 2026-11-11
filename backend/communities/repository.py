@@ -496,9 +496,38 @@ class CommunitiesRepository:
                 created_at REAL NOT NULL
             );
 
+            CREATE TABLE IF NOT EXISTS spotify_oauth_states (
+                state TEXT PRIMARY KEY,
+                user_id TEXT NOT NULL,
+                redirect_uri TEXT NOT NULL,
+                scopes TEXT NOT NULL,
+                share_presence INTEGER NOT NULL DEFAULT 1,
+                code_challenge TEXT NULL,
+                created_at REAL NOT NULL,
+                expires_at REAL NOT NULL,
+                consumed INTEGER NOT NULL DEFAULT 0
+            );
+
+            CREATE TABLE IF NOT EXISTS spotify_connections (
+                user_id TEXT PRIMARY KEY,
+                spotify_user_id TEXT NULL,
+                display_name TEXT NULL,
+                scopes TEXT NOT NULL,
+                token_ciphertext TEXT NULL,
+                expires_at REAL NULL,
+                opt_in_enabled INTEGER NOT NULL DEFAULT 0,
+                share_presence INTEGER NOT NULL DEFAULT 1,
+                current_track TEXT NULL,
+                current_artist TEXT NULL,
+                connected_at REAL NULL,
+                updated_at REAL NOT NULL,
+                revoked_at REAL NULL
+            );
+
             CREATE INDEX IF NOT EXISTS idx_reactions_message ON message_reactions(message_id);
             CREATE INDEX IF NOT EXISTS idx_activity_user_created ON activity_events(user_id, created_at DESC);
             CREATE INDEX IF NOT EXISTS idx_notifications_user_read ON user_notifications(user_id, is_read, created_at DESC);
+            CREATE INDEX IF NOT EXISTS idx_spotify_states_user ON spotify_oauth_states(user_id, expires_at);
             """)
 
             # Migración aditiva segura para user_presence (TTL + actividad real de juego)
@@ -2260,3 +2289,187 @@ class CommunitiesRepository:
             else:
                 cur = conn.execute("UPDATE user_notifications SET is_read = 1 WHERE user_id = ?", (user_id,))
             return cur.rowcount
+
+    # =========================================================================
+    # INTEGRACIÓN SPOTIFY OAUTH OPT-IN / REVOCABLE (P2)
+    # =========================================================================
+
+    def create_spotify_oauth_state(
+        self,
+        state: str,
+        user_id: str,
+        redirect_uri: str,
+        scopes: str,
+        share_presence: bool = True,
+        code_challenge: Optional[str] = None,
+        ttl_seconds: float = 600.0,
+    ) -> Dict[str, Any]:
+        now = time.time()
+        expires_at = now + max(30.0, float(ttl_seconds))
+        conn = self._get_connection()
+        with self._tx_lock, conn:
+            conn.execute("DELETE FROM spotify_oauth_states WHERE expires_at < ? OR consumed = 1", (now - 3600.0,))
+            conn.execute(
+                """
+                INSERT INTO spotify_oauth_states (
+                    state, user_id, redirect_uri, scopes, share_presence, code_challenge, created_at, expires_at, consumed
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 0)
+                """,
+                (state, user_id, redirect_uri, scopes, 1 if share_presence else 0, code_challenge, now, expires_at),
+            )
+        return {
+            "state": state,
+            "user_id": user_id,
+            "redirect_uri": redirect_uri,
+            "scopes": scopes,
+            "share_presence": bool(share_presence),
+            "code_challenge": code_challenge,
+            "created_at": now,
+            "expires_at": expires_at,
+        }
+
+    def consume_spotify_oauth_state(self, state: str, user_id: Optional[str] = None) -> Optional[Dict[str, Any]]:
+        now = time.time()
+        conn = self._get_connection()
+        with self._tx_lock, conn:
+            row = conn.execute("SELECT * FROM spotify_oauth_states WHERE state = ?", (state,)).fetchone()
+            if not row:
+                return None
+            rec = dict(row)
+            if rec.get("consumed"):
+                return None
+            if float(rec.get("expires_at") or 0) < now:
+                return None
+            if user_id is not None and str(rec.get("user_id")) != str(user_id):
+                return None
+            cur = conn.execute(
+                "UPDATE spotify_oauth_states SET consumed = 1 WHERE state = ? AND consumed = 0",
+                (state,),
+            )
+            if cur.rowcount != 1:
+                return None
+            rec["consumed"] = True
+            rec["share_presence"] = bool(rec.get("share_presence"))
+            return rec
+
+    def upsert_spotify_connection(
+        self,
+        user_id: str,
+        spotify_user_id: Optional[str],
+        display_name: Optional[str],
+        scopes: str,
+        token_ciphertext: str,
+        expires_at: Optional[float],
+        opt_in_enabled: bool = True,
+        share_presence: bool = True,
+    ) -> Dict[str, Any]:
+        now = time.time()
+        conn = self._get_connection()
+        with self._tx_lock, conn:
+            conn.execute(
+                """
+                INSERT INTO spotify_connections (
+                    user_id, spotify_user_id, display_name, scopes, token_ciphertext,
+                    expires_at, opt_in_enabled, share_presence, current_track, current_artist,
+                    connected_at, updated_at, revoked_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?, NULL)
+                ON CONFLICT(user_id) DO UPDATE SET
+                    spotify_user_id = excluded.spotify_user_id,
+                    display_name = excluded.display_name,
+                    scopes = excluded.scopes,
+                    token_ciphertext = excluded.token_ciphertext,
+                    expires_at = excluded.expires_at,
+                    opt_in_enabled = excluded.opt_in_enabled,
+                    share_presence = excluded.share_presence,
+                    connected_at = COALESCE(spotify_connections.connected_at, excluded.connected_at),
+                    updated_at = excluded.updated_at,
+                    revoked_at = NULL
+                """,
+                (
+                    user_id,
+                    spotify_user_id,
+                    display_name,
+                    scopes,
+                    token_ciphertext,
+                    expires_at,
+                    1 if opt_in_enabled else 0,
+                    1 if share_presence else 0,
+                    now,
+                    now,
+                ),
+            )
+        return self.get_spotify_connection(user_id) or {}
+
+    def get_spotify_connection(self, user_id: str) -> Optional[Dict[str, Any]]:
+        conn = self._get_connection()
+        row = conn.execute("SELECT * FROM spotify_connections WHERE user_id = ?", (user_id,)).fetchone()
+        if not row:
+            return None
+        d = dict(row)
+        d["opt_in_enabled"] = bool(d.get("opt_in_enabled"))
+        d["share_presence"] = bool(d.get("share_presence"))
+        return d
+
+    def update_spotify_connection_state(
+        self,
+        user_id: str,
+        opt_in_enabled: Optional[bool] = None,
+        share_presence: Optional[bool] = None,
+        token_ciphertext: Optional[str] = None,
+        expires_at: Optional[float] = None,
+        current_track: Any = ...,
+        current_artist: Any = ...,
+    ) -> Optional[Dict[str, Any]]:
+        now = time.time()
+        conn = self._get_connection()
+        with self._tx_lock, conn:
+            row = conn.execute("SELECT * FROM spotify_connections WHERE user_id = ?", (user_id,)).fetchone()
+            if not row:
+                return None
+            cur = dict(row)
+            new_opt = (1 if opt_in_enabled else 0) if opt_in_enabled is not None else cur["opt_in_enabled"]
+            new_share = (1 if share_presence else 0) if share_presence is not None else cur["share_presence"]
+            new_ct = token_ciphertext if token_ciphertext is not None else cur["token_ciphertext"]
+            new_exp = expires_at if expires_at is not None else cur["expires_at"]
+            new_track = cur["current_track"] if current_track is ... else current_track
+            new_artist = cur["current_artist"] if current_artist is ... else current_artist
+            conn.execute(
+                """
+                UPDATE spotify_connections
+                SET opt_in_enabled = ?,
+                    share_presence = ?,
+                    token_ciphertext = ?,
+                    expires_at = ?,
+                    current_track = ?,
+                    current_artist = ?,
+                    updated_at = ?
+                WHERE user_id = ?
+                """,
+                (new_opt, new_share, new_ct, new_exp, new_track, new_artist, now, user_id),
+            )
+        return self.get_spotify_connection(user_id)
+
+    def revoke_spotify_connection(self, user_id: str) -> Optional[Dict[str, Any]]:
+        now = time.time()
+        conn = self._get_connection()
+        with self._tx_lock, conn:
+            row = conn.execute("SELECT * FROM spotify_connections WHERE user_id = ?", (user_id,)).fetchone()
+            if not row:
+                return None
+            conn.execute(
+                """
+                UPDATE spotify_connections
+                SET token_ciphertext = NULL,
+                    expires_at = NULL,
+                    opt_in_enabled = 0,
+                    share_presence = 0,
+                    current_track = NULL,
+                    current_artist = NULL,
+                    revoked_at = ?,
+                    updated_at = ?
+                WHERE user_id = ?
+                """,
+                (now, now, user_id),
+            )
+            conn.execute("UPDATE spotify_oauth_states SET consumed = 1 WHERE user_id = ?", (user_id,))
+        return self.get_spotify_connection(user_id)
