@@ -129,14 +129,38 @@ def _enrich_messages(msgs: List[Dict[str, Any]], fallback_names: Optional[Dict[s
     return out
 
 
+def _list_accepted_friend_ids(user_id: str) -> List[str]:
+    try:
+        from backend.friends_service import FriendsService
+        items = FriendsService.get_instance().get_friends_list(str(user_id))
+        return [
+            str(f["friend_id"])
+            for f in items
+            if f.get("friend_id") and str(f.get("status") or "accepted") == "accepted"
+        ]
+    except Exception:
+        return []
+
+
 def _broadcast_presence_to_communities(svc: CommunitiesService, user_id: str, raw_presence: Dict[str, Any]) -> None:
     masked = svc._mask_presence_for_viewer(raw_presence, viewer_id=None)
     uname = _resolve_usernames([user_id]).get(str(user_id), str(user_id))
-    payload = dict(masked)
-    payload["username"] = uname
-    payload["game"] = masked.get("activity_title")
+    comm_payload = dict(masked)
+    if comm_payload.get("activity_visibility") == "friends":
+        comm_payload["activity_type"] = None
+        comm_payload["activity_title"] = None
+        comm_payload["activity_game_id"] = None
+        comm_payload["activity_started_at"] = None
+    comm_payload["username"] = uname
+    comm_payload["game"] = comm_payload.get("activity_title")
     for c in svc.repo.list_communities_for_user(user_id):
-        _emit_realtime("presence:updated", payload, room=f"comm_{c['id']}")
+        _emit_realtime("presence:updated", comm_payload, room=f"comm_{c['id']}")
+
+    friend_payload = dict(masked)
+    friend_payload["username"] = uname
+    friend_payload["game"] = friend_payload.get("activity_title")
+    for fid in _list_accepted_friend_ids(user_id):
+        _emit_realtime("presence:updated", friend_payload, room=f"user_{fid}")
 
 
 def _dispatch_mentions(
@@ -948,10 +972,16 @@ def report_game_activity_route():
         )
         ev = dict(res["event"])
         ev["username"] = username
+        if ev.get("title") and not ev.get("game_title"):
+            ev["game_title"] = ev["title"]
         ev_name = "activity:game_started" if action == "started" else "activity:game_stopped"
         if ev.get("visibility") != "private" and res["presence"].get("status") != "invisible":
-            for cid in res["community_ids"]:
-                _emit_realtime(ev_name, ev, room=f"comm_{cid}")
+            if ev.get("visibility") == "communities":
+                for cid in res["community_ids"]:
+                    _emit_realtime(ev_name, ev, room=f"comm_{cid}")
+            for fid in _list_accepted_friend_ids(user_id):
+                _emit_realtime(ev_name, ev, room=f"user_{fid}")
+            _emit_realtime(ev_name, ev, room=f"user_{user_id}")
         _broadcast_presence_to_communities(svc, user_id, res["presence"])
         return jsonify(res), 200
     except ValueError as e:
@@ -963,15 +993,7 @@ def report_game_activity_route():
 def get_activity_feed_route():
     viewer_id = g.current_user["user_id"]
     limit = max(1, min(100, int(request.args.get("limit", 40))))
-    friend_ids: List[str] = []
-    try:
-        import cci_database
-        for f in cci_database.get_user_friends(viewer_id):
-            if f.get("status") == "accepted":
-                fid = f["addressee_id"] if f["requester_id"] == viewer_id else f["requester_id"]
-                friend_ids.append(str(fid))
-    except Exception:
-        pass
+    friend_ids = _list_accepted_friend_ids(viewer_id)
 
     svc = get_service()
     events = svc.get_activity_feed(viewer_id=viewer_id, friend_ids=friend_ids, limit=limit)
@@ -981,6 +1003,8 @@ def get_activity_feed_route():
         item = dict(e)
         uid = str(item.get("user_id") or "")
         item["username"] = names.get(uid, uid)
+        if item.get("title") and not item.get("game_title"):
+            item["game_title"] = item["title"]
         enriched.append(item)
     return jsonify({"events": enriched}), 200
 

@@ -126,7 +126,9 @@ class TestCommunitiesQtP0(unittest.TestCase):
             view.auth_view.login_identifier.setText("nadie@test.local")
             view.auth_view.login_password.setText("Password123")
             view.auth_view.login_btn.click()
-            self.app.processEvents()
+            self.assertTrue(
+                self._pump_events_until(lambda: not view.auth_view.error_lbl.isHidden(), timeout_s=4.0)
+            )
 
             self.assertFalse(view.auth_view.error_lbl.isHidden())
             self.assertIn("disponible", view.auth_view.error_lbl.text().lower())
@@ -157,7 +159,14 @@ class TestCommunitiesQtP0(unittest.TestCase):
             view_a.auth_view.reg_username.setText("Alice")
             view_a.auth_view.reg_password.setText("AlicePass123!")
             view_a.auth_view.reg_btn.click()
-            self.app.processEvents()
+            self.assertTrue(
+                self._pump_events_until(
+                    lambda: ctrl_a.session is not None
+                    and view_a.internal_stack.currentWidget() == view_a.explore_view
+                    and view_a.auth_view.reg_btn.isEnabled(),
+                    timeout_s=4.0,
+                )
+            )
 
             self.assertIsNotNone(ctrl_a.session)
             self.assertTrue(sess_a.exists())
@@ -191,7 +200,12 @@ class TestCommunitiesQtP0(unittest.TestCase):
             view_b.auth_view.reg_username.setText("Bob")
             view_b.auth_view.reg_password.setText("BobPass123!")
             view_b.auth_view.reg_btn.click()
-            self.app.processEvents()
+            self.assertTrue(
+                self._pump_events_until(
+                    lambda: ctrl_b.session is not None and view_b.auth_view.reg_btn.isEnabled(),
+                    timeout_s=4.0,
+                )
+            )
 
             self.assertIsNotNone(ctrl_b.session)
             bob_mine, bob_pub = ctrl_b.refresh_communities()

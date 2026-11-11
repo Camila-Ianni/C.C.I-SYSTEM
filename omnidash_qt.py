@@ -5402,7 +5402,7 @@ class CommunityAuthView(AcrylicGlassCard):
         self.retry_btn = QPushButton("Reintentar conexión")
         self.retry_btn.setProperty("class", "glassBtn")
         self.retry_btn.setCursor(Qt.PointingHandCursor)
-        self.retry_btn.clicked.connect(lambda: self.controller.check_backend(auto_start=True))
+        self.retry_btn.clicked.connect(lambda: self.controller.check_backend_async(auto_start=True))
         hdr.addWidget(self.retry_btn)
         root.addLayout(hdr)
 
@@ -5541,6 +5541,18 @@ class CommunityAuthView(AcrylicGlassCard):
         else:
             self.error_lbl.setVisible(False)
 
+    def _set_auth_loading(self, busy: bool, mode: str = "login"):
+        self.login_btn.setEnabled(not busy)
+        self.reg_btn.setEnabled(not busy)
+        if busy:
+            if mode == "register":
+                self.reg_btn.setText("Registrando...")
+            else:
+                self.login_btn.setText("Entrando...")
+        else:
+            self.login_btn.setText("Entrar a Comunidades")
+            self.reg_btn.setText("Registrar cuenta")
+
     def _do_login(self):
         ident = self.login_identifier.text().strip()
         pw = self.login_password.text()
@@ -5548,11 +5560,17 @@ class CommunityAuthView(AcrylicGlassCard):
             self.show_error("Completá tu usuario/email y contraseña.")
             return
         self.show_error("")
-        try:
-            self.controller.login(ident, pw)
+        self._set_auth_loading(True, "login")
+
+        def _ok(_sess):
+            self._set_auth_loading(False, "login")
             self.login_password.clear()
-        except CommunityApiError as exc:
+
+        def _err(exc: CommunityApiError):
+            self._set_auth_loading(False, "login")
             self.show_error(exc.message)
+
+        self.controller.login_async(ident, pw, on_success=_ok, on_error=_err)
 
     def _do_register(self):
         email = self.reg_email.text().strip()
@@ -5562,11 +5580,17 @@ class CommunityAuthView(AcrylicGlassCard):
             self.show_error("Completá email, nombre de usuario y contraseña.")
             return
         self.show_error("")
-        try:
-            self.controller.register(email=email, username=username, password=pw)
+        self._set_auth_loading(True, "register")
+
+        def _ok(_sess):
+            self._set_auth_loading(False, "register")
             self.reg_password.clear()
-        except CommunityApiError as exc:
+
+        def _err(exc: CommunityApiError):
+            self._set_auth_loading(False, "register")
             self.show_error(exc.message)
+
+        self.controller.register_async(email=email, username=username, password=pw, on_success=_ok, on_error=_err)
 
 
 class CommunityInteriorView(AcrylicGlassCard):
@@ -5817,10 +5841,10 @@ class CommunityInteriorView(AcrylicGlassCard):
     def _on_community_selected(self, community_id: str):
         if not self.controller:
             return
-        try:
-            self.controller.open_community(community_id)
-        except CommunityApiError as exc:
-            self.chat_area.show_error(exc.message)
+        self.controller.open_community_async(
+            community_id,
+            on_error=lambda exc: self.chat_area.show_error(exc.message),
+        )
 
     def _on_community_opened(self, payload: dict):
         comm = payload.get("community")
@@ -5865,14 +5889,17 @@ class CommunityInteriorView(AcrylicGlassCard):
     def _on_channel_selected(self, channel_id: str, ch_type: str):
         if not self.controller:
             return
-        try:
-            if ch_type == "voice":
+        if ch_type == "voice":
+            try:
                 self.controller.join_voice_channel(channel_id)
                 self.channel_sidebar.set_active_voice_channel(channel_id)
-            else:
-                self.controller.select_channel(channel_id)
-        except CommunityApiError as exc:
-            self.chat_area.show_error(exc.message)
+            except CommunityApiError as exc:
+                self.chat_area.show_error(exc.message)
+        else:
+            self.controller.select_channel_async(
+                channel_id,
+                on_error=lambda exc: self.chat_area.show_error(exc.message),
+            )
 
     def _on_messages_loaded(self, channel_id: str, messages: list):
         if self.controller and self.controller.active_channel:
@@ -5936,21 +5963,28 @@ class CommunityInteriorView(AcrylicGlassCard):
         if not self.controller:
             return
         reply_id, att_ids = self.chat_area.consume_compose_meta()
-        try:
-            msg = self.controller.send_message(text, reply_to_id=reply_id, attachment_ids=att_ids or None)
-            self.chat_area.msg_input.clear()
+        self.chat_area.msg_input.clear()
+
+        def _done(msg: dict):
             self.chat_area.append_or_update_message(msg, current_user_id=self._current_user_id())
-        except CommunityApiError as exc:
-            self.chat_area.show_error(exc.message)
+
+        self.controller.send_message_async(
+            text,
+            reply_to_id=reply_id,
+            attachment_ids=att_ids or None,
+            on_done=_done,
+            on_error=lambda exc: self.chat_area.show_error(exc.message),
+        )
 
     def _on_load_older_messages(self, before_id: str):
         if not self.controller:
             return
-        try:
-            older = self.controller.load_older_messages(before_id, limit=40)
-            self.chat_area.prepend_messages(older, current_user_id=self._current_user_id())
-        except CommunityApiError as exc:
-            self.chat_area.show_error(exc.message)
+        self.controller.load_older_messages_async(
+            before_id,
+            limit=40,
+            on_done=lambda older: self.chat_area.prepend_messages(older, current_user_id=self._current_user_id()),
+            on_error=lambda exc: self.chat_area.show_error(exc.message),
+        )
 
     def _on_edit_message(self, message_id: str, new_text: str):
         if not self.controller:
@@ -6034,10 +6068,10 @@ class CommunityInteriorView(AcrylicGlassCard):
 
     def _on_refresh_messages(self):
         if self.controller and self.controller.active_channel:
-            try:
-                self.controller.select_channel(str(self.controller.active_channel["id"]))
-            except CommunityApiError as exc:
-                self.chat_area.show_error(exc.message)
+            self.controller.select_channel_async(
+                str(self.controller.active_channel["id"]),
+                on_error=lambda exc: self.chat_area.show_error(exc.message),
+            )
 
     def _on_leave_community(self):
         if not self.controller or not self.controller.active_community:
@@ -6406,12 +6440,9 @@ class CommunityExploreView(QWidget):
         if not self.controller:
             return
         self.show_error("")
-        try:
-            self.controller.refresh_communities()
-            self.controller.refresh_friends()
-            self.controller.refresh_activity_and_notifications()
-        except CommunityApiError as exc:
-            self.show_error(exc.message)
+        self.controller.refresh_communities_async(on_error=lambda exc: self.show_error(exc.message))
+        self.controller.refresh_friends_async()
+        self.controller.refresh_activity_and_notifications_async()
 
     def _on_add_friend_clicked(self):
         if not self.controller:
@@ -6469,7 +6500,7 @@ class CommunityExploreView(QWidget):
             return
         for ev in events[:6]:
             uname = str(ev.get("username") or ev.get("user_id") or "Jugador")
-            title = str(ev.get("game_title") or ev.get("game_id") or "Juego")
+            title = str(ev.get("game_title") or ev.get("title") or ev.get("game_id") or "Juego")
             etype = str(ev.get("event_type") or "")
             verb = "inició" if "started" in etype else "dejó de jugar"
             lbl = QLabel(f"🎮 @{uname} {verb} {title}")
@@ -6647,33 +6678,42 @@ class CommunitiesView(QWidget):
         if sess is None:
             self.internal_stack.setCurrentWidget(self.auth_view)
             return
-        try:
-            mine, _pub = self.controller.refresh_communities()
+
+        self.internal_stack.setCurrentWidget(self.explore_view)
+
+        def _after_comms(res):
+            mine, _pub = res
+            if self.controller.session is None:
+                return
             if not self._prefer_explore and mine:
                 target_id = (
                     str(self.controller.active_community["id"])
                     if self.controller.active_community
                     else str(mine[0]["id"])
                 )
-                self.controller.open_community(target_id)
-                self.internal_stack.setCurrentWidget(self.interior_view)
+                self.controller.open_community_async(
+                    target_id,
+                    on_error=lambda exc: self.explore_view.show_error(exc.message),
+                )
             else:
-                self.internal_stack.setCurrentWidget(self.explore_view)
-        except CommunityApiError as exc:
-            self.explore_view.show_error(exc.message)
-            self.internal_stack.setCurrentWidget(self.explore_view)
+                self.controller.refresh_friends_async()
+                self.controller.refresh_activity_and_notifications_async()
+
+        self.controller.refresh_communities_async(
+            on_done=_after_comms,
+            on_error=lambda exc: self.explore_view.show_error(exc.message),
+        )
 
     def activate_view(self, for_explore: bool = False):
         self._prefer_explore = for_explore
         if self.controller.session is None:
             if not self._bootstrapped and self._auto_connect:
                 self._bootstrapped = True
-                self.controller.restore_session()
+                self.controller.restore_session_async()
             elif self._auto_connect:
-                self.controller.check_backend(auto_start=True)
-            if self.controller.session is None:
-                self.internal_stack.setCurrentWidget(self.auth_view)
-                return
+                self.controller.check_backend_async(auto_start=True)
+            self.internal_stack.setCurrentWidget(self.auth_view)
+            return
 
         if for_explore:
             self.show_explore()
@@ -6684,19 +6724,35 @@ class CommunitiesView(QWidget):
         if self.controller.session is None:
             self.internal_stack.setCurrentWidget(self.auth_view)
             return
-        try:
-            if community_id:
-                self.controller.open_community(community_id)
-            elif not self.controller.active_community:
-                mine, _ = self.controller.refresh_communities()
+        if community_id:
+            self.controller.open_community_async(
+                community_id,
+                on_error=lambda exc: (
+                    self.explore_view.show_error(exc.message),
+                    self.internal_stack.setCurrentWidget(self.explore_view),
+                ),
+            )
+            return
+        if not self.controller.active_community:
+            def _after_mine(res):
+                mine, _ = res
                 if not mine:
                     self.internal_stack.setCurrentWidget(self.explore_view)
                     return
-                self.controller.open_community(str(mine[0]["id"]))
-            self.internal_stack.setCurrentWidget(self.interior_view)
-        except CommunityApiError as exc:
-            self.explore_view.show_error(exc.message)
-            self.internal_stack.setCurrentWidget(self.explore_view)
+                self.controller.open_community_async(
+                    str(mine[0]["id"]),
+                    on_error=lambda exc: self.explore_view.show_error(exc.message),
+                )
+
+            self.controller.refresh_communities_async(
+                on_done=_after_mine,
+                on_error=lambda exc: (
+                    self.explore_view.show_error(exc.message),
+                    self.internal_stack.setCurrentWidget(self.explore_view),
+                ),
+            )
+            return
+        self.internal_stack.setCurrentWidget(self.interior_view)
 
     def show_explore(self):
         if self.controller.session is None:
@@ -6879,7 +6935,7 @@ class OmniDashMainWindow(QMainWindow):
 
     def _restore_community_session(self):
         if self.community_controller.session is None:
-            self.community_controller.restore_session()
+            self.community_controller.restore_session_async()
 
     def _sync_session_ui(self):
         sess = self.community_controller.session

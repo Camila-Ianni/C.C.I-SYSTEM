@@ -1,5 +1,6 @@
 # C.C.I. SYSTEM - Dependencias del Cliente de Escritorio y Consola Virtual
 # 100% Python Multiplataforma (Windows / macOS / Linux)
+PySide6>=6.8.0
 pygame-ce>=2.5.0
 opencv-python-headless>=4.8.0
 numpy>=1.24.0
@@ -9,6 +10,8 @@ psutil>=5.9.0
 screeninfo>=0.8.0
 pyperclip>=1.8.0
 flask>=3.0.0
+Flask-SocketIO>=5.5.0
+python-socketio[client]>=5.11.0
 werkzeug>=3.0.0
 requests>=2.32.0
 websocket-client>=1.8.0

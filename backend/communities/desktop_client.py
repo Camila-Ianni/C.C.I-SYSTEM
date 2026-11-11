@@ -17,12 +17,12 @@ from pathlib import Path
 import socket
 import threading
 import time
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 from urllib.parse import urlparse
 
 import requests
 import socketio
-from PySide6.QtCore import QObject, QTimer, Signal
+from PySide6.QtCore import QObject, QRunnable, QThreadPool, QTimer, Signal
 
 logger = logging.getLogger(__name__)
 
@@ -199,8 +199,16 @@ class CommunityApiClient:
     def __init__(self, api_url: str = DEFAULT_API_URL, timeout: float = 6.0):
         self.api_url = api_url.rstrip("/")
         self.timeout = timeout
-        self._http = requests.Session()
+        self._thread_local = threading.local()
         self.token: Optional[str] = None
+
+    @property
+    def _http(self) -> requests.Session:
+        sess = getattr(self._thread_local, "session", None)
+        if sess is None:
+            sess = requests.Session()
+            self._thread_local.session = sess
+        return sess
 
     def set_token(self, token: Optional[str]) -> None:
         self.token = token.strip() if token else None
@@ -770,11 +778,49 @@ class CommunityRealtimeBridge(QObject):
                 pass
 
 
+class _RestTaskSignals(QObject):
+    succeeded = Signal(int, object)
+    failed = Signal(int, str, int, str)  # task_id, message, status_code, code
+
+
+class _RestWorker(QRunnable):
+    """Worker thread para llamadas REST fuera del hilo GUI con soporte de cancelación."""
+
+    def __init__(
+        self,
+        task_id: int,
+        fn: Callable[[], Any],
+        cancelled: threading.Event,
+    ):
+        super().__init__()
+        self.setAutoDelete(False)
+        self.task_id = task_id
+        self.fn = fn
+        self.cancelled = cancelled
+        self.signals = _RestTaskSignals()
+
+    def run(self) -> None:
+        if self.cancelled.is_set():
+            return
+        try:
+            res = self.fn()
+            if self.cancelled.is_set():
+                return
+            self.signals.succeeded.emit(self.task_id, res)
+        except CommunityApiError as exc:
+            if not self.cancelled.is_set():
+                self.signals.failed.emit(self.task_id, exc.message, exc.status_code, exc.code)
+        except Exception as exc:
+            if not self.cancelled.is_set():
+                self.signals.failed.emit(self.task_id, str(exc), 0, "WORKER_ERROR")
+
+
 class CommunityController(QObject):
     """Controlador único de UI Qt <-> Backend REST + Socket.IO para Communities."""
 
     session_changed = Signal(object)       # CommunitySession | None
     backend_status_changed = Signal(bool, str)
+    loading_changed = Signal(bool, str)    # is_loading, operation_name
     communities_updated = Signal(list, list)  # my_communities, public_communities
     community_opened = Signal(dict)        # community payload + channels + members
     channel_messages_loaded = Signal(str, list)  # channel_id, messages
@@ -832,6 +878,12 @@ class CommunityController(QObject):
         self._heartbeat_timer.setInterval(self._heartbeat_interval_ms or 18000)
         self._heartbeat_timer.timeout.connect(self._send_heartbeat)
 
+        self._thread_pool = QThreadPool(self)
+        self._thread_pool.setMaxThreadCount(4)
+        self._next_task_id: int = 0
+        self._pending_workers: Dict[int, Tuple[_RestWorker, Optional[str], int, threading.Event]] = {}
+        self._op_generations: Dict[str, int] = {}
+
         self.realtime.connected.connect(self._on_rt_connected)
         self.realtime.disconnected.connect(self._on_rt_disconnected)
         self.realtime.community_error.connect(self.error_occurred.emit)
@@ -850,30 +902,143 @@ class CommunityController(QObject):
         self.realtime.notification_received.connect(self._on_rt_notification_received)
 
     # ------------------------------------------------------------------
+    # Infraestructura Asíncrona para evitar bloqueo del hilo Qt GUI (P0-02)
+    # ------------------------------------------------------------------
+    def cancel_pending(self, category: Optional[str] = None) -> None:
+        """Cancela operaciones REST en vuelo (todas o de una categoría específica)."""
+        if category is None:
+            for key in list(self._op_generations.keys()):
+                self._op_generations[key] = self._op_generations.get(key, 0) + 1
+            for tid, (_worker, _cat, _gen, ev) in list(self._pending_workers.items()):
+                ev.set()
+            self._pending_workers.clear()
+        else:
+            self._op_generations[category] = self._op_generations.get(category, 0) + 1
+            for tid, (_worker, wcat, _gen, ev) in list(self._pending_workers.items()):
+                if wcat == category:
+                    ev.set()
+                    self._pending_workers.pop(tid, None)
+        self.loading_changed.emit(bool(self._pending_workers), "")
+
+    def run_async(
+        self,
+        op_name: str,
+        fn: Callable[[], Any],
+        on_success: Optional[Callable[[Any], None]] = None,
+        on_error: Optional[Callable[[CommunityApiError], None]] = None,
+        category: Optional[str] = None,
+    ) -> int:
+        """Ejecuta una llamada REST bloqueante en QThreadPool y despacha resultados al hilo Qt."""
+        self._next_task_id += 1
+        task_id = self._next_task_id
+        gen = 0
+        if category:
+            gen = self._op_generations.get(category, 0) + 1
+            self._op_generations[category] = gen
+            for tid, (_w, wcat, _g, ev) in list(self._pending_workers.items()):
+                if wcat == category:
+                    ev.set()
+                    self._pending_workers.pop(tid, None)
+
+        cancel_ev = threading.Event()
+        worker = _RestWorker(task_id=task_id, fn=fn, cancelled=cancel_ev)
+        self._pending_workers[task_id] = (worker, category, gen, cancel_ev)
+        self.loading_changed.emit(True, op_name)
+
+        def _handle_ok(tid: int, result: Any) -> None:
+            entry = self._pending_workers.pop(tid, None)
+            self.loading_changed.emit(bool(self._pending_workers), "")
+            if entry is None:
+                return
+            _w, cat, wgen, ev = entry
+            if ev.is_set():
+                return
+            if cat and wgen != self._op_generations.get(cat, 0):
+                return
+            if on_success:
+                on_success(result)
+
+        def _handle_err(tid: int, message: str, status_code: int, code: str) -> None:
+            entry = self._pending_workers.pop(tid, None)
+            self.loading_changed.emit(bool(self._pending_workers), "")
+            if entry is None:
+                return
+            _w, cat, wgen, ev = entry
+            if ev.is_set():
+                return
+            if cat and wgen != self._op_generations.get(cat, 0):
+                return
+            err = CommunityApiError(message, status_code=status_code, code=code)
+            if on_error:
+                on_error(err)
+            else:
+                self.error_occurred.emit(err.message)
+
+        worker.signals.succeeded.connect(_handle_ok)
+        worker.signals.failed.connect(_handle_err)
+        self._thread_pool.start(worker)
+        return task_id
+
+    # ------------------------------------------------------------------
     # Sesión & Salud
     # ------------------------------------------------------------------
+    def _apply_backend_result(self, ok: bool, msg: str, active_url: str, health: Dict[str, Any]) -> None:
+        if ok and active_url and active_url != self.api_url:
+            logger.info("Communities backend redirigido de %s a %s", self.api_url, active_url)
+            self.api_url = active_url
+            self.api.api_url = active_url
+            if self.session is not None:
+                self.session.api_url = active_url
+        self.last_health = health if ok else {}
+        self.backend_status_changed.emit(ok, msg)
+
     def check_backend(self, auto_start: bool = True) -> Tuple[bool, str]:
         if auto_start:
             ok, msg, active_url = resolve_communities_backend(self.api_url)
-            if ok and active_url and active_url != self.api_url:
-                logger.info("Communities backend redirigido de %s a %s", self.api_url, active_url)
-                self.api_url = active_url
-                self.api.api_url = active_url
-                if self.session is not None:
-                    self.session.api_url = active_url
         else:
             ok, msg = _is_communities_backend(self.api_url, timeout=self.api.timeout)
+            active_url = self.api_url
 
+        health: Dict[str, Any] = {}
         if ok:
             try:
-                self.last_health = self.api.health()
+                old_url = self.api.api_url
+                self.api.api_url = active_url.rstrip("/")
+                health = self.api.health()
+                self.api.api_url = old_url
             except Exception:
-                self.last_health = {}
-        else:
-            self.last_health = {}
-
-        self.backend_status_changed.emit(ok, msg)
+                health = {}
+        self._apply_backend_result(ok, msg, active_url, health)
         return ok, msg
+
+    def check_backend_async(self, auto_start: bool = True, on_done: Optional[Callable[[bool, str], None]] = None) -> int:
+        base_url = self.api_url
+
+        def _work() -> Tuple[bool, str, str, Dict[str, Any]]:
+            if auto_start:
+                ok, msg, active_url = resolve_communities_backend(base_url)
+            else:
+                ok, msg = _is_communities_backend(base_url, timeout=self.api.timeout)
+                active_url = base_url
+            health: Dict[str, Any] = {}
+            if ok:
+                try:
+                    resp = requests.get(f"{active_url.rstrip('/')}/api/v1/communities/health", timeout=self.api.timeout)
+                    if resp.status_code == 200:
+                        parsed = resp.json()
+                        if isinstance(parsed, dict):
+                            health = parsed
+                except Exception:
+                    health = {}
+            return ok, msg, active_url, health
+
+        def _done(res: Tuple[bool, str, str, Dict[str, Any]]) -> None:
+            ok, msg, active_url, health = res
+            self._apply_backend_result(ok, msg, active_url, health)
+            if on_done:
+                on_done(ok, msg)
+
+        return self.run_async("check_backend", _work, on_success=_done, category="check_backend")
 
     def restore_session(self) -> Optional[CommunitySession]:
         ok, msg = self.check_backend()
@@ -942,8 +1107,138 @@ class CommunityController(QObject):
         self._activate_session(sess, persist=True)
         return sess
 
+    def restore_session_async(self, on_done: Optional[Callable[[Optional[CommunitySession]], None]] = None) -> int:
+        base_url = self.api_url
+        sess_path = self.session_path
+
+        def _work():
+            ok, msg, active_url = resolve_communities_backend(base_url)
+            if not ok:
+                return False, msg, active_url, {}, None, None
+            if not sess_path.exists():
+                return True, msg, active_url, {}, None, None
+            raw = json.loads(sess_path.read_text(encoding="utf-8"))
+            token = str(raw.get("token") or "").strip()
+            if not token:
+                raise ValueError("Empty token")
+            tmp = CommunityApiClient(active_url, timeout=self.api.timeout)
+            tmp.set_token(token)
+            me = tmp.get_me()
+            user = me.get("user") or {}
+            health = tmp.health()
+            return True, msg, active_url, health, token, user
+
+        def _done(res):
+            ok, msg, active_url, health, token, user = res
+            self._apply_backend_result(ok, msg, active_url, health)
+            if not ok or not token or not user:
+                self.session = None
+                self.session_changed.emit(None)
+                if on_done:
+                    on_done(None)
+                return
+            sess = CommunitySession(
+                api_url=self.api_url,
+                token=token,
+                user_id=str(user["user_id"]),
+                username=str(user["username"]),
+            )
+            self._activate_session(sess, persist=False)
+            if on_done:
+                on_done(sess)
+
+        def _err(_err: CommunityApiError):
+            self.clear_saved_session()
+            self.api.set_token(None)
+            self.session = None
+            self.session_changed.emit(None)
+            if on_done:
+                on_done(None)
+
+        return self.run_async("restore_session", _work, on_success=_done, on_error=_err, category="auth")
+
+    def register_async(
+        self,
+        email: str,
+        username: str,
+        password: str,
+        on_success: Optional[Callable[[CommunitySession], None]] = None,
+        on_error: Optional[Callable[[CommunityApiError], None]] = None,
+    ) -> int:
+        base_url = self.api_url
+
+        def _work():
+            ok, msg, active_url = resolve_communities_backend(base_url)
+            if not ok:
+                raise CommunityApiError(f"Servidor no disponible: {msg}", status_code=0, code="OFFLINE")
+            tmp = CommunityApiClient(active_url, timeout=self.api.timeout)
+            res = tmp.register(email=email, username=username, password=password)
+            token = str(res.get("token") or "")
+            if not token:
+                res = tmp.login(identifier=email, password=password)
+                token = str(res["token"])
+            health = {}
+            try:
+                health = tmp.health()
+            except Exception:
+                pass
+            return active_url, health, token, res
+
+        def _done(payload):
+            active_url, health, token, res = payload
+            self._apply_backend_result(True, "connected", active_url, health)
+            sess = CommunitySession(
+                api_url=self.api_url,
+                token=token,
+                user_id=str(res["user_id"]),
+                username=str(res["username"]),
+            )
+            self._activate_session(sess, persist=True)
+            if on_success:
+                on_success(sess)
+
+        return self.run_async("register", _work, on_success=_done, on_error=on_error, category="auth")
+
+    def login_async(
+        self,
+        identifier: str,
+        password: str,
+        on_success: Optional[Callable[[CommunitySession], None]] = None,
+        on_error: Optional[Callable[[CommunityApiError], None]] = None,
+    ) -> int:
+        base_url = self.api_url
+
+        def _work():
+            ok, msg, active_url = resolve_communities_backend(base_url)
+            if not ok:
+                raise CommunityApiError(f"Servidor no disponible: {msg}", status_code=0, code="OFFLINE")
+            tmp = CommunityApiClient(active_url, timeout=self.api.timeout)
+            res = tmp.login(identifier=identifier, password=password)
+            health = {}
+            try:
+                health = tmp.health()
+            except Exception:
+                pass
+            return active_url, health, res
+
+        def _done(payload):
+            active_url, health, res = payload
+            self._apply_backend_result(True, "connected", active_url, health)
+            sess = CommunitySession(
+                api_url=self.api_url,
+                token=str(res["token"]),
+                user_id=str(res["user_id"]),
+                username=str(res["username"]),
+            )
+            self._activate_session(sess, persist=True)
+            if on_success:
+                on_success(sess)
+
+        return self.run_async("login", _work, on_success=_done, on_error=on_error, category="auth")
+
     def logout(self) -> None:
         self._heartbeat_timer.stop()
+        self.cancel_pending()
         if self._active_game_title and self.session:
             try:
                 self.api.report_game_activity(
@@ -988,8 +1283,9 @@ class CommunityController(QObject):
         self.session_changed.emit(None)
 
     def shutdown(self) -> None:
-        """Cierra timers, actividad de juego activa y conexión realtime al cerrar la app sin borrar la sesión persistida."""
+        """Cierra timers, workers pendientes, actividad de juego y conexión realtime sin borrar la sesión persistida."""
         self._heartbeat_timer.stop()
+        self.cancel_pending()
         if self._active_game_title and self.session:
             try:
                 self.api.report_game_activity(
@@ -1008,28 +1304,28 @@ class CommunityController(QObject):
             except Exception:
                 pass
         self.realtime.disconnect_sync()
+        self._thread_pool.waitForDone(1000)
 
     def _activate_session(self, sess: CommunitySession, persist: bool) -> None:
         self.session = sess
         self.api.set_token(sess.token)
         if persist:
             self._save_session(sess)
-        try:
-            self.api.set_presence(
+        self.run_async(
+            "set_presence_init",
+            lambda: self.api.set_presence(
                 self.current_presence_status,
                 activity_visibility=self.activity_visibility,
-            )
-        except Exception:
-            pass
+            ),
+            on_error=lambda _e: None,
+            category="presence_sync",
+        )
         self.realtime.connect_with_token(self.api_url, sess.token)
         if self._heartbeat_interval_ms > 0:
             self._heartbeat_timer.start()
         self.session_changed.emit(sess)
         self.presence_self_changed.emit(self.current_presence_status, self.activity_visibility)
-        try:
-            self.refresh_activity_and_notifications()
-        except Exception:
-            pass
+        self.refresh_activity_and_notifications_async()
 
     def _save_session(self, sess: CommunitySession) -> None:
         try:
@@ -1262,13 +1558,234 @@ class CommunityController(QObject):
     def _send_heartbeat(self) -> None:
         if not self.session:
             return
-        try:
-            self.api.heartbeat_presence(
-                status=self.current_presence_status,
-                activity_visibility=self.activity_visibility,
-            )
-        except Exception:
-            pass
+        st = self.current_presence_status
+        vis = self.activity_visibility
+        self.run_async(
+            "heartbeat",
+            lambda: self.api.heartbeat_presence(status=st, activity_visibility=vis),
+            on_error=lambda _e: None,
+            category="heartbeat",
+        )
+
+    def refresh_communities_async(
+        self,
+        on_done: Optional[Callable[[Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]], None]] = None,
+        on_error: Optional[Callable[[CommunityApiError], None]] = None,
+    ) -> int:
+        if not self.session:
+            err = CommunityApiError("Sesión no iniciada.", status_code=401, code="UNAUTHORIZED")
+            if on_error:
+                on_error(err)
+            else:
+                self.error_occurred.emit(err.message)
+            return 0
+
+        def _work():
+            mine = self.api.list_communities(discover_public=False)
+            public = self.api.list_communities(discover_public=True)
+            try:
+                streams = self.api.list_active_streams()
+            except Exception:
+                streams = []
+            return mine, public, streams
+
+        def _apply(res):
+            mine, public, streams = res
+            self.my_communities = mine
+            self.public_communities = public
+            self.active_streams = streams
+            self.communities_updated.emit(mine, public)
+            if on_done:
+                on_done((mine, public))
+
+        return self.run_async("refresh_communities", _work, on_success=_apply, on_error=on_error, category="communities")
+
+    def open_community_async(
+        self,
+        community_id: str,
+        on_done: Optional[Callable[[Dict[str, Any]], None]] = None,
+        on_error: Optional[Callable[[CommunityApiError], None]] = None,
+    ) -> int:
+        self.cancel_pending("select_channel")
+
+        def _work():
+            comm = self.api.get_community(community_id)
+            channels = self.api.list_channels(community_id)
+            members = self.api.list_members(community_id)
+            members = self._attach_presences(members)
+            text_channels = [c for c in channels if c.get("type") == "text"]
+            first_msgs: List[Dict[str, Any]] = []
+            first_ch_id = ""
+            if text_channels:
+                first_ch_id = str(text_channels[0]["id"])
+                first_msgs = self.api.list_messages(first_ch_id, limit=50)
+            return comm, channels, members, text_channels, first_ch_id, first_msgs
+
+        def _apply(res):
+            comm, channels, members, text_channels, first_ch_id, first_msgs = res
+            self.active_community = comm
+            self.active_channels = channels
+            self.active_members = members
+            self.realtime.join_community_room(community_id)
+            payload = {"community": comm, "channels": channels, "members": members}
+            self.community_opened.emit(payload)
+            if text_channels:
+                self.active_channel = text_channels[0]
+                self.realtime.join_channel_room(first_ch_id)
+                self._last_synced_msg_id = first_msgs[-1]["id"] if first_msgs else None
+                self.channel_messages_loaded.emit(first_ch_id, first_msgs)
+            else:
+                self.active_channel = None
+                self._last_synced_msg_id = None
+                self.channel_messages_loaded.emit("", [])
+            if on_done:
+                on_done(payload)
+
+        return self.run_async("open_community", _work, on_success=_apply, on_error=on_error, category="open_community")
+
+    def select_channel_async(
+        self,
+        channel_id: str,
+        on_done: Optional[Callable[[List[Dict[str, Any]]], None]] = None,
+        on_error: Optional[Callable[[CommunityApiError], None]] = None,
+    ) -> int:
+        ch = next((c for c in self.active_channels if c["id"] == channel_id), None)
+        if not ch:
+            err = CommunityApiError("Canal no encontrado.", status_code=404)
+            if on_error:
+                on_error(err)
+            else:
+                self.error_occurred.emit(err.message)
+            return 0
+
+        def _work():
+            return self.api.list_messages(channel_id, limit=50)
+
+        def _apply(msgs: List[Dict[str, Any]]):
+            self.active_channel = ch
+            self.realtime.join_channel_room(channel_id)
+            self._last_synced_msg_id = msgs[-1]["id"] if msgs else None
+            self.channel_messages_loaded.emit(channel_id, msgs)
+            if on_done:
+                on_done(msgs)
+
+        return self.run_async("select_channel", _work, on_success=_apply, on_error=on_error, category="select_channel")
+
+    def load_older_messages_async(
+        self,
+        before_id: str,
+        limit: int = 40,
+        on_done: Optional[Callable[[List[Dict[str, Any]]], None]] = None,
+        on_error: Optional[Callable[[CommunityApiError], None]] = None,
+    ) -> int:
+        if not self.active_channel:
+            if on_done:
+                on_done([])
+            return 0
+        ch_id = str(self.active_channel["id"])
+        return self.run_async(
+            "load_older_messages",
+            lambda: self.api.list_messages(ch_id, limit=limit, before_id=before_id),
+            on_success=on_done,
+            on_error=on_error,
+            category="older_messages",
+        )
+
+    def send_message_async(
+        self,
+        content: str,
+        reply_to_id: Optional[str] = None,
+        attachment_ids: Optional[List[str]] = None,
+        on_done: Optional[Callable[[Dict[str, Any]], None]] = None,
+        on_error: Optional[Callable[[CommunityApiError], None]] = None,
+    ) -> int:
+        if not self.active_channel:
+            err = CommunityApiError("Seleccioná un canal de texto primero.", status_code=400)
+            if on_error:
+                on_error(err)
+            else:
+                self.error_occurred.emit(err.message)
+            return 0
+        ch_id = str(self.active_channel["id"])
+        return self.run_async(
+            "send_message",
+            lambda: self.api.send_message(ch_id, content=content, reply_to_id=reply_to_id, attachment_ids=attachment_ids),
+            on_success=on_done,
+            on_error=on_error,
+        )
+
+    def refresh_friends_async(
+        self,
+        on_done: Optional[Callable[[Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]], None]] = None,
+        on_error: Optional[Callable[[CommunityApiError], None]] = None,
+    ) -> int:
+        if not self.session:
+            if on_done:
+                on_done(([], []))
+            return 0
+        uid = str(self.session.user_id)
+
+        def _work():
+            data = self.api.get_friends(uid)
+            friends = list(data.get("friends") or [])
+            pending_raw = data.get("pending")
+            if isinstance(pending_raw, dict):
+                incoming = list(pending_raw.get("incoming") or [])
+            else:
+                incoming = list(data.get("incoming_requests") or [])
+            return friends, incoming
+
+        def _apply(res):
+            friends, incoming = res
+            self.active_friends = friends
+            self.incoming_friend_requests = incoming
+            self.friends_updated.emit(friends, incoming)
+            if on_done:
+                on_done((friends, incoming))
+
+        return self.run_async("refresh_friends", _work, on_success=_apply, on_error=on_error, category="friends")
+
+    def refresh_activity_and_notifications_async(self) -> int:
+        if not self.session:
+            return 0
+
+        def _work():
+            feed = self.api.get_activity_feed(limit=30)
+            notifs = self.api.list_notifications()
+            return feed, notifs
+
+        def _apply(res):
+            feed, notifs = res
+            self.active_activity_feed = feed
+            self.activity_feed_updated.emit(feed)
+            unread = sum(1 for n in notifs if not n.get("is_read"))
+            self.active_notifications = notifs
+            self.unread_notifications_count = unread
+            self.notifications_updated.emit(notifs, unread)
+
+        return self.run_async(
+            "refresh_activity",
+            _work,
+            on_success=_apply,
+            on_error=lambda _e: None,
+            category="activity_notifs",
+        )
+
+    def refresh_members_async(self) -> int:
+        if not self.active_community:
+            return 0
+        cid = str(self.active_community["id"])
+
+        def _work():
+            members = self.api.list_members(cid)
+            return self._attach_presences(members)
+
+        def _apply(members):
+            if self.active_community and str(self.active_community["id"]) == cid:
+                self.active_members = members
+                self.members_updated.emit(members)
+
+        return self.run_async("refresh_members", _work, on_success=_apply, on_error=lambda _e: None, category="members")
 
     def set_status(self, status: str, custom_status: Optional[str] = None, activity_visibility: Optional[str] = None) -> Dict[str, Any]:
         self.current_presence_status = status
@@ -1441,16 +1958,23 @@ class CommunityController(QObject):
 
     def _on_rt_connected(self) -> None:
         self.realtime_status_changed.emit(True, "Realtime Socket.IO conectado")
-        # Recuperación automática tras reconexión: traer mensajes faltantes sin duplicar
+        # Recuperación automática tras reconexión fuera del hilo GUI sin duplicar
         if self.session and self.active_channel and self._last_synced_msg_id:
-            ch_id = self.active_channel["id"]
-            try:
-                missed = self.api.list_messages(ch_id, limit=100, after_id=self._last_synced_msg_id)
-                if missed:
+            ch_id = str(self.active_channel["id"])
+            since_id = str(self._last_synced_msg_id)
+
+            def _apply_missed(missed: List[Dict[str, Any]]) -> None:
+                if missed and self.active_channel and str(self.active_channel["id"]) == ch_id:
                     self._last_synced_msg_id = missed[-1]["id"]
                     self.messages_synced.emit(ch_id, missed)
-            except Exception:
-                pass
+
+            self.run_async(
+                "sync_missed_messages",
+                lambda: self.api.list_messages(ch_id, limit=100, after_id=since_id),
+                on_success=_apply_missed,
+                on_error=lambda _e: None,
+                category="sync_missed",
+            )
 
     def _on_rt_disconnected(self, reason: str) -> None:
         self.realtime_status_changed.emit(False, reason)
@@ -1515,10 +2039,7 @@ class CommunityController(QObject):
 
     def _on_rt_member_change(self, payload: Dict[str, Any]) -> None:
         if self.active_community and payload.get("community_id") == self.active_community["id"]:
-            try:
-                self.refresh_members()
-            except Exception:
-                pass
+            self.refresh_members_async()
 
     def _on_rt_presence_updated(self, presence: Dict[str, Any]) -> None:
         uid = str(presence.get("user_id") or "")
@@ -1541,9 +2062,23 @@ class CommunityController(QObject):
             self.typing_updated.emit(payload)
 
     def _on_rt_activity_updated(self, payload: Dict[str, Any]) -> None:
-        if self.session:
-            self.refresh_activity_and_notifications()
+        if not self.session:
+            return
+        # Inserción push inmediata en el feed local (sin necesidad de esperar refresh manual)
+        if isinstance(payload, dict) and (payload.get("game_title") or payload.get("title") or payload.get("game_id")):
+            item = dict(payload)
+            if item.get("title") and not item.get("game_title"):
+                item["game_title"] = item.get("title")
+            if item.get("game_title") and not item.get("title"):
+                item["title"] = item.get("game_title")
+            ev_id = str(item.get("id") or "")
+            existing = list(self.active_activity_feed or [])
+            if not ev_id or not any(str(prev.get("id") or "") == ev_id for prev in existing):
+                updated_feed = [item] + existing
+                self.active_activity_feed = updated_feed[:30]
+                self.activity_feed_updated.emit(list(self.active_activity_feed))
+        self.refresh_activity_and_notifications_async()
 
     def _on_rt_notification_received(self, payload: Dict[str, Any]) -> None:
         if self.session:
-            self.refresh_activity_and_notifications()
+            self.refresh_activity_and_notifications_async()

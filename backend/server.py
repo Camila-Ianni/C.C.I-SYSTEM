@@ -1061,16 +1061,37 @@ def on_community_presence_update(data: Dict[str, Any]):
         emit("community:error", {"error": str(e)})
 
 
+def _authorize_channel_socket_action(data: Dict[str, Any], perm_needed: str):
+    """Valida existencia del canal, membresía activa y permiso granular RBAC para eventos Socket.IO."""
+    from backend.communities.service import CommunitiesService
+
+    user_id = str(data.get("user_id") or "").strip()
+    channel_id = str(data.get("channel_id") or "").strip()
+    if not channel_id or not user_id:
+        emit("community:error", {"error": "channel_id requerido"})
+        return None
+
+    comm_svc = CommunitiesService.get_instance()
+    ch = comm_svc.repo.get_channel(channel_id)
+    if not ch:
+        emit("community:error", {"error": "Canal no encontrado"})
+        return None
+
+    if not comm_svc.has_permission(ch["community_id"], user_id, perm_needed, channel_id=channel_id):
+        emit("community:error", {"error": f"Acceso denegado: se requiere permiso {perm_needed}"})
+        return None
+
+    return comm_svc, ch, user_id, channel_id
+
+
 @socketio.on("community:voice:join")
 @require_socket_auth
 def on_community_voice_join(data: Dict[str, Any]):
-    """Notifica incorporación de un participante a la sala de voz en tiempo real."""
-    channel_id = data.get("channel_id")
-    user_id = data.get("user_id")
-    if not channel_id or not user_id:
-        emit("community:error", {"error": "channel_id requerido"})
+    """Notifica incorporación de un participante autorizado (voice.connect) a la sala de voz."""
+    authz = _authorize_channel_socket_action(data, "voice.connect")
+    if not authz:
         return
-
+    _svc, _ch, user_id, channel_id = authz
     room_name = f"comm_voice_{channel_id}"
     join_room(room_name)
     emit("voice.participant_joined", {"channel_id": channel_id, "user_id": user_id}, to=room_name)
@@ -1079,135 +1100,207 @@ def on_community_voice_join(data: Dict[str, Any]):
 @socketio.on("community:voice:leave")
 @require_socket_auth
 def on_community_voice_leave(data: Dict[str, Any]):
-    channel_id = data.get("channel_id")
-    user_id = data.get("user_id")
-    if channel_id and user_id:
-        room_name = f"comm_voice_{channel_id}"
-        leave_room(room_name)
-        emit("voice.participant_left", {"channel_id": channel_id, "user_id": user_id}, to=room_name)
+    """Retira al usuario de la sala de voz verificando pertenencia al canal/comunidad."""
+    from backend.communities.service import CommunitiesService
+
+    channel_id = str(data.get("channel_id") or "").strip()
+    user_id = str(data.get("user_id") or "").strip()
+    if not channel_id or not user_id:
+        emit("community:error", {"error": "channel_id requerido"})
+        return
+
+    room_name = f"comm_voice_{channel_id}"
+    leave_room(room_name)
+
+    comm_svc = CommunitiesService.get_instance()
+    ch = comm_svc.repo.get_channel(channel_id)
+    if not ch:
+        emit("community:error", {"error": "Canal no encontrado"})
+        return
+    comm = comm_svc.repo.get_community(ch["community_id"])
+    member = comm_svc.repo.get_member(ch["community_id"], user_id)
+    is_owner = bool(comm and comm.get("owner_id") == user_id)
+    if not is_owner and (not member or member.get("status") != "active"):
+        emit("community:error", {"error": "Acceso denegado a la sala de voz"})
+        return
+    emit("voice.participant_left", {"channel_id": channel_id, "user_id": user_id}, to=room_name)
 
 
 @socketio.on("community:voice:mute")
 @require_socket_auth
 def on_community_voice_mute(data: Dict[str, Any]):
-    channel_id = data.get("channel_id")
-    user_id = data.get("user_id")
+    authz = _authorize_channel_socket_action(data, "voice.connect")
+    if not authz:
+        return
+    _svc, _ch, user_id, channel_id = authz
     is_muted = bool(data.get("is_muted", True))
-    if channel_id and user_id:
-        room_name = f"comm_voice_{channel_id}"
-        emit("voice.mute_state_changed", {"channel_id": channel_id, "user_id": user_id, "is_muted": is_muted}, to=room_name)
+    room_name = f"comm_voice_{channel_id}"
+    emit("voice.mute_state_changed", {"channel_id": channel_id, "user_id": user_id, "is_muted": is_muted}, to=room_name)
 
 
 @socketio.on("community:voice:speakers")
 @require_socket_auth
 def on_community_voice_speakers(data: Dict[str, Any]):
-    channel_id = data.get("channel_id")
-    user_id = data.get("user_id")
+    authz = _authorize_channel_socket_action(data, "voice.speak")
+    if not authz:
+        return
+    _svc, _ch, user_id, channel_id = authz
     audio_level = float(data.get("audio_level", 0.0))
     is_speaking = bool(data.get("is_speaking", False))
-    if channel_id and user_id:
-        room_name = f"comm_voice_{channel_id}"
-        emit("voice.active_speakers", {
-            "channel_id": channel_id,
-            "speakers": [{"user_id": user_id, "audio_level": audio_level, "is_speaking": is_speaking}]
-        }, to=room_name)
+    room_name = f"comm_voice_{channel_id}"
+    emit("voice.active_speakers", {
+        "channel_id": channel_id,
+        "speakers": [{"user_id": user_id, "audio_level": audio_level, "is_speaking": is_speaking}]
+    }, to=room_name)
 
 
 @socketio.on("community:sound:play")
 @require_socket_auth
 def on_community_sound_play(data: Dict[str, Any]):
-    """Notifica reproducción sincronizada de sonido en la sala de voz."""
-    channel_id = data.get("channel_id")
+    """Notifica reproducción sincronizada de sonido en la sala de voz previa validación soundboard.play."""
+    authz = _authorize_channel_socket_action(data, "soundboard.play")
+    if not authz:
+        return
+    _svc, _ch, user_id, channel_id = authz
     sound_id = data.get("sound_id")
-    user_id = data.get("user_id")
+    if not sound_id:
+        emit("community:error", {"error": "sound_id requerido"})
+        return
     title = data.get("title", "")
     volume_scale = float(data.get("volume_scale", 1.0))
-    if channel_id and sound_id:
-        room_name = f"comm_voice_{channel_id}"
-        emit("sound.played", {
-            "channel_id": channel_id,
-            "sound_id": sound_id,
-            "user_id": user_id,
-            "title": title,
-            "volume_scale": volume_scale,
-        }, to=room_name)
+    room_name = f"comm_voice_{channel_id}"
+    emit("sound.played", {
+        "channel_id": channel_id,
+        "sound_id": sound_id,
+        "user_id": user_id,
+        "title": title,
+        "volume_scale": volume_scale,
+    }, to=room_name)
 
 
 @socketio.on("community:sound:stop")
 @require_socket_auth
 def on_community_sound_stop(data: Dict[str, Any]):
-    """Notifica detención de sonido en la sala de voz."""
-    channel_id = data.get("channel_id")
+    """Notifica detención de sonido en la sala de voz previa validación soundboard.play."""
+    authz = _authorize_channel_socket_action(data, "soundboard.play")
+    if not authz:
+        return
+    _svc, _ch, user_id, channel_id = authz
     sound_id = data.get("sound_id")
-    if channel_id and sound_id:
-        room_name = f"comm_voice_{channel_id}"
-        emit("sound.stopped", {
-            "channel_id": channel_id,
-            "sound_id": sound_id,
-        }, to=room_name)
+    if not sound_id:
+        emit("community:error", {"error": "sound_id requerido"})
+        return
+    room_name = f"comm_voice_{channel_id}"
+    emit("sound.stopped", {
+        "channel_id": channel_id,
+        "sound_id": sound_id,
+        "user_id": user_id,
+    }, to=room_name)
 
 
 @socketio.on("community:stream:start")
 @require_socket_auth
 def on_community_stream_start(data: Dict[str, Any]):
-    """Notifica el inicio de una transmisión de pantalla o juego en tiempo real."""
-    channel_id = data.get("channel_id")
-    user_id = data.get("user_id")
+    """Notifica el inicio de una transmisión validando permiso voice.stream."""
+    authz = _authorize_channel_socket_action(data, "voice.stream")
+    if not authz:
+        return
+    _svc, _ch, user_id, channel_id = authz
     stream_type = data.get("stream_type", "screen")
     title = data.get("title", "Stream")
     resolution = data.get("resolution", "1080p")
     fps = data.get("fps", 60)
-    if channel_id and user_id:
-        room_name = f"comm_voice_{channel_id}"
-        emit("stream.started", {
-            "channel_id": channel_id,
-            "user_id": user_id,
-            "stream_type": stream_type,
-            "title": title,
-            "resolution": resolution,
-            "fps": fps,
-        }, to=room_name)
+    room_name = f"comm_voice_{channel_id}"
+    emit("stream.started", {
+        "channel_id": channel_id,
+        "user_id": user_id,
+        "stream_type": stream_type,
+        "title": title,
+        "resolution": resolution,
+        "fps": fps,
+    }, to=room_name)
 
 
 @socketio.on("community:stream:pause")
 @require_socket_auth
 def on_community_stream_pause(data: Dict[str, Any]):
-    """Notifica pausa o reanudación de una transmisión."""
-    channel_id = data.get("channel_id")
-    user_id = data.get("user_id")
+    """Notifica pausa o reanudación de una transmisión validando permiso voice.stream."""
+    authz = _authorize_channel_socket_action(data, "voice.stream")
+    if not authz:
+        return
+    _svc, _ch, user_id, channel_id = authz
     is_paused = bool(data.get("is_paused", True))
-    if channel_id:
-        room_name = f"comm_voice_{channel_id}"
-        event = "stream.paused" if is_paused else "stream.resumed"
-        emit(event, {"channel_id": channel_id, "user_id": user_id, "is_paused": is_paused}, to=room_name)
+    room_name = f"comm_voice_{channel_id}"
+    event = "stream.paused" if is_paused else "stream.resumed"
+    emit(event, {"channel_id": channel_id, "user_id": user_id, "is_paused": is_paused}, to=room_name)
 
 
 @socketio.on("community:stream:stop")
 @require_socket_auth
 def on_community_stream_stop(data: Dict[str, Any]):
-    """Notifica el fin de una transmisión."""
-    channel_id = data.get("channel_id")
-    user_id = data.get("user_id")
-    if channel_id:
-        room_name = f"comm_voice_{channel_id}"
-        emit("stream.ended", {"channel_id": channel_id, "user_id": user_id}, to=room_name)
+    """Notifica el fin de una transmisión validando voice.stream o voice.move_members."""
+    from backend.communities.service import CommunitiesService
+
+    user_id = str(data.get("user_id") or "").strip()
+    channel_id = str(data.get("channel_id") or "").strip()
+    if not channel_id or not user_id:
+        emit("community:error", {"error": "channel_id requerido"})
+        return
+    comm_svc = CommunitiesService.get_instance()
+    ch = comm_svc.repo.get_channel(channel_id)
+    if not ch:
+        emit("community:error", {"error": "Canal no encontrado"})
+        return
+    can_stop = (
+        comm_svc.has_permission(ch["community_id"], user_id, "voice.stream", channel_id=channel_id)
+        or comm_svc.has_permission(ch["community_id"], user_id, "voice.move_members", channel_id=channel_id)
+    )
+    if not can_stop:
+        emit("community:error", {"error": "Acceso denegado: se requiere permiso voice.stream"})
+        return
+    room_name = f"comm_voice_{channel_id}"
+    emit("stream.ended", {"channel_id": channel_id, "user_id": user_id}, to=room_name)
 
 
 @socketio.on("community:moderation:action")
 @require_socket_auth
 def on_community_moderation_action(data: Dict[str, Any]):
-    """Notifica en tiempo real una acción de moderación a los miembros de la comunidad."""
-    community_id = data.get("community_id")
-    action = data.get("action")
-    target_user_id = data.get("target_user_id")
-    reason = data.get("reason", "")
-    if community_id and target_user_id and action:
-        emit("moderation.action_taken", {
-            "community_id": community_id,
-            "action": action,
-            "target_user_id": target_user_id,
-            "reason": reason,
-        }, broadcast=True)
+    """Notifica en tiempo real una acción de moderación únicamente a la room de la comunidad previa validación RBAC."""
+    from backend.communities.service import CommunitiesService
+
+    actor_id = str(data.get("user_id") or "").strip()
+    community_id = str(data.get("community_id") or "").strip()
+    action = str(data.get("action") or "").strip().lower()
+    target_user_id = str(data.get("target_user_id") or "").strip()
+    reason = str(data.get("reason") or "")
+    if not community_id or not target_user_id or not action or not actor_id:
+        emit("community:error", {"error": "community_id, action y target_user_id requeridos"})
+        return
+
+    perm_map = {
+        "kick": "community.members.kick",
+        "timeout": "community.members.kick",
+        "ban": "community.members.ban",
+        "unban": "community.members.ban",
+        "mute_voice": "voice.mute_members",
+    }
+    perm_needed = perm_map.get(action)
+    if not perm_needed:
+        emit("community:error", {"error": f"Acción de moderación no soportada: {action}"})
+        return
+
+    comm_svc = CommunitiesService.get_instance()
+    if not comm_svc.has_permission(community_id, actor_id, perm_needed):
+        emit("community:error", {"error": f"Acceso denegado: se requiere permiso {perm_needed}"})
+        return
+
+    emit("moderation.action_taken", {
+        "community_id": community_id,
+        "actor_id": actor_id,
+        "action": action,
+        "target_user_id": target_user_id,
+        "reason": reason,
+    }, to=f"comm_{community_id}")
 
 
 
