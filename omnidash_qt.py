@@ -8955,30 +8955,7 @@ class OmniDashMainWindow(QMainWindow):
                 except Exception:
                     is_cci_pkg = False
 
-            if is_cci_pkg or not core:
-                self._launch_modern_console_runner(game)
-                return
-
-            if str(core).startswith("external:"):
-                from backend.games.scanner_service import GameLibraryScannerService
-
-                scanner = GameLibraryScannerService.get_instance()
-                emu = scanner.resolve_external_emulator(str(core))
-                if emu:
-                    emu_label, emu_bin = emu
-                    rom_abs = str(rom_path.resolve())
-                    print(f"[OmniDash-Qt] Lanzando {title} con {emu_label} ({emu_bin})...")
-                    self._start_game_qprocess(
-                        title=title,
-                        game_id=gid,
-                        program=emu_bin,
-                        arguments=[rom_abs],
-                        rom_path=str(rom),
-                        executable_name=emu_bin,
-                        warn_on_error=True,
-                    )
-                    return
-                # Si el emulador externo no está en el SO, ejecutar con el runner multiplataforma de consola C.C.I.
+            if is_cci_pkg or not core or str(core).startswith("external:"):
                 self._launch_modern_console_runner(game)
                 return
 

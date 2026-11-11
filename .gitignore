@@ -42,6 +42,9 @@ roms/switch2/
 roms/wii/
 roms/nds/Pokemon White Version 2/
 assets_omnidash/playable_roms/ps1/
+assets_omnidash/playable_roms/psp/
+cores/emulators/
+cores/ppsspp_libretro.dylib
 assets_omnidash/playable_roms/mame/mslug6.zip
 assets_omnidash/playable_roms/nds/2696*
 assets_omnidash/playable_roms/nds/5585*

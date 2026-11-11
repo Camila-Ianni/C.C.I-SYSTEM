@@ -138,6 +138,7 @@ class GameLibraryScannerService:
             "RPCS3",
             ["rpcs3", "rpcs3.exe"],
             [
+                str(ROOT / "cores/emulators/RPCS3.app"),
                 "/Applications/RPCS3.app",
                 "C:/Program Files/RPCS3/rpcs3.exe",
                 str(Path.home() / "AppData/Local/Programs/RPCS3/rpcs3.exe"),
@@ -145,8 +146,9 @@ class GameLibraryScannerService:
         ),
         "external:ryujinx": (
             "Ryujinx",
-            ["ryujinx", "Ryujinx", "Ryujinx.exe"],
+            ["ryujinx", "Ryujinx", "Astris", "Ryujinx.exe"],
             [
+                str(ROOT / "cores/emulators/Ryujinx.app"),
                 "/Applications/Ryujinx.app",
                 "C:/Program Files/Ryujinx/Ryujinx.exe",
                 str(Path.home() / "AppData/Local/Programs/Ryujinx/Ryujinx.exe"),
@@ -156,6 +158,7 @@ class GameLibraryScannerService:
             "shadPS4",
             ["shadps4", "shadPS4", "shadPS4.exe"],
             [
+                str(ROOT / "cores/emulators/shadPS4.app"),
                 "/Applications/shadPS4.app",
                 "C:/Program Files/shadPS4/shadPS4.exe",
                 str(Path.home() / "AppData/Local/Programs/shadPS4/shadPS4.exe"),
@@ -165,10 +168,21 @@ class GameLibraryScannerService:
             "PCSX2",
             ["pcsx2", "pcsx2-qt", "pcsx2-qt.exe", "pcsx2.exe"],
             [
+                str(ROOT / "cores/emulators/PCSX2-v2.8.2.app"),
                 "/Applications/PCSX2.app",
                 "/Applications/PCSX2-Qt.app",
                 "C:/Program Files/PCSX2/pcsx2-qt.exe",
                 str(Path.home() / "AppData/Local/Programs/PCSX2/pcsx2-qt.exe"),
+            ],
+        ),
+        "external:ppsspp": (
+            "PPSSPP 3D",
+            ["PPSSPPSDL", "ppsspp", "PPSSPPWindows64.exe"],
+            [
+                str(ROOT / "cores/emulators/PPSSPPSDL.app"),
+                "/Applications/PPSSPPSDL.app",
+                "/Applications/PPSSPP.app",
+                "C:/Program Files/PPSSPP/PPSSPPWindows64.exe",
             ],
         ),
     }

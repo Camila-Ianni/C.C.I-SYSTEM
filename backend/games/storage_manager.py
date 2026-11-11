@@ -407,6 +407,31 @@ class GameStorageManager:
             "runner": "modern_game_runner.py",
         }
 
+    def _find_matching_user_download(self, game: dict) -> Path | None:
+        """Busca automáticamente en ~/Downloads si el usuario descargó un paquete (.rar/.zip/.nsp/.xci/.pkg/.iso) para este juego."""
+        dl_dir = Path.home() / "Downloads"
+        if not dl_dir.exists():
+            return None
+        raw_title = str(game.get("clean_title") or game.get("title") or "")
+        tokens = [t for t in re.split(r"[^a-z0-9]+", raw_title.lower()) if len(t) >= 4 and t not in ("edition", "deluxe", "pack", "game")]
+        if not tokens:
+            return None
+        valid_exts = {".nsp", ".xci", ".pkg", ".iso", ".rar", ".zip", ".7z"}
+        best: Path | None = None
+        best_score = 0
+        try:
+            for f in dl_dir.iterdir():
+                if not f.is_file() or f.suffix.lower() not in valid_exts or f.stat().st_size < 1024 * 1024:
+                    continue
+                fname_l = f.stem.lower()
+                score = sum(1 for tok in tokens if tok in fname_l)
+                if score >= max(1, len(tokens) // 2) and score > best_score:
+                    best = f
+                    best_score = score
+        except Exception:
+            return None
+        return best
+
     def install_game_for_current_os(
         self,
         game_id: str,
@@ -421,6 +446,12 @@ class GameStorageManager:
         game = svc.get_game_by_id(game_id)
         if not game:
             return False, f"Juego no encontrado en catálogo: {game_id}", {"reason": "unknown_game"}
+
+        # Si el usuario descargó previamente el archivo real en ~/Downloads, instalarlo automáticamente
+        if free_override_bytes is None:
+            user_dl = self._find_matching_user_download(game)
+            if user_dl is not None:
+                return self.install_local_package(game_id, user_dl, scanner=svc)
 
         os_prof = self.detect_target_os_profile(target_os)
         plat_key = str(game.get("platform_key") or "ps3")
