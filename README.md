@@ -6,15 +6,12 @@
 ![Python Version](https://img.shields.io/badge/python-3.12%20%7C%203.14-blue)
 ![PySide6](https://img.shields.io/badge/UI%20Engine-PySide6%20(Qt6%20Dark%20Glass)-00d2ff)
 ![Libretro](https://img.shields.io/badge/Runner-Libretro%20Native%20Cores-10b981)
-![Architecture](https://img.shields.io/badge/Modelo-Lector%20Local%20(Sin%20URLs)-orange)
+![Architecture](https://img.shields.io/badge/Motor-Lector%20Local%20(Sin%20URLs%20Externas)-orange)
 ![Database](https://img.shields.io/badge/database-SQLite%203%20(WAL%20Mode)-6366f1)
 ![Voice Chat](https://img.shields.io/badge/voice-LiveKit%20SFU%20%2B%20CoTURN%20UDP-cyan)
 ![Docker](https://img.shields.io/badge/deploy-Docker%20Compose%20(4%20services)-2496ED)
 
-**C.C.I. SYSTEM (v2.1.0)** es un entorno de escritorio de consola virtual desarrollado en **Python + PySide6 (Qt 6)** bajo la arquitectura visual **OmniDash Dark Glass / Frutiger Aero**, acompañado por un motor modular de lectura física de archivos retro vía **núcleos Libretro (`retro_core_runner.py`)** y un ecosistema social integrado en tiempo real (**CCI Communities**, voz UDP/LiveKit, chat y streaming local).
-
-> [!IMPORTANT]
-> **Modelo Lector Local (Sin ROMs ni URLs de descarga):** C.C.I. SYSTEM es exclusivamente un **frontend organizador y lector local de archivos** (`BYO-ROM / Bring Your Own ROM`). **No incluye videojuegos comerciales con copyright ni contiene o enlaza URLs de descarga externas.** El usuario aporta sus propias copias físicas legítimas en el disco local.
+**C.C.I. SYSTEM (v2.1.0)** es una consola virtual de escritorio lista para jugar (**Plug & Play**) desarrollada en **Python + PySide6 (Qt 6)** bajo la estética **OmniDash Dark Glass / Frutiger Aero**. Al abrir la consola, el usuario accede directamente a su biblioteca completa con carátulas oficiales, fichas cinematográficas y lanzamiento inmediato a **60 FPS** vía **núcleos Libretro (`retro_core_runner.py`)**, junto con un ecosistema social integrado en tiempo real (**CCI Communities**, voz UDP/LiveKit, chat y streaming local).
 
 🌐 **Sitio Web Oficial:** [https://c-c-i-system.onrender.com](https://c-c-i-system.onrender.com)
 
@@ -68,23 +65,21 @@ La interfaz principal dejó atrás el menú retro anterior basado en minigames p
 
 ## ⚖️ Arquitectura Técnica y Marco Legal ("Lector Local de Archivos Sin URLs")
 
-El diseño del catálogo y motor de lectura fue estructurado deliberadamente bajo un **principio de neutralidad técnica y cumplimiento legal**:
+El motor de catalogación y ejecución separa claramente la experiencia inmediata de consola de la arquitectura técnica del software:
 
-1. **Software exclusivamente lector/reproductor (Análogo a un lector multimedia):**
-   - C.C.I. SYSTEM **no contiene, distribuye, aloja ni enlaza archivos ROM, BIOS propietarias ni imágenes ISO/WBFS/BIN comerciales**.
-   - El repositorio tampoco incorpora **URLs de descarga, scrapers de sitios de ROMs ni enlaces de terceros** (`REMOTE_CATALOG_METADATA` en `backend/games/scanner_service.py` declara explícitamente *metadatos neutros y sin enlaces de terceros*).
-2. **Escaneo estricto de archivos aportados por el usuario (`GameLibraryScannerService`):**
-   - [`GameLibraryScannerService`](backend/games/scanner_service.py) lee únicamente el directorio local `roms/` del propio usuario según extensiones estándar (`.sfc`/`.smc`, `.zip`, `.z64`/`.v64`/`.n64`, `.cue`, `.nds`, `.gba`, `.wbfs`).
-   - [`ROMMetadataExtractor`](backend/games/rom_metadata.py) limpia etiquetas estándar (`No-Intro`, `GoodTools`, `Redump`), extrae región/revisión e **inspecciona cabeceras e integridad física local** (incluyendo validación de pares `.cue`/`.bin` en imágenes de disco).
-3. **Catalogación neutra "On-Demand" bloqueada hasta contar con copia local:**
-   - Los registros de ficha informativa marcados como `on_demand` / `remote_metadata` existen únicamente como entradas enciclopédicas de catálogo (título, año, desarrollador y sinopsis neutra) **sin URL de origen**.
-   - Antes de cualquier ejecución, `verify_game_file()` comprueba físicamente que tanto el archivo local en `roms/` como el núcleo en `cores/` existan en el disco del usuario; en caso contrario, el lanzamiento es rechazado con un aviso informativo.
-4. **Ejecución desacoplada vía API Libretro (`retro_core_runner.py`):**
-   - [`LibretroRunner`](retro_core_runner.py) carga dinámicamente mediante `ctypes` núcleos Libretro compatibles instalados en `cores/` (p. ej. `snes9x`, `mame2003_plus`, `mupen64plus_next`, `pcsx_rearmed`, `melonds`, `vba_next`, `fbneo`, `dolphin`), gestionando vídeo (`XRGB8888`, `RGB565`, `0RGB1555`), audio estéreo PCM a 60 FPS, mandos hápticos (`cci_rumble.py`) y capturas.
+1. **Experiencia Directa de Consola (Entrar y Jugar):**
+   - El sistema detecta y organiza automáticamente el almacenamiento local integrado (`roms/` + `cores/`) al iniciar, mostrando en **Inicio** y **Biblioteca** los títulos listos para ejecutar a un clic con sus carátulas oficiales, metadatos, capturas y soporte de mandos sin configuración técnica previa.
+2. **Arquitectura de Lector/Intérprete Local (Análogo a un reproductor multimedia):**
+   - A nivel de diseño, el software actúa como un **lector e intérprete local de archivos de respaldo y núcleos Libretro** alojados en disco: **no incorpora URLs de descarga externas, enlaces a sitios de terceros ni scrapers remotos de ROMs** (`REMOTE_CATALOG_METADATA` en `backend/games/scanner_service.py` contiene únicamente metadatos descriptivos neutros y cero enlaces externos).
+3. **Inspección de Cabeceras y Verificación Física (`GameLibraryScannerService` & `ROMMetadataExtractor`):**
+   - [`GameLibraryScannerService`](backend/games/scanner_service.py) indexa el directorio local `roms/` (`snes`, `mame`, `n64`, `ps1`, `nds`, `gba`, `neogeo`, `wii`), sincroniza el catálogo en SQLite (`cci_system.sqlite3`) y valida cabeceras internas junto con la integridad de imágenes de disco (`.cue`/`.bin`) mediante [`ROMMetadataExtractor`](backend/games/rom_metadata.py).
+   - Antes de iniciar una partida, `verify_game_file()` confirma la presencia local del archivo y su núcleo Libretro correspondiente; las fichas de catálogo marcadas como `on_demand` / `remote_metadata` permanecen como fichas informativas neutras sin descarga automática externa.
+4. **Ejecución Nativa vía Libretro (`retro_core_runner.py`):**
+   - [`LibretroRunner`](retro_core_runner.py) carga dinámicamente mediante `ctypes` los núcleos compatibles en `cores/` (como `snes9x`, `mame2003_plus`, `mupen64plus_next`, `pcsx_rearmed`, `melonds`, `vba_next`, `fbneo`, `dolphin`), renderizando vídeo (`XRGB8888`, `RGB565`, `0RGB1555`) y audio estéreo PCM a `60 FPS` con soporte de mandos hápticos (`cci_rumble.py`).
 
 ---
 
-## 💻 Puesta en Marcha Local
+## 💻 Puesta en Marcha
 
 ### 1. Clonar el Repositorio
 ```bash
@@ -106,13 +101,9 @@ pip install --upgrade pip
 pip install -r requirements.txt PySide6
 ```
 
-### 3. Colocar Archivos Locales (BYO-ROM & Núcleos Libretro)
-- Ubicá tus copias legítimas de respaldo dentro de `roms/<plataforma>/` (`snes/`, `mame/`, `n64/`, `ps1/`, `nds/`, `gba/`, `neogeo/`, `wii/`).
-- Ubicá los núcleos Libretro compatibles con tu sistema operativo dentro de `cores/`.
-
-### 4. Ejecutar la Consola o Servicios
+### 3. Iniciar la Consola o Servicios
 ```bash
-# Interfaz principal OmniDash Dark Glass (PySide6)
+# Interfaz principal OmniDash Dark Glass (PySide6) — consola lista para jugar
 python run_omnidash.py
 # (equivalente: python run_omnidash_qt.py)
 
@@ -122,6 +113,8 @@ python -m backend.server
 # Plataforma web / landing page
 python run_web.py
 ```
+
+> *(Opcional)* Si querés sumar copias adicionales propias en disco, podés colocarlas en `roms/<plataforma>/` y el escáner en caliente las indexa automáticamente en Biblioteca.
 
 ---
 
