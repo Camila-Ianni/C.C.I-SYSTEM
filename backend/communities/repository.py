@@ -90,6 +90,7 @@ class CommunitiesRepository:
         self._temp_mem_file: Optional[str] = None
         self._all_connections: List[sqlite3.Connection] = []
         self._tx_lock = threading.RLock()
+        self._wal_initialized = False
 
         if resolved == ":memory:":
             # Respaldar el modo efímero de pruebas con un archivo temporal WAL aislado por instancia
@@ -156,24 +157,29 @@ class CommunitiesRepository:
             except Exception:
                 self._local.conn = None
 
-        conn = sqlite3.connect(
-            self._connect_target,
-            timeout=15.0,
-            check_same_thread=False,
-            uri=self._use_uri,
-        )
-        conn.row_factory = sqlite3.Row
-        conn.execute("PRAGMA foreign_keys = ON;")
-        conn.execute("PRAGMA busy_timeout = 5000;")
-        try:
-            conn.execute("PRAGMA journal_mode = WAL;")
-            conn.execute("PRAGMA synchronous = NORMAL;")
-        except Exception:
-            pass
-        self._local.conn = conn
         with self._tx_lock:
+            conn = sqlite3.connect(
+                self._connect_target,
+                timeout=15.0,
+                check_same_thread=False,
+                uri=self._use_uri,
+            )
+            conn.row_factory = sqlite3.Row
+            conn.execute("PRAGMA foreign_keys = ON;")
+            conn.execute("PRAGMA busy_timeout = 5000;")
+            if not self._wal_initialized:
+                try:
+                    conn.execute("PRAGMA journal_mode = WAL;")
+                    self._wal_initialized = True
+                except Exception:
+                    pass
+            try:
+                conn.execute("PRAGMA synchronous = NORMAL;")
+            except Exception:
+                pass
+            self._local.conn = conn
             self._all_connections.append(conn)
-        return conn
+            return conn
 
     def check_health(self) -> bool:
         """Verifica conectividad real e integridad básica del esquema."""

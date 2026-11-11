@@ -1,30 +1,27 @@
 """
 backend/communities/stream_adapter.py
-Adaptador de detección de fuentes, captura local de previsualización y validación de perfiles
-de Streaming en CCI Communities.
-
-DELIMITACIÓN EXPLÍCITA DE ALCANCE (Fase 0.2):
-1. Detección de fuentes (`detect_available_capture_sources`): Inspecciona pantallas reales reportadas
-   por el subsistema gráfico activo y procesos reales del sistema operativo (`ps`). Si no hay pantallas
-   físicas disponibles (ej. entorno headless o driver `dummy`), devuelve `screens: []` y
-   `screen_capture_status: "unavailable"` sin inventar pantallas ficticias.
-2. Captura local (`capture_stream_frame`): Obtiene el framebuffer RGB real únicamente cuando existe
-   una superficie gráfica activa en Pygame. Si no existe superficie, reporta `status: "unavailable"`.
-3. Publicación WebRTC en red (`webrtc_media_publishing`): El backend emite y autoriza sesiones y
-   tokens JWT para LiveKit SFU (`start_stream`, `pause_stream`, `stop_stream`), pero la codificación
-   y transporte continuo de video/audio en red requiere el cliente WebRTC/LiveKit SFU externo
-   (alcance parcial en el backend Python: señalización, control de sesión y captura local).
+Adaptador de detección de fuentes, captura real de pantalla/ventana/juego y validación de perfiles
+de Streaming WebRTC en CCI Communities (P1-B).
 """
 from __future__ import annotations
 
+import importlib.util
 import os
 import subprocess
-from typing import Any, Dict, List, Tuple
+import threading
+from typing import Any, Dict, List, Optional, Tuple
 
 ALLOWED_RESOLUTIONS = ["720p", "1080p", "1440p", "4k"]
 ALLOWED_FPS = [15, 30, 45, 60]
 MIN_BITRATE_KBPS = 500
 MAX_BITRATE_KBPS = 20000
+
+RESOLUTION_DIMENSIONS: Dict[str, Tuple[int, int]] = {
+    "720p": (1280, 720),
+    "1080p": (1920, 1080),
+    "1440p": (2560, 1440),
+    "4k": (3840, 2160),
+}
 
 STREAM_PROFILES = {
     "720p_30fps": {"resolution": "720p", "fps": 30, "bitrate_kbps": 1500},
@@ -137,6 +134,37 @@ def detect_available_capture_sources(force_headless: bool = False) -> Dict[str, 
     running_procs = _list_running_process_names() if not force_headless else []
     python_active = any("python" in p for p in running_procs)
 
+    # Detección adicional de pantallas físicas vía Qt cuando no estamos en offscreen/headless
+    if not force_headless and not screens:
+        try:
+            from PySide6.QtGui import QGuiApplication
+
+            qapp = QGuiApplication.instance()
+            if qapp is not None and (QGuiApplication.platformName() or "").strip().lower() != "offscreen":
+                driver_name = f"qt:{QGuiApplication.platformName()}"
+                for idx, scr in enumerate(QGuiApplication.screens()):
+                    geom = scr.geometry()
+                    w, h = int(geom.width()), int(geom.height())
+                    if w > 0 and h > 0:
+                        screens.append({
+                            "id": f"screen:{idx}",
+                            "type": "screen",
+                            "name": f"Pantalla {'Principal' if idx == 0 else idx + 1} ({w}x{h})",
+                            "width": w,
+                            "height": h,
+                            "is_primary": idx == 0,
+                            "driver": driver_name,
+                        })
+        except Exception:
+            pass
+
+    has_livekit_video = False
+    if not force_headless:
+        try:
+            has_livekit_video = importlib.util.find_spec("livekit.rtc") is not None
+        except Exception:
+            has_livekit_video = False
+
     windows: List[Dict[str, Any]] = []
     if python_active or has_real_surface:
         windows.append({
@@ -167,13 +195,170 @@ def detect_available_capture_sources(force_headless: bool = False) -> Dict[str, 
         "games": games,
         "profiles": STREAM_PROFILES,
         "subsystem_status": {
-            "scope": "partial_local_detection_and_signaling",
+            "scope": "livekit_webrtc_desktop_capture" if (has_livekit_video and not force_headless) else "partial_local_detection_and_signaling",
             "display_driver": driver_name,
             "screen_capture_status": "available" if screens else "unavailable",
-            "local_preview_capture": "available" if has_real_surface else "unavailable",
-            "webrtc_media_publishing": "external_livekit_sfu_client_required",
+            "local_preview_capture": "available" if (has_real_surface or screens or windows) else "unavailable",
+            "webrtc_media_publishing": "livekit_video_ready" if (has_livekit_video and not force_headless) else "external_livekit_sfu_client_required",
         },
     }
+
+
+def parse_resolution_dimensions(
+    resolution: str = "720p",
+    max_width: int = 1920,
+    max_height: int = 1080,
+) -> Tuple[int, int]:
+    """Convierte una resolución nominal ('720p', '1080p', etc.) en dimensiones pares para WebRTC."""
+    res_clean = str(resolution or "720p").lower().strip()
+    w, h = RESOLUTION_DIMENSIONS.get(res_clean, (1280, 720))
+    w = min(int(w), max(2, int(max_width)))
+    h = min(int(h), max(2, int(max_height)))
+    # Asegurar múltiplos de 2 requeridos por codificadores VP8/H264
+    return max(2, w - (w % 2)), max(2, h - (h % 2))
+
+
+def resize_rgba_frame(
+    width: int,
+    height: int,
+    rgba_bytes: bytes,
+    target_width: int,
+    target_height: int,
+) -> Tuple[int, int, bytes]:
+    """Redimensiona un buffer RGBA manteniendo proporciones pares cuando difiere del objetivo."""
+    tw = max(2, int(target_width) - (int(target_width) % 2))
+    th = max(2, int(target_height) - (int(target_height) % 2))
+    if width == tw and height == th and len(rgba_bytes) == tw * th * 4:
+        return tw, th, rgba_bytes
+
+    try:
+        from PIL import Image
+
+        img = Image.frombytes("RGBA", (int(width), int(height)), rgba_bytes)
+        if img.size != (tw, th):
+            img = img.resize((tw, th), Image.Resampling.BILINEAR)
+        return tw, th, img.tobytes()
+    except Exception:
+        pass
+
+    try:
+        import cv2
+        import numpy as np
+
+        arr = np.frombuffer(rgba_bytes, dtype=np.uint8).reshape((int(height), int(width), 4))
+        resized = cv2.resize(arr, (tw, th), interpolation=cv2.INTER_LINEAR)
+        return tw, th, np.ascontiguousarray(resized).tobytes()
+    except Exception:
+        return int(width), int(height), rgba_bytes
+
+
+def _qpixmap_to_rgba_frame(
+    pix: Any,
+    target_width: int,
+    target_height: int,
+) -> Optional[Tuple[int, int, bytes]]:
+    """Convierte un QPixmap a bytes RGBA8888 compactos y redimensionados."""
+    if pix is None or pix.isNull() or pix.width() <= 0 or pix.height() <= 0:
+        return None
+    from PySide6.QtGui import QImage
+
+    img = pix.toImage().convertToFormat(QImage.Format.Format_RGBA8888)
+    w, h = int(img.width()), int(img.height())
+    bpl = int(img.bytesPerLine())
+    raw = bytes(img.constBits())
+    rgba = raw[: w * h * 4] if bpl == w * 4 else b"".join(
+        raw[r * bpl : r * bpl + w * 4] for r in range(h)
+    )
+    return resize_rgba_frame(w, h, rgba, target_width, target_height)
+
+
+def capture_qwidget_rgba(
+    widget: Any,
+    target_width: int = 1280,
+    target_height: int = 720,
+) -> Optional[Tuple[int, int, bytes]]:
+    """Captura los píxeles renderizados reales de un QWidget en formato RGBA8888."""
+    if widget is None or threading.current_thread() is not threading.main_thread():
+        return None
+    try:
+        return _qpixmap_to_rgba_frame(widget.grab(), target_width, target_height)
+    except Exception:
+        return None
+
+
+def capture_source_rgba(
+    source_id: str = "screen:0",
+    target_width: int = 1280,
+    target_height: int = 720,
+    window_widget: Any = None,
+) -> Optional[Tuple[int, int, bytes]]:
+    """Captura un frame RGBA real de pantalla, ventana Qt o superficie Pygame.
+
+    Devuelve `(width, height, rgba_bytes)` o `None` si la fuente no está disponible.
+    """
+    src = str(source_id or "screen:0").strip()
+    tw = max(2, int(target_width) - (int(target_width) % 2))
+    th = max(2, int(target_height) - (int(target_height) % 2))
+
+    # 1. Ventana de la aplicación Qt (funciona tanto en pantalla física como en offscreen)
+    if src.startswith("window:") and window_widget is not None:
+        grabbed = capture_qwidget_rgba(window_widget, tw, th)
+        if grabbed is not None:
+            return grabbed
+
+    # 2. Superficie activa de Pygame (juegos integrados o ventana principal SDL)
+    if src.startswith("game:") or src.startswith("window:") or src == "pygame":
+        try:
+            import pygame
+
+            if pygame.display.get_init():
+                surf = pygame.display.get_surface()
+                if surf is not None:
+                    w, h = surf.get_size()
+                    if w > 0 and h > 0:
+                        raw_rgba = pygame.image.tobytes(surf, "RGBA")
+                        return resize_rgba_frame(w, h, raw_rgba, tw, th)
+        except Exception:
+            pass
+        if src.startswith("game:") and window_widget is not None:
+            grabbed = capture_qwidget_rgba(window_widget, tw, th)
+            if grabbed is not None:
+                return grabbed
+
+    # 3. Captura de monitor físico vía Qt Screen o Pillow ImageGrab
+    if src.startswith("screen:"):
+        try:
+            idx = int(src.split(":", 1)[1])
+        except Exception:
+            idx = 0
+
+        if threading.current_thread() is threading.main_thread():
+            try:
+                from PySide6.QtGui import QGuiApplication
+
+                qapp = QGuiApplication.instance()
+                if qapp is not None and (QGuiApplication.platformName() or "").strip().lower() != "offscreen":
+                    screens = QGuiApplication.screens()
+                    if 0 <= idx < len(screens):
+                        grabbed = _qpixmap_to_rgba_frame(screens[idx].grabWindow(0), tw, th)
+                        if grabbed is not None:
+                            return grabbed
+            except Exception:
+                pass
+
+        # Fallback fuera del hilo Qt (no disponible en entornos headless sin compositor)
+        if os.getenv("QT_QPA_PLATFORM", "").strip().lower() != "offscreen":
+            try:
+                from PIL import ImageGrab
+
+                snap = ImageGrab.grab()
+                if snap is not None and snap.width > 0 and snap.height > 0:
+                    rgba_img = snap.convert("RGBA")
+                    return resize_rgba_frame(rgba_img.width, rgba_img.height, rgba_img.tobytes(), tw, th)
+            except Exception:
+                pass
+
+    return None
 
 
 def capture_stream_frame() -> Dict[str, Any]:

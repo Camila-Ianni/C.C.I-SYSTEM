@@ -3968,6 +3968,8 @@ class ChannelSidebar(AcrylicGlassCard):
         self.active_voice_id: Optional[str] = None
         self.text_buttons: dict[str, QPushButton] = {}
         self.voice_buttons: dict[str, QPushButton] = {}
+        self._voice_names: dict[str, str] = {}
+        self._live_channel_ids: set[str] = set()
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(12, 12, 12, 12)
@@ -4099,6 +4101,7 @@ class ChannelSidebar(AcrylicGlassCard):
 
         self.text_buttons.clear()
         self.voice_buttons.clear()
+        self._voice_names.clear()
         _clear_layout_widgets(self._text_list_layout)
         _clear_layout_widgets(self._voice_list_layout)
 
@@ -4136,7 +4139,10 @@ class ChannelSidebar(AcrylicGlassCard):
         else:
             for ch in voice_channels:
                 cid = str(ch["id"])
-                btn = QPushButton(f"  {ch.get('name', 'voz')}")
+                base_name = str(ch.get("name", "voz"))
+                self._voice_names[cid] = base_name
+                label = f"  {base_name}  ● LIVE" if cid in self._live_channel_ids else f"  {base_name}"
+                btn = QPushButton(label)
                 btn.setCursor(Qt.PointingHandCursor)
                 btn.setFixedHeight(32)
                 if vip.exists():
@@ -4150,6 +4156,13 @@ class ChannelSidebar(AcrylicGlassCard):
                 self._voice_list_layout.addWidget(btn)
                 self.voice_buttons[cid] = btn
 
+        self._style_channels()
+
+    def set_live_channels(self, channel_ids: list[str]):
+        self._live_channel_ids = {str(cid) for cid in (channel_ids or []) if cid}
+        for cid, btn in self.voice_buttons.items():
+            base_name = self._voice_names.get(cid, "voz")
+            btn.setText(f"  {base_name}  ● LIVE" if cid in self._live_channel_ids else f"  {base_name}")
         self._style_channels()
 
     def set_active_text_channel(self, channel_id: str):
@@ -4399,6 +4412,119 @@ class ChatMessageWidget(QWidget):
         self.reactions_wrap.setVisible(True)
 
 
+class StreamStageWidget(QFrame):
+    """Visor WebRTC real de pantalla / juego (LiveKit SOURCE_SCREENSHARE + preview)."""
+
+    stop_requested = Signal()
+    close_requested = Signal()
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setVisible(False)
+        self.frames_rendered: int = 0
+        self.last_frame_size: tuple[int, int] = (0, 0)
+        self.last_frame_rgba: Optional[bytes] = None
+        self._is_broadcaster: bool = False
+
+        self.setStyleSheet("""
+            StreamStageWidget {
+                background: rgba(7, 16, 26, 0.92);
+                border: 1px solid rgba(53, 200, 241, 0.45);
+                border-radius: 14px;
+            }
+        """)
+        lay = QVBoxLayout(self)
+        lay.setContentsMargins(10, 8, 10, 10)
+        lay.setSpacing(6)
+
+        hdr = QHBoxLayout()
+        hdr.setSpacing(8)
+        self.live_badge = QLabel("● LIVE")
+        self.live_badge.setStyleSheet(
+            "background: #E94B56; color: #ffffff; font-size: 11px; font-weight: 800; "
+            "padding: 2px 8px; border-radius: 8px;"
+        )
+        hdr.addWidget(self.live_badge)
+
+        self.title_lbl = QLabel("Transmisión en vivo")
+        self.title_lbl.setStyleSheet("font-size: 12px; font-weight: 800; color: #ffffff;")
+        hdr.addWidget(self.title_lbl, 1)
+
+        self.meta_lbl = QLabel("")
+        self.meta_lbl.setStyleSheet("font-size: 11px; color: #8ad8f0;")
+        hdr.addWidget(self.meta_lbl)
+
+        self.action_btn = QPushButton("Cerrar")
+        self.action_btn.setCursor(Qt.PointingHandCursor)
+        self.action_btn.setStyleSheet(
+            "QPushButton { background: rgba(233, 75, 86, 0.25); border: 1px solid #E94B56; "
+            "border-radius: 8px; color: #ffffff; font-size: 11px; font-weight: 700; padding: 3px 10px; } "
+            "QPushButton:hover { background: #E94B56; }"
+        )
+        self.action_btn.clicked.connect(self._on_action_clicked)
+        hdr.addWidget(self.action_btn)
+        lay.addLayout(hdr)
+
+        self.video_lbl = QLabel("Esperando video WebRTC de LiveKit...")
+        self.video_lbl.setAlignment(Qt.AlignCenter)
+        self.video_lbl.setMinimumHeight(180)
+        self.video_lbl.setMaximumHeight(320)
+        self.video_lbl.setStyleSheet(
+            "background: #040b12; border-radius: 10px; color: #7f95a6; font-size: 12px; font-weight: 600;"
+        )
+        lay.addWidget(self.video_lbl)
+
+    def _on_action_clicked(self):
+        if self._is_broadcaster:
+            self.stop_requested.emit()
+        else:
+            self.close_requested.emit()
+
+    def set_stream_session(self, info: Optional[dict], is_broadcaster: bool = False):
+        if not info or (not info.get("live") and not info.get("watching")):
+            self.clear_stream()
+            return
+        self._is_broadcaster = bool(is_broadcaster or info.get("live"))
+        sess = info.get("session") or {}
+        title = str(sess.get("title") or info.get("title") or "Pantalla compartida")
+        username = str(sess.get("username") or "")
+        res = str(sess.get("resolution") or f"{info.get('width') or ''}x{info.get('height') or ''}")
+        fps = info.get("fps") or sess.get("fps") or 30
+        self.title_lbl.setText(f"{username} — {title}" if username else title)
+        self.meta_lbl.setText(f"{res} · {fps} fps")
+        self.live_badge.setVisible(True)
+        self.action_btn.setText("Dejar de compartir" if self._is_broadcaster else "Cerrar visor")
+        self.setVisible(True)
+
+    def update_rgba_frame(self, width: int, height: int, rgba: bytes):
+        if width <= 0 or height <= 0 or not rgba:
+            return
+        expected = int(width) * int(height) * 4
+        if len(rgba) < expected:
+            return
+        img = QImage(rgba, int(width), int(height), int(width) * 4, QImage.Format_RGBA8888).copy()
+        pm = QPixmap.fromImage(img)
+        target_w = max(320, self.video_lbl.width() or 560)
+        target_h = max(180, self.video_lbl.height() or 280)
+        self.video_lbl.setPixmap(pm.scaled(target_w, target_h, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+        self.last_frame_size = (int(width), int(height))
+        self.last_frame_rgba = bytes(rgba[:expected])
+        self.frames_rendered += 1
+        self.meta_lbl.setText(f"{width}x{height} · {self.frames_rendered} frames")
+        if not self.isVisible():
+            self.setVisible(True)
+
+    def clear_stream(self):
+        self.frames_rendered = 0
+        self.last_frame_size = (0, 0)
+        self.last_frame_rgba = None
+        self._is_broadcaster = False
+        self.video_lbl.clear()
+        self.video_lbl.setText("Esperando video WebRTC de LiveKit...")
+        self.meta_lbl.setText("")
+        self.setVisible(False)
+
+
 class CentralChatWidget(AcrylicGlassCard):
     message_submit_requested = Signal(str)
     refresh_requested = Signal()
@@ -4490,6 +4616,9 @@ class CentralChatWidget(AcrylicGlassCard):
             "border-radius: 10px; color: #ffd6d9; font-size: 12px; font-weight: 600; padding: 8px 12px;"
         )
         layout.addWidget(self.error_banner)
+
+        self.stream_stage = StreamStageWidget(self)
+        layout.addWidget(self.stream_stage)
 
         self.scroll = QScrollArea()
         self.scroll.setWidgetResizable(True)
@@ -5084,6 +5213,14 @@ class RightPanel(QWidget):
         v_hdr.addLayout(v_titles)
         v_hdr.addStretch(1)
 
+        self.v_live_badge = QLabel("● LIVE")
+        self.v_live_badge.setVisible(False)
+        self.v_live_badge.setStyleSheet(
+            "background: #E94B56; color: #ffffff; font-size: 10px; font-weight: 800; "
+            "padding: 2px 7px; border-radius: 7px;"
+        )
+        v_hdr.addWidget(self.v_live_badge)
+
         user_ico = QLabel()
         u_p = ROOT / "assets_omnidash" / "icons" / "person.png"
         if u_p.exists():
@@ -5096,6 +5233,28 @@ class RightPanel(QWidget):
         self.v_media_lbl.setWordWrap(True)
         self.v_media_lbl.setStyleSheet("font-size: 11px; color: #ffd166;")
         v_lay.addWidget(self.v_media_lbl)
+
+        src_row = QHBoxLayout()
+        src_row.setSpacing(6)
+        self.screen_source_combo = QComboBox()
+        self.screen_source_combo.addItem("Pantalla principal", "screen:0")
+        self.screen_source_combo.addItem("Ventana OmniDash", "window:omnidash")
+        self.screen_source_combo.setStyleSheet(
+            "QComboBox { background: rgba(10, 22, 34, 0.72); border: 1px solid rgba(145,165,179,0.28); "
+            "border-radius: 7px; padding: 3px 8px; color: #BDD4E4; font-size: 11px; }"
+        )
+        src_row.addWidget(self.screen_source_combo, 1)
+
+        self.screen_res_combo = QComboBox()
+        self.screen_res_combo.addItem("720p 30fps", ("720p", 30, 2500))
+        self.screen_res_combo.addItem("1080p 60fps", ("1080p", 60, 4500))
+        self.screen_res_combo.addItem("1440p 60fps", ("1440p", 60, 7500))
+        self.screen_res_combo.setStyleSheet(
+            "QComboBox { background: rgba(10, 22, 34, 0.72); border: 1px solid rgba(145,165,179,0.28); "
+            "border-radius: 7px; padding: 3px 6px; color: #BDD4E4; font-size: 11px; }"
+        )
+        src_row.addWidget(self.screen_res_combo)
+        v_lay.addLayout(src_row)
 
         ctrls_row = QHBoxLayout()
         ctrls_row.setSpacing(12)
@@ -5119,7 +5278,7 @@ class RightPanel(QWidget):
         self.screen_btn = QPushButton()
         self.screen_btn.setFixedSize(44, 44)
         self.screen_btn.setCursor(Qt.PointingHandCursor)
-        self.screen_btn.setToolTip("Compartir pantalla (requiere WebRTC nativo)")
+        self.screen_btn.setToolTip("Compartir pantalla o ventana en vivo (LiveKit WebRTC)")
         self.screen_active = False
         self._update_screen_style()
         self.screen_btn.clicked.connect(self._toggle_screen)
@@ -5294,8 +5453,33 @@ class RightPanel(QWidget):
             self.v_media_lbl.setText(status_text or "No se pudo iniciar la señalización de voz.")
             self.v_media_lbl.setStyleSheet("font-size: 11px; color: #ffd6d9;")
 
-        self.screen_active = False
+        self.screen_active = bool(state.get("screen_live")) and self._media_ready
+        self.v_live_badge.setVisible(self.screen_active)
         self._update_screen_style()
+
+    def set_capture_sources(self, sources: dict):
+        screens = list((sources or {}).get("screens") or [])
+        cur = self.screen_source_combo.currentData()
+        self.screen_source_combo.blockSignals(True)
+        self.screen_source_combo.clear()
+        for scr in screens:
+            self.screen_source_combo.addItem(
+                f"{scr.get('name', 'Pantalla')} ({scr.get('width', '')}x{scr.get('height', '')})",
+                str(scr.get("id") or "screen:0"),
+            )
+        if not screens:
+            self.screen_source_combo.addItem("Pantalla principal", "screen:0")
+        self.screen_source_combo.addItem("Ventana OmniDash", "window:omnidash")
+        idx = self.screen_source_combo.findData(cur)
+        if idx >= 0:
+            self.screen_source_combo.setCurrentIndex(idx)
+        self.screen_source_combo.blockSignals(False)
+
+    def get_selected_stream_config(self) -> tuple[str, str, int, int]:
+        source_id = str(self.screen_source_combo.currentData() or "screen:0")
+        res_data = self.screen_res_combo.currentData() or ("720p", 30, 2500)
+        res, fps, bitrate = res_data
+        return source_id, str(res), int(fps), int(bitrate)
 
     def _toggle_mic(self):
         self.mic_muted = not self.mic_muted
@@ -5328,14 +5512,21 @@ class RightPanel(QWidget):
             self.headset_btn.setStyleSheet("QPushButton { background: rgba(255, 255, 255, 0.12); border: 1.5px solid rgba(255, 255, 255, 0.25); border-radius: 22px; } QPushButton:hover { background: rgba(255, 255, 255, 0.25); }")
 
     def _toggle_screen(self):
-        # P0.2: Prohibido alternar estado LIVE simulado sin transporte multimedia real.
-        self.screen_active = False
-        self._update_screen_style()
         if not self._media_ready:
+            self.screen_active = False
+            self.v_live_badge.setVisible(False)
+            self._update_screen_style()
             self.v_media_lbl.setText(
-                "Compartir pantalla requiere captura + WebRTC LiveKit nativo (pendiente en desktop)."
+                "Compartir pantalla requiere captura + WebRTC LiveKit nativo activo."
             )
-        self.voice_toggled.emit("screen_unavailable", False)
+            self.voice_toggled.emit("screen_unavailable", False)
+            return
+        # El estado LIVE nunca se simula aquí: solo cambia tras confirmar publicación en LiveKit SFU.
+        if self.screen_active:
+            self.voice_toggled.emit("screen_stop", False)
+        else:
+            self.v_media_lbl.setText("Publicando pista WebRTC de pantalla en LiveKit SFU...")
+            self.voice_toggled.emit("screen_start", True)
 
     def _update_screen_style(self):
         sc_p = ROOT / "assets_omnidash" / "icons" / "screen_share.png"
@@ -5789,9 +5980,17 @@ class CommunityInteriorView(AcrylicGlassCard):
         self.chat_area.reaction_toggle_requested.connect(self._on_toggle_reaction)
         self.chat_area.attachment_upload_requested.connect(self._on_upload_attachment)
         self.chat_area.typing_changed.connect(self._on_local_typing)
+        self.chat_area.stream_stage.stop_requested.connect(lambda: self._on_voice_toggled("screen_stop", False))
+        self.chat_area.stream_stage.close_requested.connect(self._on_close_stream_viewer)
         if self.controller:
             self.chat_area.set_attachment_loader(self._load_attachment_bytes)
         body_row.addWidget(self.chat_area, 1)
+
+        self._screen_capture_source_id: str = "screen:0"
+        self._screen_capture_dims: tuple[int, int] = (1280, 720)
+        self._screen_capture_timer = QTimer(self)
+        self._screen_capture_timer.setInterval(33)
+        self._screen_capture_timer.timeout.connect(self._on_screen_capture_tick)
 
         self.right_panel = RightPanel(self)
         self.right_panel.voice_toggled.connect(self._on_voice_toggled)
@@ -5806,7 +6005,7 @@ class CommunityInteriorView(AcrylicGlassCard):
 
     def _bind_controller(self, ctrl: CommunityController):
         ctrl.session_changed.connect(self._on_session_changed)
-        ctrl.communities_updated.connect(lambda mine, _pub: self.rail.set_communities(mine))
+        ctrl.communities_updated.connect(self._on_communities_updated)
         ctrl.community_opened.connect(self._on_community_opened)
         ctrl.channel_messages_loaded.connect(self._on_messages_loaded)
         ctrl.messages_synced.connect(self._on_messages_synced)
@@ -5818,6 +6017,10 @@ class CommunityInteriorView(AcrylicGlassCard):
         ctrl.members_updated.connect(self._on_members_updated)
         ctrl.presence_self_changed.connect(self.right_panel.sync_self_presence_ui)
         ctrl.voice_state_changed.connect(self._on_voice_state_changed)
+        ctrl.stream_state_changed.connect(self._on_stream_state_changed)
+        ctrl.remote_video_frame_received.connect(self._on_remote_video_frame)
+        ctrl.remote_stream_ended.connect(self._on_remote_stream_ended)
+        ctrl.active_streams_updated.connect(self._on_active_streams_updated)
         ctrl.realtime_status_changed.connect(self.chat_area.set_realtime_status)
         ctrl.error_occurred.connect(self.chat_area.show_error)
 
@@ -5832,10 +6035,16 @@ class CommunityInteriorView(AcrylicGlassCard):
     def _current_user_id(self) -> str:
         return str(self.controller.session.user_id) if (self.controller and self.controller.session) else ""
 
+    def _on_communities_updated(self, mine: list, _pub: list):
+        self.rail.set_communities(mine)
+
     def _on_session_changed(self, sess):
         if sess is None:
+            self._screen_capture_timer.stop()
+            self.chat_area.stream_stage.clear_stream()
             self.user_chip_lbl.setText("@sin_sesion")
             self.rail.set_communities([])
+            self.channel_sidebar.set_live_channels([])
             self.channel_sidebar.set_community_data(None, [])
             self.chat_area.set_channel(None)
             self.chat_area.set_messages([], "")
@@ -5894,6 +6103,10 @@ class CommunityInteriorView(AcrylicGlassCard):
             online_count=online_count,
             active_text_id=active_text_id,
             active_voice_id=active_voice_id,
+        )
+        streams = list(payload.get("streams") or (self.controller.active_streams if self.controller else []))
+        self.channel_sidebar.set_live_channels(
+            [str(s.get("channel_id")) for s in streams if s.get("channel_id")]
         )
         self._apply_member_filter()
 
@@ -6096,7 +6309,78 @@ class CommunityInteriorView(AcrylicGlassCard):
     def _on_voice_state_changed(self, state: dict):
         self.right_panel.set_voice_state(state)
         ch = state.get("channel")
-        self.channel_sidebar.set_active_voice_channel(str(ch["id"]) if isinstance(ch, dict) and ch.get("id") else None)
+        ch_id = str(ch["id"]) if isinstance(ch, dict) and ch.get("id") else None
+        self.channel_sidebar.set_active_voice_channel(ch_id)
+        if not state.get("connected"):
+            self._screen_capture_timer.stop()
+            self.chat_area.stream_stage.clear_stream()
+            return
+        if self.controller and ch_id:
+            if not getattr(self, "_sources_loaded_for_voice", False):
+                self._sources_loaded_for_voice = True
+                try:
+                    self.right_panel.set_capture_sources(self.controller.get_stream_sources())
+                except Exception:
+                    pass
+            active_s = next(
+                (s for s in self.controller.active_streams if str(s.get("channel_id")) == ch_id),
+                None,
+            )
+            if active_s and not state.get("screen_live"):
+                self.chat_area.stream_stage.set_stream_session(
+                    {"watching": True, "session": active_s},
+                    is_broadcaster=False,
+                )
+
+    def _on_screen_capture_tick(self):
+        if not self.controller or not self.controller.voice_engine.is_screen_sharing:
+            self._screen_capture_timer.stop()
+            return
+        from backend.communities.stream_adapter import capture_source_rgba
+        tw, th = self._screen_capture_dims
+        frame = capture_source_rgba(
+            source_id=self._screen_capture_source_id,
+            target_width=tw,
+            target_height=th,
+            window_widget=self.window(),
+        )
+        if frame is not None:
+            fw, fh, rgba = frame
+            self.controller.push_screen_video_frame(fw, fh, rgba)
+            self.chat_area.stream_stage.update_rgba_frame(fw, fh, rgba)
+
+    def _on_stream_state_changed(self, state: dict):
+        is_live = bool(state.get("live"))
+        is_watching = bool(state.get("watching"))
+        if is_live:
+            fps = max(1, int(state.get("fps") or 30))
+            self._screen_capture_timer.setInterval(max(16, int(1000 / fps)))
+            if not self._screen_capture_timer.isActive():
+                self._screen_capture_timer.start()
+            self.chat_area.stream_stage.set_stream_session(state, is_broadcaster=True)
+        elif is_watching:
+            self._screen_capture_timer.stop()
+            self.chat_area.stream_stage.set_stream_session(state, is_broadcaster=False)
+        else:
+            self._screen_capture_timer.stop()
+            self.chat_area.stream_stage.clear_stream()
+
+    def _on_remote_video_frame(self, participant_id: str, width: int, height: int, rgba: bytes):
+        self.chat_area.stream_stage.update_rgba_frame(width, height, rgba)
+
+    def _on_remote_stream_ended(self, _participant_or_channel: str):
+        if not (self.controller and self.controller.voice_engine.is_screen_sharing):
+            self.chat_area.stream_stage.clear_stream()
+
+    def _on_active_streams_updated(self, streams: list):
+        self.channel_sidebar.set_live_channels(
+            [str(s.get("channel_id")) for s in (streams or []) if s.get("channel_id")]
+        )
+
+    def _on_close_stream_viewer(self):
+        if self.controller:
+            self.controller.stop_watching_stream()
+        self.chat_area.stream_stage.clear_stream()
 
     def _on_voice_toggled(self, action: str, enabled: bool):
         if not self.controller:
@@ -6106,7 +6390,25 @@ class CommunityInteriorView(AcrylicGlassCard):
         elif action == "headset":
             self.controller.set_voice_deafen(not enabled)
         elif action == "disconnect":
+            self._screen_capture_timer.stop()
             self.controller.leave_voice_channel()
+        elif action == "screen_start":
+            from backend.communities.stream_adapter import parse_resolution_dimensions
+            source_id, res, fps, bitrate = self.right_panel.get_selected_stream_config()
+            self._screen_capture_source_id = source_id
+            self._screen_capture_dims = parse_resolution_dimensions(res)
+            self.controller.start_screen_share_async(
+                source_id=source_id,
+                resolution=res,
+                fps=fps,
+                bitrate_kbps=bitrate,
+                with_audio=False,
+                window_widget=self.window(),
+                on_error=lambda exc: self.chat_area.show_error(exc.message),
+            )
+        elif action == "screen_stop":
+            self._screen_capture_timer.stop()
+            self.controller.stop_screen_share_async()
         elif action == "screen_unavailable":
             self.chat_area.show_error(
                 "Compartir pantalla requiere captura + publicación de video WebRTC LiveKit (P1-B)."

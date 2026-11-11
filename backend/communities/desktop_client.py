@@ -562,6 +562,54 @@ class CommunityApiClient:
         data = self._request("GET", "/api/v1/streams", params=params)
         return list(data.get("streams") or [])
 
+    def get_stream_sources(self) -> Dict[str, Any]:
+        return self._request("GET", "/api/v1/streams/sources")
+
+    def start_stream(
+        self,
+        channel_id: str,
+        stream_type: str = "screen",
+        title: Optional[str] = None,
+        game_id: Optional[str] = None,
+        resolution: str = "720p",
+        fps: int = 30,
+        bitrate_kbps: int = 2500,
+        has_audio: bool = False,
+    ) -> Dict[str, Any]:
+        body: Dict[str, Any] = {
+            "stream_type": stream_type,
+            "resolution": resolution,
+            "fps": int(fps),
+            "bitrate_kbps": int(bitrate_kbps),
+            "has_audio": bool(has_audio),
+        }
+        if title:
+            body["title"] = title
+        if game_id:
+            body["game_id"] = game_id
+        return self._request("POST", f"/api/v1/channels/{channel_id}/stream-start", json_body=body)
+
+    def pause_stream(
+        self,
+        channel_id: str,
+        session_id: Optional[str] = None,
+        is_paused: bool = True,
+    ) -> Dict[str, Any]:
+        body: Dict[str, Any] = {"is_paused": bool(is_paused)}
+        if session_id:
+            body["session_id"] = session_id
+        return self._request("POST", f"/api/v1/channels/{channel_id}/stream-pause", json_body=body)
+
+    def stop_stream(self, channel_id: str, session_id: Optional[str] = None) -> Dict[str, Any]:
+        body: Dict[str, Any] = {}
+        if session_id:
+            body["session_id"] = session_id
+        return self._request("POST", f"/api/v1/channels/{channel_id}/stream-stop", json_body=body)
+
+    def get_channel_stream(self, channel_id: str) -> Optional[Dict[str, Any]]:
+        data = self._request("GET", f"/api/v1/channels/{channel_id}/stream")
+        return data.get("stream")
+
 
 class CommunityRealtimeBridge(QObject):
     """Cliente Socket.IO en hilo separado que despacha eventos vía señales Qt."""
@@ -582,6 +630,9 @@ class CommunityRealtimeBridge(QObject):
     typing_updated = Signal(dict)
     activity_updated = Signal(dict)
     notification_received = Signal(dict)
+    stream_started = Signal(dict)
+    stream_paused = Signal(dict)
+    stream_ended = Signal(dict)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -697,6 +748,26 @@ class CommunityRealtimeBridge(QObject):
             if isinstance(data, dict):
                 self.notification_received.emit(data)
 
+        @sio.on("stream.started")
+        def on_stream_started(data):
+            if isinstance(data, dict):
+                self.stream_started.emit(data)
+
+        @sio.on("stream.paused")
+        def on_stream_paused(data):
+            if isinstance(data, dict):
+                self.stream_paused.emit({"is_paused": True, **data})
+
+        @sio.on("stream.resumed")
+        def on_stream_resumed(data):
+            if isinstance(data, dict):
+                self.stream_paused.emit({"is_paused": False, **data})
+
+        @sio.on("stream.ended")
+        def on_stream_ended(data):
+            if isinstance(data, dict):
+                self.stream_ended.emit(data)
+
         with self._lock:
             self._sio = sio
 
@@ -778,6 +849,31 @@ class CommunityRealtimeBridge(QObject):
         if channel_id:
             self._emit_socket("community:voice:mute", {"channel_id": channel_id, "is_muted": bool(is_muted)})
 
+    def emit_stream_start(
+        self,
+        channel_id: str,
+        stream_type: str = "screen",
+        title: str = "Stream",
+        resolution: str = "720p",
+        fps: int = 30,
+    ) -> None:
+        if channel_id:
+            self._emit_socket("community:stream:start", {
+                "channel_id": channel_id,
+                "stream_type": stream_type,
+                "title": title,
+                "resolution": resolution,
+                "fps": int(fps),
+            })
+
+    def emit_stream_pause(self, channel_id: str, is_paused: bool = True) -> None:
+        if channel_id:
+            self._emit_socket("community:stream:pause", {"channel_id": channel_id, "is_paused": bool(is_paused)})
+
+    def emit_stream_stop(self, channel_id: str) -> None:
+        if channel_id:
+            self._emit_socket("community:stream:stop", {"channel_id": channel_id})
+
     def disconnect_sync(self) -> None:
         self._stop_flag = True
         with self._lock:
@@ -792,26 +888,22 @@ class CommunityRealtimeBridge(QObject):
                 pass
 
 
-class _RestTaskSignals(QObject):
-    succeeded = Signal(int, object)
-    failed = Signal(int, str, int, str)  # task_id, message, status_code, code
-
-
 class _RestWorker(QRunnable):
-    """Worker thread para llamadas REST fuera del hilo GUI con soporte de cancelación."""
+    """Worker thread para llamadas REST fuera del hilo GUI sin crear QObjects transitorios."""
 
     def __init__(
         self,
+        ctrl_ref: "weakref.ref[CommunityController]",
         task_id: int,
         fn: Callable[[], Any],
         cancelled: threading.Event,
     ):
         super().__init__()
         self.setAutoDelete(False)
+        self.ctrl_ref = ctrl_ref
         self.task_id = task_id
         self.fn = fn
         self.cancelled = cancelled
-        self.signals = _RestTaskSignals()
 
     def run(self) -> None:
         if self.cancelled.is_set():
@@ -820,17 +912,26 @@ class _RestWorker(QRunnable):
             res = self.fn()
             if self.cancelled.is_set():
                 return
-            self.signals.succeeded.emit(self.task_id, res)
+            ctrl = self.ctrl_ref()
+            if ctrl is not None:
+                ctrl._worker_ok.emit(self.task_id, res)
         except CommunityApiError as exc:
             if not self.cancelled.is_set():
-                self.signals.failed.emit(self.task_id, exc.message, exc.status_code, exc.code)
+                ctrl = self.ctrl_ref()
+                if ctrl is not None:
+                    ctrl._worker_err.emit(self.task_id, exc.message, exc.status_code, exc.code)
         except Exception as exc:
             if not self.cancelled.is_set():
-                self.signals.failed.emit(self.task_id, str(exc), 0, "WORKER_ERROR")
+                ctrl = self.ctrl_ref()
+                if ctrl is not None:
+                    ctrl._worker_err.emit(self.task_id, str(exc), 0, "WORKER_ERROR")
 
 
 class CommunityController(QObject):
     """Controlador único de UI Qt <-> Backend REST + Socket.IO para Communities."""
+
+    _worker_ok = Signal(int, object)
+    _worker_err = Signal(int, str, int, str)  # task_id, message, status_code, code
 
     session_changed = Signal(object)       # CommunitySession | None
     backend_status_changed = Signal(bool, str)
@@ -851,6 +952,10 @@ class CommunityController(QObject):
     presence_self_changed = Signal(str, str)     # status, activity_visibility
     voice_state_changed = Signal(dict)
     voice_participants_updated = Signal(list)
+    stream_state_changed = Signal(dict)
+    remote_video_frame_received = Signal(str, int, int, bytes)
+    remote_stream_ended = Signal(str)
+    active_streams_updated = Signal(list)
     realtime_status_changed = Signal(bool, str)
     error_occurred = Signal(str)
 
@@ -885,8 +990,20 @@ class CommunityController(QObject):
             if ctrl is not None:
                 ctrl._on_voice_engine_state_changed(diag)
 
+        def _on_remote_video(pid: str, width: int, height: int, rgba: bytes) -> None:
+            ctrl = ctrl_ref()
+            if ctrl is not None:
+                ctrl.remote_video_frame_received.emit(str(pid), int(width), int(height), rgba)
+
+        def _on_remote_stream_end(pid: str) -> None:
+            ctrl = ctrl_ref()
+            if ctrl is not None:
+                ctrl.remote_stream_ended.emit(str(pid))
+
         self.voice_engine.on_participants_changed = _on_voice_participants
         self.voice_engine.on_state_changed = _on_voice_state
+        self.voice_engine.on_remote_video_frame = _on_remote_video
+        self.voice_engine.on_remote_stream_ended = _on_remote_stream_end
 
         self.my_communities: List[Dict[str, Any]] = []
         self.public_communities: List[Dict[str, Any]] = []
@@ -895,6 +1012,8 @@ class CommunityController(QObject):
         self.active_channel: Optional[Dict[str, Any]] = None
         self.active_members: List[Dict[str, Any]] = []
         self.active_voice_channel: Optional[Dict[str, Any]] = None
+        self.active_stream_session: Optional[Dict[str, Any]] = None
+        self._stream_watching_channel_id: Optional[str] = None
         self.active_streams: List[Dict[str, Any]] = []
         self.active_friends: List[Dict[str, Any]] = []
         self.incoming_friend_requests: List[Dict[str, Any]] = []
@@ -916,8 +1035,10 @@ class CommunityController(QObject):
         self._thread_pool = QThreadPool(self)
         self._thread_pool.setMaxThreadCount(4)
         self._next_task_id: int = 0
-        self._pending_workers: Dict[int, Tuple[_RestWorker, Optional[str], int, threading.Event]] = {}
+        self._pending_workers: Dict[int, Tuple[Any, Optional[str], int, threading.Event, Any, Any]] = {}
         self._op_generations: Dict[str, int] = {}
+        self._worker_ok.connect(self._on_worker_succeeded)
+        self._worker_err.connect(self._on_worker_failed)
 
         self.realtime.connected.connect(self._on_rt_connected)
         self.realtime.disconnected.connect(self._on_rt_disconnected)
@@ -935,6 +1056,9 @@ class CommunityController(QObject):
         self.realtime.typing_updated.connect(self._on_rt_typing_updated)
         self.realtime.activity_updated.connect(self._on_rt_activity_updated)
         self.realtime.notification_received.connect(self._on_rt_notification_received)
+        self.realtime.stream_started.connect(self._on_rt_stream_started)
+        self.realtime.stream_paused.connect(self._on_rt_stream_paused)
+        self.realtime.stream_ended.connect(self._on_rt_stream_ended)
 
     # ------------------------------------------------------------------
     # Infraestructura Asíncrona para evitar bloqueo del hilo Qt GUI (P0-02)
@@ -944,16 +1068,45 @@ class CommunityController(QObject):
         if category is None:
             for key in list(self._op_generations.keys()):
                 self._op_generations[key] = self._op_generations.get(key, 0) + 1
-            for tid, (_worker, _cat, _gen, ev) in list(self._pending_workers.items()):
-                ev.set()
+            for tid, entry in list(self._pending_workers.items()):
+                entry[3].set()
             self._pending_workers.clear()
         else:
             self._op_generations[category] = self._op_generations.get(category, 0) + 1
-            for tid, (_worker, wcat, _gen, ev) in list(self._pending_workers.items()):
-                if wcat == category:
-                    ev.set()
+            for tid, entry in list(self._pending_workers.items()):
+                if entry[1] == category:
+                    entry[3].set()
                     self._pending_workers.pop(tid, None)
         self.loading_changed.emit(bool(self._pending_workers), "")
+
+    def _on_worker_succeeded(self, tid: int, result: Any) -> None:
+        entry = self._pending_workers.pop(tid, None)
+        self.loading_changed.emit(bool(self._pending_workers), "")
+        if entry is None:
+            return
+        _w, cat, wgen, ev, on_success, _on_error = entry
+        if ev.is_set():
+            return
+        if cat and wgen != self._op_generations.get(cat, 0):
+            return
+        if on_success:
+            on_success(result)
+
+    def _on_worker_failed(self, tid: int, message: str, status_code: int, code: str) -> None:
+        entry = self._pending_workers.pop(tid, None)
+        self.loading_changed.emit(bool(self._pending_workers), "")
+        if entry is None:
+            return
+        _w, cat, wgen, ev, _on_success, on_error = entry
+        if ev.is_set():
+            return
+        if cat and wgen != self._op_generations.get(cat, 0):
+            return
+        err = CommunityApiError(message, status_code=status_code, code=code)
+        if on_error:
+            on_error(err)
+        else:
+            self.error_occurred.emit(err.message)
 
     def run_async(
         self,
@@ -970,47 +1123,15 @@ class CommunityController(QObject):
         if category:
             gen = self._op_generations.get(category, 0) + 1
             self._op_generations[category] = gen
-            for tid, (_w, wcat, _g, ev) in list(self._pending_workers.items()):
-                if wcat == category:
-                    ev.set()
+            for tid, entry in list(self._pending_workers.items()):
+                if entry[1] == category:
+                    entry[3].set()
                     self._pending_workers.pop(tid, None)
 
         cancel_ev = threading.Event()
-        worker = _RestWorker(task_id=task_id, fn=fn, cancelled=cancel_ev)
-        self._pending_workers[task_id] = (worker, category, gen, cancel_ev)
+        worker = _RestWorker(ctrl_ref=weakref.ref(self), task_id=task_id, fn=fn, cancelled=cancel_ev)
+        self._pending_workers[task_id] = (worker, category, gen, cancel_ev, on_success, on_error)
         self.loading_changed.emit(True, op_name)
-
-        def _handle_ok(tid: int, result: Any) -> None:
-            entry = self._pending_workers.pop(tid, None)
-            self.loading_changed.emit(bool(self._pending_workers), "")
-            if entry is None:
-                return
-            _w, cat, wgen, ev = entry
-            if ev.is_set():
-                return
-            if cat and wgen != self._op_generations.get(cat, 0):
-                return
-            if on_success:
-                on_success(result)
-
-        def _handle_err(tid: int, message: str, status_code: int, code: str) -> None:
-            entry = self._pending_workers.pop(tid, None)
-            self.loading_changed.emit(bool(self._pending_workers), "")
-            if entry is None:
-                return
-            _w, cat, wgen, ev = entry
-            if ev.is_set():
-                return
-            if cat and wgen != self._op_generations.get(cat, 0):
-                return
-            err = CommunityApiError(message, status_code=status_code, code=code)
-            if on_error:
-                on_error(err)
-            else:
-                self.error_occurred.emit(err.message)
-
-        worker.signals.succeeded.connect(_handle_ok)
-        worker.signals.failed.connect(_handle_err)
         self._thread_pool.start(worker)
         return task_id
 
@@ -1271,6 +1392,25 @@ class CommunityController(QObject):
 
         return self.run_async("login", _work, on_success=_done, on_error=on_error, category="auth")
 
+    def _cleanup_active_stream_sync(self) -> None:
+        sess = self.active_stream_session
+        ch = self.active_voice_channel
+        self.active_stream_session = None
+        self._stream_watching_channel_id = None
+        if self.voice_engine.is_screen_sharing:
+            try:
+                self.voice_engine.stop_screen_share()
+            except Exception:
+                pass
+        if sess and self.session:
+            ch_id = str(sess.get("channel_id") or (ch or {}).get("id") or "")
+            if ch_id:
+                self.realtime.emit_stream_stop(ch_id)
+                try:
+                    self.api.stop_stream(ch_id, session_id=sess.get("id"))
+                except Exception:
+                    pass
+
     def logout(self) -> None:
         self._heartbeat_timer.stop()
         self.cancel_pending()
@@ -1286,6 +1426,7 @@ class CommunityController(QObject):
                 pass
             self._active_game_id = None
             self._active_game_title = None
+        self._cleanup_active_stream_sync()
         self.voice_engine.disconnect()
         if self.active_voice_channel and self.session:
             try:
@@ -1316,7 +1457,8 @@ class CommunityController(QObject):
         self.unread_notifications_count = 0
         self._last_synced_msg_id = None
         self.clear_saved_session()
-        self.voice_state_changed.emit({"connected": False, "channel": None, "media_ready": False})
+        self.stream_state_changed.emit({"live": False, "watching": False, "channel_id": None, "session": None})
+        self.voice_state_changed.emit({"connected": False, "channel": None, "media_ready": False, "screen_live": False})
         self.notifications_updated.emit([], 0)
         self.session_changed.emit(None)
 
@@ -1336,6 +1478,7 @@ class CommunityController(QObject):
                 pass
             self._active_game_id = None
             self._active_game_title = None
+        self._cleanup_active_stream_sync()
         self.voice_engine.disconnect()
         if self.active_voice_channel and self.session:
             try:
@@ -1658,22 +1801,28 @@ class CommunityController(QObject):
             channels = self.api.list_channels(community_id)
             members = self.api.list_members(community_id)
             members = self._attach_presences(members)
+            try:
+                streams = self.api.list_active_streams(community_id)
+            except Exception:
+                streams = []
             text_channels = [c for c in channels if c.get("type") == "text"]
             first_msgs: List[Dict[str, Any]] = []
             first_ch_id = ""
             if text_channels:
                 first_ch_id = str(text_channels[0]["id"])
                 first_msgs = self.api.list_messages(first_ch_id, limit=50)
-            return comm, channels, members, text_channels, first_ch_id, first_msgs
+            return comm, channels, members, streams, text_channels, first_ch_id, first_msgs
 
         def _apply(res):
-            comm, channels, members, text_channels, first_ch_id, first_msgs = res
+            comm, channels, members, streams, text_channels, first_ch_id, first_msgs = res
             self.active_community = comm
             self.active_channels = channels
             self.active_members = members
+            self.active_streams = streams
             self.realtime.join_community_room(community_id)
-            payload = {"community": comm, "channels": channels, "members": members}
+            payload = {"community": comm, "channels": channels, "members": members, "streams": streams}
             self.community_opened.emit(payload)
+            self.active_streams_updated.emit(streams)
             if text_channels:
                 self.active_channel = text_channels[0]
                 self.realtime.join_channel_room(first_ch_id)
@@ -2009,6 +2158,9 @@ class CommunityController(QObject):
             "is_deafened": bool(diag.get("is_deafened")),
             "is_speaking": bool(diag.get("is_speaking")),
             "can_publish": bool(diag.get("can_publish", True)),
+            "screen_live": bool(diag.get("is_screen_sharing")),
+            "remote_screen_active": bool(diag.get("remote_screen_active")),
+            "stream_session": self.active_stream_session,
             "latency_ms": diag.get("latency_ms"),
             "participants": self.voice_engine.list_participants(),
             "diagnostics": diag,
@@ -2122,6 +2274,7 @@ class CommunityController(QObject):
         return self.voice_engine.get_diagnostics()
 
     def leave_voice_channel(self) -> None:
+        self._cleanup_active_stream_sync()
         ch = self.active_voice_channel
         self.active_voice_channel = None
         self._active_voice_cred = None
@@ -2136,7 +2289,333 @@ class CommunityController(QObject):
                 on_error=lambda _e: None,
                 category="voice_leave",
             )
-        self.voice_state_changed.emit({"connected": False, "channel": None, "media_ready": False})
+        self.stream_state_changed.emit({"live": False, "watching": False, "channel_id": None, "session": None})
+        self.voice_state_changed.emit({"connected": False, "channel": None, "media_ready": False, "screen_live": False})
+
+    # ------------------------------------------------------------------
+    # Streaming real de pantalla / juego sobre LiveKit WebRTC (P1-B)
+    # ------------------------------------------------------------------
+    def get_stream_sources(self) -> Dict[str, Any]:
+        from backend.communities.stream_adapter import detect_available_capture_sources
+        local_sources = detect_available_capture_sources(force_headless=False)
+        if self.session:
+            try:
+                remote_info = self.api.get_stream_sources()
+                local_sources["capture_limits"] = remote_info.get("capture_limits") or {}
+            except Exception:
+                pass
+        return local_sources
+
+    def _build_stream_state(
+        self,
+        live: bool,
+        ch: Optional[Dict[str, Any]] = None,
+        session_data: Optional[Dict[str, Any]] = None,
+        watching: bool = False,
+        error: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        diag = self.voice_engine.get_diagnostics()
+        return {
+            "live": bool(live and diag.get("is_screen_sharing")),
+            "watching": bool(watching),
+            "channel_id": str(ch["id"]) if ch and ch.get("id") else (session_data or {}).get("channel_id"),
+            "channel": ch,
+            "session": session_data,
+            "source_id": diag.get("screen_share_source_id"),
+            "width": diag.get("screen_share_width"),
+            "height": diag.get("screen_share_height"),
+            "fps": diag.get("screen_share_fps"),
+            "tx_frames": diag.get("screen_tx_frames"),
+            "rx_frames": diag.get("screen_rx_frames"),
+            "error": error,
+        }
+
+    def _start_screen_share_worker(
+        self,
+        ch: Dict[str, Any],
+        source_id: str,
+        resolution: str,
+        fps: int,
+        bitrate_kbps: int,
+        with_audio: bool,
+        title: Optional[str],
+        stream_type: str,
+        frame_provider: Optional[Callable[[], Optional[tuple[int, int, bytes]]]],
+        window_widget: Any,
+        enable_audio_io: Optional[bool],
+    ) -> Tuple[Dict[str, Any], Dict[str, Any]]:
+        from backend.communities.stream_adapter import parse_resolution_dimensions
+
+        channel_id = str(ch["id"])
+        if not (
+            self.active_voice_channel
+            and str(self.active_voice_channel.get("id")) == channel_id
+            and self.voice_engine.is_connected
+        ):
+            self._connect_voice_worker(ch, enable_audio_io=enable_audio_io)
+            self.realtime.emit_voice_presence(channel_id, joined=True)
+
+        if not self.voice_engine.media_transport_active:
+            raise CommunityApiError(
+                "Servidor LiveKit SFU no disponible para publicar pantalla en tiempo real.",
+                status_code=503,
+                code="RTC_MEDIA_UNAVAILABLE",
+            )
+
+        session_data = self.api.start_stream(
+            channel_id=channel_id,
+            stream_type=stream_type,
+            title=title or f"Pantalla de {self.session.username if self.session else 'Usuario'}",
+            resolution=resolution,
+            fps=int(fps),
+            bitrate_kbps=int(bitrate_kbps),
+            has_audio=bool(with_audio),
+        )
+        w, h = parse_resolution_dimensions(resolution)
+        published = self.voice_engine.start_screen_share(
+            source_id=source_id,
+            width=w,
+            height=h,
+            fps=int(fps),
+            with_audio=bool(with_audio),
+            max_bitrate=max(250, int(bitrate_kbps)) * 1000,
+            frame_provider=frame_provider,
+            window_widget=window_widget,
+        )
+        if not published:
+            try:
+                self.api.stop_stream(channel_id, session_id=session_data.get("id"))
+            except Exception:
+                pass
+            raise CommunityApiError(
+                self.voice_engine.last_error or "LiveKit SFU no confirmó la publicación del track de pantalla.",
+                status_code=503,
+                code="RTC_STREAM_PUBLISH_FAILED",
+            )
+        return ch, session_data
+
+    def start_screen_share(
+        self,
+        channel_id: Optional[str] = None,
+        source_id: str = "screen:0",
+        resolution: str = "720p",
+        fps: int = 30,
+        bitrate_kbps: int = 2500,
+        with_audio: bool = False,
+        title: Optional[str] = None,
+        stream_type: str = "screen",
+        frame_provider: Optional[Callable[[], Optional[tuple[int, int, bytes]]]] = None,
+        window_widget: Any = None,
+        enable_audio_io: Optional[bool] = None,
+    ) -> Dict[str, Any]:
+        target_id = str(channel_id or (self.active_voice_channel or {}).get("id") or "")
+        ch = next((c for c in self.active_channels if str(c.get("id")) == target_id), None) or self.active_voice_channel
+        if not ch:
+            raise CommunityApiError("Conéctate a un canal de voz antes de compartir pantalla.", status_code=400)
+
+        ch_obj, session_data = self._start_screen_share_worker(
+            ch=ch,
+            source_id=source_id,
+            resolution=resolution,
+            fps=fps,
+            bitrate_kbps=bitrate_kbps,
+            with_audio=with_audio,
+            title=title,
+            stream_type=stream_type,
+            frame_provider=frame_provider,
+            window_widget=window_widget,
+            enable_audio_io=enable_audio_io,
+        )
+        self.active_stream_session = session_data
+        self.realtime.emit_stream_start(
+            str(ch_obj["id"]),
+            stream_type=stream_type,
+            title=str(session_data.get("title") or title or "Pantalla"),
+            resolution=resolution,
+            fps=int(fps),
+        )
+        state = self._build_stream_state(live=True, ch=ch_obj, session_data=session_data)
+        self.stream_state_changed.emit(state)
+        self.voice_state_changed.emit(
+            self._build_voice_state(ch_obj, self._active_voice_cred, self._active_voice_reachable)
+        )
+        return state
+
+    def start_screen_share_async(
+        self,
+        channel_id: Optional[str] = None,
+        source_id: str = "screen:0",
+        resolution: str = "720p",
+        fps: int = 30,
+        bitrate_kbps: int = 2500,
+        with_audio: bool = False,
+        title: Optional[str] = None,
+        stream_type: str = "screen",
+        frame_provider: Optional[Callable[[], Optional[tuple[int, int, bytes]]]] = None,
+        window_widget: Any = None,
+        enable_audio_io: Optional[bool] = None,
+        on_success: Optional[Callable[[Dict[str, Any]], None]] = None,
+        on_error: Optional[Callable[[CommunityApiError], None]] = None,
+    ) -> int:
+        target_id = str(channel_id or (self.active_voice_channel or {}).get("id") or "")
+        ch = next((c for c in self.active_channels if str(c.get("id")) == target_id), None) or self.active_voice_channel
+        if not ch:
+            err = CommunityApiError("Conéctate a un canal de voz antes de compartir pantalla.", status_code=400)
+            self.error_occurred.emit(err.message)
+            self.stream_state_changed.emit(self._build_stream_state(live=False, error=err.message))
+            if on_error:
+                on_error(err)
+            return -1
+
+        def _done(res: Tuple[Dict[str, Any], Dict[str, Any]]) -> None:
+            ch_obj, session_data = res
+            self.active_stream_session = session_data
+            self.realtime.emit_stream_start(
+                str(ch_obj["id"]),
+                stream_type=stream_type,
+                title=str(session_data.get("title") or title or "Pantalla"),
+                resolution=resolution,
+                fps=int(fps),
+            )
+            state = self._build_stream_state(live=True, ch=ch_obj, session_data=session_data)
+            self.stream_state_changed.emit(state)
+            self.voice_state_changed.emit(
+                self._build_voice_state(ch_obj, self._active_voice_cred, self._active_voice_reachable)
+            )
+            if on_success:
+                on_success(state)
+
+        def _err(api_err: CommunityApiError) -> None:
+            self.active_stream_session = None
+            self.stream_state_changed.emit(self._build_stream_state(live=False, ch=ch, error=api_err.message))
+            if self.active_voice_channel:
+                self.voice_state_changed.emit(
+                    self._build_voice_state(self.active_voice_channel, self._active_voice_cred, self._active_voice_reachable)
+                )
+            if on_error:
+                on_error(api_err)
+
+        return self.run_async(
+            "start_screen_share",
+            lambda: self._start_screen_share_worker(
+                ch=ch,
+                source_id=source_id,
+                resolution=resolution,
+                fps=fps,
+                bitrate_kbps=bitrate_kbps,
+                with_audio=with_audio,
+                title=title,
+                stream_type=stream_type,
+                frame_provider=frame_provider,
+                window_widget=window_widget,
+                enable_audio_io=enable_audio_io,
+            ),
+            on_success=_done,
+            on_error=_err,
+            category="screen_share",
+        )
+
+    def stop_screen_share(self) -> Dict[str, Any]:
+        sess = self.active_stream_session
+        ch = self.active_voice_channel
+        self.active_stream_session = None
+        self.voice_engine.stop_screen_share()
+        ch_id = str((sess or {}).get("channel_id") or (ch or {}).get("id") or "")
+        if ch_id and self.session:
+            self.realtime.emit_stream_stop(ch_id)
+            try:
+                self.api.stop_stream(ch_id, session_id=(sess or {}).get("id"))
+            except Exception:
+                pass
+        state = self._build_stream_state(live=False, ch=ch, session_data=None)
+        self.stream_state_changed.emit(state)
+        if self.active_voice_channel:
+            self.voice_state_changed.emit(
+                self._build_voice_state(self.active_voice_channel, self._active_voice_cred, self._active_voice_reachable)
+            )
+        return state
+
+    def stop_screen_share_async(
+        self,
+        on_done: Optional[Callable[[Dict[str, Any]], None]] = None,
+    ) -> int:
+        sess = self.active_stream_session
+        ch = self.active_voice_channel
+        self.active_stream_session = None
+        self.voice_engine.stop_screen_share()
+        ch_id = str((sess or {}).get("channel_id") or (ch or {}).get("id") or "")
+        state = self._build_stream_state(live=False, ch=ch, session_data=None)
+        self.stream_state_changed.emit(state)
+        if self.active_voice_channel:
+            self.voice_state_changed.emit(
+                self._build_voice_state(self.active_voice_channel, self._active_voice_cred, self._active_voice_reachable)
+            )
+
+        def _work():
+            if ch_id and self.session:
+                self.realtime.emit_stream_stop(ch_id)
+                try:
+                    self.api.stop_stream(ch_id, session_id=(sess or {}).get("id"))
+                except Exception:
+                    pass
+            return state
+
+        return self.run_async(
+            "stop_screen_share",
+            _work,
+            on_success=lambda st: on_done(st) if on_done else None,
+            on_error=lambda _e: on_done(state) if on_done else None,
+            category="screen_share_stop",
+        )
+
+    def watch_stream(
+        self,
+        channel_id: str,
+        enable_audio_io: Optional[bool] = None,
+    ) -> Dict[str, Any]:
+        ch = next((c for c in self.active_channels if str(c.get("id")) == str(channel_id)), None)
+        if not ch:
+            raise CommunityApiError("Canal de transmisión no encontrado.", status_code=404)
+        stream_info = self.api.get_channel_stream(str(channel_id))
+        if not (
+            self.active_voice_channel
+            and str(self.active_voice_channel.get("id")) == str(channel_id)
+            and self.voice_engine.is_connected
+        ):
+            self._connect_voice_worker(ch, enable_audio_io=enable_audio_io)
+            self.realtime.emit_voice_presence(str(channel_id), joined=True)
+            self.voice_state_changed.emit(
+                self._build_voice_state(ch, self._active_voice_cred, self._active_voice_reachable)
+            )
+        self._stream_watching_channel_id = str(channel_id)
+        state = self._build_stream_state(
+            live=bool(self.voice_engine.is_screen_sharing),
+            ch=ch,
+            session_data=stream_info,
+            watching=True,
+        )
+        self.stream_state_changed.emit(state)
+        latest = self.voice_engine.get_latest_remote_video_frame()
+        if latest is not None:
+            pid, fw, fh, rgba = latest
+            self.remote_video_frame_received.emit(pid, fw, fh, rgba)
+        return state
+
+    def stop_watching_stream(self) -> None:
+        self._stream_watching_channel_id = None
+        state = self._build_stream_state(
+            live=bool(self.voice_engine.is_screen_sharing),
+            ch=self.active_voice_channel,
+            session_data=self.active_stream_session,
+            watching=False,
+        )
+        self.stream_state_changed.emit(state)
+
+    def push_screen_video_frame(self, width: int, height: int, rgba_bytes: bytes) -> bool:
+        return self.voice_engine.push_video_frame(width, height, rgba_bytes)
+
+    def push_screen_audio_frame(self, samples: Any) -> bool:
+        return self.voice_engine.push_screen_audio_frame(samples)
 
     def _on_rt_connected(self) -> None:
         self.realtime_status_changed.emit(True, "Realtime Socket.IO conectado")
@@ -2264,3 +2743,65 @@ class CommunityController(QObject):
     def _on_rt_notification_received(self, payload: Dict[str, Any]) -> None:
         if self.session:
             self.refresh_activity_and_notifications_async()
+
+    def _refresh_active_streams_async(self) -> None:
+        if not self.session or not self.active_community:
+            return
+        comm_id = str(self.active_community.get("id") or "")
+        if not comm_id:
+            return
+
+        def _apply(streams: List[Dict[str, Any]]) -> None:
+            self.active_streams = list(streams or [])
+            self.active_streams_updated.emit(list(self.active_streams))
+
+        self.run_async(
+            "refresh_streams",
+            lambda: self.api.list_active_streams(comm_id),
+            on_success=_apply,
+            on_error=lambda _e: None,
+            category="streams",
+        )
+
+    def _on_rt_stream_started(self, payload: Dict[str, Any]) -> None:
+        if not isinstance(payload, dict):
+            return
+        ch_id = str(payload.get("channel_id") or "")
+        if ch_id and not any(str(s.get("channel_id")) == ch_id for s in self.active_streams):
+            self.active_streams.append(dict(payload))
+            self.active_streams_updated.emit(list(self.active_streams))
+        self._refresh_active_streams_async()
+        if self.active_voice_channel and str(self.active_voice_channel.get("id")) == ch_id:
+            self.stream_state_changed.emit(
+                self._build_stream_state(
+                    live=bool(self.voice_engine.is_screen_sharing),
+                    ch=self.active_voice_channel,
+                    session_data=payload,
+                    watching=True,
+                )
+            )
+
+    def _on_rt_stream_paused(self, payload: Dict[str, Any]) -> None:
+        self._refresh_active_streams_async()
+
+    def _on_rt_stream_ended(self, payload: Dict[str, Any]) -> None:
+        ch_id = str((payload or {}).get("channel_id") or "")
+        uid = str((payload or {}).get("user_id") or "")
+        if ch_id:
+            self.active_streams = [s for s in self.active_streams if str(s.get("channel_id")) != ch_id]
+            self.active_streams_updated.emit(list(self.active_streams))
+        if self._stream_watching_channel_id == ch_id:
+            self._stream_watching_channel_id = None
+        if uid:
+            self.remote_stream_ended.emit(uid)
+        elif ch_id:
+            self.remote_stream_ended.emit(ch_id)
+        if self.active_voice_channel and str(self.active_voice_channel.get("id")) == ch_id:
+            self.stream_state_changed.emit(
+                self._build_stream_state(
+                    live=bool(self.voice_engine.is_screen_sharing),
+                    ch=self.active_voice_channel,
+                    session_data=self.active_stream_session,
+                    watching=False,
+                )
+            )

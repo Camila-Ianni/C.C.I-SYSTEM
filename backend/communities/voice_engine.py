@@ -92,10 +92,23 @@ class DesktopVoiceEngine:
         self.last_error: Optional[str] = None
         self.audio_io_active: bool = False
 
+        # Estado de Streaming WebRTC de pantalla/juego (P1-B)
+        self.is_screen_sharing: bool = False
+        self.screen_share_source_id: Optional[str] = None
+        self.screen_share_width: int = 0
+        self.screen_share_height: int = 0
+        self.screen_share_fps: int = 30
+        self.screen_tx_frames: int = 0
+        self.screen_rx_frames: int = 0
+        self.remote_screen_active: bool = False
+
         # Callbacks opcionales hacia Desktop Controller / UI
         self.on_participants_changed: Optional[Callable[[List[Dict[str, Any]]], None]] = None
         self.on_state_changed: Optional[Callable[[Dict[str, Any]], None]] = None
         self.on_remote_audio_frame: Optional[Callable[[str, np.ndarray, int, int], None]] = None
+        self.on_remote_screen_audio_frame: Optional[Callable[[str, np.ndarray, int, int], None]] = None
+        self.on_remote_video_frame: Optional[Callable[[str, int, int, bytes], None]] = None
+        self.on_remote_stream_ended: Optional[Callable[[str], None]] = None
 
         self._lock = threading.RLock()
         self._participants: Dict[str, Dict[str, Any]] = {}
@@ -115,6 +128,26 @@ class DesktopVoiceEngine:
         self._subscriber_tasks: Dict[str, asyncio.Task] = {}
         self._subscriber_streams: Dict[str, Any] = {}
         self._stop_rtc = False
+
+        # Estado RTC de video y audio de pantalla/juego (P1-B)
+        self._video_source: Any = None
+        self._video_track: Any = None
+        self._video_pub: Any = None
+        self._video_frame_queue: Deque[tuple[int, int, bytes]] = deque(maxlen=4)
+        self._video_wakeup: Optional[asyncio.Event] = None
+        self._video_sender_task: Optional[asyncio.Task] = None
+        self._video_frame_provider: Optional[Callable[[], Optional[tuple[int, int, bytes]]]] = None
+        self._screen_window_widget: Any = None
+        self._screen_has_audio: bool = False
+        self._screen_audio_source: Any = None
+        self._screen_audio_track: Any = None
+        self._screen_audio_pub: Any = None
+        self._screen_audio_queue: Deque[np.ndarray] = deque(maxlen=30)
+        self._screen_audio_wakeup: Optional[asyncio.Event] = None
+        self._screen_audio_sender_task: Optional[asyncio.Task] = None
+        self._video_subscriber_tasks: Dict[str, tuple[str, asyncio.Task]] = {}
+        self._video_subscriber_streams: Dict[str, Any] = {}
+        self._remote_video_frames: Dict[str, tuple[int, int, bytes]] = {}
 
         # Audio I/O (PortAudio via sounddevice) y buffers de mezcla por peer
         self._input_stream: Any = None
@@ -271,22 +304,37 @@ class DesktopVoiceEngine:
                 pid = str(getattr(participant, "identity", "") or "")
                 with self._lock:
                     self._participants.pop(pid, None)
+                    had_video = pid in self._remote_video_frames
+                    self._remote_video_frames.pop(pid, None)
+                    self.remote_screen_active = bool(self._remote_video_frames)
                 with self._playout_lock:
                     self._playout_queues.pop(pid, None)
                 self._notify_participants_changed()
+                if had_video and self.on_remote_stream_ended is not None:
+                    try:
+                        self.on_remote_stream_ended(pid)
+                    except Exception:
+                        pass
 
             @room.on("track_subscribed")
             def _on_track_sub(track: Any, publication: Any, participant: Any) -> None:
-                if getattr(track, "kind", None) == lk_rtc.TrackKind.KIND_AUDIO:
+                kind = getattr(track, "kind", None)
+                if kind == lk_rtc.TrackKind.KIND_AUDIO:
                     self._start_remote_audio_reader(track, publication, participant)
+                elif kind == lk_rtc.TrackKind.KIND_VIDEO:
+                    self._start_remote_video_reader(track, publication, participant)
 
             @room.on("track_unsubscribed")
             def _on_track_unsub(track: Any, publication: Any, participant: Any) -> None:
                 sid = str(getattr(track, "sid", "") or getattr(publication, "sid", "") or "")
-                self._stop_remote_audio_reader(sid)
+                kind = getattr(track, "kind", None)
                 pid = str(getattr(participant, "identity", "") or "")
-                with self._playout_lock:
-                    self._playout_queues.pop(pid, None)
+                if kind == lk_rtc.TrackKind.KIND_VIDEO:
+                    self._stop_remote_video_reader(sid, pid=pid)
+                else:
+                    self._stop_remote_audio_reader(sid)
+                    with self._playout_lock:
+                        self._playout_queues.pop(pid, None)
 
             @room.on("track_muted")
             def _on_track_muted(participant: Any, publication: Any) -> None:
@@ -337,8 +385,11 @@ class DesktopVoiceEngine:
                 self._upsert_remote_participant(rp)
                 for pub in list(getattr(rp, "track_publications", {}).values()):
                     trk = getattr(pub, "track", None)
-                    if trk is not None and getattr(trk, "kind", None) == lk_rtc.TrackKind.KIND_AUDIO:
+                    kind = getattr(trk, "kind", None) if trk is not None else None
+                    if kind == lk_rtc.TrackKind.KIND_AUDIO:
                         self._start_remote_audio_reader(trk, pub, rp)
+                    elif kind == lk_rtc.TrackKind.KIND_VIDEO:
+                        self._start_remote_video_reader(trk, pub, rp)
 
             if can_publish:
                 source = lk_rtc.AudioSource(
@@ -396,6 +447,9 @@ class DesktopVoiceEngine:
         if sid in self._subscriber_tasks:
             return
         pid = str(getattr(participant, "identity", "") or sid)
+        is_screenshare_audio = (
+            getattr(publication, "source", None) == lk_rtc.TrackSource.SOURCE_SCREENSHARE_AUDIO
+        )
         stream = lk_rtc.AudioStream.from_track(
             track=track,
             loop=loop,
@@ -418,11 +472,12 @@ class DesktopVoiceEngine:
                             self._playout_queues.pop(pid, None)
                         continue
                     pcm = np.frombuffer(frame.data, dtype=np.int16).copy()
+                    playout_key = f"{pid}:screen" if is_screenshare_audio else pid
                     with self._playout_lock:
-                        q = self._playout_queues.get(pid)
+                        q = self._playout_queues.get(playout_key)
                         if q is None:
                             q = deque(maxlen=15)
-                            self._playout_queues[pid] = q
+                            self._playout_queues[playout_key] = q
                         # Trocear en bloques exactos de FRAME_SAMPLES para mixer estable
                         for off in range(0, len(pcm), self.FRAME_SAMPLES):
                             chunk = pcm[off:off + self.FRAME_SAMPLES]
@@ -432,10 +487,16 @@ class DesktopVoiceEngine:
                                 chunk = padded
                             q.append(chunk)
                     self._rx_frames_received += 1
-                    cb = self.on_remote_audio_frame
+                    sr, nch = int(frame.sample_rate), int(frame.num_channels)
+                    cb = self.on_remote_screen_audio_frame if (is_screenshare_audio and self.on_remote_screen_audio_frame is not None) else self.on_remote_audio_frame
                     if cb is not None:
                         try:
-                            cb(pid, pcm, int(frame.sample_rate), int(frame.num_channels))
+                            cb(pid, pcm, sr, nch)
+                        except Exception:
+                            pass
+                    if is_screenshare_audio and self.on_remote_audio_frame is not None and cb is not self.on_remote_audio_frame:
+                        try:
+                            self.on_remote_audio_frame(pid, pcm, sr, nch)
                         except Exception:
                             pass
             except asyncio.CancelledError:
@@ -463,20 +524,109 @@ class DesktopVoiceEngine:
             except Exception:
                 pass
 
-    async def _outbound_sender_loop(self) -> None:
+    def _start_remote_video_reader(self, track: Any, publication: Any, participant: Any) -> None:
+        loop = self._loop
         lk_rtc = _get_livekit_rtc()
-        wakeup = self._outbound_wakeup
+        if loop is None or lk_rtc is None:
+            return
+        sid = str(getattr(track, "sid", "") or getattr(publication, "sid", "") or id(track))
+        if sid in self._video_subscriber_tasks:
+            return
+        pid = str(getattr(participant, "identity", "") or sid)
+        stream = lk_rtc.VideoStream.from_track(
+            track=track,
+            loop=loop,
+            format=lk_rtc.VideoBufferType.RGBA,
+            capacity=4,
+        )
+        self._video_subscriber_streams[sid] = stream
+        with self._lock:
+            self.remote_screen_active = True
+
+        async def _reader() -> None:
+            try:
+                async for event in stream:
+                    if self._stop_rtc:
+                        break
+                    frame = getattr(event, "frame", None)
+                    if frame is None:
+                        continue
+                    w, h = int(getattr(frame, "width", 0)), int(getattr(frame, "height", 0))
+                    raw = bytes(getattr(frame, "data", b""))
+                    if w <= 0 or h <= 0 or len(raw) < w * h * 4:
+                        continue
+                    rgba = raw[: w * h * 4]
+                    with self._lock:
+                        self._remote_video_frames[pid] = (w, h, rgba)
+                        self.remote_screen_active = True
+                        self.screen_rx_frames += 1
+                    cb = self.on_remote_video_frame
+                    if cb is not None:
+                        try:
+                            cb(pid, w, h, rgba)
+                        except Exception:
+                            pass
+            except asyncio.CancelledError:
+                pass
+            except Exception:
+                pass
+            finally:
+                try:
+                    await stream.aclose()
+                except Exception:
+                    pass
+                self._video_subscriber_streams.pop(sid, None)
+                self._video_subscriber_tasks.pop(sid, None)
+                with self._lock:
+                    self._remote_video_frames.pop(pid, None)
+                    self.remote_screen_active = bool(self._remote_video_frames)
+
+        self._video_subscriber_tasks[sid] = (pid, loop.create_task(_reader()))
+
+    def _stop_remote_video_reader(self, sid: str, pid: str = "") -> None:
+        entry = self._video_subscriber_tasks.pop(sid, None)
+        if entry is not None:
+            stored_pid, task = entry
+            if not pid:
+                pid = stored_pid
+            if task is not None and not task.done():
+                task.cancel()
+        stream = self._video_subscriber_streams.pop(sid, None)
+        if stream is not None and self._loop and self._loop.is_running():
+            try:
+                self._loop.create_task(stream.aclose())
+            except Exception:
+                pass
+        if pid:
+            with self._lock:
+                self._remote_video_frames.pop(pid, None)
+                self.remote_screen_active = bool(self._remote_video_frames)
+            if self.on_remote_stream_ended is not None:
+                try:
+                    self.on_remote_stream_ended(pid)
+                except Exception:
+                    pass
+
+    async def _drain_audio_queue_loop(
+        self,
+        queue_obj: Deque[np.ndarray],
+        wakeup_attr: str,
+        source_attr: str,
+        respect_mute: bool = True,
+    ) -> None:
+        lk_rtc = _get_livekit_rtc()
+        wakeup = getattr(self, wakeup_attr, None)
         if wakeup is None or lk_rtc is None:
             return
         while not self._stop_rtc:
             await wakeup.wait()
             wakeup.clear()
-            while self._outbound_queue and not self._stop_rtc:
-                src = self._audio_source
-                if src is None or self.is_muted or self.is_deafened:
-                    self._outbound_queue.clear()
+            while queue_obj and not self._stop_rtc:
+                src = getattr(self, source_attr, None)
+                if src is None or (respect_mute and (self.is_muted or self.is_deafened)):
+                    queue_obj.clear()
                     break
-                pcm = self._outbound_queue.popleft()
+                pcm = queue_obj.popleft()
                 if len(pcm) != self.FRAME_SAMPLES:
                     fixed = np.zeros(self.FRAME_SAMPLES, dtype=np.int16)
                     take = min(len(pcm), self.FRAME_SAMPLES)
@@ -493,6 +643,66 @@ class DesktopVoiceEngine:
                     self._tx_frames_sent += 1
                 except Exception:
                     break
+
+    async def _outbound_sender_loop(self) -> None:
+        await self._drain_audio_queue_loop(
+            self._outbound_queue, "_outbound_wakeup", "_audio_source", respect_mute=True
+        )
+
+    async def _screen_audio_sender_loop(self) -> None:
+        await self._drain_audio_queue_loop(
+            self._screen_audio_queue, "_screen_audio_wakeup", "_screen_audio_source", respect_mute=False
+        )
+
+    async def _video_sender_loop(self) -> None:
+        lk_rtc = _get_livekit_rtc()
+        wakeup = self._video_wakeup
+        if wakeup is None or lk_rtc is None:
+            return
+        from backend.communities.stream_adapter import capture_source_rgba, resize_rgba_frame
+
+        while not self._stop_rtc and self._video_source is not None:
+            fps = max(1, int(self.screen_share_fps or 30))
+            interval = 1.0 / float(fps)
+            try:
+                await asyncio.wait_for(wakeup.wait(), timeout=interval)
+            except asyncio.TimeoutError:
+                pass
+            wakeup.clear()
+            if self._stop_rtc or self._video_source is None:
+                break
+
+            frame_tuple: Optional[tuple[int, int, bytes]] = None
+            if self._video_frame_queue:
+                frame_tuple = self._video_frame_queue.popleft()
+            elif self._video_frame_provider is not None:
+                try:
+                    frame_tuple = self._video_frame_provider()
+                except Exception:
+                    frame_tuple = None
+            elif self.screen_share_source_id:
+                frame_tuple = capture_source_rgba(
+                    source_id=self.screen_share_source_id,
+                    target_width=self.screen_share_width or 1280,
+                    target_height=self.screen_share_height or 720,
+                    window_widget=self._screen_window_widget,
+                )
+
+            if frame_tuple is None:
+                continue
+            fw, fh, rgba = frame_tuple
+            tw = self.screen_share_width or fw
+            th = self.screen_share_height or fh
+            if fw != tw or fh != th or len(rgba) != tw * th * 4:
+                fw, fh, rgba = resize_rgba_frame(fw, fh, rgba, tw, th)
+            if len(rgba) != fw * fh * 4:
+                continue
+            try:
+                vf = lk_rtc.VideoFrame(fw, fh, lk_rtc.VideoBufferType.RGBA, rgba)
+                self._video_source.capture_frame(vf)
+                self.screen_tx_frames += 1
+            except Exception:
+                pass
 
     async def _stats_poll_loop(self) -> None:
         while not self._stop_rtc and self._room is not None:
@@ -532,6 +742,28 @@ class DesktopVoiceEngine:
             except Exception:
                 pass
 
+    def _enqueue_audio_samples(
+        self,
+        samples: np.ndarray,
+        queue: Deque[np.ndarray],
+        wakeup: Optional[asyncio.Event],
+    ) -> bool:
+        arr = np.asarray(samples, dtype=np.int16).reshape(-1)
+        if arr.size == 0 or self._loop is None or wakeup is None:
+            return False
+        for off in range(0, arr.size, self.FRAME_SAMPLES):
+            chunk = arr[off:off + self.FRAME_SAMPLES]
+            if chunk.size < self.FRAME_SAMPLES:
+                padded = np.zeros(self.FRAME_SAMPLES, dtype=np.int16)
+                padded[:chunk.size] = chunk
+                chunk = padded
+            queue.append(chunk.copy())
+        try:
+            self._loop.call_soon_threadsafe(wakeup.set)
+            return True
+        except Exception:
+            return False
+
     def push_pcm_frame(self, samples: np.ndarray) -> bool:
         """Inyecta un frame PCM int16 (48kHz mono) hacia LiveKit SFU y actualiza VAD local.
 
@@ -549,21 +781,241 @@ class DesktopVoiceEngine:
 
         if self.is_muted or self.is_deafened or not self._can_publish:
             return False
-        if not self.media_transport_active or self._loop is None or self._outbound_wakeup is None:
+        if not self.media_transport_active:
             return False
+        return self._enqueue_audio_samples(arr, self._outbound_queue, self._outbound_wakeup)
 
-        for off in range(0, arr.size, self.FRAME_SAMPLES):
-            chunk = arr[off:off + self.FRAME_SAMPLES]
-            if chunk.size < self.FRAME_SAMPLES:
-                padded = np.zeros(self.FRAME_SAMPLES, dtype=np.int16)
-                padded[:chunk.size] = chunk
-                chunk = padded
-            self._outbound_queue.append(chunk.copy())
+    def push_screen_audio_frame(self, samples: np.ndarray) -> bool:
+        """Inyecta audio de pantalla/juego PCM int16 (48kHz mono) hacia LiveKit SFU."""
+        if (
+            not self.is_screen_sharing
+            or not self._screen_has_audio
+            or not self.media_transport_active
+            or self._screen_audio_source is None
+        ):
+            return False
+        return self._enqueue_audio_samples(samples, self._screen_audio_queue, self._screen_audio_wakeup)
+
+    def push_video_frame(self, width: int, height: int, rgba_bytes: bytes) -> bool:
+        """Inyecta un frame RGBA capturado hacia el track WebRTC de compartir pantalla."""
+        if (
+            not self.is_screen_sharing
+            or not self.media_transport_active
+            or self._loop is None
+            or self._video_wakeup is None
+            or self._video_source is None
+        ):
+            return False
+        if not rgba_bytes or int(width) <= 0 or int(height) <= 0:
+            return False
+        self._video_frame_queue.append((int(width), int(height), bytes(rgba_bytes)))
         try:
-            self._loop.call_soon_threadsafe(self._outbound_wakeup.set)
+            self._loop.call_soon_threadsafe(self._video_wakeup.set)
             return True
         except Exception:
             return False
+
+    def get_latest_remote_video_frame(
+        self, participant_id: Optional[str] = None
+    ) -> Optional[tuple[str, int, int, bytes]]:
+        """Obtiene el último frame RGBA recibido de pantalla/juego remoto."""
+        with self._lock:
+            if participant_id:
+                item = self._remote_video_frames.get(str(participant_id))
+                if item is None:
+                    return None
+                return (str(participant_id), item[0], item[1], item[2])
+            for pid in reversed(list(self._remote_video_frames.keys())):
+                item = self._remote_video_frames.get(pid)
+                if item is not None:
+                    return (pid, item[0], item[1], item[2])
+            return None
+
+    async def _publish_screen_share_coro(
+        self,
+        width: int,
+        height: int,
+        fps: int,
+        with_audio: bool,
+        max_bitrate: int,
+    ) -> str:
+        lk_rtc = _get_livekit_rtc()
+        room = self._room
+        if lk_rtc is None or room is None:
+            raise RuntimeError("LiveKit Room no conectado")
+
+        await self._unpublish_screen_share_coro()
+
+        vsrc = lk_rtc.VideoSource(int(width), int(height), is_screencast=True)
+        vtrack = lk_rtc.LocalVideoTrack.create_video_track("screen-video", vsrc)
+        vopts = lk_rtc.TrackPublishOptions(
+            source=lk_rtc.TrackSource.SOURCE_SCREENSHARE,
+            simulcast=False,
+            video_codec=lk_rtc.VideoCodec.VP8,
+            video_encoding=lk_rtc.VideoEncoding(
+                max_bitrate=max(250_000, int(max_bitrate)),
+                max_framerate=max(1, int(fps)),
+            ),
+        )
+        vpub = await room.local_participant.publish_track(vtrack, vopts)
+        pub_sid = str(getattr(vpub, "sid", "") or "")
+        if not pub_sid:
+            try:
+                await vsrc.aclose()
+            except Exception:
+                pass
+            raise RuntimeError("LiveKit SFU no confirmó SID de track de pantalla")
+
+        self._video_source = vsrc
+        self._video_track = vtrack
+        self._video_pub = vpub
+        self._video_wakeup = asyncio.Event()
+        self._video_frame_queue.clear()
+
+        if with_audio:
+            asrc = lk_rtc.AudioSource(self.SAMPLE_RATE, self.CHANNELS, queue_size_ms=200)
+            atrack = lk_rtc.LocalAudioTrack.create_audio_track("screen-audio", asrc)
+            aopts = lk_rtc.TrackPublishOptions(source=lk_rtc.TrackSource.SOURCE_SCREENSHARE_AUDIO)
+            apub = await room.local_participant.publish_track(atrack, aopts)
+            if not getattr(apub, "sid", None):
+                try:
+                    await room.local_participant.unpublish_track(pub_sid)
+                except Exception:
+                    pass
+                try:
+                    await vsrc.aclose()
+                    await asrc.aclose()
+                except Exception:
+                    pass
+                self._video_source = None
+                self._video_track = None
+                self._video_pub = None
+                raise RuntimeError("LiveKit SFU no confirmó SID de audio de pantalla")
+            self._screen_audio_source = asrc
+            self._screen_audio_track = atrack
+            self._screen_audio_pub = apub
+            self._screen_audio_wakeup = asyncio.Event()
+            self._screen_audio_queue.clear()
+            self._screen_audio_sender_task = asyncio.create_task(self._screen_audio_sender_loop())
+
+        self._video_sender_task = asyncio.create_task(self._video_sender_loop())
+        return pub_sid
+
+    async def _unpublish_screen_share_coro(self) -> None:
+        if self._video_sender_task and not self._video_sender_task.done():
+            self._video_sender_task.cancel()
+        self._video_sender_task = None
+
+        if self._screen_audio_sender_task and not self._screen_audio_sender_task.done():
+            self._screen_audio_sender_task.cancel()
+        self._screen_audio_sender_task = None
+
+        self._video_frame_queue.clear()
+        self._screen_audio_queue.clear()
+        self._video_wakeup = None
+        self._screen_audio_wakeup = None
+
+        room = self._room
+        for pub_attr in ("_video_pub", "_screen_audio_pub"):
+            pub = getattr(self, pub_attr, None)
+            setattr(self, pub_attr, None)
+            if room is not None and pub is not None and getattr(pub, "sid", None):
+                try:
+                    await room.local_participant.unpublish_track(pub.sid)
+                except Exception:
+                    pass
+
+        self._video_track = None
+        self._screen_audio_track = None
+
+        for src_attr in ("_video_source", "_screen_audio_source"):
+            src = getattr(self, src_attr, None)
+            setattr(self, src_attr, None)
+            if src is not None:
+                try:
+                    await src.aclose()
+                except Exception:
+                    pass
+
+    def start_screen_share(
+        self,
+        source_id: str = "screen:0",
+        width: int = 1280,
+        height: int = 720,
+        fps: int = 30,
+        with_audio: bool = False,
+        max_bitrate: int = 2_500_000,
+        frame_provider: Optional[Callable[[], Optional[tuple[int, int, bytes]]]] = None,
+        window_widget: Any = None,
+        timeout: float = 5.0,
+    ) -> bool:
+        """Publica un track real de pantalla/ventana (+ audio opcional) en LiveKit SFU."""
+        if (
+            not self.media_transport_active
+            or self._room is None
+            or self._loop is None
+            or not self._loop.is_running()
+            or not self._can_publish
+        ):
+            with self._lock:
+                self.is_screen_sharing = False
+                self.last_error = "Transporte LiveKit RTC no activo o sin permiso para publicar pantalla"
+            self._notify_state_changed()
+            return False
+
+        w = max(16, int(width or 1280))
+        h = max(16, int(height or 720))
+        fps_val = max(1, min(60, int(fps or 30)))
+
+        with self._lock:
+            self.screen_share_source_id = str(source_id or "screen:0")
+            self.screen_share_width = w
+            self.screen_share_height = h
+            self.screen_share_fps = fps_val
+            self.screen_tx_frames = 0
+            self._video_frame_provider = frame_provider
+            self._screen_window_widget = window_widget
+            self._screen_has_audio = bool(with_audio)
+
+        try:
+            fut = asyncio.run_coroutine_threadsafe(
+                self._publish_screen_share_coro(w, h, fps_val, bool(with_audio), int(max_bitrate)),
+                self._loop,
+            )
+            pub_sid = fut.result(timeout=max(1.0, float(timeout)))
+            with self._lock:
+                self.is_screen_sharing = bool(pub_sid)
+                self.last_error = None
+            self._notify_state_changed()
+            return bool(pub_sid)
+        except Exception as exc:
+            self.stop_screen_share()
+            with self._lock:
+                self.is_screen_sharing = False
+                self.last_error = f"Error publicando pantalla RTC: {exc}"
+            self._notify_state_changed()
+            return False
+
+    def stop_screen_share(self, timeout: float = 3.0) -> bool:
+        """Detiene y despublica los tracks LiveKit de pantalla/juego."""
+        loop = self._loop
+        if loop is not None and loop.is_running():
+            try:
+                fut = asyncio.run_coroutine_threadsafe(self._unpublish_screen_share_coro(), loop)
+                fut.result(timeout=max(0.5, float(timeout)))
+            except Exception:
+                pass
+        with self._lock:
+            self.is_screen_sharing = False
+            self.screen_share_source_id = None
+            self.screen_share_width = 0
+            self.screen_share_height = 0
+            self.screen_tx_frames = 0
+            self._video_frame_provider = None
+            self._screen_window_widget = None
+            self._screen_has_audio = False
+        self._notify_state_changed()
+        return True
 
     def _start_audio_io(self) -> None:
         sd = _get_sounddevice()
@@ -640,6 +1092,8 @@ class DesktopVoiceEngine:
         self._stop_rtc = True
         self._stop_audio_io()
         self._outbound_queue.clear()
+        self._screen_audio_queue.clear()
+        self._video_frame_queue.clear()
         with self._playout_lock:
             self._playout_queues.clear()
 
@@ -647,6 +1101,7 @@ class DesktopVoiceEngine:
         thread = self._loop_thread
         if loop is not None and loop.is_running():
             async def _cleanup() -> None:
+                await self._unpublish_screen_share_coro()
                 if self._sender_task and not self._sender_task.done():
                     self._sender_task.cancel()
                 if self._stats_task and not self._stats_task.done():
@@ -660,6 +1115,17 @@ class DesktopVoiceEngine:
                     if st:
                         try:
                             await st.aclose()
+                        except Exception:
+                            pass
+                for sid in list(self._video_subscriber_tasks.keys()):
+                    item = self._video_subscriber_tasks.pop(sid, None)
+                    if item and item[1] and not item[1].done():
+                        item[1].cancel()
+                for sid in list(self._video_subscriber_streams.keys()):
+                    vst = self._video_subscriber_streams.pop(sid, None)
+                    if vst:
+                        try:
+                            await vst.aclose()
                         except Exception:
                             pass
                 room = self._room
@@ -703,6 +1169,16 @@ class DesktopVoiceEngine:
         self._outbound_wakeup = None
         self._sender_task = None
         self._stats_task = None
+        self._video_wakeup = None
+        self._screen_audio_wakeup = None
+        self._video_sender_task = None
+        self._screen_audio_sender_task = None
+        self._video_frame_provider = None
+        self._screen_window_widget = None
+        with self._lock:
+            self.is_screen_sharing = False
+            self.remote_screen_active = False
+            self._remote_video_frames.clear()
 
     def sync_remote_participants(self, participants: List[Dict[str, Any]]) -> None:
         """Sincroniza la lista de participantes reales reportados por backend/SFU."""
@@ -742,6 +1218,14 @@ class DesktopVoiceEngine:
             self.active_channel_name = None
             self.active_token_info = None
             self.is_speaking = False
+            self.is_screen_sharing = False
+            self.screen_share_source_id = None
+            self.screen_share_width = 0
+            self.screen_share_height = 0
+            self.screen_tx_frames = 0
+            self.screen_rx_frames = 0
+            self.remote_screen_active = False
+            self._remote_video_frames.clear()
             self.latency_ms = None
             self.jitter_ms = None
             self.packet_loss_pct = None
@@ -875,6 +1359,14 @@ class DesktopVoiceEngine:
                 "can_publish": self._can_publish,
                 "tx_frames": self._tx_frames_sent,
                 "rx_frames": self._rx_frames_received,
+                "is_screen_sharing": self.is_screen_sharing,
+                "remote_screen_active": self.remote_screen_active,
+                "screen_share_source_id": self.screen_share_source_id,
+                "screen_share_width": self.screen_share_width,
+                "screen_share_height": self.screen_share_height,
+                "screen_share_fps": self.screen_share_fps,
+                "screen_tx_frames": self.screen_tx_frames,
+                "screen_rx_frames": self.screen_rx_frames,
                 "participant_count": len(self._participants),
                 "last_error": self.last_error,
             }
