@@ -15,6 +15,7 @@ import re
 import shutil
 import subprocess
 import sys
+import urllib.error
 import urllib.parse
 import urllib.request
 from pathlib import Path
@@ -80,8 +81,12 @@ def _resolve_direct_stream(source_url: str) -> tuple[urllib.request.OpenerDirect
     raise RuntimeError(f"Proveedor requiere descarga manual desde navegador: {source_url}")
 
 
-def download_and_install_game(game_id: str) -> tuple[bool, str]:
-    scanner = GameLibraryScannerService.get_instance(ROOT)
+def download_and_install_game(
+    game_id: str,
+    root_dir: Path | None = None,
+) -> tuple[bool, str]:
+    base_root = (root_dir or ROOT).resolve()
+    scanner = GameLibraryScannerService(root_dir=base_root)
     game = scanner.get_game_by_id(game_id)
     if not game:
         return False, f"Juego no encontrado en el catálogo: {game_id}"
@@ -91,41 +96,49 @@ def download_and_install_game(game_id: str) -> tuple[bool, str]:
         return False, f"No hay URL de origen registrada para {game_id}"
 
     plat_key = str(game.get("platform_key") or "ps3")
-    dest_dir = ROOT / "roms" / plat_key
+    dest_dir = base_root / "roms" / plat_key
     dest_dir.mkdir(parents=True, exist_ok=True)
 
-    opener, dl_url, headers = _resolve_direct_stream(source_url)
-    with opener.open(urllib.request.Request(dl_url, headers=headers), timeout=300) as resp:
-        cd = resp.headers.get("Content-Disposition", "")
-        m_fn = re.search(r'filename="([^"]+)"', cd)
-        if m_fn:
-            fname = m_fn.group(1)
-        else:
-            fname = urllib.parse.unquote(dl_url.split("/")[-1].split("?")[0])
+    part_path: Path | None = None
+    try:
+        opener, dl_url, headers = _resolve_direct_stream(source_url)
+        with opener.open(urllib.request.Request(dl_url, headers=headers), timeout=300) as resp:
+            cd = resp.headers.get("Content-Disposition", "")
+            m_fn = re.search(r'filename="([^"]+)"', cd)
+            fname = m_fn.group(1) if m_fn else urllib.parse.unquote(dl_url.split("/")[-1].split("?")[0])
             if "." not in fname:
                 fname = f"{game_id}.zip"
+            fname = Path(fname).name
 
-        total_mb = int(resp.headers.get("Content-Length", 0)) // (1024 * 1024)
-        part_path = dest_dir / f".{fname}.part"
-        final_arc = dest_dir / fname
-        print(f"[C.C.I. Downloader] Descargando '{game['title']}' ({total_mb} MB) -> {final_arc.relative_to(ROOT)}...")
-        with open(part_path, "wb") as fh:
-            shutil.copyfileobj(resp, fh, length=524288)
-        part_path.replace(final_arc)
+            expected_length = int(resp.headers.get("Content-Length", 0) or 0)
+            part_path = dest_dir / f".{fname}.part"
+            print(f"[C.C.I. Downloader] Descargando '{game['title']}' -> {dest_dir / fname}")
+            with open(part_path, "wb") as fh:
+                shutil.copyfileobj(resp, fh, length=524288)
+            if part_path.stat().st_size == 0 or (
+                expected_length and part_path.stat().st_size != expected_length
+            ):
+                raise RuntimeError(
+                    f"Descarga incompleta: recibidos {part_path.stat().st_size} B, "
+                    f"esperados {expected_length} B."
+                )
 
-    unar_bin = shutil.which("unar") or "/opt/homebrew/bin/unar"
-    if final_arc.suffix.lower() in (".rar", ".zip", ".7z") and unar_bin and Path(unar_bin).exists():
-        print(f"[C.C.I. Downloader] Extrayendo paquete {final_arc.name}...")
-        subprocess.run([unar_bin, "-f", "-o", str(dest_dir), str(final_arc)], check=False)
-        for sub in list(dest_dir.rglob("*")):
-            if sub.is_file() and sub.parent != dest_dir and not any(p.startswith(".") for p in sub.relative_to(dest_dir).parts):
-                target = dest_dir / sub.name
-                if not target.exists():
-                    shutil.move(str(sub), str(target))
+        # La instalación centralizada valida contenido, estructura, identidad,
+        # espacio y unicidad antes de mover el paquete a roms/.
+        from backend.games.storage_manager import GameStorageManager
 
-    scanner.refresh()
-    ok, msg = scanner.verify_game_file(game_id)
-    return ok, msg
+        storage = GameStorageManager(root_dir=base_root)
+        ok, msg, _entry = storage.install_local_package(
+            game_id,
+            part_path,
+            scanner=scanner,
+        )
+        return ok, msg
+    except (OSError, RuntimeError, urllib.error.URLError, ValueError) as exc:
+        return False, f"Descarga/instalación rechazada: {exc}"
+    finally:
+        if part_path is not None:
+            part_path.unlink(missing_ok=True)
 
 
 def main() -> int:

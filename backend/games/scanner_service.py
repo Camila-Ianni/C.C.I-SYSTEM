@@ -213,6 +213,17 @@ class GameLibraryScannerService:
         return cls._instance
 
     @classmethod
+    def is_rpcs3_firmware_installed(cls) -> bool:
+        """Verifica si RPCS3 tiene instalado el firmware oficial de PS3 (dev_flash/vsh/etc/version.txt)."""
+        candidates = [
+            Path.home() / "Library/Application Support/rpcs3/dev_flash/vsh/etc/version.txt",
+            Path.home() / ".config/rpcs3/dev_flash/vsh/etc/version.txt",
+            Path.home() / "AppData/Roaming/rpcs3/dev_flash/vsh/etc/version.txt",
+            ROOT / "cores/emulators/dev_flash/vsh/etc/version.txt",
+        ]
+        return any(p.exists() and p.is_file() and p.stat().st_size > 0 for p in candidates)
+
+    @classmethod
     def resolve_external_emulator(cls, core_spec: str | None) -> tuple[str, str] | None:
         """Busca un emulador externo instalado en PATH o /Applications."""
         if not core_spec or not str(core_spec).startswith("external:"):
@@ -359,17 +370,8 @@ class GameLibraryScannerService:
                     if f in matched_disk_paths:
                         continue
                     if f.resolve() == exp_abs or f.name.lower() == exp_name:
-                        id_ok, _, _ = ROMPackageIdentityValidator.verify_package_identity(
-                            game_id=str(entry.get("id") or ""),
-                            title=str(entry.get("title") or ""),
-                            platform_key=pk,
-                            rom_path=f,
-                            allowed_extensions=self.PLATFORM_SPECS.get(pk, {}).get("extensions", []),
-                            expected_rom=expected_rom,
-                        )
-                        if id_ok:
-                            matched_file = f
-                            break
+                        matched_file = f
+                        break
 
             if not matched_file and candidates:
                 title_norm = self._norm_key(entry.get("clean_title") or entry.get("title", ""))
@@ -380,19 +382,18 @@ class GameLibraryScannerService:
                     if title_norm and len(title_norm) >= 5 and (
                         stem_norm == title_norm or title_norm in stem_norm or stem_norm in title_norm
                     ):
-                        id_ok, _, _ = ROMPackageIdentityValidator.verify_package_identity(
-                            game_id=str(entry.get("id") or ""),
-                            title=str(entry.get("title") or ""),
-                            platform_key=pk,
-                            rom_path=f,
-                            allowed_extensions=self.PLATFORM_SPECS.get(pk, {}).get("extensions", []),
-                            expected_rom=expected_rom,
-                        )
-                        if id_ok:
-                            matched_file = f
-                            break
+                        matched_file = f
+                        break
 
             if matched_file:
+                id_ok, id_msg, id_meta = ROMPackageIdentityValidator.verify_package_identity(
+                    game_id=str(entry.get("id") or ""),
+                    title=str(entry.get("title") or ""),
+                    platform_key=pk,
+                    rom_path=matched_file,
+                    allowed_extensions=self.PLATFORM_SPECS.get(pk, {}).get("extensions", []),
+                    expected_rom=expected_rom,
+                )
                 matched_disk_paths.add(matched_file)
                 processed += 1
                 try:
@@ -401,24 +402,27 @@ class GameLibraryScannerService:
                     rel_rom = str(matched_file)
 
                 size_bytes = matched_file.stat().st_size
-                integrity_ok = size_bytes > 0
-                notes = "OK"
-                if matched_file.suffix.lower() == ".cue":
+                integrity_ok = bool(id_ok and size_bytes > 0)
+                notes = "OK" if id_ok else id_msg
+                if integrity_ok and matched_file.suffix.lower() == ".cue":
                     integrity_ok, notes = ROMMetadataExtractor.verify_cue_bin_integrity(matched_file)
 
+                is_container = id_meta.get("package_kind") == "cci_container"
                 region, revision = ROMMetadataExtractor.extract_region_and_revision(matched_file.stem)
                 entry.update({
                     "type": "libretro" if str(entry.get("core") or "").endswith(".dylib") else "modern",
                     "rom": rel_rom,
-                    "installed": True,
-                    "on_demand": False,
+                    "installed": bool(integrity_ok and not is_container),
+                    "on_demand": bool(is_container or not integrity_ok),
                     "available": integrity_ok,
-                    "catalog_type": "local_installed",
+                    "catalog_type": "local_installed" if (integrity_ok and not is_container) else "invalid_or_container",
                     "metadata_source": "catalog_disk",
                     "region": region,
                     "revision": revision,
                     "fingerprint": ROMMetadataExtractor.compute_file_fingerprint(matched_file),
                     "integrity_notes": notes,
+                    "package_kind": id_meta.get("package_kind", "native_rom"),
+                    "product_code": id_meta.get("product_code"),
                     "size_bytes": size_bytes,
                 })
                 if progress_callback and total_files > 0:
@@ -583,24 +587,40 @@ class GameLibraryScannerService:
         if not id_ok:
             return False, f"Error de identidad o asociación de paquete: {id_msg}"
 
-        if id_meta.get("package_kind") == "cci_container" and (self.root_dir / "modern_game_runner.py").exists():
-            return True, "Paquete de consola C.C.I. verificado listo para ejecución a 60 FPS."
+        if id_meta.get("package_kind") == "cci_container":
+            return False, f"El archivo '{rom_path.name}' es únicamente un contenedor de prueba CCI_PKG_V2 y no un juego real."
+
+        # H-07: Verificar unicidad antes de autorizar ejecución
+        for other in self.get_games():
+            other_id = str(other.get("id") or "")
+            other_rom = other.get("rom")
+            if other_id != str(game_id) and other_rom and not other.get("on_demand"):
+                other_p = Path(str(other_rom)) if Path(str(other_rom)).is_absolute() else (self.root_dir / str(other_rom))
+                try:
+                    if other_p.resolve() == rom_path.resolve():
+                        return False, f"Asociación inválida: el archivo '{rom_path.name}' está compartido con '{other_id}'."
+                except Exception:
+                    pass
 
         core = game.get("core")
-        if not core:
-            if (self.root_dir / "modern_game_runner.py").exists():
-                return True, f"Runtime C.C.I. 60 FPS verificado para {game.get('console')}."
-            return False, f"No hay emulador compatible configurado para {game.get('console')}."
+        if not core or plat_key in ("ps5", "switch2"):
+            return (
+                False,
+                f"Juego no jugable: no existe emulador comercial compatible configurado para {game.get('console')}.",
+            )
 
         if str(core).startswith("external:"):
             emu = self.resolve_external_emulator(str(core))
             if not emu:
-                if (self.root_dir / "modern_game_runner.py").exists():
-                    return True, f"ROM verificada con runtime multiplataforma C.C.I. 60 FPS ({rom_val})."
                 label = self.EXTERNAL_EMULATORS.get(str(core), (str(core),))[0]
                 return (
                     False,
-                    f"ROM instalada localmente en '{rom_val}', pero falta instalar {label} en /Applications o PATH para lanzarlo.",
+                    f"Juego no jugable: ROM instalada localmente en '{rom_val}', pero falta instalar {label} en /Applications o PATH.",
+                )
+            if str(core) == "external:rpcs3" and not self.is_rpcs3_firmware_installed():
+                return (
+                    False,
+                    "RPCS3 está instalado, pero falta instalar el firmware oficial de PS3 (PS3UPDAT.PUP).",
                 )
             return True, f"ROM y emulador externo {emu[0]} verificados."
 

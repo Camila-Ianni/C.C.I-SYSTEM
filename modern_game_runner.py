@@ -1,22 +1,20 @@
-"""modern_game_runner.py - Ejecutor estricto y verificador de integridad de juegos para C.C.I. SYSTEM.
+"""modern_game_runner.py - Ejecutor estricto y verificador real de ejecución para C.C.I. SYSTEM.
 
-Implementa el Flujo de Lanzamiento Esperado (Sección 8) y las correcciones P0, P1 y P2 de la Auditoría Técnica:
-1. Selección: Recibe un game_id estable del catálogo.
-2. Resolución: Busca exclusivamente la instalación registrada para ese game_id (priorizando instalación exacta).
-3. Comprobación: Valida existencia física, extensión permitida por plataforma e identidad exacta del paquete.
-   - Prohibición absoluta de sustituciones silenciosas (_EXACT_GAME_MAP, _PLAYSTATION_3D_ISO_MAP y reglas por palabras clave eliminadas).
-   - Prohibición absoluta de fallback a Crash Bandicoot: Warped u otro título ajeno.
-4. Emulador: Verifica que el emulador correspondiente a la plataforma esté disponible y sea compatible.
-5. Ejecución: Lanza únicamente el archivo validado del propio juego en su emulador correspondiente.
-6. Resultado y Telemetría: Registra inicio, cierre, código de salida y duración real sin inventar porcentaje de progreso artificial.
+Implementa las correcciones P0 y P1 de la Segunda Auditoría Técnica (Versión 2.0):
+- H-01 / H-03: Valida autenticidad binaria del paquete antes de lanzar; bloquea contenedores sintéticos CCI_PKG_V2
+  como juegos comerciales reales y prohíbe sustituciones o fallbacks silenciosos.
+- H-04: Implementa los 6 estados independientes de ejecución:
+    PROCESS_STARTED -> PROCESS_EXITED | EMULATOR_ERROR -> GAME_LOAD_CONFIRMED -> GAME_RUNNING -> GAME_CLOSED
+  Jamás asigna exit_code=0 si el emulador falla, termina prematuramente o reporta error fatal en sus logs/stderr.
+  Persiste la evidencia de carga y errores en SQLite (`execution_verifications`).
+- H-06: Extrae y verifica paquetes comprimidos (.zip/.rar/.7z) y PS3 .pkg (PARAM.SFO + USRDIR/EBOOT.BIN) antes
+  de pasar el objetivo real al emulador (ej. RPCS3 con Minecraft: PlayStation 3 Edition [NPUB31419]).
 """
 from __future__ import annotations
 
 import argparse
-import json
 import os
 import platform
-import shutil
 import subprocess
 import sys
 import time
@@ -36,6 +34,15 @@ EMULATORS_DIR = CORES_DIR / "emulators"
 _EXACT_GAME_MAP: dict[str, list[tuple[str, str]]] = {}
 _PLAYSTATION_3D_ISO_MAP: dict[str, list[str]] = {}
 _NATIVE_MACOS_APP_MAP: dict[str, str] = {}
+
+EXECUTION_STATES = (
+    "PROCESS_STARTED",
+    "PROCESS_EXITED",
+    "EMULATOR_ERROR",
+    "GAME_LOAD_CONFIRMED",
+    "GAME_RUNNING",
+    "GAME_CLOSED",
+)
 
 
 def detect_os_runtime_label() -> str:
@@ -80,14 +87,7 @@ def resolve_playable_engine(
     rom_arg: str = "",
     root_dir: Path | None = None,
 ) -> tuple[Path | None, Path | None, str]:
-    """Resuelve de forma estricta (emulator_or_core_path, validated_rom_path, status_message).
-
-    Cumple P0 de la Auditoría Técnica:
-    - Prioriza la instalación exacta asociada a game_id.
-    - Valida identidad y plataforma del archivo.
-    - Jamás sustituye un juego por otro ni aplica fallback a Crash Bandicoot.
-    - Si el juego no está instalado o no es compatible, devuelve (None, None, motivo).
-    """
+    """Resuelve estrictamente (emulator_or_core_path, validated_rom_path, status_message)."""
     from backend.games.scanner_service import GameLibraryScannerService
 
     base_root = (root_dir or ROOT).resolve()
@@ -106,9 +106,16 @@ def resolve_playable_engine(
     if not spec:
         return None, None, f"Plataforma '{plat_key}' no reconocida para '{catalog_title}'."
 
-    # 1. Priorizar la ruta registrada en la instalación exacta del catálogo; usar rom_arg solo si coincide
     rom_val = game.get("rom") or rom_arg
     if not rom_val or game.get("on_demand", False):
+        if rom_val:
+            cand_p = Path(str(rom_val)) if Path(str(rom_val)).is_absolute() else (base_root / str(rom_val))
+            if cand_p.exists() and ROMPackageIdentityValidator.inspect_cci_container(cand_p) is not None:
+                return (
+                    None,
+                    None,
+                    f"Contenedor sintético de prueba detectado para '{catalog_title}': no contiene el paquete binario comercial real.",
+                )
         return (
             None,
             None,
@@ -117,7 +124,6 @@ def resolve_playable_engine(
 
     rom_path = Path(str(rom_val)) if Path(str(rom_val)).is_absolute() else (base_root / str(rom_val))
 
-    # 2. Validar existencia, extensión permitida e identidad exacta del paquete
     id_ok, id_msg, id_meta = ROMPackageIdentityValidator.verify_package_identity(
         game_id=gid,
         title=catalog_title,
@@ -129,7 +135,7 @@ def resolve_playable_engine(
     if not id_ok:
         return None, None, f"Juego no instalado o identidad inválida: {id_msg}"
 
-    # 3. Verificar que ningún otro juego instalado en el catálogo comparta exactamente este archivo
+    # H-07: Verificar unicidad de archivo entre todos los game_id del catálogo
     for other in svc.get_games():
         other_id = str(other.get("id") or "")
         other_rom = other.get("rom")
@@ -145,9 +151,8 @@ def resolve_playable_engine(
             except Exception:
                 pass
 
-    # 4. Verificar emulador compatible para la plataforma
     core_spec = game.get("core") or spec.get("core")
-    if not core_spec:
+    if not core_spec or plat_key in ("ps5", "switch2"):
         return (
             None,
             None,
@@ -161,7 +166,13 @@ def resolve_playable_engine(
             return (
                 None,
                 rom_path,
-                f"Emulador pendiente de configuración: se requiere {emu_label} instalado para ejecutar '{catalog_title}'.",
+                f"Emulador no disponible: se requiere {emu_label} instalado para ejecutar '{catalog_title}'.",
+            )
+        if str(core_spec) == "external:rpcs3" and not svc.is_rpcs3_firmware_installed():
+            return (
+                None,
+                rom_path,
+                f"Firmware PS3 faltante en RPCS3: instala PS3UPDAT.PUP para ejecutar '{catalog_title}'.",
             )
         return Path(emu_info[1]), rom_path, f"Verificado con emulador externo {emu_info[0]} ({id_meta.get('package_kind')})."
 
@@ -172,41 +183,317 @@ def resolve_playable_engine(
     return core_path, rom_path, f"Verificado con núcleo Libretro {core_path.name} ({id_meta.get('package_kind')})."
 
 
-def _prepare_archive_if_needed(rom_path: Path, platform_key: str) -> Path:
-    """Si el paquete validado es un archivo comprimido (.zip/.rar/.7z) con un .pkg/.iso/.nsp/.xci/.cue dentro,
-    devuelve el binario extraído dentro de roms/<platform_key>/.extracted_cache/."""
+def _prepare_launch_target(rom_path: Path, platform_key: str) -> tuple[bool, Path | None, str]:
+    """H-06: Extrae y verifica paquetes comprimidos o .pkg PS3 antes de invocar al emulador."""
+    from backend.games.storage_manager import GameStorageManager
+
     ext = rom_path.suffix.lower()
-    if ext not in (".zip", ".rar", ".7z"):
-        return rom_path
+    if ext in (".zip", ".rar", ".7z"):
+        return GameStorageManager.extract_and_verify_archive(rom_path, platform_key)
+    if ext == ".pkg" and platform_key == "ps3":
+        ps3_dir = rom_path.parent / ".extracted_cache" / rom_path.stem
+        ok, eboot_p, msg = ROMPackageIdentityValidator.extract_ps3_pkg_to_dir(rom_path, ps3_dir)
+        if ok and eboot_p:
+            return True, eboot_p, msg
+        return False, None, msg
+    return True, rom_path, "Objetivo nativo listo."
 
-    cache_dir = rom_path.parent / ".extracted_cache"
-    cache_dir.mkdir(parents=True, exist_ok=True)
-    target_exts_by_plat = {
-        "ps3": (".pkg", ".iso"),
-        "switch": (".nsp", ".xci"),
-        "ps2": (".iso", ".chd"),
-        "ps1": (".cue", ".iso", ".bin"),
-        "ps4": (".pkg", ".iso"),
-    }
-    wanted_exts = target_exts_by_plat.get(platform_key, (".pkg", ".iso", ".nsp", ".xci", ".cue"))
 
-    stem_prefix = rom_path.stem.split()[0].lower()
-    for existing in sorted(cache_dir.rglob("*")):
-        if existing.is_file() and existing.suffix.lower() in wanted_exts and stem_prefix in existing.name.lower():
-            return existing
+def _read_new_rpcs3_log_lines(log_path: Path, start_offset: int) -> list[str]:
+    if not log_path.exists():
+        return []
+    try:
+        data = log_path.read_bytes()
+        if len(data) < start_offset:
+            return data.decode("utf-8", errors="ignore").splitlines()
+        return data[start_offset:].decode("utf-8", errors="ignore").splitlines()
+    except Exception:
+        return []
 
-    unar_bin = shutil.which("unar") or "/opt/homebrew/bin/unar"
-    if unar_bin and Path(unar_bin).exists():
-        subprocess.run(
-            [unar_bin, "-f", "-o", str(cache_dir), str(rom_path)],
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            check=False,
+
+def _inspect_rpcs3_log_status(lines: list[str]) -> tuple[bool, bool, str]:
+    """Analiza el log real de RPCS3 -> (fatal_error, load_confirmed, diagnostic_message)."""
+    fatal_markers = (
+        "Reason: Firmware is missing",
+        "with cli argument failed",
+        "Failed to load",
+        "Thread terminated due to fatal error",
+        "SYS: Stopping emulator",
+        "·F ",
+    )
+    for ln in lines:
+        for fm in fatal_markers:
+            if fm in ln:
+                return True, False, ln.strip()
+
+    has_boot = any("SYS: Booting application" in ln or "SYS: Serial:" in ln for ln in lines)
+    has_graphics = any("RSX: Swapchain:" in ln or "RSX: Found Vulkan" in ln or "cellAudio: Opened audio backend" in ln for ln in lines)
+    if has_boot and has_graphics:
+        return False, True, "RPCS3 confirmó arranque de aplicación PS3 y backend RSX/Audio activo."
+    return False, False, "Esperando confirmación de carga en RPCS3."
+
+
+def _run_external_emulator(
+    game_id: str,
+    title: str,
+    badge: str,
+    core_spec: str,
+    engine_path: Path,
+    launch_target: Path,
+    max_frames: int,
+    storage: Any,
+) -> int:
+    state_history: list[str] = []
+    start_ts = time.monotonic()
+
+    env = dict(os.environ)
+    # Emuladores Qt externos (RPCS3/PCSX2) requieren el plugin nativo cocoa en macOS, no offscreen
+    if env.get("QT_QPA_PLATFORM") == "offscreen":
+        env.pop("QT_QPA_PLATFORM", None)
+
+    is_rpcs3 = "rpcs3" in core_spec.lower() or "rpcs3" in engine_path.name.lower()
+    rpcs3_log = Path.home() / "Library/Caches/rpcs3/RPCS3.log"
+    rpcs3_log_offset = rpcs3_log.stat().st_size if (is_rpcs3 and rpcs3_log.exists()) else 0
+
+    cmd = [str(engine_path)]
+    if is_rpcs3 and "--no-gui" not in cmd:
+        cmd.append("--no-gui")
+    cmd.append(str(launch_target.resolve()))
+
+    print(f"[C.C.I. Runner] Ejecutando '{title}' [{badge}] con {engine_path.name} -> {launch_target.name}")
+
+    try:
+        proc = subprocess.Popen(
+            cmd,
+            env=env,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
         )
-        for extracted in sorted(cache_dir.rglob("*")):
-            if extracted.is_file() and extracted.suffix.lower() in wanted_exts and stem_prefix in extracted.name.lower():
-                return extracted
-    return rom_path
+    except OSError as exc:
+        state_history.append("EMULATOR_ERROR")
+        storage.record_execution_verification(
+            game_id=game_id,
+            last_state="EMULATOR_ERROR",
+            exit_code=127,
+            load_confirmed=False,
+            emulator_binary=str(engine_path),
+            rom_path=str(launch_target),
+            error_message=f"No se pudo iniciar el proceso del emulador: {exc}",
+            state_history=state_history,
+        )
+        print(f"[C.C.I. Runner] Error al iniciar emulador: {exc}", file=sys.stderr)
+        return 127
+
+    state_history.append("PROCESS_STARTED")
+
+    if max_frames > 0:
+        load_confirmed = False
+        fatal_error = False
+        err_detail = ""
+        deadline = time.monotonic() + (8.0 if is_rpcs3 else 2.5)
+        min_wait = time.monotonic() + (1.2 if not is_rpcs3 else 2.5)
+
+        while time.monotonic() < deadline:
+            rc_now = proc.poll()
+            if rc_now is not None:
+                out_txt, err_txt = proc.communicate()
+                state_history.append("PROCESS_EXITED")
+                combined_err = (err_txt or out_txt or "").strip()
+                if is_rpcs3:
+                    new_lines = _read_new_rpcs3_log_lines(rpcs3_log, rpcs3_log_offset)
+                    f_err, _l_ok, f_msg = _inspect_rpcs3_log_status(new_lines)
+                    if f_err and not combined_err:
+                        combined_err = f_msg
+
+                if rc_now != 0 or any(tok in combined_err.lower() for tok in ("error", "failed", "missing", "fatal", "corrupt")):
+                    state_history.append("EMULATOR_ERROR")
+                    msg = combined_err or f"El emulador terminó prematuramente con código {rc_now}."
+                    storage.record_execution_verification(
+                        game_id=game_id,
+                        last_state="EMULATOR_ERROR",
+                        exit_code=int(rc_now if rc_now != 0 else 1),
+                        load_confirmed=False,
+                        process_time_seconds=max(1, int(time.monotonic() - start_ts)),
+                        effective_play_seconds=0,
+                        emulator_binary=str(engine_path),
+                        rom_path=str(launch_target),
+                        error_message=msg[:500],
+                        state_history=state_history,
+                    )
+                    print(f"[C.C.I. Runner] EMULATOR_ERROR: {msg[:300]}", file=sys.stderr)
+                    return int(rc_now if rc_now != 0 else 1)
+
+                # Un código 0 sólo indica que el proceso terminó limpiamente.
+                # Sin evidencia de carga no se puede certificar el videojuego.
+                if not load_confirmed:
+                    state_history.append("EMULATOR_ERROR")
+                    msg = "El emulador terminó sin evidenciar carga real del juego."
+                    storage.record_execution_verification(
+                        game_id=game_id,
+                        last_state="EMULATOR_ERROR",
+                        exit_code=1,
+                        load_confirmed=False,
+                        process_time_seconds=0,
+                        effective_play_seconds=0,
+                        emulator_binary=str(engine_path),
+                        rom_path=str(launch_target),
+                        error_message=msg,
+                        state_history=state_history,
+                    )
+                    print(f"[C.C.I. Runner] EMULATOR_ERROR: {msg}", file=sys.stderr)
+                    return 1
+
+                # Si terminó limpiamente tras el mínimo de ejecución con código 0 y sin errores
+                state_history.extend(["GAME_LOAD_CONFIRMED", "GAME_RUNNING", "GAME_CLOSED"])
+                proc_s = max(1, int(time.monotonic() - start_ts))
+                storage.record_execution_verification(
+                    game_id=game_id,
+                    last_state="GAME_CLOSED",
+                    exit_code=0,
+                    load_confirmed=True,
+                    process_time_seconds=proc_s,
+                    effective_play_seconds=proc_s,
+                    emulator_binary=str(engine_path),
+                    rom_path=str(launch_target),
+                    error_message="",
+                    state_history=state_history,
+                )
+                storage.record_progress(game_id=game_id, title=title, last_played="Hoy", play_time_delta_s=proc_s, progress_pct=None)
+                return 0
+
+            if is_rpcs3:
+                new_lines = _read_new_rpcs3_log_lines(rpcs3_log, rpcs3_log_offset)
+                f_err, l_ok, l_msg = _inspect_rpcs3_log_status(new_lines)
+                if f_err:
+                    fatal_error = True
+                    err_detail = l_msg
+                    break
+                if l_ok:
+                    load_confirmed = True
+                    break
+            elif time.monotonic() >= min_wait:
+                load_confirmed = True
+                break
+
+            time.sleep(0.25)
+
+        if proc.poll() is None:
+            proc.terminate()
+            try:
+                out_txt, err_txt = proc.communicate(timeout=3)
+            except Exception:
+                proc.kill()
+                out_txt, err_txt = proc.communicate()
+        else:
+            out_txt, err_txt = proc.communicate()
+
+        if is_rpcs3 and not fatal_error:
+            new_lines = _read_new_rpcs3_log_lines(rpcs3_log, rpcs3_log_offset)
+            f_err, l_ok, l_msg = _inspect_rpcs3_log_status(new_lines)
+            if f_err:
+                fatal_error = True
+                err_detail = l_msg
+            elif l_ok:
+                load_confirmed = True
+
+        proc_s = max(1, int(time.monotonic() - start_ts))
+        if fatal_error or not load_confirmed:
+            state_history.append("EMULATOR_ERROR")
+            err_msg = err_detail or (err_txt or "").strip() or "No se pudo confirmar la carga real del juego en el emulador."
+            storage.record_execution_verification(
+                game_id=game_id,
+                last_state="EMULATOR_ERROR",
+                exit_code=1,
+                load_confirmed=False,
+                process_time_seconds=proc_s,
+                effective_play_seconds=0,
+                emulator_binary=str(engine_path),
+                rom_path=str(launch_target),
+                error_message=err_msg[:500],
+                state_history=state_history,
+            )
+            print(f"[C.C.I. Runner] EMULATOR_ERROR: {err_msg[:300]}", file=sys.stderr)
+            return 1
+
+        state_history.extend(["GAME_LOAD_CONFIRMED", "GAME_RUNNING", "GAME_CLOSED"])
+        storage.record_execution_verification(
+            game_id=game_id,
+            last_state="GAME_CLOSED",
+            exit_code=0,
+            load_confirmed=True,
+            process_time_seconds=proc_s,
+            effective_play_seconds=proc_s,
+            emulator_binary=str(engine_path),
+            rom_path=str(launch_target),
+            error_message="",
+            state_history=state_history,
+        )
+        storage.record_progress(game_id=game_id, title=title, last_played="Hoy", play_time_delta_s=proc_s, progress_pct=None)
+        return 0
+
+    # Ejecución interactiva completa hasta que el usuario cierre el emulador
+    out_txt, err_txt = proc.communicate()
+    rc = int(proc.returncode or 0)
+    proc_s = max(1, int(time.monotonic() - start_ts))
+    state_history.append("PROCESS_EXITED")
+
+    if rc != 0:
+        state_history.append("EMULATOR_ERROR")
+        storage.record_execution_verification(
+            game_id=game_id,
+            last_state="EMULATOR_ERROR",
+            exit_code=rc,
+            load_confirmed=False,
+            process_time_seconds=proc_s,
+            effective_play_seconds=0,
+            emulator_binary=str(engine_path),
+            rom_path=str(launch_target),
+            error_message=(err_txt or out_txt or f"Código de salida {rc}")[:500],
+            state_history=state_history,
+        )
+        return rc
+
+    load_ok = True
+    err_detail = ""
+    if is_rpcs3:
+        new_lines = _read_new_rpcs3_log_lines(rpcs3_log, rpcs3_log_offset)
+        f_err, l_ok, l_msg = _inspect_rpcs3_log_status(new_lines)
+        if f_err or not l_ok:
+            load_ok = False
+            err_detail = l_msg
+
+    if not load_ok:
+        state_history.append("EMULATOR_ERROR")
+        storage.record_execution_verification(
+            game_id=game_id,
+            last_state="EMULATOR_ERROR",
+            exit_code=1,
+            load_confirmed=False,
+            process_time_seconds=proc_s,
+            effective_play_seconds=0,
+            emulator_binary=str(engine_path),
+            rom_path=str(launch_target),
+            error_message=err_detail[:500],
+            state_history=state_history,
+        )
+        return 1
+
+    state_history.extend(["GAME_LOAD_CONFIRMED", "GAME_RUNNING", "GAME_CLOSED"])
+    storage.record_execution_verification(
+        game_id=game_id,
+        last_state="GAME_CLOSED",
+        exit_code=0,
+        load_confirmed=True,
+        process_time_seconds=proc_s,
+        effective_play_seconds=proc_s,
+        emulator_binary=str(engine_path),
+        rom_path=str(launch_target),
+        error_message="",
+        state_history=state_history,
+    )
+    storage.record_progress(game_id=game_id, title=title, last_played="Hoy", play_time_delta_s=proc_s, progress_pct=None)
+    return 0
 
 
 def run_modern_game(
@@ -241,66 +528,38 @@ def run_modern_game(
         print(f"[C.C.I. Runner] {status_msg}", file=sys.stderr)
         return 2
 
-    # Comprobar si el archivo es un contenedor de metadatos CCI_PKG_V2 (sin binario nativo real)
-    manifest = ROMPackageIdentityValidator.inspect_cci_container(validated_rom)
-    if manifest is not None:
-        if max_frames > 0:
-            # Modo de verificación de contenedor en tests automatizados
-            storage.record_progress(
-                game_id=game_id,
-                title=title,
-                last_played="Verificado",
-                play_time_delta_s=0,
-                progress_pct=None,
-            )
-            return 0
-        print(
-            f"[C.C.I. Runner] El paquete local de '{title}' ({validated_rom.name}) es únicamente un contenedor de reserva "
-            f"sin el binario comercial real ({manifest.get('format', 'ROM')}). Descargá o importá el paquete completo para iniciar.",
-            file=sys.stderr,
-        )
-        return 3
-
     game_meta = scanner.get_game_by_id(game_id) or {}
     plat_key = str(game_meta.get("platform_key") or "").lower()
-    launch_target = _prepare_archive_if_needed(validated_rom, plat_key)
+    prep_ok, launch_target, prep_msg = _prepare_launch_target(validated_rom, plat_key)
+    if not prep_ok or launch_target is None:
+        storage.record_execution_verification(
+            game_id=game_id,
+            last_state="EMULATOR_ERROR",
+            exit_code=3,
+            load_confirmed=False,
+            emulator_binary=str(engine_path),
+            rom_path=str(validated_rom),
+            error_message=prep_msg,
+            state_history=["PROCESS_STARTED", "EMULATOR_ERROR"],
+        )
+        print(f"[C.C.I. Runner] Error preparando paquete: {prep_msg}", file=sys.stderr)
+        return 3
 
-    # Si el motor es un emulador externo (RPCS3, Ryujinx, PCSX2, shadPS4), lanzarlo con telemetría real
     core_spec = str(game_meta.get("core") or "")
     if core_spec.startswith("external:"):
-        start_ts = time.monotonic()
-        print(f"[C.C.I. Runner] Ejecutando '{title}' [{badge}] con {engine_path.name} -> {launch_target.name}")
-        if max_frames > 0:
-            # En prueba automatizada controlada (--max-frames), verificar invocación sin bloquear indefinidamente
-            proc = subprocess.Popen(
-                [str(engine_path), str(launch_target.resolve())],
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-            )
-            time.sleep(0.8)
-            if proc.poll() is None:
-                proc.terminate()
-                try:
-                    proc.wait(timeout=3)
-                except Exception:
-                    proc.kill()
-            exit_code = 0
-        else:
-            completed = subprocess.run([str(engine_path), str(launch_target.resolve())], check=False)
-            exit_code = int(completed.returncode)
-
-        elapsed_s = max(1, int(time.monotonic() - start_ts))
-        # P2 Telemetría: registrar duración real y resultado sin inventar progreso artificial
-        storage.record_progress(
+        return _run_external_emulator(
             game_id=game_id,
             title=title,
-            last_played="Hoy",
-            play_time_delta_s=elapsed_s,
-            progress_pct=None,
+            badge=badge,
+            core_spec=core_spec,
+            engine_path=engine_path,
+            launch_target=launch_target,
+            max_frames=max_frames,
+            storage=storage,
         )
-        return exit_code
 
     # Ejecución con núcleo Libretro nativo (ej. PS1 con pcsx_rearmed_libretro)
+    state_history = ["PROCESS_STARTED"]
     if not pygame.get_init():
         pygame.init()
     if not pygame.font.get_init():
@@ -321,8 +580,21 @@ def run_modern_game(
         screen_h=height,
     )
     if not runner.load_rom(launch_target):
+        state_history.append("EMULATOR_ERROR")
+        storage.record_execution_verification(
+            game_id=game_id,
+            last_state="EMULATOR_ERROR",
+            exit_code=1,
+            load_confirmed=False,
+            emulator_binary=str(engine_path),
+            rom_path=str(launch_target),
+            error_message=f"Libretro retro_load_game falló para {launch_target.name}.",
+            state_history=state_history,
+        )
         print(f"[C.C.I. Runner] Error al cargar ROM verificada: {launch_target}", file=sys.stderr)
         return 1
+
+    state_history.append("GAME_LOAD_CONFIRMED")
 
     save_dir = storage.game_save_dir(game_id)
     state_file = save_dir / "libretro_state.sav"
@@ -357,12 +629,12 @@ def run_modern_game(
     toast_msg = "✓ Estado de partida restaurado desde memoria de consola" if restored_state else ""
     last_view_rect = (0, 0, width, height - 34)
     running = True
+    confirmed_running_marked = False
 
     def _save_game_state(manual: bool = False):
         nonlocal toast_timer, toast_msg
         elapsed = max(1, int(time.monotonic() - start_time))
         raw_state = runner.serialize_state()
-        # P2 Telemetría: no fabricar porcentaje de progreso artificial a partir del tiempo de sesión
         res = storage.record_progress(
             game_id=game_id,
             title=title,
@@ -410,6 +682,9 @@ def run_modern_game(
         runner.update_pointer_from_mouse(mx, my, m_pressed, last_view_rect)
 
         runner.step_frame()
+        if not confirmed_running_marked and runner.is_loaded:
+            state_history.append("GAME_RUNNING")
+            confirmed_running_marked = True
 
         if not runner.is_hw_render and screen is not None:
             last_view_rect = runner.render_to(
@@ -443,7 +718,21 @@ def run_modern_game(
         pygame.display.flip()
 
     _save_game_state(manual=False)
+    elapsed_total = max(1, int(time.monotonic() - start_time))
     runner.unload()
+    state_history.append("GAME_CLOSED")
+    storage.record_execution_verification(
+        game_id=game_id,
+        last_state="GAME_CLOSED",
+        exit_code=0,
+        load_confirmed=confirmed_running_marked,
+        process_time_seconds=elapsed_total,
+        effective_play_seconds=elapsed_total if confirmed_running_marked else 0,
+        emulator_binary=str(engine_path),
+        rom_path=str(launch_target),
+        error_message="",
+        state_history=state_history,
+    )
     try:
         pygame.display.quit()
     except Exception:
