@@ -11,7 +11,7 @@ on:
 
 jobs:
   certification-suite:
-    name: Run 22 Evaluation Suites & Docker Compose E2E (Python 3.14)
+    name: Run 23 Evaluation Suites & Docker Compose E2E (Python 3.14)
     runs-on: ubuntu-latest
 
     steps:
@@ -49,7 +49,7 @@ jobs:
         run: |
           docker compose -f deploy/docker-compose.communities.yml config > /dev/null
 
-      - name: Run Full 22-Suite Certification Protocol (Strict Zero-Skip Gate)
+      - name: Run Full 23-Suite Certification Protocol (Strict Zero-Skip Gate)
         env:
           SDL_VIDEODRIVER: dummy
           SDL_AUDIODRIVER: dummy
@@ -68,18 +68,18 @@ jobs:
               assert report["git_commit_sha"] == expected_sha, (
                   f"Report SHA {report['git_commit_sha']} != GITHUB_SHA {expected_sha}"
               )
-          assert report["suites_executed"] == 22, f"Expected 22 suites, got {report['suites_executed']}"
+          assert report["suites_executed"] == 23, f"Expected 23 suites, got {report['suites_executed']}"
           assert report["total_failed"] == 0, f"Failures: {report['total_failed']}"
           assert report["total_errors"] == 0, f"Errors: {report['total_errors']}"
           assert report["total_skipped"] == 0, f"Skips prohibited: {report['total_skipped']}"
-          assert report["total_passed"] == report["total_run"] and report["total_passed"] >= 192, (
+          assert report["total_passed"] == report["total_run"] and report["total_passed"] >= 207, (
               f"Passed {report['total_passed']}/{report['total_run']}"
           )
 
           audit_suite = [s for s in report["suites"] if s["suite"] == "test_communities_merge_audit.py"][0]
           t11 = [c for c in audit_suite["test_cases"] if "test_11_live_docker_caddy_tls" in c["id"]]
           assert len(t11) == 1 and t11[0]["status"] == "PASS", f"Mandatory Docker E2E test_11 did not pass: {t11}"
-          print("CI Gate Verified: 192/192 PASS, 0 SKIP, test_11 PASS, SHA=", report["git_commit_sha"])
+          print(f"CI Gate Verified: {report['total_passed']}/{report['total_run']} PASS, 0 SKIP, test_11 PASS, SHA={report['git_commit_sha']}")
           PY
 
       - name: Upload Evaluation Report Artifact
