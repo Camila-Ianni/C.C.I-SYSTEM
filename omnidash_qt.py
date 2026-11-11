@@ -523,7 +523,7 @@ class OmniDashNavBar(QWidget):
         brand_box.addStretch(1)
         self.left_stack.addWidget(brand_widget)
 
-        # Index 1: Cápsula de Perfil de Jugador (Alex • 18,450 G) para Comunidades (1:1 Imagen 2)
+        # Index 1: Cápsula de Perfil de Jugador para Comunidades (sincronizada con sesión real)
         profile_widget = QWidget()
         pr_box = QHBoxLayout(profile_widget)
         pr_box.setContentsMargins(0, 0, 0, 0)
@@ -534,7 +534,8 @@ class OmniDashNavBar(QWidget):
             glow_color=QColor(0, 0, 0, 50),
             glow_radius=8
         )
-        self.profile_pill.setFixedSize(190, 44)
+        self.profile_pill.setMinimumWidth(190)
+        self.profile_pill.setFixedHeight(44)
         pp_lay = QHBoxLayout(self.profile_pill)
         pp_lay.setContentsMargins(6, 4, 14, 4)
         pp_lay.setSpacing(8)
@@ -545,9 +546,9 @@ class OmniDashNavBar(QWidget):
             av_l.setPixmap(get_rounded_pixmap(QPixmap(str(av_p)), 32, 32, 16))
         pp_lay.addWidget(av_l)
 
-        txt_l = QLabel("Alex  <span style='color: #32D875;'>●</span>  18,450 G")
-        txt_l.setStyleSheet("font-size: 13px; font-weight: 700; color: #ffffff;")
-        pp_lay.addWidget(txt_l)
+        self.nav_player_lbl = QLabel("Invitado  <span style='color: #7f95a6;'>●</span>  Sin sesión")
+        self.nav_player_lbl.setStyleSheet("font-size: 13px; font-weight: 700; color: #ffffff;")
+        pp_lay.addWidget(self.nav_player_lbl)
         pr_box.addWidget(self.profile_pill)
         pr_box.addStretch(1)
         self.left_stack.addWidget(profile_widget)
@@ -671,6 +672,16 @@ class OmniDashNavBar(QWidget):
         self.timer.timeout.connect(self._update_clock)
         self.timer.start(1000)
         self._update_clock()
+
+    def set_session_user(self, username: Optional[str]):
+        if not hasattr(self, "nav_player_lbl"):
+            return
+        if username:
+            import html as _html
+            safe_u = _html.escape(str(username))
+            self.nav_player_lbl.setText(f"@{safe_u}  <span style='color: #32D875;'>●</span>  En línea")
+        else:
+            self.nav_player_lbl.setText("Invitado  <span style='color: #7f95a6;'>●</span>  Sin sesión")
 
     def set_unread_notifications(self, count: int):
         if count and count > 0:
@@ -3690,12 +3701,13 @@ class SettingsView(QWidget):
 
         # 4 Filas de Configuración Interactivas de Cristal
         settings_rows = [
-            ("person", "Active Player", "Alex (18,450 G, Frutiger Master)"),
-            ("trophy", "Total Gamerscore", "18,450 G acumulados en 7 plataformas"),
+            ("person", "Active Player", "Sin sesión activa (Invitado)"),
+            ("trophy", "Local Runtime", "OmniDash Frutiger Aero + Communities"),
             ("layers_stack", "Libretro Framebuffer", "V-Sync 60 FPS | Hardware Glitched = OFF"),
             ("sound_wave", "Audio Sink", "Qt Multimedia Core Stereo (44.1 kHz 16-bit)"),
         ]
 
+        self._settings_value_labels = {}
         for icon_id, title, val in settings_rows:
             row_frame = AcrylicGlassCard(
                 self,
@@ -3727,6 +3739,7 @@ class SettingsView(QWidget):
             v_lbl = QLabel(val)
             v_lbl.setStyleSheet("font-size: 14px; color: #a5d8ff; font-weight: 500;")
             r_lay.addWidget(v_lbl)
+            self._settings_value_labels[title] = v_lbl
 
             # Flecha Chevron >
             chev_lbl = QLabel()
@@ -6871,6 +6884,11 @@ class OmniDashMainWindow(QMainWindow):
     def _sync_session_ui(self):
         sess = self.community_controller.session
         uname = sess.username if sess else None
+        self.nav_bar.set_session_user(uname)
+        if hasattr(self.settings_view, "_settings_value_labels") and "Active Player" in self.settings_view._settings_value_labels:
+            self.settings_view._settings_value_labels["Active Player"].setText(
+                f"@{uname} (Sesión activa)" if uname else "Sin sesión activa (Invitado)"
+            )
         self.home_view.set_session_state(
             username=uname,
             communities_count=len(self.community_controller.my_communities),

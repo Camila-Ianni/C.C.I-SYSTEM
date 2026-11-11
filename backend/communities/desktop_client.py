@@ -14,6 +14,7 @@ import json
 import logging
 import os
 from pathlib import Path
+import socket
 import threading
 import time
 from typing import Any, Dict, List, Optional, Tuple
@@ -29,6 +30,7 @@ ROOT_DIR = Path(__file__).resolve().parent.parent.parent
 DEFAULT_API_URL = os.getenv("CCI_API_URL", "http://127.0.0.1:5050").rstrip("/")
 
 _started_local_ports: set[int] = set()
+_resolved_local_urls: Dict[str, str] = {}
 _local_server_lock = threading.Lock()
 
 
@@ -66,18 +68,66 @@ def _extract_invite_code(raw: str) -> str:
     return cleaned.split("?")[0].strip("/")
 
 
-def ensure_local_backend_running(api_url: str = DEFAULT_API_URL, timeout: float = 5.0) -> Tuple[bool, str]:
+def _is_tcp_port_open(host: str, port: int, timeout: float = 0.3) -> bool:
+    try:
+        with socket.create_connection((host, port), timeout=timeout):
+            return True
+    except OSError:
+        return False
+
+
+def _pick_free_loopback_port() -> int:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
+        sock.bind(("127.0.0.1", 0))
+        return int(sock.getsockname()[1])
+
+
+def _is_communities_backend(base_url: str, timeout: float = 1.2) -> Tuple[bool, str]:
+    """Verifica que el servidor responda `/api/v1/communities/health` con JSON válido de C.C.I. Communities."""
+    base = base_url.rstrip("/")
+    try:
+        resp = requests.get(f"{base}/api/v1/communities/health", timeout=timeout)
+    except requests.RequestException as exc:
+        return False, str(exc)
+
+    if resp.status_code != 200:
+        return False, f"El servidor en {base} no expone /api/v1/communities/health (HTTP {resp.status_code})"
+
+    try:
+        data = resp.json()
+    except Exception:
+        return False, f"Respuesta inválida en {base}/api/v1/communities/health"
+
+    if not isinstance(data, dict) or "realtime_socketio" not in data:
+        return False, f"Servicio inesperado en {base} (no corresponde a C.C.I. Communities)"
+
+    return True, "connected"
+
+
+def resolve_communities_backend(
+    api_url: str = DEFAULT_API_URL,
+    timeout: float = 5.0,
+) -> Tuple[bool, str, str]:
     """
-    Comprueba si el backend `/api/v1/health` responde.
-    Si apunta a loopback y CCI_AUTO_START_BACKEND != '0', inicia `backend.server` en hilo daemon local.
+    Comprueba si un backend real de C.C.I. Communities responde en `api_url`.
+    Si apunta a loopback y CCI_AUTO_START_BACKEND != '0':
+      - Inicia `backend.server` en hilo daemon local.
+      - Si el puerto configurado ya está ocupado por otro proceso que no sirve Communities
+        (ej. `run_web.py` en :5050), levanta el backend en un puerto libre de loopback y
+        devuelve la URL activa resuelta `(ok, msg, active_url)`.
     """
     base = api_url.rstrip("/")
-    try:
-        resp = requests.get(f"{base}/api/v1/health", timeout=1.2)
-        if resp.status_code == 200:
-            return True, "connected"
-    except requests.RequestException:
-        pass
+
+    with _local_server_lock:
+        cached = _resolved_local_urls.get(base)
+    if cached:
+        ok, msg = _is_communities_backend(cached, timeout=1.0)
+        if ok:
+            return True, msg, cached
+
+    ok, probe_err = _is_communities_backend(base, timeout=1.2)
+    if ok:
+        return True, "connected", base
 
     parsed = urlparse(base)
     host = parsed.hostname or ""
@@ -86,13 +136,24 @@ def ensure_local_backend_running(api_url: str = DEFAULT_API_URL, timeout: float 
     auto_start = os.getenv("CCI_AUTO_START_BACKEND", "1").strip().lower() not in ("0", "false", "no")
 
     if not (is_loopback and auto_start):
-        return False, f"No se pudo conectar con {base}"
+        return False, probe_err or f"No se pudo conectar con {base}", base
 
     with _local_server_lock:
-        if port not in _started_local_ports:
-            _started_local_ports.add(port)
+        cached = _resolved_local_urls.get(base)
+        if cached:
+            target_base = cached
+            target_parsed = urlparse(target_base)
+            target_port = int(target_parsed.port or port)
+        else:
+            port_busy = _is_tcp_port_open(host, port, timeout=0.35)
+            target_port = _pick_free_loopback_port() if port_busy else port
+            target_base = f"http://127.0.0.1:{target_port}"
+            _resolved_local_urls[base] = target_base
 
-            def _serve():
+        if target_port not in _started_local_ports:
+            _started_local_ports.add(target_port)
+
+            def _serve(listen_port: int = target_port):
                 try:
                     import cci_database
                     from backend.server import app as srv_app, socketio as srv_sio
@@ -100,7 +161,7 @@ def ensure_local_backend_running(api_url: str = DEFAULT_API_URL, timeout: float 
                     srv_sio.run(
                         srv_app,
                         host="127.0.0.1",
-                        port=port,
+                        port=listen_port,
                         debug=False,
                         use_reloader=False,
                         allow_unsafe_werkzeug=True,
@@ -109,21 +170,27 @@ def ensure_local_backend_running(api_url: str = DEFAULT_API_URL, timeout: float 
                 except Exception as exc:
                     logger.warning("Local backend thread exited: %s", exc)
 
-            t = threading.Thread(target=_serve, daemon=True, name=f"CCI-LocalBackend-{port}")
+            t = threading.Thread(target=_serve, daemon=True, name=f"CCI-LocalBackend-{target_port}")
             t.start()
 
     deadline = time.monotonic() + timeout
-    last_err = f"Tiempo agotado conectando a {base}"
+    last_err = f"Tiempo agotado conectando a {target_base}"
     while time.monotonic() < deadline:
-        try:
-            resp = requests.get(f"{base}/api/v1/health", timeout=0.8)
-            if resp.status_code == 200:
-                return True, "connected"
-            last_err = f"Backend respondió HTTP {resp.status_code}"
-        except requests.RequestException as exc:
-            last_err = str(exc)
+        ok, err_msg = _is_communities_backend(target_base, timeout=0.8)
+        if ok:
+            return True, "connected", target_base
+        last_err = err_msg
         time.sleep(0.12)
-    return False, last_err
+
+    with _local_server_lock:
+        if _resolved_local_urls.get(base) == target_base:
+            _resolved_local_urls.pop(base, None)
+    return False, last_err, base
+
+
+def ensure_local_backend_running(api_url: str = DEFAULT_API_URL, timeout: float = 5.0) -> Tuple[bool, str]:
+    ok, msg, _active = resolve_communities_backend(api_url=api_url, timeout=timeout)
+    return ok, msg
 
 
 class CommunityApiClient:
@@ -787,13 +854,15 @@ class CommunityController(QObject):
     # ------------------------------------------------------------------
     def check_backend(self, auto_start: bool = True) -> Tuple[bool, str]:
         if auto_start:
-            ok, msg = ensure_local_backend_running(self.api_url)
+            ok, msg, active_url = resolve_communities_backend(self.api_url)
+            if ok and active_url and active_url != self.api_url:
+                logger.info("Communities backend redirigido de %s a %s", self.api_url, active_url)
+                self.api_url = active_url
+                self.api.api_url = active_url
+                if self.session is not None:
+                    self.session.api_url = active_url
         else:
-            try:
-                self.api.health()
-                ok, msg = True, "connected"
-            except CommunityApiError as exc:
-                ok, msg = False, exc.message
+            ok, msg = _is_communities_backend(self.api_url, timeout=self.api.timeout)
 
         if ok:
             try:

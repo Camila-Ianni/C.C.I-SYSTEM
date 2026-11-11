@@ -317,6 +317,7 @@ class TestCommunitiesQtP0(unittest.TestCase):
             self.app.processEvents()
             self.assertNotIn("Alex", win.home_view.title_lbl.text())
             self.assertNotIn("Alex", win.home_view.pill_name_lbl.text())
+            self.assertNotIn("Alex", win.nav_bar.nav_player_lbl.text())
             self.assertFalse(win.home_view._home_live_badge.isVisible())
 
             win.switch_view("COMMUNITY")
@@ -326,8 +327,69 @@ class TestCommunitiesQtP0(unittest.TestCase):
                 win.communities_view.internal_stack.currentWidget(),
                 win.communities_view.auth_view,
             )
+            win.nav_bar.set_session_user("mimi")
+            self.assertIn("@mimi", win.nav_bar.nav_player_lbl.text())
+            self.assertNotIn("Alex", win.nav_bar.nav_player_lbl.text())
         finally:
             win.close()
+
+    def test_06_foreign_server_on_port_does_not_cause_404_on_register(self):
+        from http.server import BaseHTTPRequestHandler, HTTPServer
+        from backend.communities.desktop_client import CommunityController
+
+        class _ForeignHealthHandler(BaseHTTPRequestHandler):
+            def do_GET(self):
+                if self.path == "/api/v1/health":
+                    self.send_response(200)
+                    self.send_header("Content-Type", "application/json")
+                    self.end_headers()
+                    self.wfile.write(b'{"status":"ok","engine":"foreign-web"}')
+                    return
+                self.send_response(404)
+                self.end_headers()
+
+            def do_POST(self):
+                self.send_response(404)
+                self.end_headers()
+
+            def log_message(self, format, *args):
+                return
+
+        foreign_port = _free_port()
+        foreign_srv = HTTPServer(("127.0.0.1", foreign_port), _ForeignHealthHandler)
+        t = threading.Thread(target=foreign_srv.serve_forever, daemon=True)
+        t.start()
+
+        old_auto = os.environ.get("CCI_AUTO_START_BACKEND")
+        sess_path = Path(self._tmp_dir.name) / "sess_foreign.json"
+        ctrl = CommunityController(
+            api_url=f"http://127.0.0.1:{foreign_port}",
+            session_path=sess_path,
+            heartbeat_interval_ms=0,
+        )
+        try:
+            # Con auto_start=False NO debe dar falso positivo usando /api/v1/health ajeno
+            ok_strict, msg_strict = ctrl.check_backend(auto_start=False)
+            self.assertFalse(ok_strict)
+            self.assertIn("communities/health", msg_strict)
+
+            # Con auto_start=True debe detectar el puerto ocupado ajeno, levantar Communities en puerto libre y registrar real
+            os.environ["CCI_AUTO_START_BACKEND"] = "1"
+            ok_auto, _ = ctrl.check_backend(auto_start=True)
+            self.assertTrue(ok_auto)
+            self.assertNotEqual(ctrl.api_url, f"http://127.0.0.1:{foreign_port}")
+
+            sess = ctrl.register("mimi_fallback@cci.local", "mimi_fb", "MimiPass123!")
+            self.assertEqual(sess.username.upper(), "MIMI_FB")
+            self.assertEqual(sess.api_url, ctrl.api_url)
+        finally:
+            ctrl.realtime.disconnect_sync()
+            foreign_srv.shutdown()
+            foreign_srv.server_close()
+            if old_auto is None:
+                os.environ.pop("CCI_AUTO_START_BACKEND", None)
+            else:
+                os.environ["CCI_AUTO_START_BACKEND"] = old_auto
 
 
 if __name__ == "__main__":
