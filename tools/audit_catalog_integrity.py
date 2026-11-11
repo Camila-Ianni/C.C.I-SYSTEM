@@ -35,6 +35,7 @@ def main() -> int:
     print(f"Total fichas auditadas : {report['total_catalog_games']}")
     print(f"IDs duplicados         : {len(report['duplicate_ids'])}")
     print(f"ROMs compartidas       : {len(report['shared_roms'])}")
+    print(f"Estado de auditoría    : {report['audit_status']}")
     print(f"Asociaciones válidas   : {'SÍ (100%)' if report['all_associations_valid'] else 'NO'}")
     print("-" * 110)
     for k, v in report["status_counts"].items():
@@ -53,7 +54,7 @@ def main() -> int:
     out_json.write_text(json.dumps(report, indent=2, ensure_ascii=False), encoding="utf-8")
     print("=" * 110)
     print(f"Informe JSON guardado en: {out_json.relative_to(ROOT)}")
-    return 0 if report["all_associations_valid"] else 1
+    return 0 if report["audit_status"] == "PASS" else 1
 
 
 if __name__ == "__main__":

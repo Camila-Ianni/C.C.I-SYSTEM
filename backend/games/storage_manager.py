@@ -702,9 +702,16 @@ class GameStorageManager:
                     members = [m for m in zf.infolist() if not m.is_dir()]
                     if not members:
                         return False, None, "El ZIP no contiene archivos."
+                    if len(members) > 4096:
+                        return False, None, "El ZIP contiene demasiados archivos para una extracción segura."
+                    total_uncompressed = sum(max(0, int(m.file_size)) for m in members)
+                    if total_uncompressed > 100 * 1024**3:
+                        return False, None, "El tamaño descomprimido del ZIP supera el límite seguro de 100 GiB."
                     for m in members:
                         if ".." in Path(m.filename).parts:
                             return False, None, f"Ruta insegura en ZIP: {m.filename}"
+                        if Path(m.filename).is_absolute():
+                            return False, None, f"Ruta absoluta insegura en ZIP: {m.filename}"
                     compat = [m for m in members if Path(m.filename).suffix.lower() in wanted_exts]
                     if not compat:
                         return False, None, f"ZIP sin archivos compatibles ({wanted_exts}) para '{platform_key}'."

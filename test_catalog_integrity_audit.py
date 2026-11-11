@@ -12,8 +12,10 @@ Verifica:
 from __future__ import annotations
 
 import os
+import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 from pathlib import Path
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
@@ -22,7 +24,11 @@ os.environ.setdefault("SDL_AUDIODRIVER", "dummy")
 
 import modern_game_runner
 from backend.games.modern_catalog import MODERN_GAMES_CATALOG
-from backend.games.package_validator import CATALOG_SOURCE_URLS, ROMPackageIdentityValidator
+from backend.games.package_validator import (
+    CATALOG_SOURCE_URLS,
+    ROMPackageIdentityValidator,
+    build_valid_structural_fixture,
+)
 from backend.games.scanner_service import GameLibraryScannerService
 from backend.games.storage_manager import GameStorageManager
 
@@ -83,7 +89,12 @@ class TestCatalogIntegrityAudit(unittest.TestCase):
             tmp_path = Path(td)
             # 1. Intentar pasar una ROM de otro juego ("Mario Kart DS.xci") para Bratz: Rhythm and Style (XCI)
             wrong_file = tmp_path / "Mario Kart DS.xci"
-            wrong_file.write_bytes(b"XCI_DATA" * 1024)
+            build_valid_structural_fixture(
+                wrong_file,
+                "switch_mario_kart_8_deluxe",
+                "Mario Kart 8 Deluxe",
+                "switch",
+            )
             ok_wrong, msg_wrong, meta_wrong = ROMPackageIdentityValidator.verify_package_identity(
                 game_id="switch_bratz_rhythm_and_style_xci",
                 title="Bratz: Rhythm and Style (XCI)",
@@ -92,12 +103,17 @@ class TestCatalogIntegrityAudit(unittest.TestCase):
                 allowed_extensions=[".nsp", ".xci", ".rar", ".zip"],
             )
             self.assertFalse(ok_wrong)
-            self.assertEqual(meta_wrong["package_kind"], "identity_mismatch")
-            self.assertIn("no coincide con la identidad", msg_wrong)
+            self.assertEqual(meta_wrong["package_kind"], "test_fixture")
+            self.assertIn("Fixture sintético", msg_wrong)
 
             # 2. Intentar pasar un archivo .nsp para la edición (XCI) de Bratz: Rhythm and Style
             wrong_fmt = tmp_path / "Bratz Rhythm and Style.nsp"
-            wrong_fmt.write_bytes(b"NSP_DATA" * 1024)
+            build_valid_structural_fixture(
+                wrong_fmt,
+                "switch_bratz_rhythm_and_style_xci",
+                "Bratz: Rhythm and Style (XCI)",
+                "switch",
+            )
             ok_fmt, msg_fmt, meta_fmt = ROMPackageIdentityValidator.verify_package_identity(
                 game_id="switch_bratz_rhythm_and_style_xci",
                 title="Bratz: Rhythm and Style (XCI)",
@@ -111,7 +127,12 @@ class TestCatalogIntegrityAudit(unittest.TestCase):
 
             # 3. Archivo .xci con identidad exacta sí es aceptado para la edición XCI
             valid_xci = tmp_path / "Bratz Rhythm and Style.xci"
-            valid_xci.write_bytes(b"XCI_DATA" * 1024)
+            build_valid_structural_fixture(
+                valid_xci,
+                "switch_bratz_rhythm_and_style_xci",
+                "Bratz: Rhythm and Style (XCI)",
+                "switch",
+            )
             ok_valid, _, meta_valid = ROMPackageIdentityValidator.verify_package_identity(
                 game_id="switch_bratz_rhythm_and_style_xci",
                 title="Bratz: Rhythm and Style (XCI)",
@@ -119,8 +140,69 @@ class TestCatalogIntegrityAudit(unittest.TestCase):
                 rom_path=valid_xci,
                 allowed_extensions=[".nsp", ".xci", ".rar", ".zip"],
             )
-            self.assertTrue(ok_valid)
-            self.assertEqual(meta_valid["package_kind"], "native_rom")
+            self.assertFalse(ok_valid)
+            self.assertEqual(meta_valid["package_kind"], "test_fixture")
+
+    def test_07_structural_fixture_is_never_a_commercial_package(self):
+        with tempfile.TemporaryDirectory() as td:
+            fixture = Path(td) / "Just Dance 2025 Edition.nsp"
+            build_valid_structural_fixture(
+                fixture,
+                "switch_just_dance_2025_edition",
+                "Just Dance 2025 Edition",
+                "switch",
+            )
+            ok, msg, meta = ROMPackageIdentityValidator.verify_package_identity(
+                "switch_just_dance_2025_edition",
+                "Just Dance 2025 Edition",
+                "switch",
+                fixture,
+                [".nsp"],
+            )
+            self.assertFalse(ok)
+            self.assertEqual(meta["package_kind"], "test_fixture")
+            self.assertIn("no es un paquete comercial", msg)
+
+    def test_08_catalog_audit_marks_pending_verification_incomplete(self):
+        with tempfile.TemporaryDirectory() as td:
+            scanner, _ = _create_isolated_env(Path(td))
+            report = ROMPackageIdentityValidator.audit_entire_catalog(scanner=scanner)
+            self.assertEqual(report["audit_status"], "INCOMPLETE")
+            self.assertEqual(report["audit_dimensions"]["verified_installations"]["status"], "INCOMPLETE")
+            self.assertNotEqual(report["audit_status"], "PASS")
+
+    def test_09_external_process_without_load_signal_is_indeterminate(self):
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            _, storage = _create_isolated_env(root)
+            class FinishedWithoutLoad:
+                returncode = 0
+
+                def poll(self):
+                    return 0
+
+                def communicate(self, **_kwargs):
+                    return "", ""
+
+            with patch.object(
+                modern_game_runner.subprocess,
+                "Popen",
+                return_value=FinishedWithoutLoad(),
+            ):
+                rc = modern_game_runner._run_external_emulator(
+                    game_id="switch_minecraft",
+                    title="Minecraft",
+                    badge="SWITCH",
+                    core_spec="external:fake",
+                    engine_path=Path(sys.executable),
+                    launch_target=root / "fake-game.nsp",
+                    max_frames=1,
+                    storage=storage,
+                )
+            self.assertNotEqual(rc, 0)
+            verification = storage.get_execution_verification("switch_minecraft")
+            self.assertEqual(verification["last_state"], "INDETERMINATE")
+            self.assertFalse(verification["load_confirmed"])
 
     def test_04_unsupported_platform_and_missing_emulator_blocked_explicitly(self):
         """P1: Títulos de plataformas sin emulador (PS5 / Switch 2) o sin shadPS4 bloquean el lanzamiento con motivo claro."""

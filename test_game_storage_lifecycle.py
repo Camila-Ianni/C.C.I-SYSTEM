@@ -34,6 +34,10 @@ def _create_isolated_env(tmp_path: Path) -> tuple[GameLibraryScannerService, Gam
 
 
 class TestGameStorageLifecycle(unittest.TestCase):
+    @unittest.skipUnless(
+        os.environ.get("CCI_REAL_GAME_PACKAGE_DIR"),
+        "Requiere paquetes comerciales reales provistos fuera del repositorio.",
+    )
     def test_uninstall_frees_space_while_preserving_progress_and_catalog_presence(self):
         with tempfile.TemporaryDirectory() as td:
             tmp_path = Path(td)
@@ -96,6 +100,10 @@ class TestGameStorageLifecycle(unittest.TestCase):
             self.assertEqual(prog_after["progress_pct"], 45)
             self.assertEqual(prog_after["last_uninstalled_bytes"], expected_bytes)
 
+    @unittest.skipUnless(
+        os.environ.get("CCI_REAL_GAME_PACKAGE_DIR"),
+        "Requiere paquetes comerciales reales provistos fuera del repositorio.",
+    )
     def test_storage_limit_blocks_install_until_space_is_freed_and_reinstall_restores_progress(self):
         with tempfile.TemporaryDirectory() as td:
             tmp_path = Path(td)
@@ -159,6 +167,10 @@ class TestGameStorageLifecycle(unittest.TestCase):
             self.assertEqual(prog_mc["progress_pct"], 30)
             self.assertEqual(prog_mc["play_time_label"], "1h 0m")
 
+    @unittest.skipUnless(
+        os.environ.get("CCI_REAL_GAME_PACKAGE_DIR"),
+        "Requiere instalación real y emulador configurado.",
+    )
     def test_qt_game_details_and_storage_manager_buttons(self):
         from PySide6.QtWidgets import QApplication
         import omnidash_qt
@@ -193,6 +205,10 @@ class TestGameStorageLifecycle(unittest.TestCase):
         dlg.close()
         self.assertIsNotNone(app)
 
+    @unittest.skipUnless(
+        os.environ.get("CCI_REAL_GAME_PACKAGE_DIR"),
+        "Requiere paquetes comerciales reales provistos fuera del repositorio.",
+    )
     def test_direct_console_install_for_macos_and_windows_ready_to_play(self):
         with tempfile.TemporaryDirectory() as td:
             tmp_path = Path(td)
@@ -230,6 +246,28 @@ class TestGameStorageLifecycle(unittest.TestCase):
             self.assertTrue(entry_win["installed"])
             self.assertFalse(entry_win["on_demand"])
             self.assertEqual(entry_win["os_family"], "windows")
+
+    def test_synthetic_fixture_is_rejected_by_real_installation_flow(self):
+        from backend.games.package_validator import build_valid_structural_fixture
+
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            scanner, storage = _create_isolated_env(root)
+            fixture = root / "downloads" / "Just Dance 2025 Edition.nsp"
+            build_valid_structural_fixture(
+                fixture,
+                "switch_just_dance_2025_edition",
+                "Just Dance 2025 Edition",
+                "switch",
+            )
+            ok, msg, meta = storage.install_local_package(
+                "switch_just_dance_2025_edition",
+                fixture,
+                scanner=scanner,
+            )
+            self.assertFalse(ok)
+            self.assertEqual(meta["reason"], "test_fixture")
+            self.assertIn("Instalación rechazada", msg)
 
 
 if __name__ == "__main__":

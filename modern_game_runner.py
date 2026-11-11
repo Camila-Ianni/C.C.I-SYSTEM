@@ -105,6 +105,13 @@ def resolve_playable_engine(
     spec = svc.PLATFORM_SPECS.get(plat_key)
     if not spec:
         return None, None, f"Plataforma '{plat_key}' no reconocida para '{catalog_title}'."
+    if plat_key in ("ps5", "switch2") or not spec.get("core"):
+        return (
+            None,
+            None,
+            f"Juego no compatible: la plataforma {game.get('console', plat_key.upper())} "
+            "aún no dispone de emulador comercial estable.",
+        )
 
     rom_val = game.get("rom") or rom_arg
     if not rom_val or game.get("on_demand", False):
@@ -327,11 +334,11 @@ def _run_external_emulator(
                 # Un código 0 sólo indica que el proceso terminó limpiamente.
                 # Sin evidencia de carga no se puede certificar el videojuego.
                 if not load_confirmed:
-                    state_history.append("EMULATOR_ERROR")
+                    state_history.append("EXECUTION_INDETERMINATE")
                     msg = "El emulador terminó sin evidenciar carga real del juego."
                     storage.record_execution_verification(
                         game_id=game_id,
-                        last_state="EMULATOR_ERROR",
+                        last_state="INDETERMINATE",
                         exit_code=1,
                         load_confirmed=False,
                         process_time_seconds=0,
@@ -373,7 +380,9 @@ def _run_external_emulator(
                     load_confirmed = True
                     break
             elif time.monotonic() >= min_wait:
-                load_confirmed = True
+                # Mantener el proceso abierto no prueba que el juego haya
+                # cargado. Sólo los logs/API específicos del emulador pueden
+                # confirmar esta transición.
                 break
 
             time.sleep(0.25)
@@ -399,11 +408,11 @@ def _run_external_emulator(
 
         proc_s = max(1, int(time.monotonic() - start_ts))
         if fatal_error or not load_confirmed:
-            state_history.append("EMULATOR_ERROR")
+            state_history.append("EMULATOR_ERROR" if fatal_error else "EXECUTION_INDETERMINATE")
             err_msg = err_detail or (err_txt or "").strip() or "No se pudo confirmar la carga real del juego en el emulador."
             storage.record_execution_verification(
                 game_id=game_id,
-                last_state="EMULATOR_ERROR",
+                last_state="EMULATOR_ERROR" if fatal_error else "INDETERMINATE",
                 exit_code=1,
                 load_confirmed=False,
                 process_time_seconds=proc_s,
@@ -454,27 +463,28 @@ def _run_external_emulator(
         )
         return rc
 
-    load_ok = True
+    load_ok = False
     err_detail = ""
     if is_rpcs3:
         new_lines = _read_new_rpcs3_log_lines(rpcs3_log, rpcs3_log_offset)
         f_err, l_ok, l_msg = _inspect_rpcs3_log_status(new_lines)
         if f_err or not l_ok:
-            load_ok = False
             err_detail = l_msg
+        else:
+            load_ok = True
 
     if not load_ok:
-        state_history.append("EMULATOR_ERROR")
+        state_history.append("EXECUTION_INDETERMINATE" if not is_rpcs3 else "EMULATOR_ERROR")
         storage.record_execution_verification(
             game_id=game_id,
-            last_state="EMULATOR_ERROR",
+            last_state="INDETERMINATE" if not is_rpcs3 else "EMULATOR_ERROR",
             exit_code=1,
             load_confirmed=False,
             process_time_seconds=proc_s,
             effective_play_seconds=0,
             emulator_binary=str(engine_path),
             rom_path=str(launch_target),
-            error_message=err_detail[:500],
+            error_message=(err_detail or "El emulador no proporcionó evidencia confiable de carga del juego.")[:500],
             state_history=state_history,
         )
         return 1
@@ -682,7 +692,7 @@ def run_modern_game(
         runner.update_pointer_from_mouse(mx, my, m_pressed, last_view_rect)
 
         runner.step_frame()
-        if not confirmed_running_marked and runner.is_loaded:
+        if not confirmed_running_marked:
             state_history.append("GAME_RUNNING")
             confirmed_running_marked = True
 

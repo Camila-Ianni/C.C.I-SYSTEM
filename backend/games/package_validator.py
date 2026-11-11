@@ -202,8 +202,10 @@ def build_valid_structural_fixture(
     product_code: str = "",
     payload_size: int = 32768,
 ) -> Path:
-    """Construye un paquete binario con cabecera y estructura interna auténticas (.nsp PFS0, .xci HEAD/HFS0,
-    .pkg \\x7fPKG/\\x7fCNT o .iso ISO9660 CD001) para pruebas automatizadas de ciclo de almacenamiento e integridad.
+    """Construye un fixture sintético estructural, nunca un paquete comercial.
+
+    El marcador ``CCI_TEST_FIXTURE`` queda embebido deliberadamente para que
+    el flujo de producción lo rechace aunque la cabecera sea válida.
     """
     dest_path.parent.mkdir(parents=True, exist_ok=True)
     ext = dest_path.suffix.lower()
@@ -214,7 +216,8 @@ def build_valid_structural_fixture(
         cnmt_xml = (
             f'<?xml version="1.0" encoding="utf-8"?>\n'
             f"<ContentMeta><Id>{game_id}</Id><Title>{title}</Title>"
-            f"<Platform>{platform_key}</Platform><ProductCode>{prod}</ProductCode></ContentMeta>\n"
+            f"<Platform>{platform_key}</Platform><ProductCode>{prod}</ProductCode>"
+            f"<CCI_TEST_FIXTURE>true</CCI_TEST_FIXTURE></ContentMeta>\n"
         ).encode("utf-8")
         nca_name = b"0100000000010000.nca\x00"
         xml_name = b"meta.cnmt.xml\x00"
@@ -237,7 +240,8 @@ def build_valid_structural_fixture(
         hfs0_offset = 0x200
         part_name = b"secure\x00\x00"
         meta_blob = (
-            f"XCI_GAMECARD_META|ID={game_id}|TITLE={title}|PLATFORM={platform_key}|PRODUCT={prod}|".encode("utf-8")
+            f"XCI_GAMECARD_META|ID={game_id}|TITLE={title}|PLATFORM={platform_key}|PRODUCT={prod}|"
+            f"CCI_TEST_FIXTURE=1|".encode("utf-8")
         )
         body_len = max(1024, payload_size - hfs0_offset - 88)
         part_data = meta_blob + (b"\xaa\x55\xcc\x33" * ((body_len // 4) + 1))[: max(0, body_len - len(meta_blob))]
@@ -267,7 +271,10 @@ def build_valid_structural_fixture(
         cid = f"UP0001-{pcode}_00-{clean_tok}".encode("ascii")[:36]
         cid_off = 0x40 if is_ps4 else 0x30
         hdr[cid_off : cid_off + len(cid)] = cid
-        body = (f"PS_PKG_PAYLOAD|ID={game_id}|TITLE={title}|PLATFORM={platform_key}|".encode("utf-8") * ((body_sz // 48) + 2))[:body_sz]
+        body = (
+            f"PS_PKG_PAYLOAD|ID={game_id}|TITLE={title}|PLATFORM={platform_key}|"
+            f"CCI_TEST_FIXTURE=1|".encode("utf-8") * ((body_sz // 48) + 2)
+        )[:body_sz]
         dest_path.write_bytes(bytes(hdr) + body)
         return dest_path
 
@@ -287,11 +294,14 @@ def build_valid_structural_fixture(
 
     sec17 = memoryview(iso_buf)[0x8800 : 0x9000]
     if platform_key == "ps3":
-        marker = f"PS3_DISC.SFB|PS3_GAME|ID={game_id}|TITLE={title}|PRODUCT={prod or 'BLUS30001'}|".encode("utf-8")
+        marker = (
+            f"PS3_DISC.SFB|PS3_GAME|ID={game_id}|TITLE={title}|"
+            f"PRODUCT={prod or 'BLUS30001'}|CCI_TEST_FIXTURE=1|"
+        ).encode("utf-8")
     elif platform_key == "ps2":
-        marker = f"BOOT2 = cdrom0:\\{prod or 'SLUS_211.34'};1|ID={game_id}|TITLE={title}|".encode("utf-8")
+        marker = f"BOOT2 = cdrom0:\\{prod or 'SLUS_211.34'};1|ID={game_id}|TITLE={title}|CCI_TEST_FIXTURE=1|".encode("utf-8")
     else:
-        marker = f"BOOT = cdrom:\\{prod or 'SLUS_009.23'};1|ID={game_id}|TITLE={title}|".encode("utf-8")
+        marker = f"BOOT = cdrom:\\{prod or 'SLUS_009.23'};1|ID={game_id}|TITLE={title}|CCI_TEST_FIXTURE=1|".encode("utf-8")
     sec17[: len(marker)] = marker
     dest_path.write_bytes(bytes(iso_buf))
     return dest_path
@@ -324,6 +334,16 @@ class ROMPackageIdentityValidator:
             return json.loads(raw_json)
         except Exception:
             return None
+
+    @classmethod
+    def is_test_fixture(cls, rom_path: Path) -> bool:
+        """Detecta fixtures sintéticos sin confiar en el nombre del archivo."""
+        try:
+            with rom_path.open("rb") as fh:
+                probe = fh.read(min(1024 * 1024, rom_path.stat().st_size))
+            return b"CCI_TEST_FIXTURE" in probe
+        except OSError:
+            return False
 
     @classmethod
     def _validate_nsp_binary(cls, rom_path: Path) -> tuple[bool, str, dict[str, Any]]:
@@ -410,7 +430,6 @@ class ROMPackageIdentityValidator:
                 "num_files": num_files,
             },
         )
-
     @classmethod
     def _validate_xci_binary(cls, rom_path: Path) -> tuple[bool, str, dict[str, Any]]:
         file_sz = rom_path.stat().st_size
@@ -955,7 +974,6 @@ class ROMPackageIdentityValidator:
                     "manifest": manifest,
                 },
             )
-
         # Verificar que un título con variante explícita (XCI vs NSP) no reciba el formato opuesto (T05)
         entry_fmt = str(cls.CATALOG_BY_ID.get(gid, {}).get("format") or "").upper()
         if ("(xci)" in title.lower() or entry_fmt == "XCI") and ext == ".nsp":
@@ -963,6 +981,12 @@ class ROMPackageIdentityValidator:
                 False,
                 f"La ficha '{title}' ({gid}) requiere formato XCI pero el archivo es '{ext}'.",
                 {"package_kind": "format_variant_mismatch"},
+            )
+        if cls.is_test_fixture(rom_path):
+            return (
+                False,
+                f"Fixture sintético CCI_TEST_FIXTURE detectado en '{rom_path.name}'; no es un paquete comercial.",
+                {"package_kind": "test_fixture", "is_real_game": False, "status_override": "INSTALLED_CONTAINER"},
             )
         if ("(nsp)" in title.lower() or entry_fmt == "NSP") and ext == ".xci":
             return (
@@ -1339,23 +1363,48 @@ class ROMPackageIdentityValidator:
         # H-02: Las 7 dimensiones de auditoría separadas explícitamente
         audit_dimensions = {
             "id_integrity": {
+                "status": (
+                    "FAIL" if duplicate_ids or missing_urls or duplicate_urls else "PASS"
+                ),
                 "valid": len(duplicate_ids) == 0 and len(missing_urls) == 0 and len(duplicate_urls) == 0,
                 "total_ids": len(games),
+                "correct": len(games) - len(set(duplicate_ids)),
+                "pending": 0,
+                "errors": len(duplicate_ids) + len(missing_urls) + len(duplicate_urls),
                 "duplicate_ids": duplicate_ids,
                 "missing_urls": missing_urls,
                 "duplicate_urls": duplicate_urls,
             },
             "file_uniqueness": {
+                "status": "FAIL" if shared_rom_map else "PASS",
                 "valid": len(shared_rom_map) == 0,
+                "total": len(rom_to_ids),
+                "correct": len(rom_to_ids) - len(shared_rom_map),
+                "pending": 0,
+                "errors": len(shared_rom_map),
                 "shared_files_count": len(shared_rom_map),
                 "shared_files": shared_rom_map,
             },
             "association_integrity": {
+                "status": "FAIL" if counts["INVALID_ASSOCIATION"] else "PASS",
                 "valid": counts["INVALID_ASSOCIATION"] == 0 and len(shared_rom_map) == 0,
+                "total": len(games),
+                "correct": len(games) - counts["INVALID_ASSOCIATION"],
+                "pending": 0,
+                "errors": counts["INVALID_ASSOCIATION"],
                 "invalid_associations_count": counts["INVALID_ASSOCIATION"],
             },
             "package_authenticity": {
+                "status": (
+                    "FAIL"
+                    if corrupted_packages or incompatible_formats or counts["INSTALLED_CONTAINER"]
+                    else ("INCOMPLETE" if counts["DOWNLOADABLE_CLOUD"] or counts["INSTALLED_UNVERIFIED"] else "PASS")
+                ),
                 "valid": corrupted_packages == 0 and incompatible_formats == 0 and counts["INSTALLED_CONTAINER"] == 0,
+                "total": len(games),
+                "correct": verified_identities,
+                "pending": counts["DOWNLOADABLE_CLOUD"] + counts["INSTALLED_UNVERIFIED"],
+                "errors": corrupted_packages + incompatible_formats + counts["INSTALLED_CONTAINER"],
                 "detected_physical_files": detected_physical_files,
                 "verified_identities": verified_identities,
                 "corrupted_packages": corrupted_packages,
@@ -1363,16 +1412,37 @@ class ROMPackageIdentityValidator:
                 "synthetic_containers": counts["INSTALLED_CONTAINER"],
             },
             "emulator_availability": {
+                "status": (
+                    "FAIL" if counts["INSTALLED_NEEDS_EMULATOR"] else
+                    ("INCOMPLETE" if counts["DOWNLOADABLE_CLOUD"] else "PASS")
+                ),
+                "total": len(games),
+                "correct": available_emulators,
+                "pending": counts["DOWNLOADABLE_CLOUD"],
+                "errors": counts["INSTALLED_NEEDS_EMULATOR"] + counts["UNSUPPORTED_PLATFORM"],
                 "available_emulators_for_catalog": available_emulators,
                 "installed_needs_emulator": counts["INSTALLED_NEEDS_EMULATOR"],
                 "unsupported_platform_entries": counts["UNSUPPORTED_PLATFORM"],
             },
             "verified_installations": {
+                "status": "INCOMPLETE" if pending_installation_games else "PASS",
+                "total": len(games),
+                "correct": installed_games,
+                "pending": pending_installation_games,
+                "errors": counts["INVALID_ASSOCIATION"] + counts["INSTALLED_CONTAINER"],
                 "installed_games": installed_games,
                 "pending_installation_games": pending_installation_games,
                 "installed_unverified": counts["INSTALLED_UNVERIFIED"],
             },
             "confirmed_executions": {
+                "status": (
+                    "FAIL" if failed_execution_games else
+                    ("INCOMPLETE" if len(games) - confirmed_execution_games else "PASS")
+                ),
+                "total": len(games),
+                "correct": confirmed_execution_games,
+                "pending": len(games) - confirmed_execution_games - failed_execution_games,
+                "errors": failed_execution_games,
                 "confirmed_execution_games": confirmed_execution_games,
                 "failed_execution_games": failed_execution_games,
                 "verified_playable_games": counts["VERIFIED_PLAYABLE"],
@@ -1413,6 +1483,15 @@ class ROMPackageIdentityValidator:
                 and audit_dimensions["file_uniqueness"]["valid"]
                 and audit_dimensions["association_integrity"]["valid"]
                 and audit_dimensions["package_authenticity"]["valid"]
+            ),
+            "audit_status": (
+                "FAIL"
+                if any(dim["status"] == "FAIL" for dim in audit_dimensions.values())
+                else (
+                    "INCOMPLETE"
+                    if any(dim["status"] == "INCOMPLETE" for dim in audit_dimensions.values())
+                    else "PASS"
+                )
             ),
             # Compatibilidad histórica para consumidores del informe. Este
             # booleano sólo certifica las asociaciones estructurales; la
