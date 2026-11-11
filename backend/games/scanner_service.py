@@ -134,10 +134,43 @@ class GameLibraryScannerService:
     }
 
     EXTERNAL_EMULATORS: dict[str, tuple[str, list[str], list[str]]] = {
-        "external:rpcs3": ("RPCS3", ["rpcs3"], ["/Applications/RPCS3.app"]),
-        "external:ryujinx": ("Ryujinx", ["ryujinx", "Ryujinx"], ["/Applications/Ryujinx.app"]),
-        "external:shadps4": ("shadPS4", ["shadps4", "shadPS4"], ["/Applications/shadPS4.app"]),
-        "external:pcsx2": ("PCSX2", ["pcsx2", "pcsx2-qt"], ["/Applications/PCSX2.app", "/Applications/PCSX2-Qt.app"]),
+        "external:rpcs3": (
+            "RPCS3",
+            ["rpcs3", "rpcs3.exe"],
+            [
+                "/Applications/RPCS3.app",
+                "C:/Program Files/RPCS3/rpcs3.exe",
+                str(Path.home() / "AppData/Local/Programs/RPCS3/rpcs3.exe"),
+            ],
+        ),
+        "external:ryujinx": (
+            "Ryujinx",
+            ["ryujinx", "Ryujinx", "Ryujinx.exe"],
+            [
+                "/Applications/Ryujinx.app",
+                "C:/Program Files/Ryujinx/Ryujinx.exe",
+                str(Path.home() / "AppData/Local/Programs/Ryujinx/Ryujinx.exe"),
+            ],
+        ),
+        "external:shadps4": (
+            "shadPS4",
+            ["shadps4", "shadPS4", "shadPS4.exe"],
+            [
+                "/Applications/shadPS4.app",
+                "C:/Program Files/shadPS4/shadPS4.exe",
+                str(Path.home() / "AppData/Local/Programs/shadPS4/shadPS4.exe"),
+            ],
+        ),
+        "external:pcsx2": (
+            "PCSX2",
+            ["pcsx2", "pcsx2-qt", "pcsx2-qt.exe", "pcsx2.exe"],
+            [
+                "/Applications/PCSX2.app",
+                "/Applications/PCSX2-Qt.app",
+                "C:/Program Files/PCSX2/pcsx2-qt.exe",
+                str(Path.home() / "AppData/Local/Programs/PCSX2/pcsx2-qt.exe"),
+            ],
+        ),
     }
 
     OFFICIAL_GAME_COVERS: dict[str, str] = {

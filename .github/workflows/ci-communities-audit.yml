@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - feature/communities-phase0-design
+      - feat/communities-real-p0
       - main
   pull_request:
     branches:
@@ -68,7 +69,7 @@ jobs:
               assert report["git_commit_sha"] == expected_sha, (
                   f"Report SHA {report['git_commit_sha']} != GITHUB_SHA {expected_sha}"
               )
-          assert report["suites_executed"] == 23, f"Expected 23 suites, got {report['suites_executed']}"
+          assert report["suites_executed"] >= 23, f"Expected >=23 suites, got {report['suites_executed']}"
           assert report["total_failed"] == 0, f"Failures: {report['total_failed']}"
           assert report["total_errors"] == 0, f"Errors: {report['total_errors']}"
           assert report["total_skipped"] == 0, f"Skips prohibited: {report['total_skipped']}"

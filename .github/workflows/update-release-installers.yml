@@ -1,0 +1,47 @@
+name: Auto-Update GitHub Release Installers (macOS DMG & Windows EXE)
+
+on:
+  push:
+    branches:
+      - main
+      - feat/communities-real-p0
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-publish-installers:
+    name: Build macOS (.dmg) & Windows (.exe / .zip) Installers and Update Release
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install packaging tools (7zip & NSIS for Windows EXE + hdiutil for macOS DMG)
+        run: |
+          brew install sevenzip makensis
+
+      - name: Build official macOS DMG and Windows EXE/ZIP installers
+        run: |
+          python build_distribution.py
+          ls -lh web/static/downloads/
+
+      - name: Update GitHub Release v1.0.0 assets automatically (--clobber)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if ! gh release view v1.0.0 >/dev/null 2>&1; then
+            gh release create v1.0.0 --title "C.C.I. SYSTEM Official Installers (macOS & Windows)" --notes "Instaladores oficiales actualizados automáticamente desde el último commit."
+          fi
+          gh release upload v1.0.0 \
+            web/static/downloads/CCI_System_macOS.dmg \
+            web/static/downloads/CCI_System_Windows_Installer.exe \
+            web/static/downloads/CCI_System_Windows.zip \
+            --clobber
