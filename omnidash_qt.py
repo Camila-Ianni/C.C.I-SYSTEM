@@ -26,14 +26,14 @@ from PySide6.QtSvg import QSvgRenderer
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QStackedWidget,
     QLabel, QPushButton, QLineEdit, QScrollArea, QGridLayout, QFrame, QSizePolicy,
-    QProgressBar, QSlider, QFileDialog, QGraphicsDropShadowEffect, QDialog, QMessageBox
+    QProgressBar, QSlider, QFileDialog, QGraphicsDropShadowEffect, QDialog, QMessageBox,
+    QComboBox
 )
 
 from cci_console import CATALOG, UserData
 from cci_users import UserManager
 from retro_core_runner import LibretroRunner
-from backend.communities.repository import CommunitiesRepository
-from backend.communities.service import CommunitiesService
+from backend.communities.desktop_client import CommunityApiError, CommunityController, CommunitySession
 from omnidash_screens import ALL_GAMES, OFFICIAL_GAME_COVERS
 
 ROOT = Path(__file__).resolve().parent
@@ -767,18 +767,18 @@ class HomeView(QWidget):
         name_row.setSpacing(6)
         name_row.setAlignment(Qt.AlignLeft | Qt.AlignVCenter)
 
-        alex_lbl = QLabel("Alex")
-        alex_lbl.setStyleSheet("font-size: 14px; font-weight: 800; color: #FFFFFF;")
-        name_row.addWidget(alex_lbl)
+        self.pill_name_lbl = QLabel("Invitado")
+        self.pill_name_lbl.setStyleSheet("font-size: 14px; font-weight: 800; color: #FFFFFF;")
+        name_row.addWidget(self.pill_name_lbl)
 
-        green_dot = QLabel("●")
-        green_dot.setStyleSheet("font-size: 9px; color: #00E676; margin-top: 1px;")
-        name_row.addWidget(green_dot)
+        self.pill_dot_lbl = QLabel("●")
+        self.pill_dot_lbl.setStyleSheet("font-size: 9px; color: #7f95a6; margin-top: 1px;")
+        name_row.addWidget(self.pill_dot_lbl)
         txt_v_pill.addLayout(name_row)
 
-        score_lbl = QLabel("18,450 G")
-        score_lbl.setStyleSheet("font-size: 12px; font-weight: 700; color: #A8C4D8;")
-        txt_v_pill.addWidget(score_lbl)
+        self.pill_score_lbl = QLabel("Sin sesión")
+        self.pill_score_lbl.setStyleSheet("font-size: 12px; font-weight: 700; color: #A8C4D8;")
+        txt_v_pill.addWidget(self.pill_score_lbl)
 
         pp_lay.addLayout(txt_v_pill, 1)
 
@@ -809,8 +809,7 @@ class HomeView(QWidget):
         greet_v.setSpacing(3)
         greet_v.setContentsMargins(0, 0, 0, 0)
 
-        username = "Alex"
-        self.title_lbl = QLabel(f"¡Hola, {username}!")
+        self.title_lbl = QLabel("¡Bienvenido a C.C.I.!")
         self.title_lbl.setStyleSheet("font-size: 34px; font-weight: 800; color: #FFFFFF; letter-spacing: 0.5px;")
 
         self.sub_lbl = QLabel("Tu centro de juegos, comunidades y amigos.")
@@ -842,7 +841,7 @@ class HomeView(QWidget):
             ),
             (
                 "Amigos",
-                "Seeker & Night Raid • 3 en línea",
+                "Inicia sesión para ver comunidades",
                 "COMMUNITY",
                 "friends_duo_white.png",
                 QColor(180, 222, 250, 205),
@@ -920,6 +919,7 @@ class HomeView(QWidget):
             s_l.setAlignment(Qt.AlignCenter)
             s_l.setStyleSheet("font-size: 13px; font-weight: 500; color: #BDD4E4;")
             center_v.addWidget(s_l)
+            c._subtitle_lbl = s_l
 
             c_lay.addLayout(center_v, 1)
 
@@ -1153,10 +1153,10 @@ class HomeView(QWidget):
             ),
             (
                 "Transmisiones en vivo",
-                "3 transmisiones activas",
+                "Sin transmisiones activas",
                 "COMMUNITY",
                 "live_signal.png",
-                True  # Etiqueta roja EN VIVO
+                True  # Etiqueta roja EN VIVO (solo visible si hay transmisiones reales > 0)
             ),
         ]
 
@@ -1216,6 +1216,8 @@ class HomeView(QWidget):
                     border-radius: 6px;
                     padding: 2px 7px;
                 """)
+                live_badge.setVisible(False)
+                self._home_live_badge = live_badge
                 t_row.addWidget(live_badge)
                 txt_v.addLayout(t_row)
             else:
@@ -1226,6 +1228,8 @@ class HomeView(QWidget):
             s_lbl = QLabel(subtitle)
             s_lbl.setStyleSheet("font-size: 12px; font-weight: 500; color: #BDD4E4;")
             txt_v.addWidget(s_lbl)
+            if is_live:
+                self._home_live_subtitle = s_lbl
 
             c_lay.addLayout(txt_v, 1)
 
@@ -1253,6 +1257,39 @@ class HomeView(QWidget):
             self.nav_items.append((c, lambda card=c: card.mousePressEvent(None)))
 
         self._update_focus()
+
+    def set_session_state(
+        self,
+        username: Optional[str],
+        communities_count: int = 0,
+        active_streams_count: int = 0,
+    ):
+        """Actualiza HomeView con la cuenta autenticada real y métricas sin datos ficticios."""
+        if username:
+            self.pill_name_lbl.setText(username)
+            self.pill_dot_lbl.setStyleSheet("font-size: 9px; color: #00E676; margin-top: 1px;")
+            self.pill_score_lbl.setText("Cuenta conectada")
+            self.title_lbl.setText(f"¡Hola, {username}!")
+            if len(self.main_cards) > 1 and hasattr(self.main_cards[1], "_subtitle_lbl"):
+                self.main_cards[1]._subtitle_lbl.setText(
+                    f"{communities_count} comunidades" if communities_count else "Sin comunidades aún"
+                )
+        else:
+            self.pill_name_lbl.setText("Invitado")
+            self.pill_dot_lbl.setStyleSheet("font-size: 9px; color: #7f95a6; margin-top: 1px;")
+            self.pill_score_lbl.setText("Sin sesión")
+            self.title_lbl.setText("¡Bienvenido a C.C.I.!")
+            if len(self.main_cards) > 1 and hasattr(self.main_cards[1], "_subtitle_lbl"):
+                self.main_cards[1]._subtitle_lbl.setText("Inicia sesión para ver comunidades")
+
+        if hasattr(self, "_home_live_badge"):
+            self._home_live_badge.setVisible(active_streams_count > 0)
+        if hasattr(self, "_home_live_subtitle"):
+            self._home_live_subtitle.setText(
+                f"{active_streams_count} transmisiones activas"
+                if active_streams_count > 0
+                else "Sin transmisiones activas"
+            )
 
     def _update_bg_cache(self):
         """Calcula el escalado y centrado del fondo Spider-Man preservando exactamente su aspecto 16:9 sin estiramiento."""
@@ -3745,32 +3782,55 @@ class SettingsView(QWidget):
 # ==============================================================================
 # 5. VISTA DE COMUNIDADES Y AMIGOS (COMMUNITIES / FRIENDS - 1:1 DISCORD-LIKE DARK GLASS)
 # ==============================================================================
+def _format_message_time(ts: Any) -> str:
+    try:
+        val = float(ts)
+        if val > 0:
+            return datetime.fromtimestamp(val).strftime("%H:%M")
+    except Exception:
+        pass
+    return "Ahora"
+
+
+def _clear_layout_widgets(lay: QVBoxLayout | QHBoxLayout, keep_trailing_stretch: bool = False) -> None:
+    limit = 1 if keep_trailing_stretch else 0
+    while lay.count() > limit:
+        item = lay.takeAt(0)
+        if item is None:
+            break
+        w = item.widget()
+        if w is not None:
+            w.deleteLater()
+
+
 class ServerRailItem(QPushButton):
-    def __init__(self, icon_path: Path, is_active: bool = False, tooltip: str = "", parent=None):
+    def __init__(
+        self,
+        icon_path: Optional[Path] = None,
+        is_active: bool = False,
+        tooltip: str = "",
+        badge_text: str = "",
+        parent=None,
+    ):
         super().__init__(parent)
         self.is_active = is_active
+        self.badge_text = badge_text.upper()[:2]
         self.setFixedSize(46, 46)
         self.setCursor(Qt.PointingHandCursor)
         self.setToolTip(tooltip)
         self._pixmap = None
-        if icon_path.exists():
+        if icon_path and icon_path.exists():
             self._pixmap = QPixmap(str(icon_path))
 
         self.shadow = QGraphicsDropShadowEffect(self)
         self.shadow.setOffset(0, 0)
         self.shadow.setBlurRadius(14)
-        if is_active:
-            self.shadow.setColor(QColor(53, 200, 241, 180))
-        else:
-            self.shadow.setColor(QColor(0, 0, 0, 0))
+        self.shadow.setColor(QColor(53, 200, 241, 180) if is_active else QColor(0, 0, 0, 0))
         self.setGraphicsEffect(self.shadow)
 
     def set_active(self, active: bool):
         self.is_active = active
-        if active:
-            self.shadow.setColor(QColor(53, 200, 241, 180))
-        else:
-            self.shadow.setColor(QColor(0, 0, 0, 0))
+        self.shadow.setColor(QColor(53, 200, 241, 180) if active else QColor(0, 0, 0, 0))
         self.update()
 
     def paintEvent(self, event):
@@ -3790,11 +3850,12 @@ class ServerRailItem(QPushButton):
             ico_size = 26 if self.is_active else 24
             scaled = self._pixmap.scaled(ico_size, ico_size, Qt.KeepAspectRatio, Qt.SmoothTransformation)
             p.drawPixmap((w - ico_size) // 2, (h - ico_size) // 2, scaled)
+        elif self.badge_text:
+            p.setPen(QColor("#ffffff"))
+            p.setFont(QFont("Sans-Serif", 13, QFont.Bold))
+            p.drawText(self.rect(), Qt.AlignCenter, self.badge_text)
 
-        if self.is_active:
-            p.setPen(QPen(QColor(53, 200, 241), 2.2))
-        else:
-            p.setPen(QPen(QColor(145, 165, 179, 70), 1.0))
+        p.setPen(QPen(QColor(53, 200, 241), 2.2) if self.is_active else QPen(QColor(145, 165, 179, 70), 1.0))
         p.setBrush(Qt.NoBrush)
         p.drawRoundedRect(1, 1, w - 2, h - 2, radius, radius)
 
@@ -3806,49 +3867,53 @@ class ServerRail(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setFixedWidth(58)
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(4, 4, 4, 8)
-        layout.setSpacing(10)
-        layout.setAlignment(Qt.AlignHCenter)
+        self._root_layout = QVBoxLayout(self)
+        self._root_layout.setContentsMargins(4, 4, 4, 8)
+        self._root_layout.setSpacing(10)
+        self._root_layout.setAlignment(Qt.AlignHCenter)
 
         plus_p = ROOT / "assets_omnidash" / "communities" / "rail_plus.png"
-        self.add_btn = ServerRailItem(plus_p, tooltip="Explorar / Crear Comunidad")
+        self.add_btn = ServerRailItem(plus_p if plus_p.exists() else None, tooltip="Explorar / Crear Comunidad", badge_text="+")
         self.add_btn.clicked.connect(self.explore_clicked.emit)
-        layout.addWidget(self.add_btn)
+        self._root_layout.addWidget(self.add_btn)
 
-        self.items: list[ServerRailItem] = []
+        self._items_container = QWidget(self)
+        self._items_layout = QVBoxLayout(self._items_container)
+        self._items_layout.setContentsMargins(0, 0, 0, 0)
+        self._items_layout.setSpacing(10)
+        self._items_layout.setAlignment(Qt.AlignHCenter)
+        self._root_layout.addWidget(self._items_container)
+        self._root_layout.addStretch(1)
 
-        servers = [
-            ("seeker-hub", "rail_seeker.png", True, "Seeker Hub Central"),
-            ("night-raid", "rail_skull.png", False, "Night Raid Elite"),
-            ("pixel-squad", "rail_alien.png", False, "Pixel Squad"),
-            ("retro-preservation", "rail_triforce.png", False, "Retro Preservation Society"),
-            ("ps-classics", "rail_ps.png", False, "PlayStation Classics"),
-        ]
+        self.items: dict[str, ServerRailItem] = {}
 
-        for s_id, s_icon, active, tooltip in servers:
-            icon_p = ROOT / "assets_omnidash" / "communities" / s_icon
-            if not icon_p.exists():
-                icon_p = ROOT / "assets_omnidash" / "icons" / "xbox_controller.png"
-            item = ServerRailItem(icon_p, is_active=active, tooltip=tooltip)
-            item.clicked.connect(lambda _, sid=s_id, it=item: self._select_server(sid, it))
-            layout.addWidget(item)
-            self.items.append(item)
+    def set_communities(self, communities: list[dict], active_community_id: Optional[str] = None):
+        self.items.clear()
+        _clear_layout_widgets(self._items_layout)
+        for comm in communities or []:
+            cid = str(comm.get("id") or "")
+            name = str(comm.get("name") or "Comunidad")
+            initials = "".join(part[0] for part in name.split()[:2] if part) or name[:2]
+            item = ServerRailItem(
+                icon_path=None,
+                is_active=(cid == active_community_id),
+                tooltip=name,
+                badge_text=initials,
+                parent=self._items_container,
+            )
+            item.clicked.connect(lambda _, s=cid: self.community_selected.emit(s))
+            self._items_layout.addWidget(item)
+            self.items[cid] = item
 
-        layout.addStretch(1)
-
-        more_p = ROOT / "assets_omnidash" / "communities" / "rail_more.png"
-        self.more_btn = ServerRailItem(more_p, tooltip="Más opciones")
-        layout.addWidget(self.more_btn)
-
-    def _select_server(self, server_id: str, item: ServerRailItem):
-        for it in self.items:
-            it.set_active(it == item)
-        self.community_selected.emit(server_id)
+    def set_active_community(self, community_id: str):
+        for cid, it in self.items.items():
+            it.set_active(cid == community_id)
 
 
 class ChannelSidebar(AcrylicGlassCard):
-    channel_selected = Signal(str, str)
+    channel_selected = Signal(str, str)       # channel_id, type
+    create_channel_requested = Signal(str)    # "text" | "voice"
+    leave_community_requested = Signal()
 
     def __init__(self, parent=None):
         super().__init__(
@@ -3859,7 +3924,10 @@ class ChannelSidebar(AcrylicGlassCard):
             glow_radius=10
         )
         self.setFixedWidth(306)
-        self.active_channel = "general"
+        self.active_channel_id: Optional[str] = None
+        self.active_voice_id: Optional[str] = None
+        self.text_buttons: dict[str, QPushButton] = {}
+        self.voice_buttons: dict[str, QPushButton] = {}
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(12, 12, 12, 12)
@@ -3887,18 +3955,18 @@ class ChannelSidebar(AcrylicGlassCard):
         info_box.setSpacing(2)
 
         t_row = QHBoxLayout()
-        self.c_name_lbl = QLabel("Seeker Hub Central")
+        self.c_name_lbl = QLabel("Sin comunidad")
         self.c_name_lbl.setStyleSheet("font-size: 15px; font-weight: 800; color: #ffffff;")
         t_row.addWidget(self.c_name_lbl)
         t_row.addStretch(1)
 
-        chev = QLabel("∨")
-        chev.setStyleSheet("font-size: 13px; font-weight: 800; color: #BDD4E4;")
-        t_row.addWidget(chev)
+        self.c_vis_lbl = QLabel("")
+        self.c_vis_lbl.setStyleSheet("font-size: 11px; font-weight: 700; color: #BDD4E4;")
+        t_row.addWidget(self.c_vis_lbl)
         info_box.addLayout(t_row)
 
-        self.c_members_lbl = QLabel("●  14 en línea  •  42 miembros")
-        self.c_members_lbl.setStyleSheet("font-size: 11px; font-weight: 600; color: #32D875;")
+        self.c_members_lbl = QLabel("0 miembros")
+        self.c_members_lbl.setStyleSheet("font-size: 11px; font-weight: 600; color: #35C8F1;")
         info_box.addWidget(self.c_members_lbl)
         b_lay.addLayout(info_box)
 
@@ -3909,55 +3977,25 @@ class ChannelSidebar(AcrylicGlassCard):
                 border: 1px solid rgba(145, 165, 179, 0.3);
             }
         """)
-
         layout.addWidget(self.banner_frame)
-
-        home_btn = QPushButton("  Inicio")
-        home_btn.setCursor(Qt.PointingHandCursor)
-        home_btn.setFixedHeight(36)
-        h_ico = ROOT / "assets_omnidash" / "icons" / "home.png"
-        if h_ico.exists():
-            home_btn.setIcon(QIcon(str(h_ico)))
-            home_btn.setIconSize(QSize(16, 16))
-        home_btn.setStyleSheet("""
-            QPushButton {
-                text-align: left;
-                padding-left: 12px;
-                background: rgba(255, 255, 255, 0.04);
-                border: 1px solid rgba(255, 255, 255, 0.08);
-                border-radius: 10px;
-                color: #ffffff;
-                font-size: 13px;
-                font-weight: 600;
-            }
-            QPushButton:hover {
-                background: rgba(255, 255, 255, 0.1);
-            }
-        """)
-        layout.addWidget(home_btn)
 
         t_sec = QHBoxLayout()
         t_sec_lbl = QLabel("∨  Canales de texto")
         t_sec_lbl.setStyleSheet("font-size: 12px; font-weight: 700; color: #BDD4E4;")
         t_sec.addWidget(t_sec_lbl)
         t_sec.addStretch(1)
-        add_t_btn = QLabel("+")
-        add_t_btn.setStyleSheet("font-size: 14px; font-weight: 700; color: #BDD4E4;")
-        t_sec.addWidget(add_t_btn)
+        self.add_text_btn = QPushButton("+")
+        self.add_text_btn.setFixedSize(24, 24)
+        self.add_text_btn.setCursor(Qt.PointingHandCursor)
+        self.add_text_btn.setToolTip("Crear canal de texto")
+        self.add_text_btn.setStyleSheet("QPushButton { background: transparent; border: none; font-size: 15px; font-weight: 800; color: #BDD4E4; border-radius: 6px; } QPushButton:hover { background: rgba(255,255,255,0.12); color: #ffffff; }")
+        self.add_text_btn.clicked.connect(lambda: self.create_channel_requested.emit("text"))
+        t_sec.addWidget(self.add_text_btn)
         layout.addLayout(t_sec)
 
-        self.text_buttons: dict[str, QPushButton] = {}
-        text_channels = ["general", "juegos", "torneos", "clips-y-streams", "off-topic", "memes"]
-
-        for ch in text_channels:
-            btn = QPushButton(f" #  {ch}")
-            btn.setCursor(Qt.PointingHandCursor)
-            btn.setFixedHeight(32)
-            btn.clicked.connect(lambda _, c=ch: self._set_active_text_channel(c))
-            layout.addWidget(btn)
-            self.text_buttons[ch] = btn
-
-        self._style_text_channels()
+        self._text_list_layout = QVBoxLayout()
+        self._text_list_layout.setSpacing(4)
+        layout.addLayout(self._text_list_layout)
 
         layout.addSpacing(6)
         v_sec = QHBoxLayout()
@@ -3965,193 +4003,178 @@ class ChannelSidebar(AcrylicGlassCard):
         v_sec_lbl.setStyleSheet("font-size: 12px; font-weight: 700; color: #BDD4E4;")
         v_sec.addWidget(v_sec_lbl)
         v_sec.addStretch(1)
-        add_v_btn = QLabel("+")
-        add_v_btn.setStyleSheet("font-size: 14px; font-weight: 700; color: #BDD4E4;")
-        v_sec.addWidget(add_v_btn)
+        self.add_voice_btn = QPushButton("+")
+        self.add_voice_btn.setFixedSize(24, 24)
+        self.add_voice_btn.setCursor(Qt.PointingHandCursor)
+        self.add_voice_btn.setToolTip("Crear canal de voz")
+        self.add_voice_btn.setStyleSheet("QPushButton { background: transparent; border: none; font-size: 15px; font-weight: 800; color: #BDD4E4; border-radius: 6px; } QPushButton:hover { background: rgba(255,255,255,0.12); color: #ffffff; }")
+        self.add_voice_btn.clicked.connect(lambda: self.create_channel_requested.emit("voice"))
+        v_sec.addWidget(self.add_voice_btn)
         layout.addLayout(v_sec)
 
-        voice_channels = [
-            ("Lobby General", "speaker_2", "14"),
-            ("Gaming 1", "speaker_2", "4"),
-            ("Gaming 2", "speaker_2", None),
-            ("Streaming", "sound_wave", None),
-        ]
-
-        for v_name, v_ico, badge in voice_channels:
-            v_btn = QPushButton(f"    {v_name}")
-            v_btn.setCursor(Qt.PointingHandCursor)
-            v_btn.setFixedHeight(32)
-            vip = ROOT / "assets_omnidash" / "icons" / f"{v_ico}.png"
-            if vip.exists():
-                v_btn.setIcon(QIcon(str(vip)))
-                v_btn.setIconSize(QSize(15, 15))
-            v_btn.setStyleSheet("""
-                QPushButton {
-                    text-align: left;
-                    padding-left: 10px;
-                    background: transparent;
-                    border: none;
-                    border-radius: 8px;
-                    color: #BDD4E4;
-                    font-size: 13px;
-                    font-weight: 600;
-                }
-                QPushButton:hover {
-                    background: rgba(255, 255, 255, 0.08);
-                    color: #ffffff;
-                }
-            """)
-            if badge:
-                row = QHBoxLayout(v_btn)
-                row.setContentsMargins(0, 0, 10, 0)
-                row.addStretch(1)
-                b_lbl = QLabel(badge)
-                b_lbl.setStyleSheet("background: rgba(255, 255, 255, 0.15); border-radius: 8px; padding: 1px 6px; font-size: 11px; font-weight: 700; color: #ffffff;")
-                row.addWidget(b_lbl)
-            layout.addWidget(v_btn)
+        self._voice_list_layout = QVBoxLayout()
+        self._voice_list_layout.setSpacing(4)
+        layout.addLayout(self._voice_list_layout)
 
         layout.addStretch(1)
 
-    def _set_active_text_channel(self, ch_name: str):
-        self.active_channel = ch_name
-        self._style_text_channels()
-        self.channel_selected.emit(ch_name, "text")
+        self.leave_btn = QPushButton("Salir de la comunidad")
+        self.leave_btn.setCursor(Qt.PointingHandCursor)
+        self.leave_btn.setFixedHeight(32)
+        self.leave_btn.setStyleSheet("""
+            QPushButton {
+                background: rgba(233, 75, 86, 0.16);
+                border: 1px solid rgba(233, 75, 86, 0.45);
+                border-radius: 10px;
+                color: #ffb3b8;
+                font-size: 12px;
+                font-weight: 700;
+            }
+            QPushButton:hover {
+                background: rgba(233, 75, 86, 0.34);
+                color: #ffffff;
+            }
+        """)
+        self.leave_btn.clicked.connect(self.leave_community_requested.emit)
+        layout.addWidget(self.leave_btn)
 
-    def _style_text_channels(self):
-        for name, btn in self.text_buttons.items():
-            if name == self.active_channel:
+    def set_community_data(
+        self,
+        community: Optional[dict],
+        channels: list[dict],
+        member_count: int = 0,
+        online_count: int = 0,
+        active_text_id: Optional[str] = None,
+        active_voice_id: Optional[str] = None,
+    ):
+        if community:
+            self.c_name_lbl.setText(str(community.get("name") or "Comunidad"))
+            vis = "Pública" if community.get("visibility") == "public" else "Privada"
+            self.c_vis_lbl.setText(vis)
+            self.c_members_lbl.setText(f"●  {online_count} en línea  •  {member_count} miembros")
+        else:
+            self.c_name_lbl.setText("Sin comunidad")
+            self.c_vis_lbl.setText("")
+            self.c_members_lbl.setText("0 miembros")
+
+        self.text_buttons.clear()
+        self.voice_buttons.clear()
+        _clear_layout_widgets(self._text_list_layout)
+        _clear_layout_widgets(self._voice_list_layout)
+
+        self.active_channel_id = active_text_id
+        self.active_voice_id = active_voice_id
+
+        text_channels = [c for c in (channels or []) if c.get("type") == "text"]
+        voice_channels = [c for c in (channels or []) if c.get("type") in ("voice", "stream")]
+
+        if not text_channels:
+            empty_t = QLabel("Sin canales de texto")
+            empty_t.setStyleSheet("font-size: 12px; color: #7f95a6; padding-left: 10px;")
+            self._text_list_layout.addWidget(empty_t)
+        else:
+            for ch in text_channels:
+                cid = str(ch["id"])
+                btn = QPushButton(f" #  {ch.get('name', 'canal')}")
+                btn.setCursor(Qt.PointingHandCursor)
+                btn.setFixedHeight(32)
+                btn.clicked.connect(lambda _, c=cid: self._on_channel_click(c, "text"))
+                self._text_list_layout.addWidget(btn)
+                self.text_buttons[cid] = btn
+            if not self.active_channel_id:
+                self.active_channel_id = str(text_channels[0]["id"])
+
+        vip = ROOT / "assets_omnidash" / "icons" / "speaker_2.png"
+        if not voice_channels:
+            empty_v = QLabel("Sin canales de voz")
+            empty_v.setStyleSheet("font-size: 12px; color: #7f95a6; padding-left: 10px;")
+            self._voice_list_layout.addWidget(empty_v)
+        else:
+            for ch in voice_channels:
+                cid = str(ch["id"])
+                btn = QPushButton(f"  {ch.get('name', 'voz')}")
+                btn.setCursor(Qt.PointingHandCursor)
+                btn.setFixedHeight(32)
+                if vip.exists():
+                    btn.setIcon(QIcon(str(vip)))
+                    btn.setIconSize(QSize(15, 15))
+                btn.clicked.connect(lambda _, c=cid: self._on_channel_click(c, "voice"))
+                self._voice_list_layout.addWidget(btn)
+                self.voice_buttons[cid] = btn
+
+        self._style_channels()
+
+    def set_active_text_channel(self, channel_id: str):
+        self.active_channel_id = channel_id
+        self._style_channels()
+
+    def set_active_voice_channel(self, channel_id: Optional[str]):
+        self.active_voice_id = channel_id
+        self._style_channels()
+
+    def _on_channel_click(self, channel_id: str, ch_type: str):
+        if ch_type == "text":
+            self.active_channel_id = channel_id
+        self._style_channels()
+        self.channel_selected.emit(channel_id, ch_type)
+
+    def _style_channels(self):
+        for cid, btn in self.text_buttons.items():
+            if cid == self.active_channel_id:
                 btn.setStyleSheet("""
                     QPushButton {
-                        text-align: left;
-                        padding-left: 12px;
+                        text-align: left; padding-left: 12px;
                         background: rgba(27, 48, 64, 0.95);
                         border: 1px solid rgba(53, 200, 241, 0.6);
-                        border-radius: 8px;
-                        color: #ffffff;
-                        font-size: 13px;
-                        font-weight: 700;
+                        border-radius: 8px; color: #ffffff;
+                        font-size: 13px; font-weight: 700;
                     }
                 """)
             else:
                 btn.setStyleSheet("""
                     QPushButton {
-                        text-align: left;
-                        padding-left: 12px;
-                        background: transparent;
-                        border: none;
-                        border-radius: 8px;
-                        color: #BDD4E4;
-                        font-size: 13px;
-                        font-weight: 600;
+                        text-align: left; padding-left: 12px;
+                        background: transparent; border: none; border-radius: 8px;
+                        color: #BDD4E4; font-size: 13px; font-weight: 600;
                     }
-                    QPushButton:hover {
-                        background: rgba(255, 255, 255, 0.06);
-                        color: #ffffff;
+                    QPushButton:hover { background: rgba(255, 255, 255, 0.06); color: #ffffff; }
+                """)
+        for cid, btn in self.voice_buttons.items():
+            if cid == self.active_voice_id:
+                btn.setStyleSheet("""
+                    QPushButton {
+                        text-align: left; padding-left: 10px;
+                        background: rgba(50, 216, 117, 0.16);
+                        border: 1px solid rgba(50, 216, 117, 0.55);
+                        border-radius: 8px; color: #ffffff;
+                        font-size: 13px; font-weight: 700;
                     }
+                """)
+            else:
+                btn.setStyleSheet("""
+                    QPushButton {
+                        text-align: left; padding-left: 10px;
+                        background: transparent; border: none; border-radius: 8px;
+                        color: #BDD4E4; font-size: 13px; font-weight: 600;
+                    }
+                    QPushButton:hover { background: rgba(255, 255, 255, 0.08); color: #ffffff; }
                 """)
 
 
-class StreamCard(AcrylicGlassCard):
-    play_stream = Signal(str)
-
-    def __init__(self, title: str, streamer: str, viewers: int, thumb_path: Path, parent=None):
-        super().__init__(
-            parent,
-            border_radius=20,
-            border_color=QColor(93, 116, 131, 90),
-            glow_color=QColor(0, 0, 0, 60),
-            glow_radius=12
-        )
-        self.setFixedHeight(165)
-        self.setMaximumWidth(720)
-        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
-
-        layout = QHBoxLayout(self)
-        layout.setContentsMargins(14, 12, 18, 12)
-        layout.setSpacing(18)
-
-        self.thumb_lbl = QLabel()
-        self.thumb_lbl.setFixedSize(250, 138)
-        if thumb_path.exists():
-            pm = QPixmap(str(thumb_path)).scaled(250, 138, Qt.KeepAspectRatioByExpanding, Qt.SmoothTransformation)
-            self.thumb_lbl.setPixmap(get_rounded_pixmap(pm, 250, 138, 14))
-        self.thumb_lbl.setStyleSheet("border-radius: 14px; border: 1px solid rgba(255, 255, 255, 0.25);")
-        layout.addWidget(self.thumb_lbl)
-
-        info_lay = QVBoxLayout()
-        info_lay.setContentsMargins(0, 4, 0, 4)
-        info_lay.setSpacing(6)
-
-        title_lbl = QLabel(title)
-        title_lbl.setStyleSheet("font-size: 16px; font-weight: 800; color: #ffffff;")
-        info_lay.addWidget(title_lbl)
-
-        st_row = QHBoxLayout()
-        st_row.setSpacing(8)
-        av_lbl = QLabel()
-        av_p = ROOT / "assets_omnidash" / "communities" / "avatar_miku.png"
-        if av_p.exists():
-            av_lbl.setPixmap(get_rounded_pixmap(QPixmap(str(av_p)), 24, 24, 12))
-        st_row.addWidget(av_lbl)
-
-        name_lbl = QLabel(streamer)
-        name_lbl.setStyleSheet("font-size: 13px; font-weight: 600; color: #BDD4E4;")
-        st_row.addWidget(name_lbl)
-        st_row.addStretch(1)
-        info_lay.addLayout(st_row)
-
-        info_lay.addStretch(1)
-
-        act_row = QHBoxLayout()
-        act_row.setSpacing(10)
-
-        play_btn = QPushButton(" ▶  Ver stream")
-        play_btn.setCursor(Qt.PointingHandCursor)
-        play_btn.setFixedHeight(38)
-        play_btn.setStyleSheet("""
-            QPushButton {
-                background: rgba(255, 255, 255, 0.12);
-                border: 1.5px solid rgba(255, 255, 255, 0.35);
-                border-radius: 14px;
-                color: #ffffff;
-                font-size: 13px;
-                font-weight: 700;
-                padding: 0 20px;
-            }
-            QPushButton:hover {
-                background: rgba(53, 200, 241, 0.3);
-                border: 1.5px solid #35C8F1;
-            }
-        """)
-        play_btn.clicked.connect(lambda: self.play_stream.emit(title))
-        act_row.addWidget(play_btn)
-
-        pop_btn = QPushButton(" ⤢ ")
-        pop_btn.setCursor(Qt.PointingHandCursor)
-        pop_btn.setFixedSize(38, 38)
-        pop_btn.setStyleSheet("""
-            QPushButton {
-                background: rgba(255, 255, 255, 0.08);
-                border: 1px solid rgba(255, 255, 255, 0.2);
-                border-radius: 12px;
-                color: #ffffff;
-                font-size: 16px;
-                font-weight: 700;
-            }
-            QPushButton:hover {
-                background: rgba(255, 255, 255, 0.18);
-            }
-        """)
-        act_row.addWidget(pop_btn)
-        act_row.addStretch(1)
-        info_lay.addLayout(act_row)
-
-        layout.addLayout(info_lay, 1)
-
-
 class ChatMessageWidget(QWidget):
-    def __init__(self, author: str, time_str: str, text: str, avatar_path: Path, has_crown: bool = False, is_blue_author: bool = False, parent=None):
+    def __init__(
+        self,
+        message_id: str,
+        author: str,
+        time_str: str,
+        text: str,
+        avatar_path: Optional[Path] = None,
+        is_self: bool = False,
+        edited: bool = False,
+        parent=None,
+    ):
         super().__init__(parent)
+        self.message_id = message_id
         self.setAttribute(Qt.WA_TranslucentBackground, True)
         self.setStyleSheet("background: transparent;")
         layout = QHBoxLayout(self)
@@ -4159,43 +4182,53 @@ class ChatMessageWidget(QWidget):
         layout.setSpacing(14)
 
         av_lbl = QLabel()
-        av_lbl.setFixedSize(50, 50)
-        if avatar_path.exists():
-            av_lbl.setPixmap(get_rounded_pixmap(QPixmap(str(avatar_path)), 50, 50, 25))
+        av_lbl.setFixedSize(44, 44)
+        av_lbl.setAlignment(Qt.AlignCenter)
+        if avatar_path and avatar_path.exists():
+            av_lbl.setPixmap(get_rounded_pixmap(QPixmap(str(avatar_path)), 44, 44, 22))
+        else:
+            initial = (author[:1] or "?").upper()
+            av_lbl.setText(initial)
+            bg = "rgba(53, 200, 241, 0.35)" if is_self else "rgba(255, 255, 255, 0.12)"
+            av_lbl.setStyleSheet(
+                f"background: {bg}; border: 1px solid rgba(255,255,255,0.28); border-radius: 22px; color: #ffffff; font-size: 16px; font-weight: 800;"
+            )
         layout.addWidget(av_lbl, 0, Qt.AlignTop)
 
         content_lay = QVBoxLayout()
-        content_lay.setSpacing(4)
+        content_lay.setSpacing(3)
 
         hdr_row = QHBoxLayout()
         hdr_row.setSpacing(6)
 
-        name_lbl = QLabel(author)
-        name_color = "#35C8F1" if is_blue_author else "#ffffff"
-        name_lbl.setStyleSheet(f"font-size: 16px; font-weight: 800; color: {name_color};")
-        hdr_row.addWidget(name_lbl)
+        self.name_lbl = QLabel(author)
+        name_color = "#35C8F1" if is_self else "#ffffff"
+        self.name_lbl.setStyleSheet(f"font-size: 15px; font-weight: 800; color: {name_color};")
+        hdr_row.addWidget(self.name_lbl)
 
-        if has_crown:
-            cr_lbl = QLabel("👑")
-            cr_lbl.setStyleSheet("font-size: 14px; color: #ffd700;")
-            hdr_row.addWidget(cr_lbl)
-
-        t_lbl = QLabel(time_str)
-        t_lbl.setStyleSheet("font-size: 12px; color: #BDD4E4; font-weight: 600;")
-        hdr_row.addWidget(t_lbl)
+        self.time_lbl = QLabel(f"{time_str} (editado)" if edited else time_str)
+        self.time_lbl.setStyleSheet("font-size: 11px; color: #BDD4E4; font-weight: 600;")
+        hdr_row.addWidget(self.time_lbl)
         hdr_row.addStretch(1)
         content_lay.addLayout(hdr_row)
 
-        txt_lbl = QLabel(text)
-        txt_lbl.setStyleSheet("font-size: 15px; font-weight: 500; color: #F4F6F8; line-height: 1.45;")
-        txt_lbl.setWordWrap(True)
-        content_lay.addWidget(txt_lbl)
+        self.txt_lbl = QLabel(text)
+        self.txt_lbl.setStyleSheet("font-size: 14px; font-weight: 500; color: #F4F6F8;")
+        self.txt_lbl.setWordWrap(True)
+        self.txt_lbl.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        content_lay.addWidget(self.txt_lbl)
 
         layout.addLayout(content_lay, 1)
 
+    def update_content(self, new_text: str, edited: bool = True):
+        self.txt_lbl.setText(new_text)
+        if edited and "(editado)" not in self.time_lbl.text():
+            self.time_lbl.setText(f"{self.time_lbl.text()} (editado)")
+
 
 class CentralChatWidget(AcrylicGlassCard):
-    message_sent = Signal(str)
+    message_submit_requested = Signal(str)
+    refresh_requested = Signal()
 
     def __init__(self, parent=None):
         super().__init__(
@@ -4205,6 +4238,8 @@ class CentralChatWidget(AcrylicGlassCard):
             glow_color=QColor(0, 0, 0, 50),
             glow_radius=10,
         )
+        self._msg_widgets: dict[str, ChatMessageWidget] = {}
+
         layout = QVBoxLayout(self)
         layout.setContentsMargins(16, 12, 16, 14)
         layout.setSpacing(8)
@@ -4215,34 +4250,26 @@ class CentralChatWidget(AcrylicGlassCard):
 
         t_box = QVBoxLayout()
         t_box.setSpacing(2)
-        self.c_title = QLabel("# general")
+        self.c_title = QLabel("# Seleccioná un canal")
         self.c_title.setStyleSheet("font-size: 18px; font-weight: 800; color: #ffffff;")
-        self.c_topic = QLabel("Conversación general de la comunidad.")
+        self.c_topic = QLabel("Mensajería persistida y en tiempo real.")
         self.c_topic.setStyleSheet("font-size: 12px; color: #BDD4E4;")
         t_box.addWidget(self.c_title)
         t_box.addWidget(self.c_topic)
         c_hdr.addLayout(t_box)
         c_hdr.addStretch(1)
 
-        for ico_name in ["bell_badge", "pin", "friends_duo", "more_horizontal"]:
-            b = QPushButton()
-            b.setFixedSize(32, 32)
-            b.setCursor(Qt.PointingHandCursor)
-            ip = ROOT / "assets_omnidash" / "icons" / f"{ico_name}.png"
-            if ip.exists():
-                b.setIcon(QIcon(str(ip)))
-                b.setIconSize(QSize(18, 18))
-            b.setStyleSheet("""
-                QPushButton {
-                    background: transparent;
-                    border: none;
-                    border-radius: 8px;
-                }
-                QPushButton:hover {
-                    background: rgba(255, 255, 255, 0.1);
-                }
-            """)
-            c_hdr.addWidget(b)
+        self.rt_badge = QLabel("● Offline")
+        self.rt_badge.setStyleSheet("font-size: 11px; font-weight: 700; color: #7f95a6; padding: 4px 10px; background: rgba(255,255,255,0.06); border-radius: 10px;")
+        c_hdr.addWidget(self.rt_badge)
+
+        self.refresh_btn = QPushButton("↻")
+        self.refresh_btn.setFixedSize(32, 32)
+        self.refresh_btn.setCursor(Qt.PointingHandCursor)
+        self.refresh_btn.setToolTip("Recargar mensajes")
+        self.refresh_btn.setStyleSheet("QPushButton { background: transparent; border: 1px solid rgba(255,255,255,0.16); border-radius: 8px; color: #ffffff; font-size: 15px; font-weight: 700; } QPushButton:hover { background: rgba(255,255,255,0.12); }")
+        self.refresh_btn.clicked.connect(self.refresh_requested.emit)
+        c_hdr.addWidget(self.refresh_btn)
 
         layout.addLayout(c_hdr)
 
@@ -4251,30 +4278,23 @@ class CentralChatWidget(AcrylicGlassCard):
         sep.setStyleSheet("background: rgba(145, 165, 179, 0.22);")
         layout.addWidget(sep)
 
+        self.error_banner = QLabel("")
+        self.error_banner.setWordWrap(True)
+        self.error_banner.setVisible(False)
+        self.error_banner.setStyleSheet(
+            "background: rgba(233, 75, 86, 0.22); border: 1px solid rgba(233, 75, 86, 0.65); "
+            "border-radius: 10px; color: #ffd6d9; font-size: 12px; font-weight: 600; padding: 8px 12px;"
+        )
+        layout.addWidget(self.error_banner)
+
         self.scroll = QScrollArea()
         self.scroll.setWidgetResizable(True)
         self.scroll.setStyleSheet("""
-            QScrollArea, QScrollArea > QWidget > QWidget {
-                border: none;
-                background: transparent;
-            }
-            QScrollBar:vertical {
-                background: rgba(10, 20, 30, 0.3);
-                width: 6px;
-                margin: 0px;
-                border-radius: 3px;
-            }
-            QScrollBar::handle:vertical {
-                background: rgba(145, 165, 179, 0.4);
-                min-height: 24px;
-                border-radius: 3px;
-            }
-            QScrollBar::handle:vertical:hover {
-                background: rgba(53, 200, 241, 0.7);
-            }
-            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
-                height: 0px;
-            }
+            QScrollArea, QScrollArea > QWidget > QWidget { border: none; background: transparent; }
+            QScrollBar:vertical { background: rgba(10, 20, 30, 0.3); width: 6px; margin: 0px; border-radius: 3px; }
+            QScrollBar::handle:vertical { background: rgba(145, 165, 179, 0.4); min-height: 24px; border-radius: 3px; }
+            QScrollBar::handle:vertical:hover { background: rgba(53, 200, 241, 0.7); }
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height: 0px; }
         """)
         self.scroll.viewport().setStyleSheet("background: transparent;")
         self.scroll.viewport().setAttribute(Qt.WA_TranslucentBackground, True)
@@ -4289,11 +4309,14 @@ class CentralChatWidget(AcrylicGlassCard):
         self.msgs_container.setAttribute(Qt.WA_TranslucentBackground, True)
         self.msgs_layout = QVBoxLayout(self.msgs_container)
         self.msgs_layout.setContentsMargins(4, 8, 4, 8)
-        self.msgs_layout.setSpacing(12)
+        self.msgs_layout.setSpacing(10)
 
-        self._load_initial_messages()
-
+        self.empty_lbl = QLabel("No hay mensajes en este canal todavía.")
+        self.empty_lbl.setAlignment(Qt.AlignCenter)
+        self.empty_lbl.setStyleSheet("font-size: 13px; color: #8da4b8; padding: 24px;")
+        self.msgs_layout.addWidget(self.empty_lbl)
         self.msgs_layout.addStretch(1)
+
         self.scroll.setWidget(self.msgs_container)
         layout.addWidget(self.scroll, 1)
 
@@ -4307,129 +4330,133 @@ class CentralChatWidget(AcrylicGlassCard):
             }
         """)
         comp_lay = QHBoxLayout(comp_frame)
-        comp_lay.setContentsMargins(8, 0, 12, 0)
+        comp_lay.setContentsMargins(14, 0, 12, 0)
         comp_lay.setSpacing(8)
 
-        add_b = QPushButton("+")
-        add_b.setFixedSize(34, 34)
-        add_b.setCursor(Qt.PointingHandCursor)
-        add_b.setStyleSheet("""
-            QPushButton {
-                background: rgba(255, 255, 255, 0.08);
-                border-radius: 17px;
-                font-size: 18px;
-                font-weight: 700;
-                color: #ffffff;
-                border: 1px solid rgba(255, 255, 255, 0.15);
-            }
-            QPushButton:hover {
-                background: rgba(255, 255, 255, 0.22);
-            }
-        """)
-        comp_lay.addWidget(add_b)
-
         self.msg_input = QLineEdit()
-        self.msg_input.setPlaceholderText("Enviar mensaje a #general...")
-        self.msg_input.setStyleSheet("""
-            QLineEdit {
-                background: transparent;
-                border: none;
-                color: #ffffff;
-                font-size: 13px;
-                padding-left: 4px;
-            }
-        """)
-        self.msg_input.returnPressed.connect(self._send_current_message)
+        self.msg_input.setPlaceholderText("Enviar mensaje...")
+        self.msg_input.setStyleSheet("QLineEdit { background: transparent; border: none; color: #ffffff; font-size: 13px; padding-left: 4px; }")
+        self.msg_input.returnPressed.connect(self._on_submit)
         comp_lay.addWidget(self.msg_input, 1)
 
-        emojis = [("smile", "😊"), ("image", "🖼️"), ("gift", "🎁")]
-        for _, em_char in emojis:
-            eb = QPushButton(em_char)
-            eb.setFixedSize(30, 30)
-            eb.setCursor(Qt.PointingHandCursor)
-            eb.setStyleSheet("QPushButton { background: transparent; border: none; font-size: 15px; } QPushButton:hover { background: rgba(255, 255, 255, 0.1); border-radius: 8px; }")
-            comp_lay.addWidget(eb)
-
-        send_b = QPushButton("➤")
-        send_b.setFixedSize(34, 34)
-        send_b.setCursor(Qt.PointingHandCursor)
-        send_b.setStyleSheet("""
-            QPushButton {
-                background: rgba(53, 200, 241, 0.2);
-                border: 1.5px solid #35C8F1;
-                border-radius: 17px;
-                font-size: 14px;
-                color: #35C8F1;
-            }
-            QPushButton:hover {
-                background: rgba(53, 200, 241, 0.45);
-            }
+        self.send_btn = QPushButton("➤")
+        self.send_btn.setFixedSize(34, 34)
+        self.send_btn.setCursor(Qt.PointingHandCursor)
+        self.send_btn.setStyleSheet("""
+            QPushButton { background: rgba(53, 200, 241, 0.2); border: 1.5px solid #35C8F1; border-radius: 17px; font-size: 14px; color: #35C8F1; }
+            QPushButton:hover { background: rgba(53, 200, 241, 0.45); }
         """)
-        send_b.clicked.connect(self._send_current_message)
-        comp_lay.addWidget(send_b)
+        self.send_btn.clicked.connect(self._on_submit)
+        comp_lay.addWidget(self.send_btn)
 
         layout.addWidget(comp_frame)
 
-    def _load_initial_messages(self):
-        m1 = ChatMessageWidget(
-            "Enni", "Hoy a las 21:12",
-            "¿Alguien se suma para una partida de Metal Slug 2? 👀",
-            ROOT / "assets_omnidash" / "communities" / "avatar_enni.png",
-            has_crown=True
+    def set_realtime_status(self, connected: bool, detail: str = ""):
+        if connected:
+            self.rt_badge.setText("● Realtime")
+            self.rt_badge.setStyleSheet("font-size: 11px; font-weight: 700; color: #32D875; padding: 4px 10px; background: rgba(50,216,117,0.14); border-radius: 10px;")
+            self.rt_badge.setToolTip(detail or "Socket.IO conectado")
+        else:
+            self.rt_badge.setText("● Sin realtime")
+            self.rt_badge.setStyleSheet("font-size: 11px; font-weight: 700; color: #ffd166; padding: 4px 10px; background: rgba(255,209,102,0.12); border-radius: 10px;")
+            self.rt_badge.setToolTip(detail or "Desconectado")
+
+    def show_error(self, message: str):
+        if message:
+            self.error_banner.setText(message)
+            self.error_banner.setVisible(True)
+        else:
+            self.error_banner.setVisible(False)
+
+    def set_channel(self, channel: Optional[dict]):
+        self.show_error("")
+        if channel:
+            name = str(channel.get("name") or "general")
+            self.c_title.setText(f"# {name}")
+            self.c_topic.setText(str(channel.get("topic") or "Canal de comunidad"))
+            self.msg_input.setPlaceholderText(f"Enviar mensaje a #{name}...")
+            self.msg_input.setEnabled(True)
+            self.send_btn.setEnabled(True)
+        else:
+            self.c_title.setText("# Sin canal")
+            self.c_topic.setText("No hay canales disponibles")
+            self.msg_input.setPlaceholderText("Seleccioná un canal...")
+            self.msg_input.setEnabled(False)
+            self.send_btn.setEnabled(False)
+
+    def set_messages(self, messages: list[dict], current_user_id: str = ""):
+        self._msg_widgets.clear()
+        _clear_layout_widgets(self.msgs_layout, keep_trailing_stretch=True)
+
+        self.empty_lbl = QLabel("No hay mensajes en este canal todavía.")
+        self.empty_lbl.setAlignment(Qt.AlignCenter)
+        self.empty_lbl.setStyleSheet("font-size: 13px; color: #8da4b8; padding: 24px;")
+        self.msgs_layout.insertWidget(0, self.empty_lbl)
+
+        for m in messages or []:
+            self.append_or_update_message(m, current_user_id=current_user_id, scroll_to_bottom=False)
+        self.empty_lbl.setVisible(len(self._msg_widgets) == 0)
+        QTimer.singleShot(20, self._scroll_bottom)
+
+    def append_or_update_message(self, msg: dict, current_user_id: str = "", scroll_to_bottom: bool = True):
+        mid = str(msg.get("id") or "")
+        if not mid:
+            return
+        content = str(msg.get("content") or "")
+        edited = bool(msg.get("edited_at"))
+        if mid in self._msg_widgets:
+            self._msg_widgets[mid].update_content(content, edited=edited)
+            return
+
+        author_id = str(msg.get("author_id") or "")
+        author_name = str(msg.get("author_name") or author_id or "Usuario")
+        time_str = _format_message_time(msg.get("created_at"))
+        w = ChatMessageWidget(
+            message_id=mid,
+            author=author_name,
+            time_str=time_str,
+            text=content,
+            is_self=(bool(current_user_id) and author_id == str(current_user_id)),
+            edited=edited,
+            parent=self.msgs_container,
         )
-        self.msgs_layout.addWidget(m1)
+        self._msg_widgets[mid] = w
+        self.empty_lbl.setVisible(False)
+        insert_idx = max(0, self.msgs_layout.count() - 1)
+        self.msgs_layout.insertWidget(insert_idx, w)
+        if scroll_to_bottom:
+            QTimer.singleShot(20, self._scroll_bottom)
 
-        m2 = ChatMessageWidget(
-            "Alex", "Hoy a las 21:15",
-            "¡Yo me prendo! ¿Armamos sala? 🎮",
-            ROOT / "assets_omnidash" / "spidey_avatar.png",
-            is_blue_author=True
-        )
-        self.msgs_layout.addWidget(m2)
+    def remove_message(self, message_id: str):
+        w = self._msg_widgets.pop(str(message_id), None)
+        if w is not None:
+            self.msgs_layout.removeWidget(w)
+            w.deleteLater()
+        self.empty_lbl.setVisible(len(self._msg_widgets) == 0)
 
-        m3 = ChatMessageWidget(
-            "Miku", "Hoy a las 21:20",
-            "Estoy en stream ahora, pasen a ver 👾",
-            ROOT / "assets_omnidash" / "communities" / "avatar_miku.png"
-        )
-        self.msgs_layout.addWidget(m3)
+    def _scroll_bottom(self):
+        bar = self.scroll.verticalScrollBar()
+        if bar:
+            bar.setValue(bar.maximum())
 
-        thumb_p = ROOT / "assets_omnidash" / "communities" / "stream_mslug2_preview.jpg"
-        if not thumb_p.exists():
-            thumb_p = ROOT / "assets_omnidash" / "covers" / "arcade_mslug.png"
-        self.stream_card = StreamCard("Metal Slug 2 - Arcade Run", "Miku", 12, thumb_p)
-        self.msgs_layout.addWidget(self.stream_card)
-
-        m4 = ChatMessageWidget(
-            "Lau", "Hoy a las 21:28",
-            "¡Qué partida! 🔥",
-            ROOT / "assets_omnidash" / "communities" / "avatar_lau.png"
-        )
-        self.msgs_layout.addWidget(m4)
-
-    def _send_current_message(self):
+    def _on_submit(self):
         txt = self.msg_input.text().strip()
         if not txt:
             return
-        self.msg_input.clear()
-        m = ChatMessageWidget("Alex", "Ahora", txt, ROOT / "assets_omnidash" / "spidey_avatar.png", is_blue_author=True)
-        count = self.msgs_layout.count()
-        self.msgs_layout.insertWidget(count - 1, m)
-        try:
-            repo = CommunitiesRepository.get_instance()
-            comm = repo.get_community_by_slug("seeker-hub")
-            if comm:
-                chans = repo.list_channels(comm["id"])
-                g_ch = [c for c in chans if c["name"] == "general"]
-                if g_ch:
-                    repo.create_message(g_ch[0]["id"], "u_alex", txt)
-        except Exception:
-            pass
-        self.message_sent.emit(txt)
+        self.show_error("")
+        self.message_submit_requested.emit(txt)
 
 
 class MemberItemWidget(QWidget):
-    def __init__(self, name: str, status_text: str, is_online: bool, avatar_path: Path, has_crown: bool = False, parent=None):
+    def __init__(
+        self,
+        name: str,
+        status_text: str,
+        is_online: bool,
+        avatar_path: Optional[Path] = None,
+        has_crown: bool = False,
+        parent=None,
+    ):
         super().__init__(parent)
         self.setAttribute(Qt.WA_TranslucentBackground, True)
         self.setStyleSheet("background: transparent;")
@@ -4444,14 +4471,22 @@ class MemberItemWidget(QWidget):
 
         av_lbl = QLabel(av_container)
         av_lbl.setGeometry(0, 0, 42, 42)
-        if avatar_path.exists():
+        av_lbl.setAlignment(Qt.AlignCenter)
+        if avatar_path and avatar_path.exists():
             av_lbl.setPixmap(get_rounded_pixmap(QPixmap(str(avatar_path)), 42, 42, 21))
+        else:
+            av_lbl.setText((name[:1] or "?").upper())
+            bg = "rgba(53, 200, 241, 0.32)" if is_online else "rgba(255, 255, 255, 0.1)"
+            av_lbl.setStyleSheet(
+                f"background: {bg}; border: 1px solid rgba(255,255,255,0.25); "
+                "border-radius: 21px; color: #ffffff; font-size: 15px; font-weight: 800;"
+            )
 
         dot = QLabel(av_container)
         dot.setGeometry(30, 30, 13, 13)
         if not is_online:
             dot_col = "#7f95a6"
-        elif "stream" in status_text.lower() or "transmitiendo" in status_text.lower():
+        elif "jugando" in status_text.lower():
             dot_col = "#A77AE4"
         else:
             dot_col = "#32D875"
@@ -4479,9 +4514,7 @@ class MemberItemWidget(QWidget):
         st = QLabel(status_text)
         if not is_online:
             st_color = "#657C8D"
-        elif "stream" in status_text.lower() or "transmitiendo" in status_text.lower():
-            st_color = "#A77AE4"
-        elif "jugando" in status_text.lower() or "partida" in status_text.lower():
+        elif "jugando" in status_text.lower():
             st_color = "#32D875"
         else:
             st_color = "#7f95a6"
@@ -4497,11 +4530,12 @@ class RightPanel(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setFixedWidth(305)
+        self._media_ready = False
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(12)
 
-        # Contenedor de Miembros en Dark Glass
+        # Contenedor de Miembros en Dark Glass (100% desde backend)
         self.members_card = AcrylicGlassCard(
             self,
             border_radius=20,
@@ -4543,45 +4577,19 @@ class RightPanel(QWidget):
         pal_m.setColor(QPalette.Window, Qt.transparent)
         m_scroll.viewport().setPalette(pal_m)
 
-        m_container = QWidget()
-        m_container.setStyleSheet("background: transparent;")
-        m_container.setAttribute(Qt.WA_TranslucentBackground, True)
-        m_lay = QVBoxLayout(m_container)
-        m_lay.setContentsMargins(0, 0, 0, 0)
-        m_lay.setSpacing(6)
+        self.m_container = QWidget()
+        self.m_container.setStyleSheet("background: transparent;")
+        self.m_container.setAttribute(Qt.WA_TranslucentBackground, True)
+        self.m_lay = QVBoxLayout(self.m_container)
+        self.m_lay.setContentsMargins(0, 0, 0, 0)
+        self.m_lay.setSpacing(6)
+        self.m_lay.addStretch(1)
 
-        on_hdr = QLabel("●  En línea — 14")
-        on_hdr.setStyleSheet("font-size: 12px; font-weight: 800; color: #32D875; padding: 4px 6px;")
-        m_lay.addWidget(on_hdr)
-
-        online_members = [
-            ("Alex", "🎮 Jugando: Metal Slug 2", ROOT / "assets_omnidash" / "spidey_avatar.png", False),
-            ("Enni", "📺 En stream", ROOT / "assets_omnidash" / "communities" / "avatar_enni.png", True),
-            ("Miku", "📶 Transmitiendo", ROOT / "assets_omnidash" / "communities" / "avatar_miku.png", False),
-            ("Lau", "🎮 Jugando: Tetris", ROOT / "assets_omnidash" / "communities" / "avatar_lau.png", False),
-            ("Rami", "🎮 En partida", ROOT / "assets_omnidash" / "communities" / "avatar_rami.png", False),
-        ]
-        for name, st, av, crown in online_members:
-            m_lay.addWidget(MemberItemWidget(name, st, True, av, has_crown=crown))
-
-        m_lay.addSpacing(10)
-
-        off_hdr = QLabel("●  Búsqueda — 28")
-        off_hdr.setStyleSheet("font-size: 12px; font-weight: 800; color: #7f95a6; padding: 4px 6px;")
-        m_lay.addWidget(off_hdr)
-
-        offline_members = [
-            ("Tomi", "Desconectado", ROOT / "assets_omnidash" / "communities" / "avatar_tomi.png"),
-            ("Vale", "Desconectado", ROOT / "assets_omnidash" / "communities" / "avatar_vale.png"),
-        ]
-        for name, st, av in offline_members:
-            m_lay.addWidget(MemberItemWidget(name, st, False, av))
-
-        m_lay.addStretch(1)
-        m_scroll.setWidget(m_container)
+        m_scroll.setWidget(self.m_container)
         mem_lay.addWidget(m_scroll)
         layout.addWidget(self.members_card, 1)
 
+        # Panel de Voz / Señalización LiveKit (oculto hasta intentar o conectar a canal de voz)
         self.voice_panel = AcrylicGlassCard(
             self,
             border_radius=18,
@@ -4589,10 +4597,10 @@ class RightPanel(QWidget):
             glow_color=QColor(0, 0, 0, 50),
             glow_radius=10
         )
-        self.voice_panel.setFixedHeight(175)
+        self.voice_panel.setMinimumHeight(185)
         v_lay = QVBoxLayout(self.voice_panel)
         v_lay.setContentsMargins(14, 14, 14, 14)
-        v_lay.setSpacing(12)
+        v_lay.setSpacing(10)
 
         v_hdr = QHBoxLayout()
         v_hdr.setSpacing(8)
@@ -4605,12 +4613,12 @@ class RightPanel(QWidget):
 
         v_titles = QVBoxLayout()
         v_titles.setSpacing(1)
-        v_st = QLabel("Voz conectada")
-        v_st.setStyleSheet("font-size: 14px; font-weight: 800; color: #ffffff;")
-        v_chan = QLabel("Lobby General")
-        v_chan.setStyleSheet("font-size: 12px; font-weight: 600; color: #BDD4E4;")
-        v_titles.addWidget(v_st)
-        v_titles.addWidget(v_chan)
+        self.v_st = QLabel("Voz desconectada")
+        self.v_st.setStyleSheet("font-size: 13px; font-weight: 800; color: #ffffff;")
+        self.v_chan = QLabel("Sin canal")
+        self.v_chan.setStyleSheet("font-size: 12px; font-weight: 600; color: #BDD4E4;")
+        v_titles.addWidget(self.v_st)
+        v_titles.addWidget(self.v_chan)
         v_hdr.addLayout(v_titles)
         v_hdr.addStretch(1)
 
@@ -4621,6 +4629,11 @@ class RightPanel(QWidget):
         v_hdr.addWidget(user_ico)
 
         v_lay.addLayout(v_hdr)
+
+        self.v_media_lbl = QLabel("Sin transporte multimedia activo.")
+        self.v_media_lbl.setWordWrap(True)
+        self.v_media_lbl.setStyleSheet("font-size: 11px; color: #ffd166;")
+        v_lay.addWidget(self.v_media_lbl)
 
         ctrls_row = QHBoxLayout()
         ctrls_row.setSpacing(12)
@@ -4644,6 +4657,7 @@ class RightPanel(QWidget):
         self.screen_btn = QPushButton()
         self.screen_btn.setFixedSize(44, 44)
         self.screen_btn.setCursor(Qt.PointingHandCursor)
+        self.screen_btn.setToolTip("Compartir pantalla (requiere WebRTC nativo)")
         self.screen_active = False
         self._update_screen_style()
         self.screen_btn.clicked.connect(self._toggle_screen)
@@ -4671,6 +4685,97 @@ class RightPanel(QWidget):
 
         v_lay.addLayout(ctrls_row)
         layout.addWidget(self.voice_panel)
+        self.voice_panel.setVisible(False)
+        self.set_members([])
+
+    def set_members(self, members: list[dict], presence: Optional[dict[str, dict]] = None):
+        _clear_layout_widgets(self.m_lay, keep_trailing_stretch=True)
+        presence = presence or {}
+
+        online_items = []
+        offline_items = []
+        for m in members or []:
+            uid = str(m.get("user_id") or "")
+            name = str(m.get("username") or uid or "Miembro")
+            role = str(m.get("role") or "member").lower()
+            pinfo = presence.get(uid) or {}
+            p_status = str(m.get("presence_status") or m.get("presence") or pinfo.get("status") or "offline").lower()
+            is_online = p_status in ("online", "playing", "in_game")
+            game = m.get("custom_status") or pinfo.get("game")
+            if is_online and game:
+                st_text = f"🎮 Jugando: {game}"
+            elif is_online:
+                st_text = "En línea" if role not in ("owner", "admin") else f"En línea • {role}"
+            else:
+                st_text = "Desconectado"
+            entry = (name, st_text, is_online, role in ("owner", "admin"))
+            if is_online:
+                online_items.append(entry)
+            else:
+                offline_items.append(entry)
+
+        insert_pos = 0
+        on_hdr = QLabel(f"●  En línea — {len(online_items)}")
+        on_hdr.setStyleSheet("font-size: 12px; font-weight: 800; color: #32D875; padding: 4px 6px;")
+        self.m_lay.insertWidget(insert_pos, on_hdr)
+        insert_pos += 1
+
+        if online_items:
+            for name, st, is_on, crown in online_items:
+                self.m_lay.insertWidget(insert_pos, MemberItemWidget(name, st, is_on, has_crown=crown))
+                insert_pos += 1
+        else:
+            none_on = QLabel("Nadie en línea todavía.")
+            none_on.setStyleSheet("font-size: 12px; color: #7f95a6; padding: 4px 8px;")
+            self.m_lay.insertWidget(insert_pos, none_on)
+            insert_pos += 1
+
+        off_hdr = QLabel(f"●  Desconectados — {len(offline_items)}")
+        off_hdr.setStyleSheet("font-size: 12px; font-weight: 800; color: #7f95a6; padding: 10px 6px 4px 6px;")
+        self.m_lay.insertWidget(insert_pos, off_hdr)
+        insert_pos += 1
+
+        for name, st, is_on, crown in offline_items:
+            self.m_lay.insertWidget(insert_pos, MemberItemWidget(name, st, is_on, has_crown=crown))
+            insert_pos += 1
+
+    def set_voice_state(self, state: dict):
+        connected = bool(state.get("connected"))
+        self._media_ready = bool(state.get("media_ready"))
+        ch_obj = state.get("channel")
+        channel_name = str(
+            (ch_obj.get("name") if isinstance(ch_obj, dict) else "")
+            or state.get("channel_name")
+            or ""
+        )
+        status_text = str(state.get("status_text") or "")
+
+        if not connected and not channel_name and not status_text:
+            self.voice_panel.setVisible(False)
+            return
+
+        self.voice_panel.setVisible(True)
+        self.v_chan.setText(channel_name or "Canal de voz")
+        if self._media_ready:
+            self.v_st.setText("Voz conectada")
+            self.v_st.setStyleSheet("font-size: 13px; font-weight: 800; color: #32D875;")
+            self.v_media_lbl.setText(status_text or "Audio WebRTC activo.")
+            self.v_media_lbl.setStyleSheet("font-size: 11px; color: #BDD4E4;")
+        elif connected:
+            self.v_st.setText("Señalización LiveKit lista")
+            self.v_st.setStyleSheet("font-size: 13px; font-weight: 800; color: #35C8F1;")
+            self.v_media_lbl.setText(
+                status_text or "Token emitido; audio/pantalla WebRTC no integrado en escritorio."
+            )
+            self.v_media_lbl.setStyleSheet("font-size: 11px; color: #ffd166;")
+        else:
+            self.v_st.setText("Voz no disponible")
+            self.v_st.setStyleSheet("font-size: 13px; font-weight: 800; color: #ffb3b8;")
+            self.v_media_lbl.setText(status_text or "No se pudo iniciar la señalización de voz.")
+            self.v_media_lbl.setStyleSheet("font-size: 11px; color: #ffd6d9;")
+
+        self.screen_active = False
+        self._update_screen_style()
 
     def _toggle_mic(self):
         self.mic_muted = not self.mic_muted
@@ -4703,16 +4808,21 @@ class RightPanel(QWidget):
             self.headset_btn.setStyleSheet("QPushButton { background: rgba(255, 255, 255, 0.12); border: 1.5px solid rgba(255, 255, 255, 0.25); border-radius: 22px; } QPushButton:hover { background: rgba(255, 255, 255, 0.25); }")
 
     def _toggle_screen(self):
-        self.screen_active = not self.screen_active
+        # P0.2: Prohibido alternar estado LIVE simulado sin transporte multimedia real.
+        self.screen_active = False
         self._update_screen_style()
-        self.voice_toggled.emit("screen", self.screen_active)
+        if not self._media_ready:
+            self.v_media_lbl.setText(
+                "Compartir pantalla requiere captura + WebRTC LiveKit nativo (pendiente en desktop)."
+            )
+        self.voice_toggled.emit("screen_unavailable", False)
 
     def _update_screen_style(self):
         sc_p = ROOT / "assets_omnidash" / "icons" / "screen_share.png"
         if sc_p.exists():
             self.screen_btn.setIcon(QIcon(str(sc_p)))
             self.screen_btn.setIconSize(QSize(18, 18))
-        if self.screen_active:
+        if self.screen_active and self._media_ready:
             self.screen_btn.setStyleSheet("QPushButton { background: rgba(53, 200, 241, 0.3); border: 1.5px solid #35C8F1; border-radius: 22px; }")
         else:
             self.screen_btn.setStyleSheet("QPushButton { background: rgba(255, 255, 255, 0.08); border: 1px solid rgba(255, 255, 255, 0.18); border-radius: 22px; } QPushButton:hover { background: rgba(255, 255, 255, 0.2); }")
@@ -4722,10 +4832,238 @@ class RightPanel(QWidget):
         self.voice_toggled.emit("disconnect", False)
 
 
+def _styled_input(placeholder: str = "", password: bool = False) -> QLineEdit:
+    inp = QLineEdit()
+    inp.setPlaceholderText(placeholder)
+    if password:
+        inp.setEchoMode(QLineEdit.Password)
+    inp.setFixedHeight(40)
+    inp.setStyleSheet("""
+        QLineEdit {
+            background: rgba(12, 26, 40, 0.85);
+            border: 1px solid rgba(145, 165, 179, 0.45);
+            border-radius: 10px;
+            color: #ffffff;
+            font-size: 13px;
+            padding: 0 12px;
+        }
+        QLineEdit:focus {
+            border: 1.5px solid #35C8F1;
+        }
+    """)
+    return inp
+
+
+class CommunityAuthView(AcrylicGlassCard):
+    """Pantalla real de autenticación JWT para Comunidades (sin identidades demo)."""
+
+    def __init__(self, controller: CommunityController, parent=None):
+        super().__init__(
+            parent,
+            border_radius=24,
+            border_color=QColor(145, 165, 179, 85),
+            glow_color=QColor(0, 0, 0, 70),
+            glow_radius=12,
+        )
+        self.controller = controller
+        self._mode = "login"
+
+        root = QVBoxLayout(self)
+        root.setContentsMargins(36, 28, 36, 28)
+        root.setSpacing(14)
+
+        hdr = QHBoxLayout()
+        title_box = QVBoxLayout()
+        title_box.setSpacing(3)
+        title = QLabel("C.C.I. Communities — Iniciar sesión")
+        title.setStyleSheet("font-size: 22px; font-weight: 800; color: #ffffff;")
+        sub = QLabel("Conecta tu cuenta real para acceder a comunidades, mensajería en tiempo real e invitaciones.")
+        sub.setStyleSheet("font-size: 12px; color: #BDD4E4;")
+        title_box.addWidget(title)
+        title_box.addWidget(sub)
+        hdr.addLayout(title_box, 1)
+
+        self.backend_lbl = QLabel("● Verificando servidor...")
+        self.backend_lbl.setStyleSheet(
+            "font-size: 12px; font-weight: 700; color: #ffd166; padding: 6px 12px; "
+            "background: rgba(255,209,102,0.12); border-radius: 12px;"
+        )
+        hdr.addWidget(self.backend_lbl)
+
+        self.retry_btn = QPushButton("Reintentar conexión")
+        self.retry_btn.setProperty("class", "glassBtn")
+        self.retry_btn.setCursor(Qt.PointingHandCursor)
+        self.retry_btn.clicked.connect(lambda: self.controller.check_backend(auto_start=True))
+        hdr.addWidget(self.retry_btn)
+        root.addLayout(hdr)
+
+        center_row = QHBoxLayout()
+        center_row.addStretch(1)
+
+        card = AcrylicGlassCard(
+            self,
+            border_radius=18,
+            border_color=QColor(53, 200, 241, 120),
+            glow_color=QColor(0, 0, 0, 45),
+            glow_radius=10,
+        )
+        card.setFixedWidth(480)
+        c_lay = QVBoxLayout(card)
+        c_lay.setContentsMargins(24, 22, 24, 22)
+        c_lay.setSpacing(12)
+
+        tabs = QHBoxLayout()
+        tabs.setSpacing(8)
+        self.tab_login_btn = QPushButton("Iniciar sesión")
+        self.tab_reg_btn = QPushButton("Crear cuenta")
+        for btn, mode in ((self.tab_login_btn, "login"), (self.tab_reg_btn, "register")):
+            btn.setFixedHeight(36)
+            btn.setCursor(Qt.PointingHandCursor)
+            btn.clicked.connect(lambda _, m=mode: self.set_mode(m))
+            tabs.addWidget(btn)
+        c_lay.addLayout(tabs)
+
+        self.form_stack = QStackedWidget()
+
+        # Tab 0: Login
+        login_w = QWidget()
+        login_l = QVBoxLayout(login_w)
+        login_l.setContentsMargins(0, 6, 0, 0)
+        login_l.setSpacing(10)
+        self.login_identifier = _styled_input("Usuario o email")
+        self.login_password = _styled_input("Contraseña", password=True)
+        self.login_password.returnPressed.connect(self._do_login)
+        self.login_btn = QPushButton("Entrar a Comunidades")
+        self.login_btn.setFixedHeight(40)
+        self.login_btn.setCursor(Qt.PointingHandCursor)
+        self.login_btn.setStyleSheet(
+            "QPushButton { background: #35C8F1; border: none; border-radius: 10px; color: #051624; font-size: 13px; font-weight: 800; }"
+            "QPushButton:hover { background: #64d8f7; }"
+        )
+        self.login_btn.clicked.connect(self._do_login)
+        login_l.addWidget(QLabel("Usuario o correo"))
+        login_l.addWidget(self.login_identifier)
+        login_l.addWidget(QLabel("Contraseña"))
+        login_l.addWidget(self.login_password)
+        login_l.addSpacing(4)
+        login_l.addWidget(self.login_btn)
+        self.form_stack.addWidget(login_w)
+
+        # Tab 1: Register
+        reg_w = QWidget()
+        reg_l = QVBoxLayout(reg_w)
+        reg_l.setContentsMargins(0, 6, 0, 0)
+        reg_l.setSpacing(8)
+        self.reg_email = _styled_input("Correo electrónico")
+        self.reg_username = _styled_input("Nombre de usuario (único)")
+        self.reg_password = _styled_input("Contraseña (mín. 8 caracteres)", password=True)
+        self.reg_password.returnPressed.connect(self._do_register)
+        self.reg_btn = QPushButton("Registrar cuenta")
+        self.reg_btn.setFixedHeight(40)
+        self.reg_btn.setCursor(Qt.PointingHandCursor)
+        self.reg_btn.setStyleSheet(
+            "QPushButton { background: #32D875; border: none; border-radius: 10px; color: #051624; font-size: 13px; font-weight: 800; }"
+            "QPushButton:hover { background: #5be692; }"
+        )
+        self.reg_btn.clicked.connect(self._do_register)
+        reg_l.addWidget(QLabel("Email"))
+        reg_l.addWidget(self.reg_email)
+        reg_l.addWidget(QLabel("Usuario"))
+        reg_l.addWidget(self.reg_username)
+        reg_l.addWidget(QLabel("Contraseña"))
+        reg_l.addWidget(self.reg_password)
+        reg_l.addSpacing(4)
+        reg_l.addWidget(self.reg_btn)
+        self.form_stack.addWidget(reg_w)
+
+        c_lay.addWidget(self.form_stack)
+
+        self.error_lbl = QLabel("")
+        self.error_lbl.setWordWrap(True)
+        self.error_lbl.setVisible(False)
+        self.error_lbl.setStyleSheet(
+            "background: rgba(233, 75, 86, 0.22); border: 1px solid rgba(233, 75, 86, 0.65); "
+            "border-radius: 10px; color: #ffd6d9; font-size: 12px; font-weight: 600; padding: 8px 10px;"
+        )
+        c_lay.addWidget(self.error_lbl)
+
+        center_row.addWidget(card)
+        center_row.addStretch(1)
+        root.addLayout(center_row, 1)
+
+        self.controller.backend_status_changed.connect(self.set_backend_status)
+        self.set_mode("login")
+
+    def set_mode(self, mode: str):
+        self._mode = "register" if mode == "register" else "login"
+        self.form_stack.setCurrentIndex(1 if self._mode == "register" else 0)
+        self.show_error("")
+        active_css = (
+            "QPushButton { background: rgba(53,200,241,0.28); border: 1.5px solid #35C8F1; "
+            "border-radius: 10px; color: #ffffff; font-size: 13px; font-weight: 800; }"
+        )
+        idle_css = (
+            "QPushButton { background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.16); "
+            "border-radius: 10px; color: #BDD4E4; font-size: 13px; font-weight: 700; }"
+        )
+        self.tab_login_btn.setStyleSheet(active_css if self._mode == "login" else idle_css)
+        self.tab_reg_btn.setStyleSheet(active_css if self._mode == "register" else idle_css)
+
+    def set_backend_status(self, online: bool, detail: str = ""):
+        if online:
+            self.backend_lbl.setText("● Servidor conectado")
+            self.backend_lbl.setStyleSheet(
+                "font-size: 12px; font-weight: 700; color: #32D875; padding: 6px 12px; "
+                "background: rgba(50,216,117,0.14); border-radius: 12px;"
+            )
+            self.backend_lbl.setToolTip(detail or self.controller.api_url)
+        else:
+            self.backend_lbl.setText("● Servidor sin conexión")
+            self.backend_lbl.setStyleSheet(
+                "font-size: 12px; font-weight: 700; color: #ffb3b8; padding: 6px 12px; "
+                "background: rgba(233,75,86,0.22); border-radius: 12px;"
+            )
+            self.backend_lbl.setToolTip(detail or "Backend no accesible")
+
+    def show_error(self, message: str):
+        if message:
+            self.error_lbl.setText(message)
+            self.error_lbl.setVisible(True)
+        else:
+            self.error_lbl.setVisible(False)
+
+    def _do_login(self):
+        ident = self.login_identifier.text().strip()
+        pw = self.login_password.text()
+        if not ident or not pw:
+            self.show_error("Completá tu usuario/email y contraseña.")
+            return
+        self.show_error("")
+        try:
+            self.controller.login(ident, pw)
+            self.login_password.clear()
+        except CommunityApiError as exc:
+            self.show_error(exc.message)
+
+    def _do_register(self):
+        email = self.reg_email.text().strip()
+        username = self.reg_username.text().strip()
+        pw = self.reg_password.text()
+        if not email or not username or not pw:
+            self.show_error("Completá email, nombre de usuario y contraseña.")
+            return
+        self.show_error("")
+        try:
+            self.controller.register(email=email, username=username, password=pw)
+            self.reg_password.clear()
+        except CommunityApiError as exc:
+            self.show_error(exc.message)
+
+
 class CommunityInteriorView(AcrylicGlassCard):
     back_to_explore = Signal()
 
-    def __init__(self, parent=None):
+    def __init__(self, controller: Optional[CommunityController] = None, parent=None):
         super().__init__(
             parent,
             border_radius=30,
@@ -4733,6 +5071,11 @@ class CommunityInteriorView(AcrylicGlassCard):
             glow_color=QColor(0, 0, 0, 75),
             glow_radius=14
         )
+        self.controller = controller
+        self._all_members: list[dict] = []
+        self._presence_map: dict[str, dict] = {}
+        self._search_filter: str = ""
+
         main_lay = QVBoxLayout(self)
         main_lay.setContentsMargins(20, 16, 20, 18)
         main_lay.setSpacing(12)
@@ -4776,7 +5119,7 @@ class CommunityInteriorView(AcrylicGlassCard):
         desc_v.setSpacing(2)
         m_title = QLabel("Gaming Communities & Friends")
         m_title.setStyleSheet("font-size: 18px; font-weight: 800; color: #ffffff;")
-        m_desc = QLabel("Crea comunidades, juega, conversa y transmite con tu gente.")
+        m_desc = QLabel("Comunidades reales persistidas, invitaciones y mensajería Socket.IO.")
         m_desc.setStyleSheet("font-size: 12px; color: #BDD4E4;")
         desc_v.addWidget(m_title)
         desc_v.addWidget(m_desc)
@@ -4784,9 +5127,28 @@ class CommunityInteriorView(AcrylicGlassCard):
 
         hdr_row.addStretch(1)
 
+        self.user_chip_lbl = QLabel("@sin_sesion")
+        self.user_chip_lbl.setStyleSheet(
+            "font-size: 12px; font-weight: 700; color: #35C8F1; padding: 6px 12px; "
+            "background: rgba(53, 200, 241, 0.14); border: 1px solid rgba(53, 200, 241, 0.4); border-radius: 14px;"
+        )
+        hdr_row.addWidget(self.user_chip_lbl)
+
+        self.logout_btn = QPushButton("Salir")
+        self.logout_btn.setFixedHeight(34)
+        self.logout_btn.setCursor(Qt.PointingHandCursor)
+        self.logout_btn.setToolTip("Cerrar sesión de Comunidades")
+        self.logout_btn.setStyleSheet(
+            "QPushButton { background: rgba(233,75,86,0.18); border: 1px solid rgba(233,75,86,0.45); "
+            "border-radius: 14px; color: #ffb3b8; font-size: 12px; font-weight: 700; padding: 0 12px; }"
+            "QPushButton:hover { background: rgba(233,75,86,0.35); color: #ffffff; }"
+        )
+        self.logout_btn.clicked.connect(self._on_logout_clicked)
+        hdr_row.addWidget(self.logout_btn)
+
         search_frame = QFrame()
         search_frame.setFixedHeight(40)
-        search_frame.setFixedWidth(240)
+        search_frame.setFixedWidth(220)
         search_frame.setStyleSheet("""
             QFrame {
                 background: rgba(14, 28, 44, 0.75);
@@ -4804,17 +5166,18 @@ class CommunityInteriorView(AcrylicGlassCard):
             s_ico.setPixmap(QPixmap(str(s_p)).scaled(15, 15, Qt.KeepAspectRatio, Qt.SmoothTransformation))
         s_lay.addWidget(s_ico)
 
-        s_inp = QLineEdit()
-        s_inp.setPlaceholderText("Buscar en C.C.I...")
-        s_inp.setStyleSheet("background: transparent; border: none; color: #ffffff; font-size: 13px;")
-        s_lay.addWidget(s_inp)
+        self.search_input = QLineEdit()
+        self.search_input.setPlaceholderText("Filtrar miembros...")
+        self.search_input.setStyleSheet("background: transparent; border: none; color: #ffffff; font-size: 13px;")
+        self.search_input.textChanged.connect(self._on_search_changed)
+        s_lay.addWidget(self.search_input)
         hdr_row.addWidget(search_frame)
 
-        add_comm_btn = QPushButton("+")
-        add_comm_btn.setFixedSize(40, 40)
-        add_comm_btn.setCursor(Qt.PointingHandCursor)
-        add_comm_btn.setToolTip("Crear Comunidad")
-        add_comm_btn.setStyleSheet("""
+        self.add_comm_btn = QPushButton("+")
+        self.add_comm_btn.setFixedSize(40, 40)
+        self.add_comm_btn.setCursor(Qt.PointingHandCursor)
+        self.add_comm_btn.setToolTip("Crear Comunidad")
+        self.add_comm_btn.setStyleSheet("""
             QPushButton {
                 background: rgba(18, 38, 56, 0.75);
                 border: 1px solid rgba(145, 165, 179, 0.4);
@@ -4828,19 +5191,20 @@ class CommunityInteriorView(AcrylicGlassCard):
                 border: 1.5px solid #35C8F1;
             }
         """)
-        hdr_row.addWidget(add_comm_btn)
+        self.add_comm_btn.clicked.connect(self.open_create_community_dialog)
+        hdr_row.addWidget(self.add_comm_btn)
 
-        invite_btn = QPushButton()
-        invite_btn.setFixedSize(40, 40)
-        invite_btn.setCursor(Qt.PointingHandCursor)
-        invite_btn.setToolTip("Invitar Amigos")
+        self.invite_btn = QPushButton()
+        self.invite_btn.setFixedSize(40, 40)
+        self.invite_btn.setCursor(Qt.PointingHandCursor)
+        self.invite_btn.setToolTip("Generar enlace de invitación")
         inv_p = ROOT / "assets_omnidash" / "icons" / "person_add.png"
         if not inv_p.exists():
             inv_p = ROOT / "assets_omnidash" / "icons" / "people.png"
         if inv_p.exists():
-            invite_btn.setIcon(QIcon(str(inv_p)))
-            invite_btn.setIconSize(QSize(20, 20))
-        invite_btn.setStyleSheet("""
+            self.invite_btn.setIcon(QIcon(str(inv_p)))
+            self.invite_btn.setIconSize(QSize(20, 20))
+        self.invite_btn.setStyleSheet("""
             QPushButton {
                 background: rgba(18, 38, 56, 0.75);
                 border: 1px solid rgba(145, 165, 179, 0.4);
@@ -4851,7 +5215,8 @@ class CommunityInteriorView(AcrylicGlassCard):
                 border: 1.5px solid #35C8F1;
             }
         """)
-        hdr_row.addWidget(invite_btn)
+        self.invite_btn.clicked.connect(self.open_invite_dialog)
+        hdr_row.addWidget(self.invite_btn)
 
         main_lay.addLayout(hdr_row)
 
@@ -4860,120 +5225,687 @@ class CommunityInteriorView(AcrylicGlassCard):
 
         self.rail = ServerRail(self)
         self.rail.explore_clicked.connect(self.back_to_explore.emit)
+        self.rail.community_selected.connect(self._on_community_selected)
         body_row.addWidget(self.rail)
 
         self.channel_sidebar = ChannelSidebar(self)
+        self.channel_sidebar.channel_selected.connect(self._on_channel_selected)
+        self.channel_sidebar.create_channel_requested.connect(self.open_create_channel_dialog)
+        self.channel_sidebar.leave_community_requested.connect(self._on_leave_community)
         body_row.addWidget(self.channel_sidebar)
 
         self.chat_area = CentralChatWidget(self)
+        self.chat_area.message_submit_requested.connect(self._on_send_message)
+        self.chat_area.refresh_requested.connect(self._on_refresh_messages)
         body_row.addWidget(self.chat_area, 1)
 
         self.right_panel = RightPanel(self)
+        self.right_panel.voice_toggled.connect(self._on_voice_toggled)
         body_row.addWidget(self.right_panel)
 
         main_lay.addLayout(body_row, 1)
+
+        if self.controller:
+            self._bind_controller(self.controller)
+
+    def _bind_controller(self, ctrl: CommunityController):
+        ctrl.session_changed.connect(self._on_session_changed)
+        ctrl.communities_updated.connect(lambda mine, _pub: self.rail.set_communities(mine))
+        ctrl.community_opened.connect(self._on_community_opened)
+        ctrl.channel_messages_loaded.connect(self._on_messages_loaded)
+        ctrl.message_received.connect(self._on_message_received)
+        ctrl.message_updated.connect(self._on_message_updated)
+        ctrl.message_deleted.connect(self._on_message_deleted)
+        ctrl.members_updated.connect(self._on_members_updated)
+        ctrl.voice_state_changed.connect(self._on_voice_state_changed)
+        ctrl.realtime_status_changed.connect(self.chat_area.set_realtime_status)
+        ctrl.error_occurred.connect(self.chat_area.show_error)
+
+    def _current_user_id(self) -> str:
+        return str(self.controller.session.user_id) if (self.controller and self.controller.session) else ""
+
+    def _on_session_changed(self, sess):
+        if sess is None:
+            self.user_chip_lbl.setText("@sin_sesion")
+            self.rail.set_communities([])
+            self.channel_sidebar.set_community_data(None, [])
+            self.chat_area.set_channel(None)
+            self.chat_area.set_messages([], "")
+            self._all_members = []
+            self.right_panel.set_members([])
+            self.right_panel.set_voice_state({"connected": False})
+        else:
+            self.user_chip_lbl.setText(f"@{sess.username}")
+
+    def _on_logout_clicked(self):
+        if self.controller:
+            self.controller.logout()
+
+    def _on_community_selected(self, community_id: str):
+        if not self.controller:
+            return
+        try:
+            self.controller.open_community(community_id)
+        except CommunityApiError as exc:
+            self.chat_area.show_error(exc.message)
+
+    def _on_community_opened(self, payload: dict):
+        comm = payload.get("community")
+        channels = list(payload.get("channels") or [])
+        members = list(payload.get("members") or [])
+        if comm:
+            self.rail.set_active_community(str(comm["id"]))
+        self._all_members = members
+        online_count = sum(
+            1 for m in members
+            if str(m.get("presence_status") or m.get("presence") or "").lower() in ("online", "playing", "in_game")
+        )
+        active_text_id = (
+            str(self.controller.active_channel["id"])
+            if self.controller and self.controller.active_channel
+            else None
+        )
+        active_voice_id = (
+            str(self.controller.active_voice_channel["id"])
+            if self.controller and self.controller.active_voice_channel
+            else None
+        )
+        self.channel_sidebar.set_community_data(
+            comm,
+            channels,
+            member_count=len(members),
+            online_count=online_count,
+            active_text_id=active_text_id,
+            active_voice_id=active_voice_id,
+        )
+        self._apply_member_filter()
+
+    def _on_channel_selected(self, channel_id: str, ch_type: str):
+        if not self.controller:
+            return
+        try:
+            if ch_type == "voice":
+                self.controller.join_voice_channel(channel_id)
+                self.channel_sidebar.set_active_voice_channel(channel_id)
+            else:
+                self.controller.select_channel(channel_id)
+        except CommunityApiError as exc:
+            self.chat_area.show_error(exc.message)
+
+    def _on_messages_loaded(self, channel_id: str, messages: list):
+        if self.controller and self.controller.active_channel:
+            self.chat_area.set_channel(self.controller.active_channel)
+            self.channel_sidebar.set_active_text_channel(str(self.controller.active_channel["id"]))
+        else:
+            self.chat_area.set_channel(None)
+        self.chat_area.set_messages(messages, current_user_id=self._current_user_id())
+
+    def _on_message_received(self, msg: dict):
+        active_id = str(self.controller.active_channel["id"]) if (self.controller and self.controller.active_channel) else ""
+        if active_id and str(msg.get("channel_id") or "") == active_id:
+            self.chat_area.append_or_update_message(msg, current_user_id=self._current_user_id())
+
+    def _on_message_updated(self, msg: dict):
+        active_id = str(self.controller.active_channel["id"]) if (self.controller and self.controller.active_channel) else ""
+        if active_id and str(msg.get("channel_id") or "") == active_id:
+            self.chat_area.append_or_update_message(msg, current_user_id=self._current_user_id(), scroll_to_bottom=False)
+
+    def _on_message_deleted(self, payload: dict):
+        mid = str(payload.get("id") or payload.get("message_id") or "")
+        if mid:
+            self.chat_area.remove_message(mid)
+
+    def _on_members_updated(self, members: list):
+        self._all_members = list(members or [])
+        self._apply_member_filter()
+
+    def _on_search_changed(self, text: str):
+        self._search_filter = text.strip().lower()
+        self._apply_member_filter()
+
+    def _apply_member_filter(self):
+        if not self._search_filter:
+            self.right_panel.set_members(self._all_members)
+            return
+        filtered = [
+            m for m in self._all_members
+            if self._search_filter in str(m.get("username") or m.get("user_id") or "").lower()
+        ]
+        self.right_panel.set_members(filtered)
+
+    def _on_send_message(self, text: str):
+        if not self.controller:
+            return
+        try:
+            msg = self.controller.send_message(text)
+            self.chat_area.msg_input.clear()
+            self.chat_area.append_or_update_message(msg, current_user_id=self._current_user_id())
+        except CommunityApiError as exc:
+            self.chat_area.show_error(exc.message)
+
+    def _on_refresh_messages(self):
+        if self.controller and self.controller.active_channel:
+            try:
+                self.controller.select_channel(str(self.controller.active_channel["id"]))
+            except CommunityApiError as exc:
+                self.chat_area.show_error(exc.message)
+
+    def _on_leave_community(self):
+        if not self.controller or not self.controller.active_community:
+            return
+        cid = str(self.controller.active_community["id"])
+        try:
+            self.controller.leave_community(cid)
+            self.back_to_explore.emit()
+        except CommunityApiError as exc:
+            self.chat_area.show_error(exc.message)
+
+    def _on_voice_state_changed(self, state: dict):
+        self.right_panel.set_voice_state(state)
+        ch = state.get("channel")
+        self.channel_sidebar.set_active_voice_channel(str(ch["id"]) if isinstance(ch, dict) and ch.get("id") else None)
+
+    def _on_voice_toggled(self, action: str, _enabled: bool):
+        if not self.controller:
+            return
+        if action == "disconnect":
+            self.controller.leave_voice_channel()
+        elif action == "screen_unavailable":
+            self.chat_area.show_error(
+                "Compartir pantalla requiere transporte multimedia LiveKit WebRTC nativo (disponible en Fase 4)."
+            )
+
+    def open_create_community_dialog(self):
+        if not self.controller or not self.controller.session:
+            return
+        dlg = QDialog(self)
+        dlg.setWindowTitle("Crear Comunidad")
+        dlg.setFixedWidth(400)
+        dlg.setStyleSheet("QDialog { background: #0e1e2e; color: #ffffff; } QLabel { color: #ffffff; }")
+        lay = QVBoxLayout(dlg)
+        lay.setSpacing(10)
+
+        name_inp = _styled_input("Nombre de la comunidad")
+        desc_inp = _styled_input("Descripción corta")
+        vis_cb = QComboBox()
+        vis_cb.addItem("Privada (por invitación)", "private")
+        vis_cb.addItem("Pública (visible en Explorar)", "public")
+        vis_cb.setFixedHeight(36)
+        err_lbl = QLabel("")
+        err_lbl.setStyleSheet("color: #ffb3b8; font-size: 12px;")
+        err_lbl.setVisible(False)
+
+        lay.addWidget(QLabel("Nombre:"))
+        lay.addWidget(name_inp)
+        lay.addWidget(QLabel("Descripción:"))
+        lay.addWidget(desc_inp)
+        lay.addWidget(QLabel("Visibilidad:"))
+        lay.addWidget(vis_cb)
+        lay.addWidget(err_lbl)
+
+        btns = QHBoxLayout()
+        cancel_b = QPushButton("Cancelar")
+        cancel_b.clicked.connect(dlg.reject)
+        create_b = QPushButton("Crear")
+        create_b.setStyleSheet("background: #35C8F1; color: #051624; font-weight: 800; padding: 8px 16px; border-radius: 8px;")
+        btns.addStretch(1)
+        btns.addWidget(cancel_b)
+        btns.addWidget(create_b)
+        lay.addLayout(btns)
+
+        def submit():
+            name = name_inp.text().strip()
+            if not name:
+                err_lbl.setText("El nombre es obligatorio.")
+                err_lbl.setVisible(True)
+                return
+            try:
+                self.controller.create_community(
+                    name=name,
+                    description=desc_inp.text().strip(),
+                    visibility=str(vis_cb.currentData()),
+                )
+                dlg.accept()
+            except CommunityApiError as exc:
+                err_lbl.setText(exc.message)
+                err_lbl.setVisible(True)
+
+        create_b.clicked.connect(submit)
+        dlg.exec()
+
+    def open_create_channel_dialog(self, channel_type: str = "text"):
+        if not self.controller or not self.controller.active_community:
+            return
+        dlg = QDialog(self)
+        dlg.setWindowTitle("Crear Canal")
+        dlg.setFixedWidth(380)
+        dlg.setStyleSheet("QDialog { background: #0e1e2e; color: #ffffff; } QLabel { color: #ffffff; }")
+        lay = QVBoxLayout(dlg)
+        lay.setSpacing(10)
+
+        name_inp = _styled_input("Nombre del canal (ej. torneos)")
+        topic_inp = _styled_input("Tema opcional")
+        type_cb = QComboBox()
+        type_cb.addItem("Texto (#)", "text")
+        type_cb.addItem("Voz (LiveKit señalización)", "voice")
+        type_cb.setCurrentIndex(1 if channel_type == "voice" else 0)
+        type_cb.setFixedHeight(36)
+        err_lbl = QLabel("")
+        err_lbl.setStyleSheet("color: #ffb3b8; font-size: 12px;")
+        err_lbl.setVisible(False)
+
+        lay.addWidget(QLabel("Nombre:"))
+        lay.addWidget(name_inp)
+        lay.addWidget(QLabel("Tema:"))
+        lay.addWidget(topic_inp)
+        lay.addWidget(QLabel("Tipo:"))
+        lay.addWidget(type_cb)
+        lay.addWidget(err_lbl)
+
+        btns = QHBoxLayout()
+        cancel_b = QPushButton("Cancelar")
+        cancel_b.clicked.connect(dlg.reject)
+        create_b = QPushButton("Crear Canal")
+        create_b.setStyleSheet("background: #35C8F1; color: #051624; font-weight: 800; padding: 8px 16px; border-radius: 8px;")
+        btns.addStretch(1)
+        btns.addWidget(cancel_b)
+        btns.addWidget(create_b)
+        lay.addLayout(btns)
+
+        def submit():
+            name = name_inp.text().strip()
+            if not name:
+                err_lbl.setText("El nombre del canal es obligatorio.")
+                err_lbl.setVisible(True)
+                return
+            try:
+                self.controller.create_channel(
+                    name=name,
+                    channel_type=str(type_cb.currentData()),
+                    topic=topic_inp.text().strip(),
+                )
+                dlg.accept()
+            except CommunityApiError as exc:
+                err_lbl.setText(exc.message)
+                err_lbl.setVisible(True)
+
+        create_b.clicked.connect(submit)
+        dlg.exec()
+
+    def open_invite_dialog(self):
+        if not self.controller or not self.controller.active_community:
+            self.chat_area.show_error("Abrí una comunidad para generar un código de invitación.")
+            return
+        cid = str(self.controller.active_community["id"])
+        try:
+            inv = self.controller.create_invitation(cid)
+        except CommunityApiError as exc:
+            self.chat_area.show_error(exc.message)
+            return
+
+        code = str(inv.get("code") or "")
+        link = f"cci://invite/{code}" if code else ""
+        dlg = QDialog(self)
+        dlg.setWindowTitle("Invitación generada")
+        dlg.setFixedWidth(420)
+        dlg.setStyleSheet("QDialog { background: #0e1e2e; color: #ffffff; } QLabel { color: #ffffff; }")
+        lay = QVBoxLayout(dlg)
+        lay.setSpacing(10)
+        lay.addWidget(QLabel(f"Compartí este código o enlace para unirse a {self.controller.active_community.get('name', 'la comunidad')}:"))
+
+        code_box = _styled_input()
+        code_box.setReadOnly(True)
+        code_box.setText(code)
+        link_box = _styled_input()
+        link_box.setReadOnly(True)
+        link_box.setText(link)
+        lay.addWidget(QLabel("Código:"))
+        lay.addWidget(code_box)
+        lay.addWidget(QLabel("Enlace C.C.I.:"))
+        lay.addWidget(link_box)
+
+        btns = QHBoxLayout()
+        copy_b = QPushButton("Copiar código")
+        copy_b.clicked.connect(lambda: QApplication.clipboard().setText(code))
+        close_b = QPushButton("Cerrar")
+        close_b.setStyleSheet("background: #35C8F1; color: #051624; font-weight: 800; padding: 8px 16px; border-radius: 8px;")
+        close_b.clicked.connect(dlg.accept)
+        btns.addStretch(1)
+        btns.addWidget(copy_b)
+        btns.addWidget(close_b)
+        lay.addLayout(btns)
+        dlg.exec()
 
 
 class CommunityExploreView(QWidget):
     open_community_requested = Signal(str)
 
-    def __init__(self, parent=None):
+    def __init__(self, controller: Optional[CommunityController] = None, parent=None):
         super().__init__(parent)
+        self.controller = controller
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(48, 20, 48, 24)
+        layout.setContentsMargins(20, 12, 20, 18)
 
-        self.panel = AcrylicGlassCard(self, border_radius=18)
+        self.panel = AcrylicGlassCard(self, border_radius=24)
         p_lay = QVBoxLayout(self.panel)
-        p_lay.setContentsMargins(28, 24, 28, 24)
-        p_lay.setSpacing(16)
+        p_lay.setContentsMargins(28, 22, 28, 22)
+        p_lay.setSpacing(14)
 
+        hdr = QHBoxLayout()
+        hdr_t = QVBoxLayout()
+        hdr_t.setSpacing(3)
         title = QLabel("C.C.I. Gaming Communities & Friends")
         title.setStyleSheet("font-size: 20px; font-weight: 800; color: #ffffff;")
-        sub = QLabel("Live multiplayer lobbies, tournament chats and presence")
+        sub = QLabel("Tus comunidades privadas o públicas y catálogo oficial del servidor.")
         sub.setStyleSheet("font-size: 12px; color: #a5d8ff;")
-        p_lay.addWidget(title)
-        p_lay.addWidget(sub)
+        hdr_t.addWidget(title)
+        hdr_t.addWidget(sub)
+        hdr.addLayout(hdr_t, 1)
 
+        self.create_btn = QPushButton("+ Crear comunidad")
+        self.create_btn.setProperty("class", "glassBtn")
+        self.create_btn.setCursor(Qt.PointingHandCursor)
+        self.create_btn.clicked.connect(self._open_create_dialog)
+        hdr.addWidget(self.create_btn)
+
+        self.join_code_btn = QPushButton("Unirse por código")
+        self.join_code_btn.setProperty("class", "glassBtn")
+        self.join_code_btn.setCursor(Qt.PointingHandCursor)
+        self.join_code_btn.clicked.connect(self._open_join_code_dialog)
+        hdr.addWidget(self.join_code_btn)
+
+        self.refresh_btn = QPushButton("↻ Actualizar")
+        self.refresh_btn.setProperty("class", "glassBtn")
+        self.refresh_btn.setCursor(Qt.PointingHandCursor)
+        self.refresh_btn.clicked.connect(self.refresh)
+        hdr.addWidget(self.refresh_btn)
+
+        self.logout_btn = QPushButton("Cerrar sesión")
+        self.logout_btn.setProperty("class", "glassBtn")
+        self.logout_btn.setCursor(Qt.PointingHandCursor)
+        self.logout_btn.clicked.connect(lambda: self.controller.logout() if self.controller else None)
+        hdr.addWidget(self.logout_btn)
+
+        p_lay.addLayout(hdr)
+
+        self.status_banner = QLabel("")
+        self.status_banner.setWordWrap(True)
+        self.status_banner.setVisible(False)
+        self.status_banner.setStyleSheet(
+            "background: rgba(233, 75, 86, 0.22); border: 1px solid rgba(233, 75, 86, 0.65); "
+            "border-radius: 10px; color: #ffd6d9; font-size: 12px; font-weight: 600; padding: 8px 12px;"
+        )
+        p_lay.addWidget(self.status_banner)
+
+        self.scroll = QScrollArea()
+        self.scroll.setWidgetResizable(True)
+        self.scroll.setStyleSheet("QScrollArea, QScrollArea > QWidget > QWidget { border: none; background: transparent; }")
+        self.scroll.viewport().setStyleSheet("background: transparent;")
+        self.scroll.viewport().setAttribute(Qt.WA_TranslucentBackground, True)
+
+        self.cards_container = QWidget()
+        self.cards_container.setStyleSheet("background: transparent;")
+        self.cards_layout = QVBoxLayout(self.cards_container)
+        self.cards_layout.setContentsMargins(0, 0, 0, 0)
+        self.cards_layout.setSpacing(10)
+        self.cards_layout.addStretch(1)
+        self.scroll.setWidget(self.cards_container)
+        p_lay.addWidget(self.scroll, 1)
+
+        layout.addWidget(self.panel)
+
+        if self.controller:
+            self.controller.communities_updated.connect(self.render_communities)
+            self.controller.session_changed.connect(self._on_session_changed)
+
+    def show_error(self, message: str):
+        if message:
+            self.status_banner.setText(message)
+            self.status_banner.setVisible(True)
+        else:
+            self.status_banner.setVisible(False)
+
+    def _on_session_changed(self, sess):
+        if sess is None:
+            self.render_communities([], [])
+
+    def refresh(self):
+        if not self.controller:
+            return
+        self.show_error("")
         try:
-            repo = CommunitiesRepository.get_instance()
-            service = CommunitiesService(repo)
-            rooms = service.list_rooms()
-        except Exception:
-            rooms = []
+            self.controller.refresh_communities()
+        except CommunityApiError as exc:
+            self.show_error(exc.message)
 
-        if not rooms:
-            rooms = [
-                {"id": "seeker-hub", "name": "Seeker Hub Central", "description": "3 friends playing Metal Slug 2", "members_count": 14},
-                {"id": "night-raid", "name": "Night Raid Elite", "description": "Street Fighter II Turbo Tournament", "members_count": 8},
-                {"id": "retro-preservation", "name": "Retro Preservation Society", "description": "Castlevania Symphony of the Night Party", "members_count": 22},
-            ]
+    def render_communities(self, my_communities: list, public_communities: list):
+        _clear_layout_widgets(self.cards_layout, keep_trailing_stretch=True)
+        insert_pos = 0
 
-        for r in rooms:
+        def add_section_header(text: str):
+            nonlocal insert_pos
+            lbl = QLabel(text)
+            lbl.setStyleSheet("font-size: 13px; font-weight: 800; color: #35C8F1; padding: 6px 2px 2px 2px;")
+            self.cards_layout.insertWidget(insert_pos, lbl)
+            insert_pos += 1
+
+        def add_card(comm: dict, is_member: bool):
+            nonlocal insert_pos
+            cid = str(comm.get("id") or "")
             card = AcrylicGlassCard(self, border_radius=12, is_interactive=True)
-            card.setFixedHeight(72)
+            card.setFixedHeight(74)
             c_lay = QHBoxLayout(card)
             c_lay.setContentsMargins(18, 10, 18, 10)
 
-            ico = QLabel()
-            ip = ROOT / "assets_omnidash" / "icons" / "chat.png"
-            if ip.exists():
-                ico.setPixmap(QPixmap(str(ip)).scaled(24, 24, Qt.KeepAspectRatio, Qt.SmoothTransformation))
-            c_lay.addWidget(ico)
-
             info_box = QVBoxLayout()
-            r_name = QLabel(r.get("name", "Room"))
+            r_name = QLabel(str(comm.get("name") or "Comunidad"))
             r_name.setStyleSheet("font-size: 14px; font-weight: 700; color: #ffffff;")
-            r_desc = QLabel(r.get("description", "Community Lobby"))
+            r_desc = QLabel(str(comm.get("description") or "Sin descripción"))
             r_desc.setStyleSheet("font-size: 11px; color: #cbe6ff;")
             info_box.addWidget(r_name)
             info_box.addWidget(r_desc)
-            c_lay.addLayout(info_box)
+            c_lay.addLayout(info_box, 1)
 
-            c_lay.addStretch(1)
+            vis = "Pública" if comm.get("visibility") == "public" else "Privada"
+            mcount = comm.get("member_count", 0)
+            meta_lbl = QLabel(f"{vis}  •  {mcount} miembros")
+            meta_lbl.setStyleSheet("font-size: 12px; color: #BDD4E4; font-weight: 600;")
+            c_lay.addWidget(meta_lbl)
 
-            online_lbl = QLabel(f"● {r.get('members_count', 1)} online")
-            online_lbl.setStyleSheet("font-size: 12px; color: #70d6ff; font-weight: 700;")
-            c_lay.addWidget(online_lbl)
+            btn = QPushButton("Abrir" if is_member else "Unirse")
+            btn.setProperty("class", "glassBtn")
+            btn.setCursor(Qt.PointingHandCursor)
+            if is_member:
+                btn.clicked.connect(lambda _, c=cid: self.open_community_requested.emit(c))
+            else:
+                btn.clicked.connect(lambda _, c=cid: self._join_public(c))
+            c_lay.addWidget(btn)
 
-            join_btn = QPushButton("Unirse")
-            join_btn.setProperty("class", "glassBtn")
-            join_btn.setCursor(Qt.PointingHandCursor)
-            join_btn.clicked.connect(lambda _, cid=r.get("id"): self.open_community_requested.emit(cid))
-            c_lay.addWidget(join_btn)
+            self.cards_layout.insertWidget(insert_pos, card)
+            insert_pos += 1
 
-            p_lay.addWidget(card)
+        add_section_header("Tus comunidades")
+        my_ids = {str(c.get("id")) for c in (my_communities or [])}
+        if my_communities:
+            for c in my_communities:
+                add_card(c, is_member=True)
+        else:
+            empty_mine = QLabel("Todavía no perteneces a ninguna comunidad. Crea una o únete con un código de invitación.")
+            empty_mine.setStyleSheet("font-size: 12px; color: #91A5B3; padding: 8px 4px;")
+            self.cards_layout.insertWidget(insert_pos, empty_mine)
+            insert_pos += 1
 
-        p_lay.addStretch(1)
-        layout.addWidget(self.panel)
+        add_section_header("Comunidades públicas disponibles")
+        other_public = [c for c in (public_communities or []) if str(c.get("id")) not in my_ids]
+        if other_public:
+            for c in other_public:
+                add_card(c, is_member=bool(c.get("is_member")))
+        else:
+            empty_pub = QLabel("No hay comunidades públicas nuevas para explorar.")
+            empty_pub.setStyleSheet("font-size: 12px; color: #91A5B3; padding: 8px 4px;")
+            self.cards_layout.insertWidget(insert_pos, empty_pub)
+            insert_pos += 1
+
+    def _join_public(self, community_id: str):
+        if not self.controller:
+            return
+        try:
+            self.controller.join_public_community(community_id)
+            self.open_community_requested.emit(community_id)
+        except CommunityApiError as exc:
+            self.show_error(exc.message)
+
+    def _open_join_code_dialog(self):
+        if not self.controller:
+            return
+        dlg = QDialog(self)
+        dlg.setWindowTitle("Unirse con código o enlace")
+        dlg.setFixedWidth(400)
+        dlg.setStyleSheet("QDialog { background: #0e1e2e; color: #ffffff; } QLabel { color: #ffffff; }")
+        lay = QVBoxLayout(dlg)
+        lay.setSpacing(10)
+        code_inp = _styled_input("Ej: ABC12345 o cci://invite/ABC12345")
+        err_lbl = QLabel("")
+        err_lbl.setStyleSheet("color: #ffb3b8; font-size: 12px;")
+        err_lbl.setVisible(False)
+        lay.addWidget(QLabel("Código o enlace de invitación:"))
+        lay.addWidget(code_inp)
+        lay.addWidget(err_lbl)
+
+        btns = QHBoxLayout()
+        cancel_b = QPushButton("Cancelar")
+        cancel_b.clicked.connect(dlg.reject)
+        join_b = QPushButton("Unirse")
+        join_b.setStyleSheet("background: #35C8F1; color: #051624; font-weight: 800; padding: 8px 16px; border-radius: 8px;")
+        btns.addStretch(1)
+        btns.addWidget(cancel_b)
+        btns.addWidget(join_b)
+        lay.addLayout(btns)
+
+        def submit():
+            raw = code_inp.text().strip()
+            if not raw:
+                err_lbl.setText("Ingresá un código válido.")
+                err_lbl.setVisible(True)
+                return
+            try:
+                res = self.controller.join_by_invitation(raw)
+                cid = str((res.get("community") or {}).get("id") or "")
+                dlg.accept()
+                if cid:
+                    self.open_community_requested.emit(cid)
+            except CommunityApiError as exc:
+                err_lbl.setText(exc.message)
+                err_lbl.setVisible(True)
+
+        join_b.clicked.connect(submit)
+        dlg.exec()
+
+    def _open_create_dialog(self):
+        parent_comm = self.parent()
+        while parent_comm is not None and not hasattr(parent_comm, "interior_view"):
+            parent_comm = parent_comm.parent()
+        if parent_comm is not None and hasattr(parent_comm, "interior_view"):
+            parent_comm.interior_view.open_create_community_dialog()
+            if self.controller and self.controller.active_community:
+                parent_comm.internal_stack.setCurrentWidget(parent_comm.interior_view)
 
 
 class CommunitiesView(QWidget):
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, controller: Optional[CommunityController] = None, auto_connect: bool = True):
         super().__init__(parent)
+        self.controller = controller or CommunityController(parent=self)
+        self._auto_connect = auto_connect
+        self._bootstrapped = False
+        self._prefer_explore = False
+
         layout = QVBoxLayout(self)
         layout.setContentsMargins(36, 8, 36, 18)
 
         self.internal_stack = QStackedWidget(self)
         layout.addWidget(self.internal_stack)
 
-        self.explore_view = CommunityExploreView(self)
-        self.interior_view = CommunityInteriorView(self)
+        self.auth_view = CommunityAuthView(self.controller, self)
+        self.explore_view = CommunityExploreView(self.controller, self)
+        self.interior_view = CommunityInteriorView(self.controller, self)
 
-        self.internal_stack.addWidget(self.explore_view)   # Index 0: Catálogo / Explorar
-        self.internal_stack.addWidget(self.interior_view)  # Index 1: Interior de Comunidad (1:1 Imagen 2)
+        self.internal_stack.addWidget(self.auth_view)      # Index 0: Auth real JWT
+        self.internal_stack.addWidget(self.explore_view)   # Index 1: Explorar / Invitaciones
+        self.internal_stack.addWidget(self.interior_view)  # Index 2: Interior de Comunidad
 
-        # Conectar navegación
         self.explore_view.open_community_requested.connect(self.show_interior)
         self.interior_view.back_to_explore.connect(self.show_explore)
+        self.controller.session_changed.connect(self._on_session_changed)
+        self.controller.community_opened.connect(self._on_community_opened)
 
-        # Mostrar interior por defecto para alineación con Imagen 2
-        self.internal_stack.setCurrentIndex(1)
+        # Gate estricto: jamás mostrar interior ni comunidades sin sesión autenticada
+        self.internal_stack.setCurrentIndex(0)
 
-    def show_interior(self, community_id: str = "seeker-hub"):
-        self.internal_stack.setCurrentIndex(1)
+    def _on_community_opened(self, _payload: dict):
+        if self.controller.session is not None:
+            self.internal_stack.setCurrentWidget(self.interior_view)
+
+    def _on_session_changed(self, sess):
+        if sess is None:
+            self.internal_stack.setCurrentWidget(self.auth_view)
+            return
+        try:
+            mine, _pub = self.controller.refresh_communities()
+            if not self._prefer_explore and mine:
+                target_id = (
+                    str(self.controller.active_community["id"])
+                    if self.controller.active_community
+                    else str(mine[0]["id"])
+                )
+                self.controller.open_community(target_id)
+                self.internal_stack.setCurrentWidget(self.interior_view)
+            else:
+                self.internal_stack.setCurrentWidget(self.explore_view)
+        except CommunityApiError as exc:
+            self.explore_view.show_error(exc.message)
+            self.internal_stack.setCurrentWidget(self.explore_view)
+
+    def activate_view(self, for_explore: bool = False):
+        self._prefer_explore = for_explore
+        if self.controller.session is None:
+            if not self._bootstrapped and self._auto_connect:
+                self._bootstrapped = True
+                self.controller.restore_session()
+            elif self._auto_connect:
+                self.controller.check_backend(auto_start=True)
+            if self.controller.session is None:
+                self.internal_stack.setCurrentWidget(self.auth_view)
+                return
+
+        if for_explore:
+            self.show_explore()
+        else:
+            self.show_interior()
+
+    def show_interior(self, community_id: Optional[str] = None):
+        if self.controller.session is None:
+            self.internal_stack.setCurrentWidget(self.auth_view)
+            return
+        try:
+            if community_id:
+                self.controller.open_community(community_id)
+            elif not self.controller.active_community:
+                mine, _ = self.controller.refresh_communities()
+                if not mine:
+                    self.internal_stack.setCurrentWidget(self.explore_view)
+                    return
+                self.controller.open_community(str(mine[0]["id"]))
+            self.internal_stack.setCurrentWidget(self.interior_view)
+        except CommunityApiError as exc:
+            self.explore_view.show_error(exc.message)
+            self.internal_stack.setCurrentWidget(self.explore_view)
 
     def show_explore(self):
-        self.internal_stack.setCurrentIndex(0)
+        if self.controller.session is None:
+            self.internal_stack.setCurrentWidget(self.auth_view)
+            return
+        self.explore_view.refresh()
+        self.internal_stack.setCurrentWidget(self.explore_view)
 
 
 # Alias para retrocompatibilidad
@@ -4997,10 +5929,10 @@ class ProfileView(QWidget):
 
         # Header con Avatar
         head_box = QHBoxLayout()
-        av = QLabel("A")
-        av.setFixedSize(64, 64)
-        av.setAlignment(Qt.AlignCenter)
-        av.setStyleSheet("""
+        self.profile_av_lbl = QLabel("?")
+        self.profile_av_lbl.setFixedSize(64, 64)
+        self.profile_av_lbl.setAlignment(Qt.AlignCenter)
+        self.profile_av_lbl.setStyleSheet("""
             background: qlineargradient(x1:0, y1:0, x2:0, y2:1, stop:0 #8cd7f5, stop:1 #06345a);
             border: 2px solid #ffffff;
             border-radius: 32px;
@@ -5008,15 +5940,15 @@ class ProfileView(QWidget):
             font-weight: 800;
             color: #ffffff;
         """)
-        head_box.addWidget(av)
+        head_box.addWidget(self.profile_av_lbl)
 
         name_box = QVBoxLayout()
-        name_l = QLabel("Alex  •  Frutiger Pilot")
-        name_l.setStyleSheet("font-size: 20px; font-weight: 800; color: #ffffff;")
-        score_l = QLabel("18,450 G  •  Level 42 Master  •  110 Trofeos C.C.I.")
-        score_l.setStyleSheet("font-size: 13px; color: #ffd166; font-weight: 700;")
-        name_box.addWidget(name_l)
-        name_box.addWidget(score_l)
+        self.profile_name_lbl = QLabel("Invitado  •  Sin sesión en Comunidades")
+        self.profile_name_lbl.setStyleSheet("font-size: 20px; font-weight: 800; color: #ffffff;")
+        self.profile_score_lbl = QLabel("Inicia sesión en la pestaña Comunidades para sincronizar tu cuenta.")
+        self.profile_score_lbl.setStyleSheet("font-size: 13px; color: #ffd166; font-weight: 700;")
+        name_box.addWidget(self.profile_name_lbl)
+        name_box.addWidget(self.profile_score_lbl)
         head_box.addLayout(name_box)
         head_box.addStretch(1)
         p_lay.addLayout(head_box)
@@ -5055,16 +5987,28 @@ class ProfileView(QWidget):
         p_lay.addStretch(1)
         layout.addWidget(self.panel)
 
+    def set_session_user(self, username: Optional[str]):
+        if username:
+            self.profile_av_lbl.setText(username[:1].upper())
+            self.profile_name_lbl.setText(f"{username}  •  Cuenta C.C.I. conectada")
+            self.profile_score_lbl.setText("Sesión activa en C.C.I. Communities")
+        else:
+            self.profile_av_lbl.setText("?")
+            self.profile_name_lbl.setText("Invitado  •  Sin sesión en Comunidades")
+            self.profile_score_lbl.setText("Inicia sesión en la pestaña Comunidades para sincronizar tu cuenta.")
+
 
 # ==============================================================================
 # 7. VENTANA PRINCIPAL OMNIDASH EN PYSIDE6 (OmniDashMainWindow)
 # ==============================================================================
 class OmniDashMainWindow(QMainWindow):
-    def __init__(self):
+    def __init__(self, controller: Optional[CommunityController] = None, auto_connect: bool = True):
         super().__init__()
         self.setWindowTitle("C.C.I. SYSTEM — OmniDash Virtual Console (Frutiger Aero)")
         self.resize(1672, 941)
         self.setMinimumSize(1280, 720)
+        self._auto_connect = auto_connect and (os.environ.get("CCI_AUTO_START_BACKEND", "1") != "0")
+        self.community_controller = controller or CommunityController(parent=self)
 
         # Cargar fondo predeterminado (prioriza background.jpg subido por el usuario)
         self.bg_pixmap = None
@@ -5096,7 +6040,11 @@ class OmniDashMainWindow(QMainWindow):
         self.library_view = LibraryView(self)
         self.details_view = GameDetailsView(self)
         self.settings_view = SettingsView(self)
-        self.communities_view = CommunitiesView(self)
+        self.communities_view = CommunitiesView(
+            self,
+            controller=self.community_controller,
+            auto_connect=self._auto_connect,
+        )
         self.friends_view = self.communities_view.explore_view
         self.profile_view = ProfileView(self)
 
@@ -5121,14 +6069,25 @@ class OmniDashMainWindow(QMainWindow):
 
         self.settings_view.wallpaper_changed.connect(self.set_wallpaper)
 
-        # Conectar Stream Card para lanzar juego en directo
-        self.communities_view.interior_view.chat_area.stream_card.play_stream.connect(
-            lambda _: self.launch_game({
-                "title": "Metal Slug 2",
-                "core": "cores/fbneo_libretro.dylib",
-                "rom": "roms/arcade/mslug2.zip"
-            })
+        self.community_controller.session_changed.connect(lambda _s: self._sync_session_ui())
+        self.community_controller.communities_updated.connect(lambda _m, _p: self._sync_session_ui())
+        self._sync_session_ui()
+        if self._auto_connect:
+            QTimer.singleShot(50, self._restore_community_session)
+
+    def _restore_community_session(self):
+        if self.community_controller.session is None:
+            self.community_controller.restore_session()
+
+    def _sync_session_ui(self):
+        sess = self.community_controller.session
+        uname = sess.username if sess else None
+        self.home_view.set_session_state(
+            username=uname,
+            communities_count=len(self.community_controller.my_communities),
+            active_streams_count=len(self.community_controller.active_streams),
         )
+        self.profile_view.set_session_user(uname)
 
     def set_wallpaper(self, path: str):
         p = Path(path).resolve()
@@ -5192,10 +6151,15 @@ class OmniDashMainWindow(QMainWindow):
         idx = mapping.get(view_id, 0)
         self.stack.setCurrentIndex(idx)
         if view_id == "FRIENDS":
-            self.communities_view.show_explore()
+            self.communities_view.activate_view(for_explore=True)
         elif view_id in ("COMMUNITY", "COMMUNITIES"):
-            self.communities_view.show_interior()
+            self.communities_view.activate_view(for_explore=False)
         self.nav_bar.set_active_view(view_id)
+
+    def closeEvent(self, event):
+        if hasattr(self, "community_controller") and self.community_controller:
+            self.community_controller.realtime.disconnect_sync()
+        super().closeEvent(event)
 
     def show_details(self, game: dict):
         self.details_view.load_game(game)

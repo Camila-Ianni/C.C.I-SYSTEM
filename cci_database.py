@@ -787,7 +787,10 @@ def authenticate_account(
     clean_email = clean_id.lower()
     with get_db(db_path) as conn:
         cursor = conn.cursor()
-        cursor.execute("SELECT * FROM accounts WHERE email = ? OR username = ?", (clean_email, clean_id))
+        cursor.execute(
+            "SELECT * FROM accounts WHERE email = ? OR username = ? OR UPPER(username) = ?",
+            (clean_email, clean_id, clean_id.upper()),
+        )
         row = cursor.fetchone()
         if not row:
             return None

@@ -1261,24 +1261,40 @@ class CommunitiesUIBridge:
         community_slug_or_id: str,
         sound_name: str,
     ) -> Dict[str, Any]:
-        """Dispara un sonido en la sala de voz de la comunidad y lo audita en backend."""
+        """Dispara un sonido en la sala de voz verificando permisos y cooldown reales."""
         comm = self._resolve_community(community_slug_or_id)
         if not comm:
-            return {"status": "ok", "sound": sound_name}
+            return {"status": "error", "message": "Comunidad no encontrada"}
         channels = self.repo.list_channels(comm["id"])
         voice_ch = next((c for c in channels if c.get("type") in ("voice", "stream")), None)
         ch_id = voice_ch["id"] if voice_ch else f"ch_v_{comm['id']}"
         sound_id = f"snd_{sound_name.lower().replace(' ', '_').replace('.', '')}"
         try:
-            self.service.play_sound(self.user_id, sound_id, ch_id)
-        except Exception:
+            auth = self.service.authorize_sound_play(self.user_id, sound_id, ch_id)
+            return {
+                "status": "played",
+                "sound": sound_name,
+                "community_id": comm["id"],
+                "channel_id": ch_id,
+                "authorized": auth.get("authorized", True),
+            }
+        except LookupError:
+            # Sonido sintetizado integrado: validar igualmente permiso y mute antes de auditar
+            if not self.service.has_permission(comm["id"], self.user_id, "sounds.play", channel_id=ch_id):
+                return {"status": "error", "message": "Permiso denegado: se requiere sounds.play"}
+            if self.repo.is_user_muted(comm["id"], self.user_id):
+                return {"status": "error", "message": "Usuario silenciado en la comunidad"}
+            import sqlite3
+            import uuid
+            play_id = str(uuid.uuid4())
             try:
-                import uuid
-                play_id = str(uuid.uuid4())
                 self.repo.record_sound_play(play_id, sound_id, self.user_id, ch_id)
-            except Exception:
+            except sqlite3.IntegrityError:
+                # Sonido sintetizado integrado sin fila en soundboard_sounds (FK): ejecución local autorizada
                 pass
-        return {"status": "played", "sound": sound_name, "community_id": comm["id"]}
+            return {"status": "played", "sound": sound_name, "community_id": comm["id"], "channel_id": ch_id}
+        except Exception as e:
+            return {"status": "error", "message": str(e)}
 
     def start_live_stream(
         self,
@@ -1289,7 +1305,7 @@ class CommunitiesUIBridge:
         resolution: str = "720p",
         fps: int = 30,
     ) -> Dict[str, Any]:
-        """Inicia una sesión de transmisión en vivo (Go Live) de juego o pantalla en el backend."""
+        """Inicia una sesión de transmisión en vivo verificando autorización y límites reales."""
         comm = self._resolve_community(community_slug_or_id)
         if not comm:
             return {"status": "error", "message": "Comunidad no encontrada"}
@@ -1319,22 +1335,11 @@ class CommunitiesUIBridge:
                 fps=fps,
             )
             return {"status": "streaming", "session": session, "channel_id": target_ch["id"]}
-        except Exception:
-            session_id = f"stream_{int(time.time())}"
-            return {
-                "status": "streaming",
-                "session": {
-                    "session_id": session_id,
-                    "title": title,
-                    "stream_type": stream_type,
-                    "resolution": resolution,
-                    "fps": fps,
-                },
-                "channel_id": target_ch["id"],
-            }
+        except Exception as e:
+            return {"status": "error", "message": str(e), "channel_id": target_ch["id"]}
 
     def stop_live_stream(self, community_slug_or_id: str, channel_id: Optional[str] = None) -> bool:
-        """Detiene la sesión de transmisión en vivo activa y libera el slot en el canal."""
+        """Detiene la sesión de transmisión en vivo activa sin simular éxito ante errores."""
         comm = self._resolve_community(community_slug_or_id)
         if not comm:
             return False
@@ -1345,13 +1350,12 @@ class CommunitiesUIBridge:
                 if act and act["user_id"] == self.user_id:
                     channel_id = c["id"]
                     break
-        if channel_id:
-            try:
-                self.service.stop_stream(actor_id=self.user_id, community_id=comm["id"], channel_id=channel_id)
-                return True
-            except Exception:
-                pass
-        return True
+        if not channel_id:
+            return False
+        try:
+            return bool(self.service.stop_stream(actor_id=self.user_id, community_id=comm["id"], channel_id=channel_id))
+        except Exception:
+            return False
 
     def save_ui_state(self, key: str, payload: Any) -> None:
         conn = self.repo._get_connection()
@@ -3178,10 +3182,13 @@ class CommunityViewState(BaseState):
         self.modal_mode = None
 
     def _fire_soundboard(self, s_name: str) -> None:
-        """Reproduce un tono sintetizado y registra la emisión del efecto en el backend."""
-        play_soundboard_tone(s_name)
+        """Valida permisos y dispara un tono en el soundboard sin falsos positivos."""
         grp = self._active_group_dict()
-        self.bridge.trigger_soundboard(grp["id"], s_name)
+        res = self.bridge.trigger_soundboard(grp["id"], s_name)
+        if res.get("status") != "played":
+            self.status_toast = f"Error Soundboard: {res.get('message', 'No autorizado')}"
+            return
+        play_soundboard_tone(s_name)
         self.status_toast = f"Sonido '{s_name}' reproducido en {grp['name']}"
 
     def _to_logical_pos(self, pos: Tuple[int, int]) -> Tuple[int, int]:
@@ -3381,7 +3388,9 @@ class CommunityViewState(BaseState):
             _draw_cut_rect(canvas, self.voice_bar_rect, (12, 22, 18), (80, 235, 140), cut=4, border_w=1)
             canvas.blit(f_small_b.render("🟢 VOZ CONECTADA", True, (95, 240, 150)), (self.voice_bar_rect.x + 8, self.voice_bar_rect.y + 5))
             diag = self.bridge.get_voice_diagnostics()
-            canvas.blit(f_small.render(f"{diag['latency_ms']:.0f}ms UDP", True, (160, 215, 185)), (self.voice_bar_rect.right - 58, self.voice_bar_rect.y + 5))
+            lat = diag.get("latency_ms")
+            lat_text = f"{lat:.0f}ms UDP" if isinstance(lat, (int, float)) else "SIN RTC"
+            canvas.blit(f_small.render(lat_text, True, (160, 215, 185)), (self.voice_bar_rect.right - 58, self.voice_bar_rect.y + 5))
             canvas.blit(f_small.render(f"#{self.active_voice[:10]} / {grp['name'][:10]}", True, (185, 225, 205)), (self.voice_bar_rect.x + 8, self.voice_bar_rect.y + 20))
 
             # 4 Botones: Mute, Deafen, HUD, Desconectar

@@ -1,8 +1,8 @@
 {
-  "timestamp": "2026-11-10T22:13:09.564619",
-  "git_commit_sha": "f5ac372e4729397fddaecbf9db5c1397e6d3e055",
-  "git_code_tree_sha256": "cba3093f343d4c1b54f47016117679cece12dd1c2087e18bbff7080c8df7973b",
-  "git_branch": "main",
+  "timestamp": "2026-11-10T23:58:06.199842",
+  "git_commit_sha": "ae61141053dece685210e1e306a19b6f095df0f7",
+  "git_code_tree_sha256": "888c57f03aa177210506e9261665da321d058c64ccdfdcbe2663b16c878fcc99",
+  "git_branch": "feat/communities-real-p0",
   "python_interpreter": "/Users/cami/Desktop/C.C.I SYSTEM/.venv/bin/python3",
   "python_version": "3.14.5 (main, May 10 2026, 10:21:34) [Clang 21.0.0 (clang-2100.0.123.102)]",
   "platform": "macOS-26.6.2-arm64-arm-64bit-Mach-O",
@@ -15,7 +15,7 @@
   "total_failed": 0,
   "total_errors": 0,
   "total_skipped": 0,
-  "total_time_seconds": 42.4,
+  "total_time_seconds": 47.76,
   "suites": [
     {
       "suite": "test_phase2.py",
@@ -25,54 +25,54 @@
       "failures": 0,
       "errors": 0,
       "skipped": 0,
-      "elapsed": 0.567,
+      "elapsed": 0.536,
       "success": true,
-      "output_sha256": "357a04dd8c00a1ac8a4d99d97c256986c289ff7a061d192eebccf053b9dd9ac5",
+      "output_sha256": "ed4672851cb6de0276427c204a120036c19e985a832a3c42b03f698f1d04b11f",
       "test_cases": [
         {
           "id": "test_phase2.TestPhase2Backend.test_01_database_seed_and_games",
           "status": "PASS",
-          "elapsed_ms": 1.46
+          "elapsed_ms": 1.86
         },
         {
           "id": "test_phase2.TestPhase2Backend.test_02_database_highscores",
           "status": "PASS",
-          "elapsed_ms": 2.34
+          "elapsed_ms": 3.66
         },
         {
           "id": "test_phase2.TestPhase2Backend.test_03_database_profile_sync",
           "status": "PASS",
-          "elapsed_ms": 3.56
+          "elapsed_ms": 4.36
         },
         {
           "id": "test_phase2.TestPhase2Backend.test_04_http_rest_api_health",
           "status": "PASS",
-          "elapsed_ms": 30.44
+          "elapsed_ms": 17.82
         },
         {
           "id": "test_phase2.TestPhase2Backend.test_05_http_rest_api_games",
           "status": "PASS",
-          "elapsed_ms": 9.17
+          "elapsed_ms": 1.82
         },
         {
           "id": "test_phase2.TestPhase2Backend.test_06_http_rest_api_leaderboard_submission",
           "status": "PASS",
-          "elapsed_ms": 6.7
+          "elapsed_ms": 4.69
         },
         {
           "id": "test_phase2.TestPhase2Backend.test_07_web_profiles_and_auth_removed",
           "status": "PASS",
-          "elapsed_ms": 3.22
+          "elapsed_ms": 3.99
         },
         {
           "id": "test_phase2.TestPhase2Backend.test_08_local_disk_user_persistence",
           "status": "PASS",
-          "elapsed_ms": 112.22
+          "elapsed_ms": 74.2
         },
         {
           "id": "test_phase2.TestPhase2Backend.test_09_web_landing_clean_structure",
           "status": "PASS",
-          "elapsed_ms": 8.12
+          "elapsed_ms": 8.5
         }
       ]
     },
@@ -84,39 +84,39 @@
       "failures": 0,
       "errors": 0,
       "skipped": 0,
-      "elapsed": 0.26,
+      "elapsed": 0.298,
       "success": true,
-      "output_sha256": "22dc4faa62bb13256760af37c5e079120175fe2b9f921f7a748d5c5606be7d88",
+      "output_sha256": "50245794172134aa4e589d7270ddc8a0945a604a3dc605bc47fa08086b998bef",
       "test_cases": [
         {
           "id": "test_phase3.TestPhase3PackagingAndUpdater.test_01_version_json_validity",
           "status": "PASS",
-          "elapsed_ms": 0.21
+          "elapsed_ms": 0.23
         },
         {
           "id": "test_phase3.TestPhase3PackagingAndUpdater.test_02_semver_parsing_and_comparison",
           "status": "PASS",
-          "elapsed_ms": 0.05
+          "elapsed_ms": 0.04
         },
         {
           "id": "test_phase3.TestPhase3PackagingAndUpdater.test_03_http_version_endpoint",
           "status": "PASS",
-          "elapsed_ms": 13.06
+          "elapsed_ms": 14.18
         },
         {
           "id": "test_phase3.TestPhase3PackagingAndUpdater.test_04_updater_sync_check",
           "status": "PASS",
-          "elapsed_ms": 1.33
+          "elapsed_ms": 1.46
         },
         {
           "id": "test_phase3.TestPhase3PackagingAndUpdater.test_05_updater_background_check",
           "status": "PASS",
-          "elapsed_ms": 1.63
+          "elapsed_ms": 1.41
         },
         {
           "id": "test_phase3.TestPhase3PackagingAndUpdater.test_06_build_distribution_exclusions",
           "status": "PASS",
-          "elapsed_ms": 0.04
+          "elapsed_ms": 0.05
         },
         {
           "id": "test_phase3.TestPhase3PackagingAndUpdater.test_07_system_badge",
@@ -133,54 +133,54 @@
       "failures": 0,
       "errors": 0,
       "skipped": 0,
-      "elapsed": 0.977,
+      "elapsed": 1.091,
       "success": true,
-      "output_sha256": "bb27debd42878065da1fcd2c288723d70b4468ecae74d3a093daa61f78f0fda4",
+      "output_sha256": "182e07b50980bd8c67eca0b1a983f0de71d98674d3691f292c9c7c7323bcee16",
       "test_cases": [
         {
           "id": "test_phase1_evolution.TestAuthoritativeSyncEngine.test_fixed_timestep_and_punch_hit",
           "status": "PASS",
-          "elapsed_ms": 0.62
+          "elapsed_ms": 0.65
         },
         {
           "id": "test_phase1_evolution.TestBackendServerAPI.test_network_status_endpoint",
           "status": "PASS",
-          "elapsed_ms": 263.66
+          "elapsed_ms": 191.51
         },
         {
           "id": "test_phase1_evolution.TestPhase1DatabaseMigrations.test_all_evolution_tables_exist",
           "status": "PASS",
-          "elapsed_ms": 87.86
+          "elapsed_ms": 98.56
         },
         {
           "id": "test_phase1_evolution.TestPhase1DatabaseMigrations.test_friendships_in_db",
           "status": "PASS",
-          "elapsed_ms": 82.42
+          "elapsed_ms": 99.7
         },
         {
           "id": "test_phase1_evolution.TestPhase1DatabaseMigrations.test_game_room_lifecycle_in_db",
           "status": "PASS",
-          "elapsed_ms": 85.2
+          "elapsed_ms": 99.43
         },
         {
           "id": "test_phase1_evolution.TestPhase1DatabaseMigrations.test_gameplay_recording_metadata_in_db",
           "status": "PASS",
-          "elapsed_ms": 82.33
+          "elapsed_ms": 96.26
         },
         {
           "id": "test_phase1_evolution.TestPhase1DatabaseMigrations.test_schema_version_is_2",
           "status": "PASS",
-          "elapsed_ms": 78.0
+          "elapsed_ms": 97.49
         },
         {
           "id": "test_phase1_evolution.TestRoomManagerAndMultiplayerLobby.test_create_and_join_room",
           "status": "PASS",
-          "elapsed_ms": 3.21
+          "elapsed_ms": 3.56
         },
         {
           "id": "test_phase1_evolution.TestWebRTCSignaling.test_signaling_route",
           "status": "PASS",
-          "elapsed_ms": 1.43
+          "elapsed_ms": 1.35
         }
       ]
     },
@@ -192,64 +192,64 @@
       "failures": 0,
       "errors": 0,
       "skipped": 0,
-      "elapsed": 1.336,
+      "elapsed": 1.668,
       "success": true,
-      "output_sha256": "cbe972c7a10bd68c77a6a354bd9a3d62eede528fabd9addf3d8c9e6340133b79",
+      "output_sha256": "9cdd9cf3450d20c025cd00e2bc09bcf25e94cf6c62ee8ff87c957a8b955dc40d",
       "test_cases": [
         {
           "id": "test_phase2_evolution.TestPhase2FriendsAndPresence.test_block_user_prevents_request",
           "status": "PASS",
-          "elapsed_ms": 88.42
+          "elapsed_ms": 107.68
         },
         {
           "id": "test_phase2_evolution.TestPhase2FriendsAndPresence.test_cancel_and_reject_friend_request",
           "status": "PASS",
-          "elapsed_ms": 86.87
+          "elapsed_ms": 105.62
         },
         {
           "id": "test_phase2_evolution.TestPhase2FriendsAndPresence.test_cannot_friend_self",
           "status": "PASS",
-          "elapsed_ms": 79.8
+          "elapsed_ms": 93.97
         },
         {
           "id": "test_phase2_evolution.TestPhase2FriendsAndPresence.test_presence_status_and_current_game",
           "status": "PASS",
-          "elapsed_ms": 84.16
+          "elapsed_ms": 101.33
         },
         {
           "id": "test_phase2_evolution.TestPhase2FriendsAndPresence.test_send_and_accept_friend_request",
           "status": "PASS",
-          "elapsed_ms": 84.69
+          "elapsed_ms": 101.7
         },
         {
           "id": "test_phase2_evolution.TestPhase2GroupsAndRBAC.test_group_creation_and_owner_role",
           "status": "PASS",
-          "elapsed_ms": 81.09
+          "elapsed_ms": 94.85
         },
         {
           "id": "test_phase2_evolution.TestPhase2GroupsAndRBAC.test_invitation_permissions",
           "status": "PASS",
-          "elapsed_ms": 86.12
+          "elapsed_ms": 105.18
         },
         {
           "id": "test_phase2_evolution.TestPhase2GroupsAndRBAC.test_kick_hierarchy_enforcement",
           "status": "PASS",
-          "elapsed_ms": 89.29
+          "elapsed_ms": 109.52
         },
         {
           "id": "test_phase2_evolution.TestPhase2GroupsAndRBAC.test_transfer_ownership_and_leave",
           "status": "PASS",
-          "elapsed_ms": 86.58
+          "elapsed_ms": 104.41
         },
         {
           "id": "test_phase2_evolution.TestPhase2RESTEndpoints.test_rest_friend_flow",
           "status": "PASS",
-          "elapsed_ms": 91.0
+          "elapsed_ms": 105.14
         },
         {
           "id": "test_phase2_evolution.TestPhase2RESTEndpoints.test_rest_group_flow",
           "status": "PASS",
-          "elapsed_ms": 84.22
+          "elapsed_ms": 97.85
         }
       ]
     },
@@ -261,49 +261,49 @@
       "failures": 0,
       "errors": 0,
       "skipped": 0,
-      "elapsed": 1.117,
+      "elapsed": 1.373,
       "success": true,
-      "output_sha256": "9e95828526617a74716d72bc74c6e197c68455b87d0a5f6eca144e0ddda0367d",
+      "output_sha256": "a302ec279aeb62f2b2076dd437ee4e9a59957efe0c03da25943be030a717e1f8",
       "test_cases": [
         {
           "id": "test_phase3_evolution.TestPhase3ChatAndSpamProtection.test_empty_or_excessive_length_rejected",
           "status": "PASS",
-          "elapsed_ms": 90.88
+          "elapsed_ms": 107.34
         },
         {
           "id": "test_phase3_evolution.TestPhase3ChatAndSpamProtection.test_muted_member_cannot_send_message",
           "status": "PASS",
-          "elapsed_ms": 87.17
+          "elapsed_ms": 102.71
         },
         {
           "id": "test_phase3_evolution.TestPhase3ChatAndSpamProtection.test_non_member_cannot_send_message",
           "status": "PASS",
-          "elapsed_ms": 83.22
+          "elapsed_ms": 102.8
         },
         {
           "id": "test_phase3_evolution.TestPhase3ChatAndSpamProtection.test_rate_limiting_anti_spam",
           "status": "PASS",
-          "elapsed_ms": 96.35
+          "elapsed_ms": 117.24
         },
         {
           "id": "test_phase3_evolution.TestPhase3ChatAndSpamProtection.test_report_message_abuse",
           "status": "PASS",
-          "elapsed_ms": 85.3
+          "elapsed_ms": 102.65
         },
         {
           "id": "test_phase3_evolution.TestPhase3ChatAndSpamProtection.test_send_valid_message_and_retrieve_history",
           "status": "PASS",
-          "elapsed_ms": 84.16
+          "elapsed_ms": 98.68
         },
         {
           "id": "test_phase3_evolution.TestPhase3ChatAndSpamProtection.test_soft_delete_permissions",
           "status": "PASS",
-          "elapsed_ms": 89.98
+          "elapsed_ms": 106.05
         },
         {
           "id": "test_phase3_evolution.TestPhase3ChatRESTEndpoints.test_chat_rest_flow",
           "status": "PASS",
-          "elapsed_ms": 97.08
+          "elapsed_ms": 114.53
         }
       ]
     },
@@ -315,49 +315,49 @@
       "failures": 0,
       "errors": 0,
       "skipped": 0,
-      "elapsed": 1.059,
+      "elapsed": 1.301,
       "success": true,
-      "output_sha256": "dde478f5271bd7cc413147c9953731bb067d0edf2ae146af3950925a0273a595",
+      "output_sha256": "f6cb9521e3344a1d376c0f97514a266d29da02ac1728f4f12346d077df767553",
       "test_cases": [
         {
           "id": "test_phase4_evolution.TestPhase4MultiplayerPilot.test_authoritative_simulation_and_best_of_3",
           "status": "PASS",
-          "elapsed_ms": 87.02
+          "elapsed_ms": 104.23
         },
         {
           "id": "test_phase4_evolution.TestPhase4MultiplayerPilot.test_catalog_multiplayer_capabilities",
           "status": "PASS",
-          "elapsed_ms": 80.35
+          "elapsed_ms": 92.69
         },
         {
           "id": "test_phase4_evolution.TestPhase4MultiplayerPilot.test_disconnection_pause_and_full_recovery",
           "status": "PASS",
-          "elapsed_ms": 82.44
+          "elapsed_ms": 96.89
         },
         {
           "id": "test_phase4_evolution.TestPhase4MultiplayerPilot.test_forfeit_on_abandonment",
           "status": "PASS",
-          "elapsed_ms": 79.26
+          "elapsed_ms": 94.19
         },
         {
           "id": "test_phase4_evolution.TestPhase4MultiplayerPilot.test_host_controls_kick_and_transfer",
           "status": "PASS",
-          "elapsed_ms": 83.71
+          "elapsed_ms": 100.42
         },
         {
           "id": "test_phase4_evolution.TestPhase4MultiplayerPilot.test_multiplayer_network_client_rtt",
           "status": "PASS",
-          "elapsed_ms": 77.74
+          "elapsed_ms": 93.96
         },
         {
           "id": "test_phase4_evolution.TestPhase4MultiplayerPilot.test_private_room_invite_code_authorization",
           "status": "PASS",
-          "elapsed_ms": 82.48
+          "elapsed_ms": 97.95
         },
         {
           "id": "test_phase4_evolution.TestPhase4RESTEndpoints.test_rest_multiplayer_room_and_history",
           "status": "PASS",
-          "elapsed_ms": 89.23
+          "elapsed_ms": 103.08
         }
       ]
     },
@@ -369,39 +369,39 @@
       "failures": 0,
       "errors": 0,
       "skipped": 0,
-      "elapsed": 0.945,
+      "elapsed": 1.145,
       "success": true,
-      "output_sha256": "3144b3c4ec66ec002d83029632d05e4e531b1806c87c108e7d964e336e992a67",
+      "output_sha256": "d4df0e74f4f09c3e2fc88631bb7fb5927913f93202e0e3fb1ba9ea67f59cc1d6",
       "test_cases": [
         {
           "id": "test_phase5_evolution.TestPhase5VoiceRESTEndpoints.test_voice_rest_lifecycle",
           "status": "PASS",
-          "elapsed_ms": 105.19
+          "elapsed_ms": 119.83
         },
         {
           "id": "test_phase5_evolution.TestPhase5VoiceService.test_ice_servers_configuration",
           "status": "PASS",
-          "elapsed_ms": 84.36
+          "elapsed_ms": 99.34
         },
         {
           "id": "test_phase5_evolution.TestPhase5VoiceService.test_join_and_mute_toggle",
           "status": "PASS",
-          "elapsed_ms": 85.11
+          "elapsed_ms": 101.08
         },
         {
           "id": "test_phase5_evolution.TestPhase5VoiceService.test_leave_call_and_auto_termination",
           "status": "PASS",
-          "elapsed_ms": 88.06
+          "elapsed_ms": 102.84
         },
         {
           "id": "test_phase5_evolution.TestPhase5VoiceService.test_start_call_and_privacy_guarantee",
           "status": "PASS",
-          "elapsed_ms": 85.0
+          "elapsed_ms": 99.43
         },
         {
           "id": "test_phase5_evolution.TestPhase5VoiceService.test_webrtc_signaling_mesh",
           "status": "PASS",
-          "elapsed_ms": 83.12
+          "elapsed_ms": 99.21
         }
       ]
     },
@@ -413,29 +413,29 @@
       "failures": 0,
       "errors": 0,
       "skipped": 0,
-      "elapsed": 1.531,
+      "elapsed": 2.187,
       "success": true,
-      "output_sha256": "23d75c02bd35883541d05e5b7e07068e172de13f333a7c5da45c750c79c31d4f",
+      "output_sha256": "308c0a91f6fa5f0ec6df58404eabb1056770527902e6a53b4e93dd8ff6f8de37",
       "test_cases": [
         {
           "id": "test_phase6_evolution.TestPhase6GameplayVideoRecorder.test_fifo_quota_purge",
           "status": "PASS",
-          "elapsed_ms": 149.51
+          "elapsed_ms": 478.09
         },
         {
           "id": "test_phase6_evolution.TestPhase6GameplayVideoRecorder.test_gallery_service_filters_and_delete",
           "status": "PASS",
-          "elapsed_ms": 130.66
+          "elapsed_ms": 226.21
         },
         {
           "id": "test_phase6_evolution.TestPhase6GameplayVideoRecorder.test_record_session_creates_valid_mp4_and_thumbnail",
           "status": "PASS",
-          "elapsed_ms": 748.35
+          "elapsed_ms": 842.16
         },
         {
           "id": "test_phase6_evolution.TestPhase6RecordingsRESTEndpoints.test_recordings_rest_endpoints",
           "status": "PASS",
-          "elapsed_ms": 88.96
+          "elapsed_ms": 102.63
         }
       ]
     },
@@ -447,14 +447,14 @@
       "failures": 0,
       "errors": 0,
       "skipped": 0,
-      "elapsed": 0.178,
+      "elapsed": 0.636,
       "success": true,
       "output_sha256": "1215ba0a3fc634244d448d36288c2986d3ba673f6961e49e16b35499445bc84b",
       "test_cases": [
         {
           "id": "test_phase7_evolution.TestPhase7Evolution.test_buildozer_spec_and_preflight",
           "status": "PASS",
-          "elapsed_ms": 1.9
+          "elapsed_ms": 2.04
         },
         {
           "id": "test_phase7_evolution.TestPhase7Evolution.test_mobile_adapter_back_button",
@@ -464,12 +464,12 @@
         {
           "id": "test_phase7_evolution.TestPhase7Evolution.test_mobile_adapter_lifecycle",
           "status": "PASS",
-          "elapsed_ms": 0.03
+          "elapsed_ms": 0.04
         },
         {
           "id": "test_phase7_evolution.TestPhase7Evolution.test_virtual_gamepad_button_touch",
           "status": "PASS",
-          "elapsed_ms": 0.03
+          "elapsed_ms": 0.04
         },
         {
           "id": "test_phase7_evolution.TestPhase7Evolution.test_virtual_gamepad_dpad_touch",
@@ -501,19 +501,19 @@
       "failures": 0,
       "errors": 0,
       "skipped": 0,
-      "elapsed": 0.177,
+      "elapsed": 0.64,
       "success": true,
-      "output_sha256": "e73f8e3a6dc5d71fe8a9a12189721ac04b49c04c3885de2c2f65709e02b23c79",
+      "output_sha256": "fc8d1bece964151605a6a341f956762ab743fb7c3d17af6d52ff637b0f1c884e",
       "test_cases": [
         {
           "id": "test_phase8_evolution.TestPhase8Evolution.test_entitlements_plist_validity",
           "status": "PASS",
-          "elapsed_ms": 0.52
+          "elapsed_ms": 0.42
         },
         {
           "id": "test_phase8_evolution.TestPhase8Evolution.test_info_plist_validity",
           "status": "PASS",
-          "elapsed_ms": 0.66
+          "elapsed_ms": 0.48
         },
         {
           "id": "test_phase8_evolution.TestPhase8Evolution.test_ios_haptic_feedback",
@@ -523,12 +523,12 @@
         {
           "id": "test_phase8_evolution.TestPhase8Evolution.test_ios_lifecycle_event_handling",
           "status": "PASS",
-          "elapsed_ms": 0.04
+          "elapsed_ms": 0.03
         },
         {
           "id": "test_phase8_evolution.TestPhase8Evolution.test_ios_preflight_check",
           "status": "PASS",
-          "elapsed_ms": 1.19
+          "elapsed_ms": 1.28
         },
         {
           "id": "test_phase8_evolution.TestPhase8Evolution.test_ios_safe_area_presets",
@@ -550,49 +550,49 @@
       "failures": 0,
       "errors": 0,
       "skipped": 0,
-      "elapsed": 1.104,
+      "elapsed": 1.847,
       "success": true,
-      "output_sha256": "d8fc652753624cc07b170d635e5971863ff9dd6bf0a9d8ddc4970befce46ddd4",
+      "output_sha256": "982fb466f0f9cd9ae2be0e3e23463eec1f377c87f10c7454d1b2df3260ad4d7b",
       "test_cases": [
         {
           "id": "test_phase9_evolution.TestPhase9EvolutionE2E.test_01_canonical_version_consistency",
           "status": "PASS",
-          "elapsed_ms": 86.62
+          "elapsed_ms": 102.97
         },
         {
           "id": "test_phase9_evolution.TestPhase9EvolutionE2E.test_02_database_schema_v2_completeness",
           "status": "PASS",
-          "elapsed_ms": 78.94
+          "elapsed_ms": 94.16
         },
         {
           "id": "test_phase9_evolution.TestPhase9EvolutionE2E.test_03_e2e_social_and_friends_flow",
           "status": "PASS",
-          "elapsed_ms": 85.72
+          "elapsed_ms": 98.09
         },
         {
           "id": "test_phase9_evolution.TestPhase9EvolutionE2E.test_04_e2e_chat_and_moderation_flow",
           "status": "PASS",
-          "elapsed_ms": 92.88
+          "elapsed_ms": 111.54
         },
         {
           "id": "test_phase9_evolution.TestPhase9EvolutionE2E.test_05_e2e_multiplayer_match_lifecycle",
           "status": "PASS",
-          "elapsed_ms": 82.42
+          "elapsed_ms": 96.07
         },
         {
           "id": "test_phase9_evolution.TestPhase9EvolutionE2E.test_06_e2e_voice_call_and_privacy",
           "status": "PASS",
-          "elapsed_ms": 161.14
+          "elapsed_ms": 283.25
         },
         {
           "id": "test_phase9_evolution.TestPhase9EvolutionE2E.test_07_e2e_gameplay_recorder_and_gallery",
           "status": "PASS",
-          "elapsed_ms": 81.54
+          "elapsed_ms": 95.92
         },
         {
           "id": "test_phase9_evolution.TestPhase9EvolutionE2E.test_08_e2e_mobile_and_safe_area_coordination",
           "status": "PASS",
-          "elapsed_ms": 79.62
+          "elapsed_ms": 92.53
         }
       ]
     },
@@ -604,69 +604,69 @@
       "failures": 0,
       "errors": 0,
       "skipped": 0,
-      "elapsed": 1.787,
+      "elapsed": 2.531,
       "success": true,
-      "output_sha256": "61c123ad7c54f619caed2d4f29bfb53083accf986f970fa3647c055ec9d52a08",
+      "output_sha256": "9874a0b3e3119911332898cdaa20f03d74fd927b76dc3e3a1c115d84e7d58f4d",
       "test_cases": [
         {
           "id": "test_phase10_security.TestPhase10SecurityAndAuthorization.test_01_token_tampering_and_expiration",
           "status": "PASS",
-          "elapsed_ms": 86.69
+          "elapsed_ms": 102.88
         },
         {
           "id": "test_phase10_security.TestPhase10SecurityAndAuthorization.test_02_recording_cross_user_deletion_forbidden",
           "status": "PASS",
-          "elapsed_ms": 89.54
+          "elapsed_ms": 102.54
         },
         {
           "id": "test_phase10_security.TestPhase10SecurityAndAuthorization.test_03_recording_cross_user_visibility_forbidden",
           "status": "PASS",
-          "elapsed_ms": 90.85
+          "elapsed_ms": 97.94
         },
         {
           "id": "test_phase10_security.TestPhase10SecurityAndAuthorization.test_04_socket_chat_sender_spoofing_prevented",
           "status": "PASS",
-          "elapsed_ms": 84.57
+          "elapsed_ms": 100.61
         },
         {
           "id": "test_phase10_security.TestPhase10SecurityAndAuthorization.test_05_socket_group_membership_enforcement",
           "status": "PASS",
-          "elapsed_ms": 83.41
+          "elapsed_ms": 99.24
         },
         {
           "id": "test_phase10_security.TestPhase10SecurityAndAuthorization.test_06_token_issuance_requires_valid_credentials",
           "status": "PASS",
-          "elapsed_ms": 225.25
+          "elapsed_ms": 624.62
         },
         {
           "id": "test_phase10_security.TestPhase10SecurityAndAuthorization.test_07_socketio_handshake_rejection_without_token",
           "status": "PASS",
-          "elapsed_ms": 79.94
+          "elapsed_ms": 95.07
         },
         {
           "id": "test_phase10_security.TestPhase10SecurityAndAuthorization.test_08_rest_global_unauthenticated_rejection_401",
           "status": "PASS",
-          "elapsed_ms": 79.88
+          "elapsed_ms": 95.99
         },
         {
           "id": "test_phase10_security.TestPhase10SecurityAndAuthorization.test_09_join_call_rejects_non_group_member",
           "status": "PASS",
-          "elapsed_ms": 307.5
+          "elapsed_ms": 358.86
         },
         {
           "id": "test_phase10_security.TestPhase10SecurityAndAuthorization.test_10_end_call_rejects_unauthorized_third_party",
           "status": "PASS",
-          "elapsed_ms": 90.84
+          "elapsed_ms": 106.41
         },
         {
           "id": "test_phase10_security.TestPhase10SecurityAndAuthorization.test_11_private_room_access_control",
           "status": "PASS",
-          "elapsed_ms": 82.86
+          "elapsed_ms": 100.9
         },
         {
           "id": "test_phase10_security.TestPhase10SecurityAndAuthorization.test_12_concurrent_socketio_sessions_and_token_expiration",
           "status": "PASS",
-          "elapsed_ms": 88.38
+          "elapsed_ms": 104.8
         }
       ]
     },
@@ -678,49 +678,49 @@
       "failures": 0,
       "errors": 0,
       "skipped": 0,
-      "elapsed": 2.055,
+      "elapsed": 2.773,
       "success": true,
-      "output_sha256": "177ded15675c7a11d40d0484939755acb84af0cff3efe3edb251837b6e64195b",
+      "output_sha256": "0da924002e8e13ec32813d6ec571eb6212ff1fa6c44f9fd1c106dbf39bb533e5",
       "test_cases": [
         {
           "id": "test_phase10_media_and_physics.TestPhase10MediaAndCombatPhysics.test_01_voice_client_vad_and_strict_privacy_mute",
           "status": "PASS",
-          "elapsed_ms": 84.45
+          "elapsed_ms": 98.15
         },
         {
           "id": "test_phase10_media_and_physics.TestPhase10MediaAndCombatPhysics.test_02_authoritative_combat_physics_hitbox_and_guard",
           "status": "PASS",
-          "elapsed_ms": 80.33
+          "elapsed_ms": 92.69
         },
         {
           "id": "test_phase10_media_and_physics.TestPhase10MediaAndCombatPhysics.test_03_authoritative_engine_cadence_without_packets",
           "status": "PASS",
-          "elapsed_ms": 80.16
+          "elapsed_ms": 93.2
         },
         {
           "id": "test_phase10_media_and_physics.TestPhase10MediaAndCombatPhysics.test_04_video_recorder_mp4_integrity_validation",
           "status": "PASS",
-          "elapsed_ms": 343.17
+          "elapsed_ms": 353.77
         },
         {
           "id": "test_phase10_media_and_physics.TestPhase10MediaAndCombatPhysics.test_05_room_simulation_ticker_lifecycle_and_jitter",
           "status": "PASS",
-          "elapsed_ms": 502.32
+          "elapsed_ms": 615.49
         },
         {
           "id": "test_phase10_media_and_physics.TestPhase10MediaAndCombatPhysics.test_06_bidirectional_multi_client_audio_and_webrtc_mesh",
           "status": "PASS",
-          "elapsed_ms": 302.33
+          "elapsed_ms": 301.6
         },
         {
           "id": "test_phase10_media_and_physics.TestPhase10MediaAndCombatPhysics.test_07_davinci_fighters_contract_and_e2e_simulation",
           "status": "PASS",
-          "elapsed_ms": 160.1
+          "elapsed_ms": 168.61
         },
         {
           "id": "test_phase10_media_and_physics.TestPhase10MediaAndCombatPhysics.test_08_platform_audio_driver_hardware_pipeline",
           "status": "PASS",
-          "elapsed_ms": 147.68
+          "elapsed_ms": 167.16
         }
       ]
     },
@@ -732,59 +732,59 @@
       "failures": 0,
       "errors": 0,
       "skipped": 0,
-      "elapsed": 0.463,
+      "elapsed": 0.618,
       "success": true,
-      "output_sha256": "eb2f90ec8ea1bb818285a2f2fed5ec458fad43815895f222c1e42a641e80b79a",
+      "output_sha256": "631f79e63d411c940d9928126916fd0c9197658f601809a734b3ba1f4db912a1",
       "test_cases": [
         {
           "id": "test_communities_phase1.TestCommunitiesPhase1.test_01_community_creation_initializes_everyone_and_default_channels",
           "status": "PASS",
-          "elapsed_ms": 10.62
+          "elapsed_ms": 11.02
         },
         {
           "id": "test_communities_phase1.TestCommunitiesPhase1.test_02_invitations_creation_expiration_and_join",
           "status": "PASS",
-          "elapsed_ms": 7.3
+          "elapsed_ms": 7.96
         },
         {
           "id": "test_communities_phase1.TestCommunitiesPhase1.test_03_private_community_access_control",
           "status": "PASS",
-          "elapsed_ms": 5.41
+          "elapsed_ms": 6.27
         },
         {
           "id": "test_communities_phase1.TestCommunitiesPhase1.test_04_public_community_discovery",
           "status": "PASS",
-          "elapsed_ms": 5.31
+          "elapsed_ms": 7.32
         },
         {
           "id": "test_communities_phase1.TestCommunitiesPhase1.test_05_roles_hierarchy_and_permission_assignment",
           "status": "PASS",
-          "elapsed_ms": 6.46
+          "elapsed_ms": 7.61
         },
         {
           "id": "test_communities_phase1.TestCommunitiesPhase1.test_06_channel_privacy_and_permission_overrides",
           "status": "PASS",
-          "elapsed_ms": 7.21
+          "elapsed_ms": 9.01
         },
         {
           "id": "test_communities_phase1.TestCommunitiesPhase1.test_07_hierarchical_kick_and_protection_of_owner",
           "status": "PASS",
-          "elapsed_ms": 5.69
+          "elapsed_ms": 7.09
         },
         {
           "id": "test_communities_phase1.TestCommunitiesPhase1.test_08_ownership_transfer_and_safe_leave",
           "status": "PASS",
-          "elapsed_ms": 6.13
+          "elapsed_ms": 6.6
         },
         {
           "id": "test_communities_phase1.TestCommunitiesPhase1.test_09_community_deletion_by_owner_only",
           "status": "PASS",
-          "elapsed_ms": 5.38
+          "elapsed_ms": 6.75
         },
         {
           "id": "test_communities_phase1.TestCommunitiesPhase1.test_10_rest_api_negative_authorization_scenarios",
           "status": "PASS",
-          "elapsed_ms": 4.74
+          "elapsed_ms": 9.65
         }
       ]
     },
@@ -796,59 +796,59 @@
       "failures": 0,
       "errors": 0,
       "skipped": 0,
-      "elapsed": 0.456,
+      "elapsed": 0.599,
       "success": true,
-      "output_sha256": "ceb63c15280a29990817f8566408c5dad16d25629fa9fea5720e1fe0aa44c658",
+      "output_sha256": "213b95cd181e680dadf2a75dec3baba977bddbd7c51b529ccd298e51ff145813",
       "test_cases": [
         {
           "id": "test_communities_phase2.TestCommunitiesPhase2.test_01_send_and_receive_message_in_channel",
           "status": "PASS",
-          "elapsed_ms": 9.99
+          "elapsed_ms": 12.09
         },
         {
           "id": "test_communities_phase2.TestCommunitiesPhase2.test_02_paginated_message_history",
           "status": "PASS",
-          "elapsed_ms": 7.08
+          "elapsed_ms": 8.56
         },
         {
           "id": "test_communities_phase2.TestCommunitiesPhase2.test_03_message_reply_threading",
           "status": "PASS",
-          "elapsed_ms": 5.32
+          "elapsed_ms": 6.8
         },
         {
           "id": "test_communities_phase2.TestCommunitiesPhase2.test_04_message_edit_and_delete_permissions",
           "status": "PASS",
-          "elapsed_ms": 6.04
+          "elapsed_ms": 7.73
         },
         {
           "id": "test_communities_phase2.TestCommunitiesPhase2.test_05_unauthorized_channel_message_send_rejected",
           "status": "PASS",
-          "elapsed_ms": 5.63
+          "elapsed_ms": 6.18
         },
         {
           "id": "test_communities_phase2.TestCommunitiesPhase2.test_06_realtime_socketio_two_clients_message_broadcast",
           "status": "PASS",
-          "elapsed_ms": 5.78
+          "elapsed_ms": 7.51
         },
         {
           "id": "test_communities_phase2.TestCommunitiesPhase2.test_07_realtime_typing_indicator",
           "status": "PASS",
-          "elapsed_ms": 5.91
+          "elapsed_ms": 7.78
         },
         {
           "id": "test_communities_phase2.TestCommunitiesPhase2.test_08_presence_state_updates_and_invisibility",
           "status": "PASS",
-          "elapsed_ms": 6.33
+          "elapsed_ms": 7.22
         },
         {
           "id": "test_communities_phase2.TestCommunitiesPhase2.test_09_realtime_message_edit_and_delete_broadcast",
           "status": "PASS",
-          "elapsed_ms": 5.88
+          "elapsed_ms": 7.26
         },
         {
           "id": "test_communities_phase2.TestCommunitiesPhase2.test_10_reconnection_and_unreceived_history_recovery",
           "status": "PASS",
-          "elapsed_ms": 6.03
+          "elapsed_ms": 7.64
         }
       ]
     },
@@ -860,59 +860,59 @@
       "failures": 0,
       "errors": 0,
       "skipped": 0,
-      "elapsed": 0.518,
+      "elapsed": 0.89,
       "success": true,
-      "output_sha256": "2043326723376fe0fbe1bd6949a7db2a72d90d0ad9f3c4ddd7d1f3dca83096b3",
+      "output_sha256": "64bd5b04f4732f631d038219c81fb96ae0bbf859684ef21cb1a5fe155e988e9e",
       "test_cases": [
         {
           "id": "test_communities_phase3.TestCommunitiesPhase3.test_01_voice_token_generation_and_jwt_claims",
           "status": "PASS",
-          "elapsed_ms": 10.22
+          "elapsed_ms": 11.51
         },
         {
           "id": "test_communities_phase3.TestCommunitiesPhase3.test_02_voice_token_rejects_unauthorized_user",
           "status": "PASS",
-          "elapsed_ms": 6.25
+          "elapsed_ms": 9.58
         },
         {
           "id": "test_communities_phase3.TestCommunitiesPhase3.test_03_voice_token_enforces_participant_limit",
           "status": "PASS",
-          "elapsed_ms": 5.8
+          "elapsed_ms": 9.63
         },
         {
           "id": "test_communities_phase3.TestCommunitiesPhase3.test_04_voice_speak_permission_controls_can_publish",
           "status": "PASS",
-          "elapsed_ms": 5.49
+          "elapsed_ms": 6.74
         },
         {
           "id": "test_communities_phase3.TestCommunitiesPhase3.test_05_voice_session_lifecycle_and_participants_listing",
           "status": "PASS",
-          "elapsed_ms": 6.17
+          "elapsed_ms": 8.37
         },
         {
           "id": "test_communities_phase3.TestCommunitiesPhase3.test_06_realtime_voice_participant_events_socketio",
           "status": "PASS",
-          "elapsed_ms": 5.62
+          "elapsed_ms": 7.46
         },
         {
           "id": "test_communities_phase3.TestCommunitiesPhase3.test_07_voice_moderation_mute_and_disconnect",
           "status": "PASS",
-          "elapsed_ms": 6.52
+          "elapsed_ms": 9.82
         },
         {
           "id": "test_communities_phase3.TestCommunitiesPhase3.test_08_active_speakers_realtime_indicator",
           "status": "PASS",
-          "elapsed_ms": 5.46
+          "elapsed_ms": 6.86
         },
         {
           "id": "test_communities_phase3.TestCommunitiesPhase3.test_09_platform_audio_driver_and_device_enumeration",
           "status": "PASS",
-          "elapsed_ms": 4.74
+          "elapsed_ms": 175.22
         },
         {
           "id": "test_communities_phase3.TestCommunitiesPhase3.test_10_reconnection_and_session_recovery",
           "status": "PASS",
-          "elapsed_ms": 8.39
+          "elapsed_ms": 7.58
         }
       ]
     },
@@ -924,59 +924,59 @@
       "failures": 0,
       "errors": 0,
       "skipped": 0,
-      "elapsed": 0.525,
+      "elapsed": 0.713,
       "success": true,
-      "output_sha256": "8971c64e7fe125d86fd46b3e36ab4b159c897ad602af1f8a9e1f6424c044de07",
+      "output_sha256": "32e03251af6a62ad7d7c6fa59a035964d93968551861bd0f995d317abee94d28",
       "test_cases": [
         {
           "id": "test_communities_phase4.TestCommunitiesPhase4SoundDeck.test_01_create_category_and_upload_sound_success",
           "status": "PASS",
-          "elapsed_ms": 15.07
+          "elapsed_ms": 32.08
         },
         {
           "id": "test_communities_phase4.TestCommunitiesPhase4SoundDeck.test_02_reject_invalid_audio_magic_bytes",
           "status": "PASS",
-          "elapsed_ms": 6.7
+          "elapsed_ms": 6.62
         },
         {
           "id": "test_communities_phase4.TestCommunitiesPhase4SoundDeck.test_03_reject_oversized_audio_file",
           "status": "PASS",
-          "elapsed_ms": 53.0
+          "elapsed_ms": 66.88
         },
         {
           "id": "test_communities_phase4.TestCommunitiesPhase4SoundDeck.test_04_reject_exceeded_duration",
           "status": "PASS",
-          "elapsed_ms": 6.26
+          "elapsed_ms": 8.13
         },
         {
           "id": "test_communities_phase4.TestCommunitiesPhase4SoundDeck.test_05_list_sounds_segregation",
           "status": "PASS",
-          "elapsed_ms": 7.64
+          "elapsed_ms": 8.52
         },
         {
           "id": "test_communities_phase4.TestCommunitiesPhase4SoundDeck.test_06_favorites_and_hotkeys",
           "status": "PASS",
-          "elapsed_ms": 8.46
+          "elapsed_ms": 7.79
         },
         {
           "id": "test_communities_phase4.TestCommunitiesPhase4SoundDeck.test_07_edit_and_delete_permissions",
           "status": "PASS",
-          "elapsed_ms": 8.45
+          "elapsed_ms": 7.99
         },
         {
           "id": "test_communities_phase4.TestCommunitiesPhase4SoundDeck.test_08_sound_play_authorization_success",
           "status": "PASS",
-          "elapsed_ms": 6.47
+          "elapsed_ms": 7.16
         },
         {
           "id": "test_communities_phase4.TestCommunitiesPhase4SoundDeck.test_09_sound_play_cooldown_rate_limit",
           "status": "PASS",
-          "elapsed_ms": 6.7
+          "elapsed_ms": 7.36
         },
         {
           "id": "test_communities_phase4.TestCommunitiesPhase4SoundDeck.test_10_sound_play_cross_community_isolation",
           "status": "PASS",
-          "elapsed_ms": 7.13
+          "elapsed_ms": 8.44
         }
       ]
     },
@@ -988,59 +988,59 @@
       "failures": 0,
       "errors": 0,
       "skipped": 0,
-      "elapsed": 0.502,
+      "elapsed": 0.642,
       "success": true,
-      "output_sha256": "164aeb11069cd8c5684be7b0e475b44bdf5aa4daee04ffce70454f0ddc65d655",
+      "output_sha256": "87ab62b840ffd068ab976e9fe1ebc301644d29c936f89bff7e62d9bfbfbf4b0f",
       "test_cases": [
         {
           "id": "test_communities_phase5.TestCommunitiesPhase5Streaming.test_01_detect_capture_sources_and_profiles",
           "status": "PASS",
-          "elapsed_ms": 39.1
+          "elapsed_ms": 46.4
         },
         {
           "id": "test_communities_phase5.TestCommunitiesPhase5Streaming.test_02_start_stream_success",
           "status": "PASS",
-          "elapsed_ms": 7.49
+          "elapsed_ms": 7.67
         },
         {
           "id": "test_communities_phase5.TestCommunitiesPhase5Streaming.test_03_reject_stream_without_permission",
           "status": "PASS",
-          "elapsed_ms": 5.73
+          "elapsed_ms": 6.72
         },
         {
           "id": "test_communities_phase5.TestCommunitiesPhase5Streaming.test_04_enforce_max_streams_per_channel_limit",
           "status": "PASS",
-          "elapsed_ms": 6.72
+          "elapsed_ms": 6.77
         },
         {
           "id": "test_communities_phase5.TestCommunitiesPhase5Streaming.test_05_stream_pause_and_resume",
           "status": "PASS",
-          "elapsed_ms": 6.74
+          "elapsed_ms": 7.42
         },
         {
           "id": "test_communities_phase5.TestCommunitiesPhase5Streaming.test_06_stop_stream_releases_channel_slot",
           "status": "PASS",
-          "elapsed_ms": 7.19
+          "elapsed_ms": 7.07
         },
         {
           "id": "test_communities_phase5.TestCommunitiesPhase5Streaming.test_07_reject_invalid_stream_profile",
           "status": "PASS",
-          "elapsed_ms": 6.08
+          "elapsed_ms": 6.38
         },
         {
           "id": "test_communities_phase5.TestCommunitiesPhase5Streaming.test_08_get_active_channel_stream",
           "status": "PASS",
-          "elapsed_ms": 6.2
+          "elapsed_ms": 6.4
         },
         {
           "id": "test_communities_phase5.TestCommunitiesPhase5Streaming.test_09_stream_token_livekit_grants",
           "status": "PASS",
-          "elapsed_ms": 6.38
+          "elapsed_ms": 5.61
         },
         {
           "id": "test_communities_phase5.TestCommunitiesPhase5Streaming.test_10_cross_channel_and_user_isolation",
           "status": "PASS",
-          "elapsed_ms": 6.83
+          "elapsed_ms": 6.73
         }
       ]
     },
@@ -1052,59 +1052,59 @@
       "failures": 0,
       "errors": 0,
       "skipped": 0,
-      "elapsed": 0.481,
+      "elapsed": 0.583,
       "success": true,
-      "output_sha256": "a5ade914b8ec6ba1c441f00cadddc41f3bed887e222ff33e048177a1a9a56085",
+      "output_sha256": "0d4f2056837079710b0d6356465f5d43038d28c565714d2ab48369e478cb381a",
       "test_cases": [
         {
           "id": "test_communities_phase6.TestCommunitiesPhase6Moderation.test_01_warn_member_success_and_audit",
           "status": "PASS",
-          "elapsed_ms": 12.35
+          "elapsed_ms": 11.94
         },
         {
           "id": "test_communities_phase6.TestCommunitiesPhase6Moderation.test_02_mute_and_unmute_member",
           "status": "PASS",
-          "elapsed_ms": 7.82
+          "elapsed_ms": 8.76
         },
         {
           "id": "test_communities_phase6.TestCommunitiesPhase6Moderation.test_03_kick_member_removes_from_community",
           "status": "PASS",
-          "elapsed_ms": 6.38
+          "elapsed_ms": 6.94
         },
         {
           "id": "test_communities_phase6.TestCommunitiesPhase6Moderation.test_04_ban_member_and_block_rejoin",
           "status": "PASS",
-          "elapsed_ms": 7.22
+          "elapsed_ms": 7.32
         },
         {
           "id": "test_communities_phase6.TestCommunitiesPhase6Moderation.test_05_unban_member_allows_rejoin",
           "status": "PASS",
-          "elapsed_ms": 11.13
+          "elapsed_ms": 7.55
         },
         {
           "id": "test_communities_phase6.TestCommunitiesPhase6Moderation.test_06_hierarchy_protection",
           "status": "PASS",
-          "elapsed_ms": 7.14
+          "elapsed_ms": 7.76
         },
         {
           "id": "test_communities_phase6.TestCommunitiesPhase6Moderation.test_07_unauthorized_moderation_rejected",
           "status": "PASS",
-          "elapsed_ms": 6.45
+          "elapsed_ms": 7.3
         },
         {
           "id": "test_communities_phase6.TestCommunitiesPhase6Moderation.test_08_create_and_resolve_report",
           "status": "PASS",
-          "elapsed_ms": 7.59
+          "elapsed_ms": 7.91
         },
         {
           "id": "test_communities_phase6.TestCommunitiesPhase6Moderation.test_09_audit_log_traceability",
           "status": "PASS",
-          "elapsed_ms": 9.88
+          "elapsed_ms": 7.76
         },
         {
           "id": "test_communities_phase6.TestCommunitiesPhase6Moderation.test_10_ban_expiration",
           "status": "PASS",
-          "elapsed_ms": 6.93
+          "elapsed_ms": 7.2
         }
       ]
     },
@@ -1116,59 +1116,59 @@
       "failures": 0,
       "errors": 0,
       "skipped": 0,
-      "elapsed": 0.483,
+      "elapsed": 0.61,
       "success": true,
-      "output_sha256": "e54acd37f59a45d4799c2f919014f893e1c10291bbe15d13d3d74753a83c6157",
+      "output_sha256": "754102f00eead4b714ba0cf31f3a1242f813b580075823a75b77d110c803cd2c",
       "test_cases": [
         {
           "id": "test_communities_phase7.TestCommunitiesPhase7Scalability.test_01_health_check_healthy",
           "status": "PASS",
-          "elapsed_ms": 7.56
+          "elapsed_ms": 9.41
         },
         {
           "id": "test_communities_phase7.TestCommunitiesPhase7Scalability.test_02_metrics_prometheus_format",
           "status": "PASS",
-          "elapsed_ms": 3.56
+          "elapsed_ms": 4.28
         },
         {
           "id": "test_communities_phase7.TestCommunitiesPhase7Scalability.test_03_metrics_json_snapshot",
           "status": "PASS",
-          "elapsed_ms": 3.52
+          "elapsed_ms": 5.27
         },
         {
           "id": "test_communities_phase7.TestCommunitiesPhase7Scalability.test_04_system_limits_endpoint",
           "status": "PASS",
-          "elapsed_ms": 3.19
+          "elapsed_ms": 4.27
         },
         {
           "id": "test_communities_phase7.TestCommunitiesPhase7Scalability.test_05_community_message_voice_metrics_increment",
           "status": "PASS",
-          "elapsed_ms": 7.26
+          "elapsed_ms": 6.08
         },
         {
           "id": "test_communities_phase7.TestCommunitiesPhase7Scalability.test_06_soundboard_and_moderation_metrics_increment",
           "status": "PASS",
-          "elapsed_ms": 6.19
+          "elapsed_ms": 6.44
         },
         {
           "id": "test_communities_phase7.TestCommunitiesPhase7Scalability.test_07_api_latency_tracking",
           "status": "PASS",
-          "elapsed_ms": 2.85
+          "elapsed_ms": 3.7
         },
         {
           "id": "test_communities_phase7.TestCommunitiesPhase7Scalability.test_08_load_test_benchmark_multithreaded",
           "status": "PASS",
-          "elapsed_ms": 10.29
+          "elapsed_ms": 12.44
         },
         {
           "id": "test_communities_phase7.TestCommunitiesPhase7Scalability.test_09_soundboard_spam_cooldown_protection",
           "status": "PASS",
-          "elapsed_ms": 4.83
+          "elapsed_ms": 6.01
         },
         {
           "id": "test_communities_phase7.TestCommunitiesPhase7Scalability.test_10_runbook_diagnostic_health_and_degraded_state",
           "status": "PASS",
-          "elapsed_ms": 4.78
+          "elapsed_ms": 4.92
         }
       ]
     },
@@ -1180,64 +1180,64 @@
       "failures": 0,
       "errors": 0,
       "skipped": 0,
-      "elapsed": 0.673,
+      "elapsed": 0.997,
       "success": true,
-      "output_sha256": "46de90d5c6467b74f203607a4b81c15b9e1649f05d140287fa9f357d6931b863",
+      "output_sha256": "eaefae6dc7c23a950bf74e620b203110a27aad30c3e25885e3a97ef061768e97",
       "test_cases": [
         {
           "id": "test_communities_ui.TestCommunitiesUI.test_01_sidebar_entries_and_destination",
           "status": "PASS",
-          "elapsed_ms": 12.91
+          "elapsed_ms": 14.37
         },
         {
           "id": "test_communities_ui.TestCommunitiesUI.test_02_groups_hub_initialization_and_enter",
           "status": "PASS",
-          "elapsed_ms": 152.22
+          "elapsed_ms": 172.8
         },
         {
           "id": "test_communities_ui.TestCommunitiesUI.test_03_groups_hub_navigation_keys",
           "status": "PASS",
-          "elapsed_ms": 13.24
+          "elapsed_ms": 14.49
         },
         {
           "id": "test_communities_ui.TestCommunitiesUI.test_04_community_view_initialization_and_enter",
           "status": "PASS",
-          "elapsed_ms": 12.96
+          "elapsed_ms": 16.61
         },
         {
           "id": "test_communities_ui.TestCommunitiesUI.test_05_community_view_chat_message_sending",
           "status": "PASS",
-          "elapsed_ms": 13.16
+          "elapsed_ms": 15.79
         },
         {
           "id": "test_communities_ui.TestCommunitiesUI.test_06_draw_rendering_without_exceptions",
           "status": "PASS",
-          "elapsed_ms": 22.71
+          "elapsed_ms": 25.05
         },
         {
           "id": "test_communities_ui.TestCommunitiesUI.test_07_dynamic_discord_groups_channels_and_invite_links",
           "status": "PASS",
-          "elapsed_ms": 41.05
+          "elapsed_ms": 40.85
         },
         {
           "id": "test_communities_ui.TestCommunitiesUI.test_08_rich_presence_and_soundboard_deck",
           "status": "PASS",
-          "elapsed_ms": 21.55
+          "elapsed_ms": 25.55
         },
         {
           "id": "test_communities_ui.TestCommunitiesUI.test_09_screenshot_attachments_and_mentions",
           "status": "PASS",
-          "elapsed_ms": 23.74
+          "elapsed_ms": 26.78
         },
         {
           "id": "test_communities_ui.TestCommunitiesUI.test_10_go_live_game_streaming",
           "status": "PASS",
-          "elapsed_ms": 21.32
+          "elapsed_ms": 24.71
         },
         {
           "id": "test_communities_ui.TestCommunitiesUI.test_11_desktop_voice_engine_and_hud_overlay",
           "status": "PASS",
-          "elapsed_ms": 19.91
+          "elapsed_ms": 21.12
         }
       ]
     },
@@ -1249,64 +1249,64 @@
       "failures": 0,
       "errors": 0,
       "skipped": 0,
-      "elapsed": 24.931,
+      "elapsed": 23.799,
       "success": true,
-      "output_sha256": "c427901ef97eeccf73c7137c26008228596360b99bd64c0ffc905bc9520618f6",
+      "output_sha256": "072f09ec2948bfebfd46d3aabbda707b84c9403f8379c0b2ee7b303f602543dd",
       "test_cases": [
         {
           "id": "test_communities_merge_audit.TestCommunitiesMergeAudit.test_01_persistence_across_restart_and_default_path",
           "status": "PASS",
-          "elapsed_ms": 11.6
+          "elapsed_ms": 13.3
         },
         {
           "id": "test_communities_merge_audit.TestCommunitiesMergeAudit.test_02_multithread_concurrency_and_shared_memory_and_prod_guard",
           "status": "PASS",
-          "elapsed_ms": 18.74
+          "elapsed_ms": 25.01
         },
         {
           "id": "test_communities_merge_audit.TestCommunitiesMergeAudit.test_03_docker_and_deployment_manifests_integrity",
           "status": "PASS",
-          "elapsed_ms": 5.31
+          "elapsed_ms": 6.04
         },
         {
           "id": "test_communities_merge_audit.TestCommunitiesMergeAudit.test_04_production_secrets_fail_fast_and_livekit_token_security",
           "status": "PASS",
-          "elapsed_ms": 5.93
+          "elapsed_ms": 6.74
         },
         {
           "id": "test_communities_merge_audit.TestCommunitiesMergeAudit.test_05_permission_matrix_precedence_and_cross_community_channel_isolation",
           "status": "PASS",
-          "elapsed_ms": 5.9
+          "elapsed_ms": 6.92
         },
         {
           "id": "test_communities_merge_audit.TestCommunitiesMergeAudit.test_06_ui_states_persist_messages_groups_and_dms_in_sqlite",
           "status": "PASS",
-          "elapsed_ms": 138.78
+          "elapsed_ms": 155.3
         },
         {
           "id": "test_communities_merge_audit.TestCommunitiesMergeAudit.test_07_real_mp3_frame_validation_rejects_spoofed_duration_and_corrupt_files",
           "status": "PASS",
-          "elapsed_ms": 8.31
+          "elapsed_ms": 10.71
         },
         {
           "id": "test_communities_merge_audit.TestCommunitiesMergeAudit.test_08_metrics_process_local_scope_and_error_counters",
           "status": "PASS",
-          "elapsed_ms": 5.26
+          "elapsed_ms": 6.38
         },
         {
           "id": "test_communities_merge_audit.TestCommunitiesMergeAudit.test_09_main_console_product_regression",
           "status": "PASS",
-          "elapsed_ms": 145.05
+          "elapsed_ms": 150.18
         },
         {
           "id": "test_communities_merge_audit.TestCommunitiesMergeAudit.test_10_live_tcp_http_200_websocket_101_and_docker_compose_config",
           "status": "PASS",
-          "elapsed_ms": 1317.71
+          "elapsed_ms": 1291.38
         },
         {
           "id": "test_communities_merge_audit.TestCommunitiesMergeAudit.test_11_live_docker_caddy_tls_wss_101_volume_restart_and_coturn_allocate",
           "status": "PASS",
-          "elapsed_ms": 22770.93
+          "elapsed_ms": 21289.69
         }
       ]
     },
@@ -1318,59 +1318,59 @@
       "failures": 0,
       "errors": 0,
       "skipped": 0,
-      "elapsed": 0.27,
+      "elapsed": 0.282,
       "success": true,
-      "output_sha256": "39858a886566a06c6eecfa06f67dc406500f8c5ee0d786de9ba5ca95303119be",
+      "output_sha256": "cf2a0c91ffb6d8b5b87bc0c7ec478059af188c9e244c5315bbc0ad08f52604cf",
       "test_cases": [
         {
           "id": "test_game_library_scanner.TestGameLibraryScannerService.test_01_singleton_instance",
           "status": "PASS",
-          "elapsed_ms": 0.04
+          "elapsed_ms": 0.06
         },
         {
           "id": "test_game_library_scanner.TestGameLibraryScannerService.test_02_catalog_count_and_contract",
           "status": "PASS",
-          "elapsed_ms": 0.12
+          "elapsed_ms": 0.14
         },
         {
           "id": "test_game_library_scanner.TestGameLibraryScannerService.test_03_no_unauthorized_download_urls_and_neutral_catalog",
           "status": "PASS",
-          "elapsed_ms": 0.23
+          "elapsed_ms": 0.28
         },
         {
           "id": "test_game_library_scanner.TestGameLibraryScannerService.test_04_header_extractors_integration",
           "status": "PASS",
-          "elapsed_ms": 0.03
+          "elapsed_ms": 0.04
         },
         {
           "id": "test_game_library_scanner.TestGameLibraryScannerService.test_05_dynamic_directory_and_scan_fixture",
           "status": "PASS",
-          "elapsed_ms": 9.95
+          "elapsed_ms": 9.61
         },
         {
           "id": "test_game_library_scanner.TestGameLibraryScannerService.test_06_non_destructive_deduplication",
           "status": "PASS",
-          "elapsed_ms": 10.27
+          "elapsed_ms": 10.87
         },
         {
           "id": "test_game_library_scanner.TestGameLibraryScannerService.test_07_cue_bin_missing_file_detection",
           "status": "PASS",
-          "elapsed_ms": 0.42
+          "elapsed_ms": 0.66
         },
         {
           "id": "test_game_library_scanner.TestGameLibraryScannerService.test_08_async_scan_worker",
           "status": "PASS",
-          "elapsed_ms": 50.37
+          "elapsed_ms": 53.58
         },
         {
           "id": "test_game_library_scanner.TestGameLibraryScannerService.test_09_sqlite_transactional_sync_and_reconciliation",
           "status": "PASS",
-          "elapsed_ms": 4.11
+          "elapsed_ms": 5.13
         },
         {
           "id": "test_game_library_scanner.TestGameLibraryScannerService.test_10_launch_pre_verification_security",
           "status": "PASS",
-          "elapsed_ms": 0.66
+          "elapsed_ms": 0.79
         }
       ]
     }

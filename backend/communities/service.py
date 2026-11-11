@@ -370,6 +370,31 @@ class CommunitiesService:
         self.repo.add_member(comm["id"], user_id)
         return {"community": comm, "member": self.repo.get_member(comm["id"], user_id)}
 
+    def join_public_community(self, community_id: str, user_id: str) -> Dict[str, Any]:
+        """Permite unirse directamente a una comunidad pública si el usuario no está baneado."""
+        comm = self.repo.get_community(community_id)
+        if not comm:
+            raise LookupError("Comunidad no encontrada")
+        if comm.get("visibility") != "public":
+            raise PermissionError("Esta comunidad es privada; requiere código de invitación")
+        if self.repo.is_user_banned(comm["id"], user_id):
+            raise PermissionError("El usuario tiene una sanción de ban activa en esta comunidad")
+
+        existing = self.repo.get_member(comm["id"], user_id)
+        if existing and existing.get("status") == "active":
+            return {"community": self.get_community(comm["id"], user_id), "member": existing, "already_member": True}
+
+        current_members = len(self.repo.list_members(comm["id"]))
+        if current_members >= comm["max_members"]:
+            raise ValueError("La comunidad ha alcanzado su límite máximo de miembros")
+
+        self.repo.add_member(comm["id"], user_id)
+        return {
+            "community": self.get_community(comm["id"], user_id),
+            "member": self.repo.get_member(comm["id"], user_id),
+            "already_member": False,
+        }
+
     def kick_member(self, community_id: str, requester_id: str, target_user_id: str) -> bool:
         """Expulsa a un miembro respetando la jerarquía de roles."""
         if not self.has_permission(community_id, requester_id, "community.members.kick"):

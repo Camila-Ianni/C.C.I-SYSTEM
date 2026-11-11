@@ -37,7 +37,7 @@ from backend.auth import (
 app = Flask(__name__)
 app.config["SECRET_KEY"] = config.secret_key
 
-from backend.communities.routes import communities_bp
+from backend.communities.routes import communities_bp, set_realtime_emitter
 app.register_blueprint(communities_bp, url_prefix="/api/v1")
 
 # Socket.IO con soporte multi-origen y autorización centralizada
@@ -163,6 +163,7 @@ def _emit_to(event: str, data: Any, to: Any = None):
 
 chat_svc.set_broadcast_fn(_emit_to)
 voice_svc.set_broadcast_fn(_emit_to)
+set_realtime_emitter(_emit_to)
 signaling_router = WebRTCSignalingRouter(emit_fn=_emit_to)
 
 
@@ -173,6 +174,7 @@ signaling_router = WebRTCSignalingRouter(emit_fn=_emit_to)
 @app.route("/api/v1/auth/register", methods=["POST"])
 def register_account():
     """[PÚBLICO] Registra una nueva cuenta de usuario en el sistema."""
+    cci_database.init_db()
     body = request.get_json(silent=True) or {}
     email = str(body.get("email", "")).strip()
     username = str(body.get("username", "")).strip()
@@ -183,7 +185,16 @@ def register_account():
 
     try:
         acc = cci_database.create_account(email, username, password)
-        return jsonify({"success": True, "account": acc}), 201
+        user_id = str(acc["id"])
+        acc_username = str(acc["username"])
+        token = create_access_token(user_id=user_id, username=acc_username)
+        return jsonify({
+            "success": True,
+            "account": acc,
+            "token": token,
+            "user_id": user_id,
+            "username": acc_username,
+        }), 201
     except ValueError as exc:
         return jsonify({"success": False, "error": str(exc)}), 400
 
@@ -195,6 +206,7 @@ def issue_auth_token():
     Valida credenciales reales (usuario/email y contraseña o token de cuenta registrado).
     Rechaza solicitudes sin credenciales o con credenciales erróneas (401 Unauthorized).
     """
+    cci_database.init_db()
     body = request.get_json(silent=True) or {}
     identifier = str(body.get("identifier") or body.get("email") or body.get("user_id") or body.get("username") or "").strip()
     password = str(body.get("password", "")).strip()
@@ -224,6 +236,13 @@ def issue_auth_token():
         "username": username,
         "expires_in": 86400,
     })
+
+
+@app.route("/api/v1/auth/me", methods=["GET"])
+@require_auth
+def get_authenticated_me():
+    """[PROTEGIDO] Retorna la identidad verificada del token Bearer actual."""
+    return jsonify({"success": True, "user": g.current_user}), 200
 
 
 # ==============================================================================
@@ -847,6 +866,32 @@ def on_chat_typing(data: Dict[str, Any]):
 # EVENTOS WEBSOCKET: CCI COMMUNITIES (CHAT Y PRESENCIA EN TIEMPO REAL)
 # ==============================================================================
 
+@socketio.on("community:join")
+@require_socket_auth
+def on_community_join(data: Dict[str, Any]):
+    """Une al usuario autenticado a la sala Socket.IO de la comunidad si tiene membresía."""
+    from backend.communities.service import CommunitiesService
+    user_id = data.get("user_id")
+    community_id = data.get("community_id")
+    if not community_id or not user_id:
+        emit("community:error", {"error": "community_id requerido"})
+        return
+    comm = CommunitiesService.get_instance().get_community(community_id, user_id)
+    if not comm:
+        emit("community:error", {"error": "Acceso denegado a la comunidad"})
+        return
+    join_room(f"comm_{community_id}")
+    emit("community:joined", {"community_id": community_id, "user_id": user_id})
+
+
+@socketio.on("community:leave")
+@require_socket_auth
+def on_community_leave(data: Dict[str, Any]):
+    community_id = data.get("community_id")
+    if community_id:
+        leave_room(f"comm_{community_id}")
+
+
 @socketio.on("community:channel:join")
 @require_socket_auth
 def on_community_channel_join(data: Dict[str, Any]):
@@ -905,6 +950,8 @@ def on_community_message_send(data: Dict[str, Any]):
             content=content,
             reply_to_id=reply_to_id,
         )
+        msg = dict(msg)
+        msg["author_name"] = data.get("sender_name") or author_id
         emit("message:created", msg, to=f"comm_chan_{channel_id}")
     except Exception as e:
         emit("community:error", {"error": str(e)})

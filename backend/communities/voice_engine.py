@@ -28,12 +28,14 @@ class DesktopVoiceEngine:
     _instance: Optional[DesktopVoiceEngine] = None
 
     @classmethod
-    def get_instance(cls, user_id: str = "usr_alex_001", username: str = "ALEX") -> DesktopVoiceEngine:
+    def get_instance(cls, user_id: str = "", username: str = "") -> DesktopVoiceEngine:
         if cls._instance is None:
             cls._instance = DesktopVoiceEngine(user_id=user_id, username=username)
+        elif user_id and cls._instance.user_id != str(user_id):
+            cls._instance.set_identity(user_id=str(user_id), username=str(username or user_id))
         return cls._instance
 
-    def __init__(self, user_id: str = "usr_alex_001", username: str = "ALEX"):
+    def __init__(self, user_id: str = "", username: str = ""):
         self.user_id = str(user_id)
         self.username = str(username)
         self.is_connected = False
@@ -45,10 +47,12 @@ class DesktopVoiceEngine:
         self.is_deafened = False
         self.is_speaking = False
 
-        self.latency_ms = 14.5
-        self.jitter_ms = 1.8
-        self.packet_loss_pct = 0.0
-        self.transport_protocol = "UDP/RTP L16 48kHz"
+        # Métricas reales únicamente (None mientras no haya transporte RTC de audio activo)
+        self.latency_ms: Optional[float] = None
+        self.jitter_ms: Optional[float] = None
+        self.packet_loss_pct: Optional[float] = None
+        self.media_transport_active: bool = False
+        self.transport_protocol = "UDP/RTP L16 48kHz (Signaling)"
 
         # Socket UDP del sistema operativo
         self._udp_socket: Optional[socket.socket] = None
@@ -56,9 +60,13 @@ class DesktopVoiceEngine:
         self._seq = 0
         self._lock = threading.Lock()
 
-        # Participantes en la sala de voz activa
+        # Participantes reales en la sala de voz activa (sincronizados desde backend/SFU)
         self._participants: Dict[str, Dict[str, Any]] = {}
-        self._speaking_sim_timer: float = 0.0
+
+    def set_identity(self, user_id: str, username: str) -> None:
+        """Actualiza la identidad autenticada del usuario local sin simular peers."""
+        self.user_id = str(user_id)
+        self.username = str(username)
 
     def bind_udp_socket(self, host: str = "127.0.0.1", port: int = 0) -> int:
         """Enlaza un socket UDP real del sistema operativo para transporte de paquetes RTP."""
@@ -100,34 +108,44 @@ class DesktopVoiceEngine:
         self.active_channel_name = channel_name
         self.active_token_info = token_info
 
-        # Inicializar participantes de la sala de voz
-        self._participants = {
-            self.user_id: {
+        # Inicializar solo el participante local autenticado; los peers remotos llegan vía sync_remote_participants
+        self._participants = {}
+        if self.user_id:
+            self._participants[self.user_id] = {
                 "user_id": self.user_id,
-                "username": self.username,
+                "username": self.username or self.user_id,
                 "is_speaking": self.is_speaking,
                 "is_muted": self.is_muted,
                 "is_deafened": self.is_deafened,
                 "is_local": True,
-            },
-            "usr_mira_002": {
-                "user_id": "usr_mira_002",
-                "username": "MIRA",
-                "is_speaking": False,
-                "is_muted": False,
-                "is_deafened": False,
-                "is_local": False,
-            },
-            "usr_kai_003": {
-                "user_id": "usr_kai_003",
-                "username": "KAI",
-                "is_speaking": False,
-                "is_muted": True,
-                "is_deafened": False,
-                "is_local": False,
-            },
-        }
+            }
         return True
+
+    def sync_remote_participants(self, participants: List[Dict[str, Any]]) -> None:
+        """Sincroniza la lista de participantes reales reportados por backend/SFU."""
+        updated: Dict[str, Dict[str, Any]] = {}
+        if self.is_connected and self.user_id:
+            updated[self.user_id] = {
+                "user_id": self.user_id,
+                "username": self.username or self.user_id,
+                "is_speaking": self.is_speaking,
+                "is_muted": self.is_muted,
+                "is_deafened": self.is_deafened,
+                "is_local": True,
+            }
+        for p in participants or []:
+            uid = str(p.get("user_id") or "")
+            if not uid or uid == self.user_id:
+                continue
+            updated[uid] = {
+                "user_id": uid,
+                "username": str(p.get("username") or uid),
+                "is_speaking": bool(p.get("is_speaking", False)),
+                "is_muted": bool(p.get("is_muted", False)),
+                "is_deafened": bool(p.get("is_deafened", False)),
+                "is_local": False,
+            }
+        self._participants = updated
 
     def disconnect(self) -> bool:
         """Desconecta el motor de voz y reinicia el estado."""
@@ -185,14 +203,6 @@ class DesktopVoiceEngine:
             self._participants[self.user_id]["is_speaking"] = self.is_speaking
         return self.is_speaking
 
-    def toggle_peer_speaking(self, peer_user_id: str = "usr_mira_002") -> bool:
-        """Simula que un compañero de sala empieza o deja de hablar."""
-        if peer_user_id in self._participants:
-            cur = self._participants[peer_user_id].get("is_speaking", False)
-            self._participants[peer_user_id]["is_speaking"] = not cur
-            return not cur
-        return False
-
     def list_participants(self) -> List[Dict[str, Any]]:
         """Devuelve la lista actual de participantes con sus estados de voz."""
         return list(self._participants.values())
@@ -201,6 +211,7 @@ class DesktopVoiceEngine:
         """Devuelve métricas técnicas del transporte de audio en tiempo real."""
         return {
             "is_connected": self.is_connected,
+            "media_transport_active": self.media_transport_active,
             "channel": self.active_channel_name,
             "community_id": self.active_community_id,
             "protocol": self.transport_protocol,

@@ -6,14 +6,75 @@ Expone endpoints bajo /api/v1/communities e invitaciones protegidos con autentic
 from __future__ import annotations
 
 import base64
+import socket
 import time
+from typing import Any, Callable, Dict, Iterable, Optional
+from urllib.parse import urlparse
 from flask import Blueprint, g, jsonify, request, Response
 from backend.auth import require_auth
 from backend.communities.service import CommunitiesService, SoundCooldownError, StreamLimitError
 from backend.communities.stream_adapter import StreamValidationError
 from backend.communities.metrics import CommunityMetricsCollector
+from backend.config import config
 
 communities_bp = Blueprint("communities", __name__)
+
+_realtime_emitter: Optional[Callable[..., Any]] = None
+
+
+def set_realtime_emitter(fn: Callable[..., Any]) -> None:
+    """Registra la función Socket.IO para emitir eventos en tiempo real desde rutas REST."""
+    global _realtime_emitter
+    _realtime_emitter = fn
+
+
+def _emit_realtime(event: str, payload: Any, room: Optional[str] = None) -> None:
+    if _realtime_emitter is None:
+        return
+    try:
+        _realtime_emitter(event, payload, to=room)
+    except Exception:
+        pass
+
+
+def _resolve_usernames(user_ids: Iterable[str]) -> Dict[str, str]:
+    """Resuelve nombres de cuenta reales desde SQLite (`accounts`) sin simular usuarios."""
+    ids = [str(uid) for uid in user_ids if uid]
+    mapping: Dict[str, str] = {}
+    numeric_ids = []
+    for uid in ids:
+        if uid.isdigit():
+            numeric_ids.append(int(uid))
+    if not numeric_ids:
+        return mapping
+    try:
+        import cci_database
+        with cci_database.get_db() as conn:
+            placeholders = ",".join("?" for _ in numeric_ids)
+            rows = conn.execute(
+                f"SELECT id, username FROM accounts WHERE id IN ({placeholders})",
+                numeric_ids,
+            ).fetchall()
+            for r in rows:
+                mapping[str(r["id"])] = str(r["username"])
+    except Exception:
+        pass
+    return mapping
+
+
+def _probe_livekit_tcp(timeout: float = 0.25) -> bool:
+    """Verifica por TCP si el puerto configurado de LiveKit SFU acepta conexiones reales."""
+    raw = config.livekit_ws_url or ""
+    try:
+        parsed = urlparse(raw)
+        host = parsed.hostname
+        if not host:
+            return False
+        port = parsed.port or (443 if parsed.scheme == "wss" else 7880)
+        with socket.create_connection((host, port), timeout=timeout):
+            return True
+    except Exception:
+        return False
 
 
 @communities_bp.before_request
@@ -69,8 +130,16 @@ def create_community_route():
 def list_communities_route():
     user_id = g.current_user["user_id"]
     discover = request.args.get("visibility") == "public"
-    items = get_service().list_communities(user_id, discover_public=discover)
-    return jsonify({"communities": items}), 200
+    svc = get_service()
+    items = svc.list_communities(user_id, discover_public=discover)
+    user_comm_ids = {c["id"] for c in svc.list_communities(user_id, discover_public=False)}
+    enriched = []
+    for c in items:
+        item = dict(c)
+        item["member_count"] = len(svc.repo.list_members(c["id"]))
+        item["is_member"] = c["id"] in user_comm_ids
+        enriched.append(item)
+    return jsonify({"communities": enriched}), 200
 
 
 @communities_bp.route("/communities/<community_id>", methods=["GET"])
@@ -151,8 +220,15 @@ def create_invitation_route(community_id: str):
 @require_auth
 def accept_invitation_route(code_str: str):
     user_id = g.current_user["user_id"]
+    username = g.current_user.get("username", user_id)
     try:
         res = get_service().join_via_invitation(code_str, user_id)
+        comm_id = res["community"]["id"]
+        _emit_realtime(
+            "community:member_joined",
+            {"community_id": comm_id, "user_id": user_id, "username": username, "timestamp": time.time()},
+            room=f"comm_{comm_id}",
+        )
         return jsonify(res), 200
     except PermissionError as e:
         return jsonify({"error": str(e)}), 403
@@ -166,10 +242,39 @@ def accept_invitation_route(code_str: str):
 @require_auth
 def join_invitation_route():
     user_id = g.current_user["user_id"]
+    username = g.current_user.get("username", user_id)
     data = request.get_json() or {}
     code_str = data.get("code", "")
     try:
         res = get_service().join_via_invitation(code_str, user_id)
+        comm_id = res["community"]["id"]
+        _emit_realtime(
+            "community:member_joined",
+            {"community_id": comm_id, "user_id": user_id, "username": username, "timestamp": time.time()},
+            room=f"comm_{comm_id}",
+        )
+        return jsonify(res), 200
+    except PermissionError as e:
+        return jsonify({"error": str(e)}), 403
+    except LookupError as e:
+        return jsonify({"error": str(e)}), 404
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+
+
+@communities_bp.route("/communities/<community_id>/join", methods=["POST"])
+@require_auth
+def join_public_community_route(community_id: str):
+    user_id = g.current_user["user_id"]
+    username = g.current_user.get("username", user_id)
+    try:
+        res = get_service().join_public_community(community_id, user_id)
+        if not res.get("already_member"):
+            _emit_realtime(
+                "community:member_joined",
+                {"community_id": community_id, "user_id": user_id, "username": username, "timestamp": time.time()},
+                room=f"comm_{community_id}",
+            )
         return jsonify(res), 200
     except PermissionError as e:
         return jsonify({"error": str(e)}), 403
@@ -187,7 +292,14 @@ def list_members_route(community_id: str):
     if not comm:
         return jsonify({"error": "Acceso denegado a la comunidad"}), 403
     members = get_service().repo.list_members(community_id)
-    return jsonify({"members": members}), 200
+    names = _resolve_usernames(m.get("user_id") for m in members)
+    enriched = []
+    for m in members:
+        item = dict(m)
+        uid = str(item.get("user_id", ""))
+        item["username"] = item.get("nickname") or names.get(uid) or uid
+        enriched.append(item)
+    return jsonify({"members": enriched}), 200
 
 
 @communities_bp.route("/communities/<community_id>/members/<target_id>/kick", methods=["POST"])
@@ -209,6 +321,11 @@ def leave_community_route(community_id: str):
     user_id = g.current_user["user_id"]
     try:
         get_service().leave_community(community_id, user_id)
+        _emit_realtime(
+            "community:member_left",
+            {"community_id": community_id, "user_id": user_id, "timestamp": time.time()},
+            room=f"comm_{community_id}",
+        )
         return jsonify({"status": "left"}), 200
     except ValueError as e:
         return jsonify({"error": str(e)}), 400
@@ -307,6 +424,7 @@ def create_channel_route(community_id: str):
             topic=topic,
             is_private=is_private,
         )
+        _emit_realtime("channel:created", {"community_id": community_id, "channel": ch}, room=f"comm_{community_id}")
         return jsonify({"channel": ch}), 201
     except PermissionError as e:
         return jsonify({"error": str(e)}), 403
@@ -380,7 +498,14 @@ def get_channel_messages_route(channel_id: str):
             limit=limit,
             before_id=before_id,
         )
-        return jsonify({"messages": msgs}), 200
+        names = _resolve_usernames(m.get("author_id") for m in msgs)
+        enriched = []
+        for m in msgs:
+            item = dict(m)
+            aid = str(item.get("author_id", ""))
+            item["author_name"] = item.get("author_name") or names.get(aid) or aid
+            enriched.append(item)
+        return jsonify({"messages": enriched}), 200
     except PermissionError as e:
         return jsonify({"error": str(e)}), 403
     except LookupError as e:
@@ -391,6 +516,7 @@ def get_channel_messages_route(channel_id: str):
 @require_auth
 def send_channel_message_route(channel_id: str):
     user_id = g.current_user["user_id"]
+    username = g.current_user.get("username", user_id)
     data = request.get_json() or {}
     content = data.get("content", "")
     reply_to_id = data.get("reply_to_id")
@@ -407,7 +533,10 @@ def send_channel_message_route(channel_id: str):
             content=content,
             reply_to_id=reply_to_id,
         )
+        msg = dict(msg)
+        msg["author_name"] = username
         CommunityMetricsCollector.get_instance().increment("communities_messages_total")
+        _emit_realtime("message:created", msg, room=f"comm_chan_{channel_id}")
         return jsonify({"message": msg}), 201
     except PermissionError as e:
         return jsonify({"error": str(e)}), 403
@@ -419,6 +548,7 @@ def send_channel_message_route(channel_id: str):
 @require_auth
 def edit_channel_message_route(channel_id: str, message_id: str):
     user_id = g.current_user["user_id"]
+    username = g.current_user.get("username", user_id)
     data = request.get_json() or {}
     content = data.get("content", "")
 
@@ -434,6 +564,9 @@ def edit_channel_message_route(channel_id: str, message_id: str):
             requester_id=user_id,
             new_content=content,
         )
+        updated = dict(updated)
+        updated["author_name"] = _resolve_usernames([updated.get("author_id")]).get(str(updated.get("author_id")), username)
+        _emit_realtime("message:updated", updated, room=f"comm_chan_{channel_id}")
         return jsonify({"message": updated}), 200
     except PermissionError as e:
         return jsonify({"error": str(e)}), 403
@@ -457,6 +590,7 @@ def delete_channel_message_route(channel_id: str, message_id: str):
             message_id=message_id,
             requester_id=user_id,
         )
+        _emit_realtime("message:deleted", {"channel_id": channel_id, "message_id": message_id}, room=f"comm_chan_{channel_id}")
         return jsonify({"status": "deleted", "message_id": message_id}), 200
     except PermissionError as e:
         return jsonify({"error": str(e)}), 403
@@ -1375,11 +1509,16 @@ def health_check_route():
         collector.record_error("db")
 
     metrics = collector.get_snapshot()
+    lk_tcp_ok = _probe_livekit_tcp() if repo_ok else False
     status = "healthy" if repo_ok else "degraded"
     return jsonify({
         "status": status,
         "database": "connected" if repo_ok else "disconnected",
         "livekit_sfu": "ready",
+        "livekit_token_signing": "ready",
+        "livekit_media_plane": "reachable" if lk_tcp_ok else "unreachable",
+        "voice_media_transport": "signaling_only",
+        "realtime_socketio": "ready",
         "storage": "local_storage_ready",
         "metrics_scope": "process_local",
         "uptime_seconds": metrics["uptime_seconds"],
