@@ -1,5 +1,4 @@
-"""backend/games/scanner_service.py - Servicio Auxiliar de Escaneo, Catalogación y Gestión de Juegos.
-Diseñado para evolucionar la biblioteca de forma no invasiva, segura y asíncrona.
+"""backend/games/scanner_service.py - Servicio de Escaneo, Catalogación y Gestión de Biblioteca Moderna.
 100% Python estándar con soporte para refresco en caliente, deduplicación e integridad.
 Autora: Camila Carolina Ianni
 """
@@ -7,462 +6,145 @@ from __future__ import annotations
 
 import os
 import re
+import shutil
 import sqlite3
 import threading
 import unicodedata
 from pathlib import Path
 from typing import Any, Callable
 
+from backend.games.modern_catalog import MODERN_GAMES_CATALOG
 from backend.games.rom_metadata import ROMMetadataExtractor
 
 ROOT = Path(__file__).resolve().parent.parent.parent
 
 
+def _build_modern_remote_metadata() -> list[dict]:
+    """Construye entradas de catálogo remoto/nube neutrales desde MODERN_GAMES_CATALOG."""
+    out: list[dict] = []
+    for entry in MODERN_GAMES_CATALOG:
+        item = {
+            "id": entry["id"],
+            "title": entry["title"],
+            "clean_title": entry.get("clean_title", entry["title"]),
+            "console": entry["console"],
+            "badge": entry["badge"],
+            "platform_key": entry["platform_key"],
+            "format": entry.get("format", "PKG"),
+            "genre": entry.get("genre", "Acción / Aventura"),
+            "players": entry.get("players", "1-2 Jugadores"),
+            "type": "on_demand",
+            "core": entry.get("core"),
+            "rom": None,
+            "expected_rom": entry.get("rom"),
+            "cover": entry.get("cover", ""),
+            "cover_is_fallback": not bool(entry.get("cover")),
+            "year": str(entry.get("year", "2024")),
+            "developer": entry.get("developer", "Publicación Oficial"),
+            "desc": entry.get("desc", ""),
+            "installed": False,
+            "on_demand": True,
+            "available": False,
+            "size": entry.get("size", "Cloud"),
+            "size_gb": float(entry.get("size_gb", 4.0)),
+            "catalog_type": "remote_metadata",
+            "is_compatible": bool(entry.get("is_compatible", False)),
+        }
+        out.append(item)
+    return out
+
+
 class GameLibraryScannerService:
-    """Servicio independiente para escanear, validar y catalogar la biblioteca física de juegos."""
+    """Servicio independiente para escanear, validar y catalogar la biblioteca moderna de juegos."""
 
     _instance: GameLibraryScannerService | None = None
     _lock = threading.RLock()
 
     PLATFORM_SPECS = {
-        "snes": {
-            "name": "Super Nintendo",
-            "badge": "SNES",
-            "extensions": [".sfc", ".smc"],
-            "core": "cores/snes9x_libretro.dylib",
-            "year": "1992",
-            "developer": "Nintendo EAD",
-            "desc": "Clásico legendario de 16-Bit Super Nintendo preservado a 60 FPS estables.",
+        "ps5": {
+            "name": "PlayStation 5",
+            "badge": "PS5",
+            "extensions": [".pkg", ".iso", ".rar", ".zip"],
+            "core": None,
+            "emulator_app": None,
+            "year": "2024",
+            "developer": "Sony Interactive Entertainment",
+            "desc": "Título de nueva generación PlayStation 5 gestionado en biblioteca C.C.I.",
         },
-        "mame": {
-            "name": "Arcade",
-            "badge": "ARCADE",
-            "extensions": [".zip"],
-            "core": "cores/mame2003_plus_libretro.dylib",
-            "year": "1991",
-            "developer": "Konami / Capcom / Sega",
-            "desc": "Cabina recreativa arcade clásica preservada a 60 FPS estables.",
+        "ps4": {
+            "name": "PlayStation 4",
+            "badge": "PS4",
+            "extensions": [".pkg", ".iso", ".rar", ".zip"],
+            "core": "external:shadps4",
+            "emulator_app": "shadPS4",
+            "year": "2018",
+            "developer": "Sony Interactive Entertainment",
+            "desc": "Edición PlayStation 4 compatible con emulador shadPS4.",
         },
-        "n64": {
-            "name": "Nintendo 64",
-            "badge": "N64",
-            "extensions": [".z64", ".v64", ".n64"],
-            "core": "cores/mupen64plus_next_libretro.dylib",
-            "year": "1996",
+        "ps3": {
+            "name": "PlayStation 3",
+            "badge": "PS3",
+            "extensions": [".zip", ".iso", ".pkg", ".7z", ".rar"],
+            "core": "external:rpcs3",
+            "emulator_app": "RPCS3",
+            "year": "2014",
+            "developer": "Sony Interactive Entertainment",
+            "desc": "Título HD de PlayStation 3 preparado para RPCS3.",
+        },
+        "switch": {
+            "name": "Nintendo Switch",
+            "badge": "SWITCH",
+            "extensions": [".nsp", ".xci", ".rar", ".zip"],
+            "core": "external:ryujinx",
+            "emulator_app": "Ryujinx",
+            "year": "2022",
             "developer": "Nintendo",
-            "desc": "Hito de la revolución poligonal en 3D de 64-Bit a 60 FPS.",
+            "desc": "Juego de Nintendo Switch compatible con Ryujinx.",
+        },
+        "switch2": {
+            "name": "Nintendo Switch 2",
+            "badge": "SWITCH 2",
+            "extensions": [".nsp", ".xci", ".rar", ".zip"],
+            "core": None,
+            "emulator_app": None,
+            "year": "2025",
+            "developer": "Nintendo",
+            "desc": "Título de nueva generación para Nintendo Switch 2.",
+        },
+        "ps2": {
+            "name": "PlayStation 2",
+            "badge": "PS2",
+            "extensions": [".iso", ".chd", ".zip"],
+            "core": "external:pcsx2",
+            "emulator_app": "PCSX2",
+            "year": "2005",
+            "developer": "Sony Computer Entertainment",
+            "desc": "Clásico moderno PlayStation 2 compatible con PCSX2.",
         },
         "ps1": {
             "name": "PlayStation 1",
             "badge": "PS1",
-            "extensions": [".cue"],
+            "extensions": [".cue", ".iso", ".bin", ".zip"],
             "core": "cores/pcsx_rearmed_libretro.dylib",
-            "year": "1997",
-            "developer": "Sony / Konami / Capcom",
-            "desc": "Aventura cinematográfica en formato CD-ROM PlayStation.",
-        },
-        "nds": {
-            "name": "Nintendo DS",
-            "badge": "NDS",
-            "extensions": [".nds"],
-            "core": "cores/melonds_libretro.dylib",
-            "year": "2005",
-            "developer": "Nintendo",
-            "desc": "Doble pantalla interactiva de Nintendo DS preservada a 60 FPS.",
-        },
-        "gba": {
-            "name": "Game Boy Advance",
-            "badge": "GBA",
-            "extensions": [".gba"],
-            "core": "cores/vba_next_libretro.dylib",
-            "year": "2004",
-            "developer": "Nintendo / Various",
-            "desc": "Clásico de 32-Bit Game Boy Advance con gráficos portátiles de alta definición.",
-        },
-        "neogeo": {
-            "name": "Neo-Geo",
-            "badge": "NEO-GEO",
-            "extensions": [".zip"],
-            "core": "cores/fbneo_libretro.dylib",
-            "year": "1995",
-            "developer": "SNK Neo-Geo",
-            "desc": "Arcade 24-Bit SNK Neo-Geo de máxima fidelidad.",
-        },
-        "wii": {
-            "name": "Nintendo Wii",
-            "badge": "WII",
-            "extensions": [".wbfs"],
-            "core": "cores/dolphin_libretro.dylib",
-            "year": "2006",
-            "developer": "Nintendo",
-            "desc": "Innovación por control de movimiento de Nintendo Wii a 60 FPS.",
-        },
-    }
-
-    ARCADE_FBNEO_OVERRIDES = {
-        "mame_mslug2",
-        "mame_ffightub",
-    }
-
-    ARCADE_TITLE_BEAUTIFY = {
-        "mame_crusnusa": "Cruis'n USA",
-        "mame_ffightub": "Final Fight",
-        "mame_mslug2": "Metal Slug 2",
-        "mame_mslug6": "Metal Slug 6",
-        "mame_mvscu": "Marvel vs. Capcom: Clash of Super Heroes",
-        "mame_pacman": "Pac-Man",
-        "mame_simpsons": "The Simpsons Arcade",
-        "neogeo_pbobblen": "Puzzle Bobble / Bust-A-Move",
-        "neogeo_snowbro2": "Snow Bros. 2",
-        "neogeo_ssideki2": "Super Sidekicks 2: The World Championship",
-        "snes_Legend of Zelda, The - A Link to the Past (U) [!]": "The Legend of Zelda: A Link to the Past",
-        "n64_Legend of Zelda, The - Ocarina of Time (U) (V1.2) [!]": "The Legend of Zelda: Ocarina of Time",
-    }
-
-    OFFICIAL_GAME_COVERS = {
-        # SNES
-        "snes_Aladdin (U) [!]": "fotos juegos/Aladdin.jpg",
-        "snes_BS Mario Collection 3 (J)": "fotos juegos/BS Mario Collection 3.webp",
-        "snes_Donkey Kong Country (U) (V1.2) [!]": "fotos juegos/Donkey Kong Country.jpg",
-        "snes_Donkey Kong Country 2 - Diddy's Kong Quest (U) (V1.1) [!]": "fotos juegos/Donkey Kong Country 2- Diddy's Kong Quest.webp",
-        "snes_Donkey Kong Country 3 - Dixie Kong's Double Trouble (U) [!]": "fotos juegos/Donkey Kong Country 3- Dixie Kong's Double Trouble.jpg",
-        "snes_Doom (USA)": "fotos juegos/Doom.jpg",
-        "snes_Kirby Super Star (U) [!]": "fotos juegos/Kirby Super Star.webp",
-        "snes_Legend of Zelda, The - A Link to the Past (U) [!]": "fotos juegos/The Legend of Zelda- A Link to the Past.jpg",
-        "snes_Megaman X3 (USA)": "fotos juegos/Mega Man X3.png",
-        "snes_Mortal Kombat (USA)": "fotos juegos/Mortal Kombat.webp",
-        "snes_Sonic the Hedgehog 4 (World) (Unl)": "fotos juegos/Sonic the Hedgehog 4.jpg",
-        "snes_Street Fighter II - The World Warrior (Europe)": "fotos juegos/Street Fighter II- The World Warrior.jpg",
-        "snes_Street Fighter II Turbo - Hyper Fighting (USA)": "fotos juegos/Street Fighter II Turbo- Hyper Fighting.webp",
-        "snes_Sunset Riders (USA)": "fotos juegos/Sunset Riders.jpeg",
-        "snes_Super Bomberman 4": "fotos juegos/Super Bomberman 4.webp",
-        "snes_Super Mario All-Stars (U) [!]": "fotos juegos/Super Mario All-Stars Online.jpeg",
-        "snes_Super Mario All-Stars + Super Mario World (USA)": "fotos juegos/Super Mario All-Stars + Super Mario World.webp",
-        "snes_Super Mario Kart (U) [!]": "fotos juegos/Super Mario Kart.jpg",
-        "snes_Super Mario World 2 - Yoshi's Island (U) (V1.1)": "fotos juegos/Super Mario World 2- Yoshi's Island.jpg",
-        "snes_Super Metroid (JU) [!]": "fotos juegos/Super Metroid.jpg",
-        "snes_Ultimate Mortal Kombat 3 (USA)": "fotos juegos/Ultimate Mortal Kombat 3.jpeg",
-
-        # MAME / ARCADE
-        "mame_crusnusa": "fotos juegos/Cruis'n USA.jpg",
-        "mame_ffightub": "fotos juegos/Final Fight.jpg",
-        "mame_mslug2": "fotos juegos/Metal Slug 2- Super Vehicle-001:II.jpg",
-        "mame_mslug6": "fotos juegos/Metal Slug 6.png",
-        "mame_mvscu": "fotos juegos/Marvel vs. Capcom- Clash of Super Heroes.png",
-        "mame_pacman": "fotos juegos/Pac-Man.png",
-        "mame_simpsons": "fotos juegos/The Simpsons.webp",
-
-        # N64
-        "n64_Donkey Kong 64 (U) [!]": "fotos juegos/Donkey Kong 64.jpg",
-        "n64_Mario Kart 64 (E) (V1.1) [!]": "fotos juegos/Mario Kart 64.jpg",
-        "n64_Super Smash Bros. (U) [!]": "fotos juegos/Super Smash Bros..png",
-        "n64_Super Mario 64 (U) [!]": "fotos juegos/Super Mario 64.jpg",
-        "n64_Legend of Zelda, The - Ocarina of Time (U) (V1.2) [!]": "fotos juegos/The Legend of Zelda- Ocarina of Time.jpg",
-
-        # PS1
-        "ps1_Castlevania - Symphony of the Night (USA)": "fotos juegos/Castlevania- Symphony of the Night.webp",
-        "ps1_Crash Bandicoot (USA)": "fotos juegos/Crash Bandicoot.png",
-        "ps1_Crash Bandicoot - Warped (USA)": "fotos juegos/Crash Bandicoot 3- Warped.webp",
-        "ps1_Metal Slug X (USA)": "fotos juegos/Metal Slug X.jpg",
-        "ps1_Resident Evil (USA)": "fotos juegos/Resident Evil.webp",
-        "ps1_Resident Evil 2 (USA) (Disc 2)": "fotos juegos/Resident Evil 2.jpg",
-        "ps1_Yu-Gi-Oh! Forbidden Memories (USA)": "fotos juegos/Yu-Gi-Oh! Forbidden Memories.webp",
-
-        # NDS
-        "nds_0168 - Mario Kart DS (U)(SCZ)": "fotos juegos/Mario Kart DS.jpg",
-        "nds_0389 - Animal Crossing - Wild World (E)(Legacy)": "fotos juegos/Animal Crossing- Wild World.webp",
-        "nds_0434 - New Super Mario Bros. (U)(Psyfer)": "fotos juegos/New Super Mario Bros..jpg",
-        "nds_0827 - Bratz - Forever Diamondz (E)(WRG)": "fotos juegos/Bratz- Forever Diamondz.jpeg",
-        "nds_1633 - LEGO Star Wars - The Complete Saga (E)(EXiMiUS)": "fotos juegos/LEGO Star Wars- The Complete Saga.jpg",
-        "nds_1740 - Bratz - 4 Real (E)(EXiMiUS)": "fotos juegos/Bratz 4 Real.jpeg",
-        "nds_2988 - Bratz - Girlz Really Rock (E)(XenoPhobia)": "fotos juegos/Bratz- Girlz Really Rock.webp",
-        "nds_6148 - Bratz Fashion Boutique (U)(frieNDS)": "fotos juegos/Bratz- Fashion Boutique.jpg",
-        "nds_Pokemon White Version 2 (DSi Enhanced)(U)(frieNDS)": "fotos juegos/Pokémon White 2.jpg",
-
-        # GBA
-        "gba_1645 - Barbie as the Princess and the Pauper (U)(Chameleon)": "fotos juegos/Barbie as The Princess and the Pauper.jpg",
-        "gba_1955 - Disney's Girls Pack (E)(Independent)": "fotos juegos/Disney's Girls Pack.jpeg",
-
-        # Neo-Geo
-        "neogeo_pbobblen": "fotos juegos/Puzzle Bobble- Bust-A-Move.jpg",
-        "neogeo_snowbro2": "fotos juegos/Snow Bros. 2.png",
-        "neogeo_ssideki2": "fotos juegos/Super Sidekicks 2- The World Championship.png",
-
-        # Wii
-        "wii_Wii Sports [RSPE01]": "fotos juegos/Wii Sports.webp",
-
-        # On-Demand (Instalador Base < 1 GB)
-        "gow_ps2_1": "fotos juegos/God of War.jpg",
-        "gow_ps2_2": "fotos juegos/God of War II.jpg",
-        "gow_psp_chains": "fotos juegos/God of War- Chains of Olympus.jpg",
-        "gow_psp_sparta": "fotos juegos/God of War- Ghost of Sparta.webp",
-        "wii_monster_high": "fotos juegos/Monster High- 13 Wishes.webp",
-        "nds_mh_13_wishes": "fotos juegos/Monster High- 13 Wishes.jpg",
-        "nds_mh_ghoul_spirit": "fotos juegos/Monster High- Ghoul Spirit.jpg",
-        "nds_mh_roller_maze": "fotos juegos/Monster High- Skultimate Roller Maze.jpg",
-        "gba_herbie": "fotos juegos/Disney's Herbie- Fully Loaded.webp",
-        "nds_kirby_ultra": "fotos juegos/Kirby Super Star Ultra.webp",
-        "nds_lego_marvel": "fotos juegos/LEGO Marvel Super Heroes- Universe in Peril.jpg",
-        "nds_pokemon_black": "fotos juegos/Pokémon Black Version.jpg",
-        "ps1_re3_nemesis": "fotos juegos/Resident Evil 3- Nemesis.webp",
-        "arcade_wonderboy": "fotos juegos/Wonder Boy.jpg",
-    }
-
-    # Catálogo Remoto / On-Demand con metadatos neutros y sin enlaces de terceros
-    REMOTE_CATALOG_METADATA = [
-        {
-            "id": "gow_ps2_1",
-            "title": "God of War",
-            "console": "PlayStation 2",
-            "badge": "PS2",
-            "type": "on_demand",
-            "core": None,  # PS2 requiere core PCSX2/Play! dedicado no instalado
-            "rom": None,
-            "cover": "fotos juegos/God of War.jpg",
-            "year": "2005",
-            "developer": "Santa Monica Studio / Sony",
-            "desc": "Kratos desata su furia contra los dioses del Olimpo en Grecia clásica a 60 FPS.",
-            "installed": False,
-            "on_demand": True,
-            "size": "6.8 GB",
-            "catalog_type": "remote_metadata",
-            "is_compatible": False,
-        },
-        {
-            "id": "gow_ps2_2",
-            "title": "God of War II",
-            "console": "PlayStation 2",
-            "badge": "PS2",
-            "type": "on_demand",
-            "core": None,
-            "rom": None,
-            "cover": "fotos juegos/God of War II.jpg",
-            "year": "2007",
-            "developer": "Santa Monica Studio / Sony",
-            "desc": "Segunda entrega épica de Kratos desafiando a las Moiras y a Zeus.",
-            "installed": False,
-            "on_demand": True,
-            "size": "6.4 GB",
-            "catalog_type": "remote_metadata",
-            "is_compatible": False,
-        },
-        {
-            "id": "gow_psp_chains",
-            "title": "God of War: Chains of Olympus",
-            "console": "PlayStation Portable",
-            "badge": "PSP",
-            "type": "on_demand",
-            "core": None,  # PSP requiere core PPSSPP no instalado
-            "rom": None,
-            "cover": "fotos juegos/God of War- Chains of Olympus.jpg",
-            "year": "2008",
-            "developer": "Ready at Dawn / Santa Monica Studio",
-            "desc": "Aventura portátil aclamada de Kratos antes de los eventos del primer God of War.",
-            "installed": False,
-            "on_demand": True,
-            "size": "1.25 GB",
-            "catalog_type": "remote_metadata",
-            "is_compatible": False,
-        },
-        {
-            "id": "gow_psp_sparta",
-            "title": "God of War: Ghost of Sparta",
-            "console": "PlayStation Portable",
-            "badge": "PSP",
-            "type": "on_demand",
-            "core": None,
-            "rom": None,
-            "cover": "fotos juegos/God of War- Ghost of Sparta.webp",
-            "year": "2010",
-            "developer": "Ready at Dawn / Santa Monica Studio",
-            "desc": "Kratos en busca de su hermano Deimos revelando el origen de sus cicatrices.",
-            "installed": False,
-            "on_demand": True,
-            "size": "1.08 GB",
-            "catalog_type": "remote_metadata",
-            "is_compatible": False,
-        },
-        {
-            "id": "wii_monster_high",
-            "title": "Monster High: 13 Wishes",
-            "console": "Nintendo Wii",
-            "badge": "WII",
-            "type": "on_demand",
-            "core": "cores/dolphin_libretro.dylib",
-            "rom": None,
-            "cover": "fotos juegos/Monster High- 13 Wishes.webp",
-            "year": "2013",
-            "developer": "Little Orbit / Mattel",
-            "desc": "Aventura mágica en el mundo de Monster High explorando la lámpara maravillosa.",
-            "installed": False,
-            "on_demand": True,
-            "size": "1.4 GB",
-            "catalog_type": "remote_metadata",
-            "is_compatible": True,
-        },
-        {
-            "id": "nds_mh_13_wishes",
-            "title": "Monster High: 13 Wishes (DS)",
-            "console": "Nintendo DS",
-            "badge": "NDS",
-            "type": "on_demand",
-            "core": "cores/melonds_libretro.dylib",
-            "rom": None,
-            "cover": "fotos juegos/Monster High- 13 Wishes.jpg",
-            "year": "2013",
-            "developer": "Little Orbit / Mattel",
-            "desc": "Versión táctil portátil de Monster High 13 Wishes para Nintendo DS.",
-            "installed": False,
-            "on_demand": True,
-            "size": "64 MB",
-            "catalog_type": "remote_metadata",
-            "is_compatible": True,
-        },
-        {
-            "id": "nds_mh_ghoul_spirit",
-            "title": "Monster High: Ghoul Spirit",
-            "console": "Nintendo DS",
-            "badge": "NDS",
-            "type": "on_demand",
-            "core": "cores/melonds_libretro.dylib",
-            "rom": None,
-            "cover": "fotos juegos/Monster High- Ghoul Spirit.jpg",
-            "year": "2011",
-            "developer": "ImaginEngine / Mattel",
-            "desc": "Conviértete en nueva estudiante monstruosa en Monster High Ghoul Spirit.",
-            "installed": False,
-            "on_demand": True,
-            "size": "64 MB",
-            "catalog_type": "remote_metadata",
-            "is_compatible": True,
-        },
-        {
-            "id": "nds_mh_roller_maze",
-            "title": "Monster High: Skultimate Roller Maze",
-            "console": "Nintendo DS",
-            "badge": "NDS",
-            "type": "on_demand",
-            "core": "cores/melonds_libretro.dylib",
-            "rom": None,
-            "cover": "fotos juegos/Monster High- Skultimate Roller Maze.jpg",
-            "year": "2012",
-            "developer": "Little Orbit / Mattel",
-            "desc": "Carreras sobre patines monstruosas en laberintos vertiginosos.",
-            "installed": False,
-            "on_demand": True,
-            "size": "64 MB",
-            "catalog_type": "remote_metadata",
-            "is_compatible": True,
-        },
-        {
-            "id": "gba_herbie",
-            "title": "Disney's Herbie: Fully Loaded",
-            "console": "Game Boy Advance",
-            "badge": "GBA",
-            "type": "on_demand",
-            "core": "cores/vba_next_libretro.dylib",
-            "rom": None,
-            "cover": "fotos juegos/Disney's Herbie- Fully Loaded.webp",
-            "year": "2005",
-            "developer": "Disney Interactive / Climax",
-            "desc": "Conduce al icónico Herbie #53 en carreras 32-Bit de alta velocidad.",
-            "installed": False,
-            "on_demand": True,
-            "size": "16 MB",
-            "catalog_type": "remote_metadata",
-            "is_compatible": False,
-        },
-        {
-            "id": "nds_kirby_ultra",
-            "title": "Kirby Super Star Ultra",
-            "console": "Nintendo DS",
-            "badge": "NDS",
-            "type": "on_demand",
-            "core": "cores/melonds_libretro.dylib",
-            "rom": None,
-            "cover": "fotos juegos/Kirby Super Star Ultra.webp",
-            "year": "2008",
-            "developer": "HAL Laboratory / Nintendo",
-            "desc": "Remake ampliado para Nintendo DS del legendario juego de SNES con minijuegos táctiles.",
-            "installed": False,
-            "on_demand": True,
-            "size": "128 MB",
-            "catalog_type": "remote_metadata",
-            "is_compatible": True,
-        },
-        {
-            "id": "nds_pokemon_black",
-            "title": "Pokémon Black Version",
-            "console": "Nintendo DS",
-            "badge": "NDS",
-            "type": "on_demand",
-            "core": "cores/melonds_libretro.dylib",
-            "rom": None,
-            "cover": "fotos juegos/Pokémon Black Version.jpg",
-            "year": "2010",
-            "developer": "Game Freak / Nintendo",
-            "desc": "Quinta generación de Pokémon en la región de Teselia con Reshiram y el Equipo Plasma.",
-            "installed": False,
-            "on_demand": True,
-            "size": "256 MB",
-            "catalog_type": "remote_metadata",
-            "is_compatible": True,
-        },
-        {
-            "id": "nds_lego_marvel",
-            "title": "LEGO Marvel Super Heroes: Universe in Peril",
-            "console": "Nintendo DS",
-            "badge": "NDS",
-            "type": "on_demand",
-            "core": "cores/melonds_libretro.dylib",
-            "rom": "roms/nds/6325 - LEGO Marvel Super Heroes Universe in Peril (U)(ABSTRAKT).7z",
-            "cover": "fotos juegos/LEGO Marvel Super Heroes- Universe in Peril.jpg",
-            "year": "2013",
-            "developer": "TT Games / Warner Bros.",
-            "desc": "Únete a Iron Man, Spider-Man, Hulk y más héroes de Marvel para detener a Loki.",
-            "installed": False,
-            "on_demand": True,
-            "size": "64 MB",
-            "catalog_type": "remote_metadata",
-            "is_compatible": True,
-        },
-        {
-            "id": "ps1_re3_nemesis",
-            "title": "Resident Evil 3: Nemesis",
-            "console": "PlayStation 1",
-            "badge": "PS1",
-            "type": "on_demand",
-            "core": "cores/pcsx_rearmed_libretro.dylib",
-            "rom": "roms/ps1/Resident Evil 3 - Nemesis (E) [SLES-02529].bin.ecm",
-            "cover": "fotos juegos/Resident Evil 3- Nemesis.webp",
+            "emulator_app": None,
             "year": "1999",
-            "developer": "Capcom",
-            "desc": "Jill Valentine intenta escapar de Raccoon City mientras el implacable Nemesis la persigue.",
-            "installed": False,
-            "on_demand": True,
-            "size": "450 MB",
-            "catalog_type": "remote_metadata",
-            "is_compatible": True,
+            "developer": "Sony Computer Entertainment",
+            "desc": "Clásico PlayStation compatible con motor Libretro nativo.",
         },
-        {
-            "id": "arcade_wonderboy",
-            "title": "Wonder Boy",
-            "console": "Arcade",
-            "badge": "ARCADE",
-            "type": "on_demand",
-            "core": "cores/mame2003_plus_libretro.dylib",
-            "rom": None,
-            "cover": "fotos juegos/Wonder Boy.jpg",
-            "year": "1986",
-            "developer": "Escape / Sega",
-            "desc": "Clásico arcade de plataformas y acción de desplazamiento lateral rescatando a Tina.",
-            "installed": False,
-            "on_demand": True,
-            "size": "12 MB",
-            "catalog_type": "remote_metadata",
-            "is_compatible": True,
-        },
-    ]
+    }
+
+    EXTERNAL_EMULATORS: dict[str, tuple[str, list[str], list[str]]] = {
+        "external:rpcs3": ("RPCS3", ["rpcs3"], ["/Applications/RPCS3.app"]),
+        "external:ryujinx": ("Ryujinx", ["ryujinx", "Ryujinx"], ["/Applications/Ryujinx.app"]),
+        "external:shadps4": ("shadPS4", ["shadps4", "shadPS4"], ["/Applications/shadPS4.app"]),
+        "external:pcsx2": ("PCSX2", ["pcsx2", "pcsx2-qt"], ["/Applications/PCSX2.app", "/Applications/PCSX2-Qt.app"]),
+    }
+
+    OFFICIAL_GAME_COVERS: dict[str, str] = {
+        e["id"]: e["cover"] for e in MODERN_GAMES_CATALOG if e.get("cover")
+    }
+
+    REMOTE_CATALOG_METADATA: list[dict] = _build_modern_remote_metadata()
 
     def __init__(self, root_dir: Path | None = None):
         self.root_dir = (root_dir or ROOT).resolve()
@@ -472,7 +154,7 @@ class GameLibraryScannerService:
         self._cancel_requested: bool = False
         self._scan_thread: threading.Thread | None = None
 
-        # Precargar catálogo base de forma instantánea para evitar bloqueos en importación
+        # Precarga inmediata para UI sin bloqueos
         self._preload_fast_catalog()
 
     @classmethod
@@ -483,8 +165,32 @@ class GameLibraryScannerService:
                     cls._instance = cls(root_dir)
         return cls._instance
 
+    @classmethod
+    def resolve_external_emulator(cls, core_spec: str | None) -> tuple[str, str] | None:
+        """Busca un emulador externo instalado en PATH o /Applications."""
+        if not core_spec or not str(core_spec).startswith("external:"):
+            return None
+        info = cls.EXTERNAL_EMULATORS.get(str(core_spec))
+        if not info:
+            return None
+        label, bins, app_paths = info
+        for app_p in app_paths:
+            p = Path(app_p)
+            if p.exists():
+                macos_bin = p / "Contents" / "MacOS"
+                if macos_bin.exists():
+                    for child in macos_bin.iterdir():
+                        if child.is_file() and os.access(child, os.X_OK):
+                            return label, str(child)
+                return label, str(p)
+        for b in bins:
+            found = shutil.which(b)
+            if found:
+                return label, found
+        return None
+
     def add_scan_directory(self, path: Path | str) -> bool:
-        """Permite registrar directorios adicionales configurables para escaneo de ROMs."""
+        """Registra un directorio adicional de escaneo de ROMs."""
         p = Path(path).resolve()
         if p.exists() and p.is_dir() and p not in self._scan_directories:
             self._scan_directories.append(p)
@@ -492,7 +198,7 @@ class GameLibraryScannerService:
         return False
 
     def remove_scan_directory(self, path: Path | str) -> bool:
-        """Remueve un directorio de escaneo configurado."""
+        """Remueve un directorio adicional de escaneo configurado."""
         p = Path(path).resolve()
         if p in self._scan_directories and p != (self.root_dir / "roms"):
             self._scan_directories.remove(p)
@@ -502,77 +208,67 @@ class GameLibraryScannerService:
     def get_scan_directories(self) -> list[str]:
         return [str(p) for p in self._scan_directories]
 
-    def resolve_cover(self, game_id: str, clean_name: str, console_badge: str, alt_title: str | None = None) -> tuple[str, bool]:
-        """Encuentra la mejor carátula física disponible y retorna (ruta, es_fallback)."""
-        # 1. Mapeo oficial verificado por ID
+    def resolve_cover(
+        self,
+        game_id: str,
+        clean_name: str,
+        console_badge: str,
+        alt_title: str | None = None,
+    ) -> tuple[str, bool]:
+        """Resuelve la carátula moderna del juego desde fotos juegos/ o fallback."""
+        def _norm(s: str) -> str:
+            t = unicodedata.normalize("NFKD", s or "").encode("ASCII", "ignore").decode("utf-8")
+            return re.sub(r"[^a-z0-9]", "", t.lower())
+
         if game_id in self.OFFICIAL_GAME_COVERS:
-            p = self.root_dir / self.OFFICIAL_GAME_COVERS[game_id]
-            if p.exists():
-                return self.OFFICIAL_GAME_COVERS[game_id], False
+            cov_p = self.OFFICIAL_GAME_COVERS[game_id]
+            if (self.root_dir / cov_p).exists():
+                return cov_p, False
 
         fj_dir = self.root_dir / "fotos juegos"
         if fj_dir.exists():
-            candidates = [c for c in [clean_name, alt_title] if c]
-
-            # 2. Coincidencia directa con extensiones
-            for cand_name in candidates:
-                for ext in [".jpg", ".webp", ".png", ".jpeg"]:
-                    exact = fj_dir / f"{cand_name}{ext}"
-                    if exact.exists():
-                        return str(exact.relative_to(self.root_dir)), False
-
-            # 3. Búsqueda normalizada (insensible a diacríticos, mayúsculas, símbolos y espaciado)
-            import unicodedata
-            def _norm(s: str) -> str:
-                t = unicodedata.normalize('NFKD', s or '').encode('ASCII', 'ignore').decode('utf-8')
-                return re.sub(r'[^a-z0-9]', '', t.lower())
-
-            all_fj = list(fj_dir.glob("*.*"))
+            candidates = [clean_name, alt_title or "", game_id]
             target_norms = [_norm(c) for c in candidates if _norm(c)]
+            all_fj = sorted(fj_dir.glob("*.*"))
 
-            # Coincidencia exacta de stems normalizados
             for cand in all_fj:
-                cand_norm = _norm(cand.stem)
-                if cand_norm in target_norms:
+                c_norm = _norm(cand.stem)
+                if c_norm in target_norms:
                     return str(cand.relative_to(self.root_dir)), False
 
-            # Coincidencia por contención de nombre significativo (mínimo 5 caracteres)
             for cand in all_fj:
-                cand_norm = _norm(cand.stem)
+                c_norm = _norm(cand.stem)
                 for tn in target_norms:
-                    if len(cand_norm) >= 5 and len(tn) >= 5 and (cand_norm in tn or tn in cand_norm):
+                    if len(c_norm) >= 5 and len(tn) >= 5 and (c_norm in tn or tn in c_norm):
                         return str(cand.relative_to(self.root_dir)), False
 
-        # Fallbacks por consola (marcados como fallback=True)
-        if console_badge == "SNES":
-            return "fotos web/super mario.jpg", True
-        elif console_badge == "N64":
-            return "fotos web/The_Legend_of_Zelda_film_logo.jpg", True
-        elif console_badge == "PS1":
-            return "assets_omnidash/covers/red.png", True
-        elif console_badge == "ARCADE":
-            return "fotos web/metal slug.jpg", True
-        elif console_badge == "NDS":
-            return "fotos web/pokemon.webp", True
-        elif console_badge == "WII":
-            return "assets_omnidash/covers/far-cry.webp", True
-        elif console_badge == "NEO-GEO":
-            return "assets_omnidash/covers/sega.webp", True
-        return "assets_omnidash/covers/elden.png", True
+        fallback = "assets_omnidash/covers/elden.png"
+        if console_badge in ("PS5", "PS4", "PS3"):
+            p = self.root_dir / "assets_omnidash" / "covers" / "red.png"
+            if p.exists():
+                fallback = "assets_omnidash/covers/red.png"
+        return fallback, True
 
     def _preload_fast_catalog(self):
-        """Genera el catálogo inicial sin bloquear el hilo principal."""
         self.scan_all(force=False)
 
-    def scan_all(self, force: bool = False, progress_callback: Callable[[int, int, str], None] | None = None) -> list[dict]:
-        """Escanea todas las carpetas autorizadas de ROMs de forma segura y estructurada."""
+    @staticmethod
+    def _norm_key(text: str) -> str:
+        t = unicodedata.normalize("NFKD", text or "").encode("ASCII", "ignore").decode("utf-8")
+        return re.sub(r"[^a-z0-9]", "", t.lower())
+
+    def scan_all(
+        self,
+        force: bool = False,
+        progress_callback: Callable[[int, int, str], None] | None = None,
+    ) -> list[dict]:
+        """Escanea carpetas roms/ modernas y combina con la metadata del catálogo moderno."""
         with self._lock:
             self._is_scanning = True
             self._cancel_requested = False
 
-        games: list[dict] = []
-        seen_titles: dict[tuple[str, str, str, str], dict] = {}
-
+        # Mapa de archivos físicos por plataforma encontrados en disk
+        disk_files_by_platform: dict[str, list[Path]] = {k: [] for k in self.PLATFORM_SPECS}
         total_files = 0
         for base_dir in self._scan_directories:
             if not base_dir.exists():
@@ -581,146 +277,141 @@ class GameLibraryScannerService:
                 p_dir = base_dir / platform_key
                 if p_dir.exists():
                     for ext in spec["extensions"]:
-                        total_files += len(list(p_dir.rglob(f"*{ext}")))
+                        for ext_variant in (ext, ext.upper()):
+                            for f in p_dir.rglob(f"*{ext_variant}"):
+                                if (
+                                    f.is_file()
+                                    and not f.name.startswith(".")
+                                    and not f.name.endswith(".part")
+                                ):
+                                    disk_files_by_platform[platform_key].append(f)
 
-        processed_count = 0
+        for pk in disk_files_by_platform:
+            disk_files_by_platform[pk] = sorted(set(disk_files_by_platform[pk]))
+            total_files += len(disk_files_by_platform[pk])
 
-        for base_dir in self._scan_directories:
-            if not base_dir.exists():
-                continue
+        matched_disk_paths: set[Path] = set()
+        catalog_games: list[dict] = []
+        processed = 0
 
-            for platform_key, spec in self.PLATFORM_SPECS.items():
-                if self._cancel_requested:
-                    break
+        for meta in self.REMOTE_CATALOG_METADATA:
+            entry = dict(meta)
+            pk = entry.get("platform_key", "ps3")
+            candidates = disk_files_by_platform.get(pk, [])
+            expected_rom = entry.get("expected_rom")
 
-                p_dir = base_dir / platform_key
-                if not p_dir.exists():
-                    continue
-
-                found_files: list[Path] = []
-                for ext in spec["extensions"]:
-                    found_files.extend(p_dir.rglob(f"*{ext}"))
-                    found_files.extend(p_dir.rglob(f"*{ext.upper()}"))
-
-                found_files = sorted(set(found_files))
-
-                for f in found_files:
-                    if self._cancel_requested:
+            matched_file: Path | None = None
+            if expected_rom:
+                exp_abs = (self.root_dir / expected_rom).resolve()
+                exp_name = Path(expected_rom).name.lower()
+                for f in candidates:
+                    if f.resolve() == exp_abs or f.name.lower() == exp_name:
+                        matched_file = f
                         break
 
-                    if f.name.startswith(".") or f.is_dir():
+            if not matched_file and candidates:
+                title_norm = self._norm_key(entry.get("clean_title") or entry.get("title", ""))
+                for f in candidates:
+                    if f in matched_disk_paths:
                         continue
+                    stem_norm = self._norm_key(ROMMetadataExtractor.clean_display_title(f.stem))
+                    if title_norm and len(title_norm) >= 5 and (
+                        stem_norm == title_norm or title_norm in stem_norm or stem_norm in title_norm
+                    ):
+                        matched_file = f
+                        break
 
-                    processed_count += 1
-                    stem = f.stem
-                    game_id = f"{platform_key}_{stem}"
-                    clean_title = ROMMetadataExtractor.clean_display_title(stem)
-                    region, revision = ROMMetadataExtractor.extract_region_and_revision(stem)
+            if matched_file:
+                matched_disk_paths.add(matched_file)
+                processed += 1
+                try:
+                    rel_rom = str(matched_file.relative_to(self.root_dir))
+                except ValueError:
+                    rel_rom = str(matched_file)
 
-                    # Invocación efectiva de extractores de cabecera por plataforma
-                    internal_title = ""
-                    meta_source = "filename"
+                size_bytes = matched_file.stat().st_size
+                integrity_ok = size_bytes > 0
+                notes = "OK"
+                if matched_file.suffix.lower() == ".cue":
+                    integrity_ok, notes = ROMMetadataExtractor.verify_cue_bin_integrity(matched_file)
 
-                    if platform_key == "snes":
-                        snes_meta = ROMMetadataExtractor.extract_snes_header(f)
-                        if snes_meta.get("internal_title"):
-                            internal_title = snes_meta["internal_title"]
-                            meta_source = snes_meta["source"]
-                    elif platform_key == "n64":
-                        n64_meta = ROMMetadataExtractor.extract_n64_header(f)
-                        if n64_meta.get("internal_title"):
-                            internal_title = n64_meta["internal_title"]
-                            meta_source = n64_meta["source"]
-                    elif platform_key == "nds":
-                        nds_meta = ROMMetadataExtractor.extract_nds_header(f)
-                        if nds_meta.get("internal_title"):
-                            internal_title = nds_meta["internal_title"]
-                            meta_source = nds_meta["source"]
-                    elif platform_key == "gba":
-                        gba_meta = ROMMetadataExtractor.extract_gba_header(f)
-                        if gba_meta.get("internal_title"):
-                            internal_title = gba_meta["internal_title"]
-                            meta_source = gba_meta["source"]
+                region, revision = ROMMetadataExtractor.extract_region_and_revision(matched_file.stem)
+                entry.update({
+                    "type": "libretro" if str(entry.get("core") or "").endswith(".dylib") else "modern",
+                    "rom": rel_rom,
+                    "installed": True,
+                    "on_demand": False,
+                    "available": integrity_ok,
+                    "catalog_type": "local_installed",
+                    "metadata_source": "catalog_disk",
+                    "region": region,
+                    "revision": revision,
+                    "fingerprint": ROMMetadataExtractor.compute_file_fingerprint(matched_file),
+                    "integrity_notes": notes,
+                    "size_bytes": size_bytes,
+                })
+                if progress_callback and total_files > 0:
+                    progress_callback(processed, total_files, entry["title"])
 
-                    # Título para interfaz (priorizando mapeo embellecido y clean title)
-                    if game_id in self.ARCADE_TITLE_BEAUTIFY:
-                        display_title = self.ARCADE_TITLE_BEAUTIFY[game_id]
-                    elif platform_key == "mame":
-                        display_title = stem.upper()
-                        if stem.lower() == "simpsons":
-                            display_title = "The Simpsons Arcade"
-                        elif stem.lower() == "pacman":
-                            display_title = "Pac-Man"
-                        elif not display_title.startswith("The ") and display_title != "Pac-Man":
-                            display_title = f"Arcade: {display_title}"
-                    elif platform_key == "neogeo":
-                        display_title = f"NeoGeo: {stem.upper()}"
-                    else:
-                        display_title = clean_title
+            catalog_games.append(entry)
 
-                    # Validación de integridad CUE/BIN
-                    integrity_ok = True
-                    integrity_notes = "OK"
-                    if f.suffix.lower() == ".cue":
-                        integrity_ok, integrity_notes = ROMMetadataExtractor.verify_cue_bin_integrity(f)
+        # Incluir cualquier ROM adicional no listada que el usuario agregue manualmente a roms/<plat>/
+        for pk, files in disk_files_by_platform.items():
+            if self._cancel_requested:
+                break
+            spec = self.PLATFORM_SPECS[pk]
+            for f in files:
+                if f in matched_disk_paths:
+                    continue
+                processed += 1
+                stem = f.stem
+                game_id = f"{pk}_{stem}"
+                clean_title = ROMMetadataExtractor.clean_display_title(stem)
+                region, revision = ROMMetadataExtractor.extract_region_and_revision(stem)
+                cover_path, is_fb = self.resolve_cover(game_id, clean_title, spec["badge"], alt_title=clean_title)
+                try:
+                    rel_rom = str(f.relative_to(self.root_dir))
+                except ValueError:
+                    rel_rom = str(f)
+                size_mb = round(f.stat().st_size / (1024 * 1024), 1)
+                size_str = f"{round(size_mb / 1024, 2)} GB" if size_mb >= 1024 else f"{size_mb} MB"
 
-                    cover_path, is_fallback = self.resolve_cover(game_id, clean_title, spec["badge"], alt_title=display_title)
-                    fingerprint = ROMMetadataExtractor.compute_file_fingerprint(f)
-
-                    try:
-                        rel_rom = str(f.relative_to(self.root_dir))
-                    except ValueError:
-                        rel_rom = str(f)
-
-                    selected_core = (
-                        "cores/fbneo_libretro.dylib"
-                        if game_id in self.ARCADE_FBNEO_OVERRIDES
-                        else spec["core"]
-                    )
-                    item = {
-                        "id": game_id,
-                        "title": display_title,
-                        "internal_title": internal_title or display_title,
-                        "metadata_source": meta_source,
-                        "console": spec["name"],
-                        "badge": spec["badge"],
-                        "type": "libretro",
-                        "core": selected_core,
-                        "rom": rel_rom,
-                        "cover": cover_path,
-                        "cover_is_fallback": is_fallback,
-                        "year": spec["year"],
-                        "developer": spec["developer"],
-                        "desc": spec["desc"],
-                        "region": region,
-                        "revision": revision,
-                        "installed": True,
-                        "available": integrity_ok,
-                        "fingerprint": fingerprint,
-                        "integrity_notes": integrity_notes,
-                    }
-
-                    # Deduplicación no destructiva: preserva variantes regionales
-                    dedup_key = (spec["badge"], clean_title.lower(), region, revision)
-                    if dedup_key in seen_titles:
-                        prev = seen_titles[dedup_key]
-                        if f.suffix.lower() == ".sfc" and prev["rom"].lower().endswith(".smc"):
-                            seen_titles[dedup_key] = item
-                    else:
-                        seen_titles[dedup_key] = item
-
-                    if progress_callback and total_files > 0:
-                        progress_callback(processed_count, total_files, display_title)
-
-        installed_games = list(seen_titles.values())
-        games.extend(installed_games)
-        games.extend(self.REMOTE_CATALOG_METADATA)
+                catalog_games.append({
+                    "id": game_id,
+                    "title": clean_title,
+                    "clean_title": clean_title,
+                    "internal_title": clean_title,
+                    "metadata_source": "filename",
+                    "console": spec["name"],
+                    "badge": spec["badge"],
+                    "platform_key": pk,
+                    "format": f.suffix.lstrip(".").upper() or "ROM",
+                    "type": "libretro" if str(spec["core"] or "").endswith(".dylib") else "modern",
+                    "core": spec["core"],
+                    "rom": rel_rom,
+                    "cover": cover_path,
+                    "cover_is_fallback": is_fb,
+                    "year": spec["year"],
+                    "developer": spec["developer"],
+                    "desc": spec["desc"],
+                    "region": region,
+                    "revision": revision,
+                    "size": size_str,
+                    "installed": True,
+                    "on_demand": False,
+                    "available": True,
+                    "fingerprint": ROMMetadataExtractor.compute_file_fingerprint(f),
+                    "integrity_notes": "OK",
+                    "is_compatible": spec["core"] is not None,
+                })
+                if progress_callback and total_files > 0:
+                    progress_callback(processed, total_files, clean_title)
 
         with self._lock:
-            self._cached_games = games
+            self._cached_games = catalog_games
             self._is_scanning = False
 
-        return games
+        return catalog_games
 
     def scan_async(
         self,
@@ -728,7 +419,7 @@ class GameLibraryScannerService:
         on_complete: Callable[[list[dict]], None] | None = None,
         on_error: Callable[[Exception], None] | None = None,
     ):
-        """Ejecuta el escaneo en un hilo de trabajo en segundo plano para no congelar la UI."""
+        """Ejecuta el escaneo en segundo plano sin bloquear el hilo principal de Qt."""
         def _worker():
             try:
                 res = self.scan_all(force=True, progress_callback=on_progress)
@@ -742,44 +433,69 @@ class GameLibraryScannerService:
         self._scan_thread.start()
 
     def cancel_scan(self):
-        """Solicita la cancelación limpia del escaneo en curso."""
         self._cancel_requested = True
 
     def get_games(self) -> list[dict]:
-        """Retorna el catálogo en memoria de forma inmediata."""
         if not self._cached_games:
             self.scan_all()
         return list(self._cached_games)
 
     def get_game_by_id(self, game_id: str) -> dict | None:
-        """Busca un juego por ID respetando posibles migraciones o nombres directos."""
         for g in self.get_games():
             if g.get("id") == game_id:
                 return g
         return None
 
     def refresh(self) -> list[dict]:
-        """Fuerza un reescaneo de las carpetas ROM físicas para reflejar cambios en caliente."""
         return self.scan_all(force=True)
 
     def verify_game_file(self, game_id: str) -> tuple[bool, str]:
-        """Comprueba físicamente antes del lanzamiento si la ROM y el Core existen y son compatibles."""
+        """Comprueba físicamente antes del lanzamiento si la ROM y el emulador están listos."""
         game = self.get_game_by_id(game_id)
         if not game:
             return False, f"Juego no registrado en el catálogo: {game_id}"
 
         if game.get("on_demand"):
+            badge = game.get("badge", "ROM")
+            size = game.get("size", "")
+            if badge == "PS5" or badge == "SWITCH 2":
+                return (
+                    False,
+                    f"'{game['title']}' ({badge} · {size}) está en la nube On-Demand. "
+                    f"Aún no existe emulador comercial estable para {game.get('console')}.",
+                )
             if not game.get("is_compatible", True) or not game.get("core"):
-                return False, f"El título '{game['title']}' requiere un núcleo emulador no disponible en la plataforma actual."
-            return False, f"El juego '{game['title']}' está en el catálogo On-Demand y requiere instalación previa."
+                return (
+                    False,
+                    f"El título '{game['title']}' ({size}) está disponible en la nube para {game.get('console')}.",
+                )
+            return (
+                False,
+                f"El juego '{game['title']}' ({size}) está en la nube On-Demand y requiere descarga previa en roms/{game.get('platform_key', 'ps3')}/.",
+            )
 
-        rom_path = self.root_dir / game["rom"]
-        if not rom_path.exists():
-            return False, f"Archivo de ROM no encontrado en disco: {game['rom']}"
+        rom_val = str(game.get("rom") or "")
+        rom_path = Path(rom_val) if Path(rom_val).is_absolute() else (self.root_dir / rom_val)
+        if not rom_val or not rom_path.exists():
+            return False, f"Archivo de ROM no encontrado en disco: {rom_val}"
 
-        core_path = self.root_dir / game["core"]
+        core = game.get("core")
+        if not core:
+            return False, f"No hay emulador compatible configurado para {game.get('console')}."
+
+        if str(core).startswith("external:"):
+            emu = self.resolve_external_emulator(str(core))
+            if not emu:
+                label = self.EXTERNAL_EMULATORS.get(str(core), (str(core),))[0]
+                return (
+                    False,
+                    f"ROM instalada localmente en '{rom_val}', pero falta instalar {label} en /Applications o PATH para lanzarlo.",
+                )
+            return True, f"ROM y emulador externo {emu[0]} verificados."
+
+        core_path = self.root_dir / str(core)
         if not core_path.exists():
-            return False, f"Núcleo Libretro no encontrado en disco: {game['core']}"
+            return False, f"Núcleo Libretro no encontrado en disco: {core}"
 
         if rom_path.suffix.lower() == ".cue":
             ok, msg = ROMMetadataExtractor.verify_cue_bin_integrity(rom_path)
@@ -789,7 +505,7 @@ class GameLibraryScannerService:
         return True, "Archivo de juego y núcleo verificados listos para ejecución a 60 FPS"
 
     def sync_to_sqlite(self, db_path: Path | None = None) -> int:
-        """Sincroniza transaccionalmente el catálogo en la base de datos SQLite con reconciliación de ausentes."""
+        """Sincroniza transaccionalmente el catálogo moderno en SQLite con reconciliación."""
         target_db = db_path or (self.root_dir / ".cci-user-data" / "cci_system.sqlite3")
         if not target_db.parent.exists():
             target_db.parent.mkdir(parents=True, exist_ok=True)
@@ -821,7 +537,6 @@ class GameLibraryScannerService:
                     );
                 """)
 
-                # Migración automática de columnas
                 cur.execute("PRAGMA table_info(installed_roms)")
                 existing_cols = {col[1] for col in cur.fetchall()}
                 for c_name, c_type in [
@@ -837,6 +552,8 @@ class GameLibraryScannerService:
                             pass
 
                 for g in current_games:
+                    is_inst = 1 if g.get("installed", False) else 0
+                    is_avail = 1 if g.get("available", False) else 0
                     cur.execute("""
                         INSERT OR REPLACE INTO installed_roms
                         (id, title, internal_title, metadata_source, console, badge, core, rom_path, cover_path, region, revision, fingerprint, installed, available, on_demand, updated_at)
@@ -845,22 +562,21 @@ class GameLibraryScannerService:
                         g.get("id"),
                         g.get("title"),
                         g.get("internal_title", g.get("title")),
-                        g.get("metadata_source", "filename"),
+                        g.get("metadata_source", "catalog"),
                         g.get("console"),
                         g.get("badge"),
                         g.get("core") or "",
                         g.get("rom") or "",
                         g.get("cover") or "",
-                        g.get("region", "Unknown"),
+                        g.get("region", "Global"),
                         g.get("revision", "1.0"),
                         g.get("fingerprint", ""),
-                        1 if g.get("installed", True) else 0,
-                        1 if g.get("available", True) else 0,
+                        is_inst,
+                        is_avail,
                         1 if g.get("on_demand", False) else 0,
                     ))
 
-                # Reconciliación: Marcar como MISSING / available=0 los registros que ya no están en disco
-                cur.execute("SELECT id FROM installed_roms WHERE on_demand = 0")
+                cur.execute("SELECT id FROM installed_roms")
                 stored_rows = cur.fetchall()
                 for (row_id,) in stored_rows:
                     if row_id not in active_ids:

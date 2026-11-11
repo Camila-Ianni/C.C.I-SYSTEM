@@ -1018,25 +1018,25 @@ class HomeView(QWidget):
         """)
         recent_row.addWidget(self.left_arrow)
 
-        # Datos de juegos recientes en 3 páginas (Mockup 1:1)
+        # Datos de juegos recientes modernos en 3 páginas
         self.recent_pages_data = [
-            # Página 0 (Mockup Exacto)
+            # Página 0 (Destacados actuales)
             [
-                ("Metal Slug 2", "Jugado hoy", "assets_omnidash/mockup_cards/thumb_recent_mslug2.png", "mame_mslug2", True),
-                ("Castlevania: SOTN", "Jugado ayer", "assets_omnidash/mockup_cards/thumb_recent_castlevania.png", "ps1_Castlevania - Symphony of the Night (USA)", False),
-                ("Mario Kart DS", "Jugado hace 2 días", "assets_omnidash/mockup_cards/thumb_recent_mariokart.png", "nds_0168 - Mario Kart DS (U)(SCZ)", False),
+                ("God of War Ragnarök", "PlayStation 5 • 103 GB", "fotos juegos/33_god_of_war_ragnar_k.jpg", "ps5_god_of_war_ragnarok", True),
+                ("Mario Kart 8 Deluxe", "Nintendo Switch • 6.8 GB", "fotos juegos/43_mario_kart_8_deluxe.png", "switch_mario_kart_8_deluxe", False),
+                ("Minecraft", "PS3 • Instalado local", "fotos juegos/03_minecraft.jpg", "ps3_minecraft", False),
             ],
             # Página 1
             [
-                ("Super Mario World", "Jugado hace 3 días", "fotos juegos/Super Mario World 2- Yoshi's Island.jpg", "snes_smw", False),
-                ("Zelda: Ocarina", "Jugado la semana pasada", "fotos juegos/The Legend of Zelda- Ocarina of Time.jpg", "n64_zelda", False),
-                ("Donkey Kong 64", "Jugado hace 2 semanas", "fotos juegos/Donkey Kong 64.jpg", "n64_dk64", False),
+                ("ASTRO BOT", "PlayStation 5 • 37.9 GB", "fotos juegos/34_astro_bot.jpg", "ps5_astro_bot", False),
+                ("Gran Turismo Sport", "PlayStation 4 • 40 GB", "fotos juegos/12_gran_turismo_sport.png", "ps4_gran_turismo_sport", False),
+                ("Hollow Knight", "Nintendo Switch • 3.6 GB", "fotos juegos/55_hollow_knight.jpg", "switch_hollow_knight", False),
             ],
             # Página 2
             [
-                ("Pac-Man", "Jugado hace 2 semanas", "fotos juegos/Pac-Man.png", "arcade_pacman", False),
-                ("God of War", "Jugado el mes pasado", "fotos juegos/God of War.jpg", "ps2_gow", False),
-                ("Sonic 4", "Jugado el mes pasado", "fotos juegos/Sonic The Hedgehog 4- Episode 1.jpg", "wii_sonic", False),
+                ("Grand Theft Auto V", "PlayStation 5 • 84.4 GB", "fotos juegos/32_grand_theft_auto_v.jpg", "ps5_grand_theft_auto_v", False),
+                ("God of War (2018)", "PlayStation 4 • 36 GB", "fotos juegos/15_god_of_war_2018.jpg", "ps4_god_of_war_2018", False),
+                ("Resident Evil 4", "Nintendo Switch • 12.1 GB", "fotos juegos/72_resident_evil_4.jpg", "switch_resident_evil_4", False),
             ]
         ]
 
@@ -1438,18 +1438,18 @@ class HomeView(QWidget):
             if not matched:
                 matched = next((g for g in ALL_GAMES if title.lower() in g.get("title", "").lower()), None)
             if not matched:
-                matched = {"title": title, "console": "Retro", "cover": img_rel}
+                matched = {"title": title, "console": "PlayStation 5", "badge": "PS5", "cover": img_rel, "on_demand": True}
             slot["game"] = matched
 
             # Cargar imagen redondeada adaptada al tamaño del slot
             img_p = ROOT / img_rel
-            if img_p.exists():
-                raw = QPixmap(str(img_p))
+            raw = QPixmap(str(img_p)) if img_p.exists() else resolve_game_cover(matched)
+            if raw and not raw.isNull():
                 ts = slot["thumb_lbl"].width() if slot["thumb_lbl"].width() > 10 else 96
                 slot["thumb_lbl"].setPixmap(get_rounded_pixmap(raw, ts, ts, 16))
 
-            # Conectar botón de play y clic de tarjeta
-            slot["card"].mousePressEvent = lambda _, gm=matched: self.launch_game.emit(gm)
+            # Conectar tarjeta a detalles y botón ▶ al lanzamiento / aviso nube
+            slot["card"].mousePressEvent = lambda _, gm=matched: self.open_details.emit(gm)
             if slot.get("connected"):
                 try:
                     slot["play_btn"].clicked.disconnect()
@@ -1622,16 +1622,16 @@ def resolve_game_cover(game: dict) -> QPixmap | None:
         if not pm.isNull():
             return pm
 
-    # 5. Fallbacks secundarios de títulos y clásicos
+    # 5. Fallbacks modernos si un archivo directo faltara
     title = (game.get("title") or "").lower()
     priority_map = [
-        ("super mario", ROOT / "fotos juegos" / "Super Mario World 2- Yoshi's Island.jpg"),
-        ("zelda", ROOT / "fotos juegos" / "The Legend of Zelda- Ocarina of Time.jpg"),
-        ("metal slug", ROOT / "fotos juegos" / "Metal Slug 2- Super Vehicle-001:II.jpg"),
-        ("castlevania", ROOT / "fotos juegos" / "Castlevania- Symphony of the Night.webp"),
-        ("donkey kong", ROOT / "fotos juegos" / "Donkey Kong 64.jpg"),
-        ("pac-man", ROOT / "fotos juegos" / "Pac-Man.png"),
-        ("god of war", ROOT / "fotos juegos" / "God of War.jpg"),
+        ("god of war", ROOT / "fotos juegos" / "33_god_of_war_ragnar_k.jpg"),
+        ("mario kart", ROOT / "fotos juegos" / "43_mario_kart_8_deluxe.png"),
+        ("minecraft", ROOT / "fotos juegos" / "03_minecraft.jpg"),
+        ("astro bot", ROOT / "fotos juegos" / "34_astro_bot.jpg"),
+        ("grand theft auto", ROOT / "fotos juegos" / "32_grand_theft_auto_v.jpg"),
+        ("hollow knight", ROOT / "fotos juegos" / "55_hollow_knight.jpg"),
+        ("resident evil", ROOT / "fotos juegos" / "72_resident_evil_4.jpg"),
     ]
     for key, path in priority_map:
         if key in title and path.exists():
@@ -1928,14 +1928,13 @@ class LibraryView(QWidget):
 
         platforms = [
             (f"Todas ({len(ALL_GAMES)})", "todas", "apps_grid.png"),
-            ("Super Nintendo", "snes", "controller_outline.png"),
-            ("Arcade MAME", "arcade", "arcade_cabinet.png"),
-            ("Nintendo 64", "n64", "xbox_controller.png"),
-            ("PlayStation 1", "ps1", "disc_ps.png"),
-            ("Nintendo DS", "nds", "nds_dual.png"),
-            ("Neo-Geo", "neo", "games.png"),
-            ("Game Boy Advance", "gba", "desktop.png"),
-            ("Nintendo Wii", "wii", "controller_outline.png"),
+            ("PlayStation 5", "ps5", "disc_ps.png"),
+            ("PlayStation 4", "ps4", "disc_ps.png"),
+            ("Nintendo Switch", "switch", "controller_outline.png"),
+            ("PlayStation 3", "ps3", "disc_ps.png"),
+            ("Instalados locales", "installed", "games.png"),
+            ("En la nube", "cloud", "desktop.png"),
+            ("Clásicos PS1 / PS2", "ps_classic", "disc_ps.png"),
         ]
 
         self.cat_buttons = []
@@ -2108,28 +2107,37 @@ class LibraryView(QWidget):
         event.accept()
 
     def _get_prioritized_games(self, games: list[dict]) -> list[dict]:
-        """Ordena los 69 juegos de la consola colocando clásicos representativos al inicio."""
+        """Ordena la biblioteca moderna destacando lanzamientos insignia e instalados primero."""
         def match_game(target: str, g: dict) -> bool:
-            t = g.get("title", "").lower().replace("-", " ")
-            if target == "mario": return "super mario" in t and "kart" not in t and "64" not in t and "world" not in t and "collection" not in t
-            if target == "zelda": return "zelda" in t
-            if target == "metal slug": return "metal slug" in t
-            if target == "pacman": return "pac man" in t or "pacman" in t
-            if target == "donkey": return "donkey kong" in t and "64" in t
-            if target == "castlevania": return "castlevania" in t
-            if target == "kart": return "mario kart" in t
-            if target == "god of war": return "god of war" in t and "ii" not in t and "chains" not in t and "ghost" not in t
+            gid = (g.get("id") or "").lower()
+            t = (g.get("title") or "").lower()
+            if target == "ps3_minecraft":
+                return gid == "ps3_minecraft"
+            if target == "ragnarok":
+                return "ragnarök" in t or "ragnarok" in t
+            if target == "astro":
+                return "astro bot" in t
+            if target == "mk8":
+                return "mario kart 8" in t
+            if target == "gtav":
+                return gid == "ps5_grand_theft_auto_v"
+            if target == "gtsport":
+                return "gran turismo sport" in t
+            if target == "sparking":
+                return "sparking! zero" in t
+            if target == "hollow":
+                return "hollow knight" in t
             return False
 
         top_targets = [
-            "mario",
-            "zelda",
-            "metal slug",
-            "pacman",
-            "donkey",
-            "castlevania",
-            "kart",
-            "god of war",
+            "ps3_minecraft",
+            "ragnarok",
+            "astro",
+            "mk8",
+            "gtav",
+            "gtsport",
+            "sparking",
+            "hollow",
         ]
         priority_games = []
         for target in top_targets:
@@ -2199,22 +2207,20 @@ class LibraryView(QWidget):
 
             if not code or code == "todas":
                 plat_match = True
-            elif code == "snes":
-                plat_match = ("super" in console or "snes" in console or badge == "snes")
-            elif code == "arcade":
-                plat_match = ("arcade" in console or "mame" in console or badge == "arcade")
-            elif code == "n64":
-                plat_match = ("64" in console or badge == "n64")
-            elif code == "ps1":
-                plat_match = ("playstation" in console or "ps1" in console or "ps2" in console or "psp" in console or badge in ("ps1", "ps2", "psp"))
-            elif code == "nds":
-                plat_match = ("ds" in console or badge == "nds")
-            elif code == "neo":
-                plat_match = ("neo" in console or badge == "neo-geo")
-            elif code == "gba":
-                plat_match = ("gba" in console or "advance" in console or badge == "gba")
-            elif code == "wii":
-                plat_match = ("wii" in console or badge == "wii")
+            elif code == "ps5":
+                plat_match = (badge == "ps5" or "playstation 5" in console)
+            elif code == "ps4":
+                plat_match = (badge == "ps4" or "playstation 4" in console)
+            elif code == "switch":
+                plat_match = ("switch" in badge or "switch" in console)
+            elif code == "ps3":
+                plat_match = (badge == "ps3" or "playstation 3" in console)
+            elif code == "installed":
+                plat_match = bool(g.get("installed")) and not bool(g.get("on_demand"))
+            elif code == "cloud":
+                plat_match = bool(g.get("on_demand"))
+            elif code == "ps_classic":
+                plat_match = badge in ("ps1", "ps2") or "playstation 1" in console or "playstation 2" in console
             else:
                 plat_match = (code in console or code in badge)
 
@@ -3191,35 +3197,20 @@ class GameDetailsView(QWidget):
                 }
             """)
 
-        t_low = title.lower()
-        if "all-stars" in t_low or "mario" in t_low:
-            self.val_last_played.setText("Ayer")
-            self.val_play_time.setText("12h 45m")
-            self.val_saves.setText("3 slots")
-            self.val_progress.setText("85%")
-        elif "metal slug 2" in t_low:
-            self.val_last_played.setText("Hoy")
-            self.val_play_time.setText("4h 20m")
-            self.val_saves.setText("2 slots")
-            self.val_progress.setText("60%")
-        elif "castlevania" in t_low:
-            self.val_last_played.setText("Ayer")
-            self.val_play_time.setText("9h 15m")
-            self.val_saves.setText("4 slots")
-            self.val_progress.setText("78%")
-        else:
-            self.val_last_played.setText("Sin registrar aún")
-            self.val_play_time.setText("0h 0m")
-            self.val_saves.setText("0 slots")
-            self.val_progress.setText("—")
+        self.val_last_played.setText("Hoy" if game.get("installed") else "Sin registrar aún")
+        self.val_play_time.setText("0h 0m")
+        self.val_saves.setText("Nube C.C.I." if game.get("on_demand") else "Local")
+        self.val_progress.setText(game.get("size", "—"))
 
-        cover_pix = None
-        if "all-stars" in t_low:
-            p_alt = ROOT / "fotos juegos" / "Super Mario All-Stars + Super Mario World.webp"
-            if p_alt.exists():
-                cover_pix = QPixmap(str(p_alt))
-        if not cover_pix or cover_pix.isNull():
-            cover_pix = resolve_game_cover(game)
+        cover_pix = resolve_game_cover(game)
+
+        if game.get("on_demand"):
+            sz_txt = game.get("size") or "Nube"
+            self.play_btn.setText(f"☁  NUBE · {sz_txt}")
+            self.play_btn.setFixedWidth(max(150, min(210, 110 + len(sz_txt) * 8)))
+        else:
+            self.play_btn.setText("▶  JUGAR")
+            self.play_btn.setFixedWidth(134)
 
         self._current_cover_pix = cover_pix
         if cover_pix and not cover_pix.isNull():
@@ -3232,79 +3223,46 @@ class GameDetailsView(QWidget):
 
         self._populate_captures(game)
 
-        self.val_tech_core.setText(game.get("core", "Libretro Native Engine"))
-        self.val_tech_rom.setText(game.get("rom", "Builtin"))
-        self.val_tech_format.setText(f"{game.get('region', 'Global')} · Rev {game.get('revision', '1.0')}")
-        self.val_tech_status.setText("✓ Verificado e instalado listo para ejecución")
-        self.val_tech_cert.setText("✓ Certificado 60 FPS Low-Latency Framebuffer")
+        core_disp = str(game.get("core") or "")
+        if core_disp.startswith("external:"):
+            core_disp = f"Emulador externo ({core_disp.split(':', 1)[1].upper()})"
+        elif not core_disp:
+            core_disp = "Nube / Sin emulador local"
+        self.val_tech_core.setText(core_disp)
+        self.val_tech_rom.setText(game.get("rom") or f"Nube On-Demand ({game.get('size', '—')})")
+        self.val_tech_format.setText(f"{game.get('format', 'PKG')} · {game.get('region', 'Global')}")
+        if game.get("on_demand"):
+            self.val_tech_status.setText(f"☁ Disponible en la nube ({game.get('size', '—')})")
+            self.val_tech_cert.setText(
+                "Descarga manual/externa requerida en roms/" + str(game.get("platform_key", "ps3"))
+            )
+        else:
+            self.val_tech_status.setText("✓ ROM descargada e instalada localmente")
+            self.val_tech_cert.setText("✓ Verificado en biblioteca C.C.I. SYSTEM")
 
     def _infer_genre_and_players(self, game: dict) -> tuple[str, str]:
+        if game.get("genre"):
+            return str(game["genre"]), str(game.get("players") or "1-2 Jugadores")
         title = (game.get("title") or "").lower()
-        if "all-stars" in title:
-            return "Plataformas", ""
-        elif "mario kart" in title or "cruis'n" in title:
-            return "Carreras / Arcade", "1-4 Jugadores"
-        elif "street fighter" in title or "mortal kombat" in title or "marvel vs" in title:
-            return "Lucha / Versus", "1-2 Jugadores"
-        elif "doom" in title:
-            return "FPS / Acción", "1 Jugador"
-        elif "zelda" in title:
-            return "Acción / Aventura", "1 Jugador"
-        elif "castlevania" in title or "metroid" in title:
-            return "Metroidvania / Acción", "1 Jugador"
-        elif "metal slug" in title or "sunset riders" in title or "wonder boy" in title:
-            return "Run & Gun / Acción", "1-2 Jugadores"
-        elif "pac-man" in title or "puzzle bobble" in title or "snow bros" in title:
-            return "Arcade / Clásico", "1-2 Jugadores"
-        elif "resident evil" in title:
+        if "mario kart" in title or "hot wheels" in title or "f1 " in title or "gran turismo" in title or "wrc" in title or "need for speed" in title:
+            return "Carreras", "1-4 Jugadores"
+        elif "mortal kombat" in title or "dragon ball" in title or "jojo" in title:
+            return "Lucha", "1-2 Jugadores"
+        elif "resident evil" in title or "silent hill" in title:
             return "Survival Horror", "1 Jugador"
-        elif "pokemon" in title or "pokémon" in title:
-            return "RPG / Aventura", "1 Jugador"
-        elif "god of war" in title:
-            return "Hack & Slash / Acción", "1 Jugador"
-        elif "wii sports" in title:
-            return "Deportes / Familiar", "1-4 Jugadores"
-        elif "bratz" in title or "barbie" in title:
-            return "Aventura / Simulación", "1 Jugador"
-        return "Plataformas", "1-2 Jugadores"
+        elif "god of war" in title or "spider-man" in title or "star wars" in title:
+            return "Acción / Aventura", "1 Jugador"
+        elif "fifa" in title or "fc " in title or "pro evolution" in title:
+            return "Deportes / Fútbol", "1-4 Jugadores"
+        elif "just dance" in title:
+            return "Música / Baile", "1-6 Jugadores"
+        elif "hollow knight" in title or "cuphead" in title:
+            return "Indie / Acción", "1-2 Jugadores"
+        return "Acción / Aventura", "1-2 Jugadores"
 
     def _resolve_hero_banner_pixmap(self, game: dict, fallback_cover: QPixmap | None) -> QPixmap | None:
-        title = (game.get("title") or "").lower()
-        gid = (game.get("id") or "").lower()
-
-        if "all-stars" in title or "super mario" in title or "hero_mario" in gid:
-            p = ROOT / "assets_omnidash" / "mockup_cards" / "hero_allstars_cast.png"
-            if p.exists():
-                return QPixmap(str(p))
-
-        if "zelda" in title:
-            p = ROOT / "assets_omnidash" / "mockup_cards" / "grid_zelda_2x.png"
-            if p.exists():
-                return QPixmap(str(p))
-
-        if "castlevania" in title:
-            p = ROOT / "assets_omnidash" / "mockup_cards" / "grid_castlevania_2x.png"
-            if p.exists():
-                return QPixmap(str(p))
-
-        if "metal slug" in title:
-            p = ROOT / "assets_omnidash" / "mockup_cards" / "grid_metalslug_2x.png"
-            if p.exists():
-                return QPixmap(str(p))
-
-        if "donkey kong" in title:
-            p = ROOT / "assets_omnidash" / "mockup_cards" / "grid_donkeykong_2x.png"
-            if p.exists():
-                return QPixmap(str(p))
-
-        if "mario kart" in title:
-            p = ROOT / "assets_omnidash" / "mockup_cards" / "grid_mariokart_2x.png"
-            if p.exists():
-                return QPixmap(str(p))
-
         if fallback_cover and not fallback_cover.isNull():
             return fallback_cover
-
         return None
 
     def _populate_captures(self, game: dict):
@@ -3314,25 +3272,10 @@ class GameDetailsView(QWidget):
             if w:
                 w.deleteLater()
 
-        title = (game.get("title") or "").lower()
         caps = []
-
-        if "super mario" in title or "all-stars" in title:
-            for i in (1, 2, 3):
-                p = ROOT / "assets_omnidash" / "captures" / f"mario_allstars_{i}.png"
-                if p.exists():
-                    caps.append(QPixmap(str(p)))
-
-        rom_path = game.get("rom", "")
-        if not caps and rom_path and "nds" in rom_path.lower():
-            p_rom = ROOT / rom_path
-            if p_rom.exists():
-                parent = p_rom.parent
-                prefix = p_rom.name.split(" - ")[0] if " - " in p_rom.name else ""
-                if prefix:
-                    ingame = parent / f"{prefix} - InGame.png"
-                    if ingame.exists():
-                        caps.append(QPixmap(str(ingame)))
+        cover = resolve_game_cover(game)
+        if cover and not cover.isNull():
+            caps.append(cover)
 
         if caps:
             self.captures_header.show()
@@ -3341,8 +3284,7 @@ class GameDetailsView(QWidget):
                 card = ClickableCaptureCard(pix, self.captures_container)
                 card.clicked.connect(self._open_capture_preview)
                 self.captures_lay.addWidget(card, 1)
-            if len(caps) < 3:
-                self.captures_lay.addStretch(max(1, 3 - len(caps)))
+            self.captures_lay.addStretch(2)
         else:
             self.captures_header.hide()
             self.captures_container.hide()
@@ -7826,15 +7768,51 @@ class OmniDashMainWindow(QMainWindow):
             print(f"[OmniDash-Qt] Ya hay un juego en ejecución; cerralo antes de abrir {title}.")
             return
 
+        if game.get("on_demand"):
+            console_name = game.get("console", "Consola")
+            size_txt = game.get("size", "—")
+            plat_key = game.get("platform_key", "ps3")
+            badge = game.get("badge", "")
+            extra_note = (
+                "\n\nNota técnica: Actualmente no existe un emulador estable público para PlayStation 5 / Switch 2."
+                if badge in ("PS5", "SWITCH 2")
+                else f"\n\nPara ejecutarlo localmente, descargá el paquete e instalalo en roms/{plat_key}/."
+            )
+            QMessageBox.information(
+                self,
+                f"{title} — En la nube ({size_txt})",
+                f"Título: {title}\nPlataforma: {console_name} ({badge})\nTamaño en la nube: {size_txt}"
+                + extra_note,
+            )
+            return
+
         if core and rom:
-            # H-08: Verificación física de integridad de ROM y Core antes de invocar Libretro
+            # Verificación física de integridad de ROM y emulador (Libretro o externo)
             if game.get("id"):
                 from backend.games.scanner_service import GameLibraryScannerService
-                ok, msg = GameLibraryScannerService.get_instance().verify_game_file(str(game["id"]))
+                scanner = GameLibraryScannerService.get_instance()
+                ok, msg = scanner.verify_game_file(str(game["id"]))
                 if not ok:
-                    print(f"[OmniDash-Qt] Verificación de lanzamiento denegada para {title}: {msg}")
-                    QMessageBox.warning(self, f"No se pudo iniciar {title}", msg)
+                    print(f"[OmniDash-Qt] Verificación de lanzamiento para {title}: {msg}")
+                    QMessageBox.information(self, f"{title} — Requiere emulador", msg)
                     return
+
+                if str(core).startswith("external:"):
+                    emu = scanner.resolve_external_emulator(str(core))
+                    if emu:
+                        emu_label, emu_bin = emu
+                        rom_abs = str((ROOT / str(rom)).resolve()) if not Path(str(rom)).is_absolute() else str(rom)
+                        print(f"[OmniDash-Qt] Lanzando {title} con {emu_label} ({emu_bin})...")
+                        self._start_game_qprocess(
+                            title=title,
+                            game_id=gid,
+                            program=emu_bin,
+                            arguments=[rom_abs],
+                            rom_path=str(rom),
+                            executable_name=emu_bin,
+                            warn_on_error=True,
+                        )
+                        return
 
             print(f"[OmniDash-Qt] Lanzando emulador Libretro 60 FPS en subproceso aislado: {title} ({core})...")
             self._start_game_qprocess(

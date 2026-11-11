@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import math
 import os
+import re
 import time
 from pathlib import Path
 import pygame
@@ -87,195 +88,46 @@ def draw_aero_glass_panel(surface: pygame.Surface, rect: pygame.Rect, border_rad
 # ==============================================================================
 # CARGADOR DE IMÁGENES EN COLOR DE ALTA DEFINICIÓN
 # ==============================================================================
+def _build_modern_official_covers() -> dict[str, str]:
+    from backend.games.modern_catalog import MODERN_GAMES_CATALOG
+    return {g["id"]: g["cover"] for g in MODERN_GAMES_CATALOG if g.get("cover")}
+
+
 COLOR_COVERS = {
-    # Nintendo & Retro
-    "mario": "fotos web/super mario.jpg",
-    "zelda": "fotos web/The_Legend_of_Zelda_film_logo.jpg",
-    "pokemon": "fotos web/pokemon.webp",
-    "donkeykong": "fotos web/donkeykong.jpg",
-    "castlevania": "fotos web/castlevania.webp",
-    "metalslug": "fotos web/metal slug.jpg",
-    "streetfighter": "fotos web/Street_Fighter_old_logo.png",
-    "doom": "fotos web/Doom_logo.png",
-    "pacman": "fotos web/pac man.jpg",
-    "megaman": "fotos web/megaman.jpg",
-    "plantsvszombies": "fotos web/pvzr-key-art.png.adapt.crop1x1.767p.png",
-    "flappy": "fotos web/Flappy_Bird_icon.png",
-    "asteroids": "fotos web/asteroids.jpg",
-    "dino": "fotos web/dino.jpg",
-    "tetris": "fotos web/tetris logo .jpg",
-    "spaceinvaders": "fotos web/space nvaders.jpg",
-    "ghostbusters": "fotos web/ghostbusters.webp",
-    # Colección AAA OmniDash
-    "sonic": "assets_omnidash/covers/sonic.webp",
-    "residentevil": "assets_omnidash/covers/resident-evil.webp",
-    "battlefield": "assets_omnidash/covers/battlefield.webp",
-    "callofduty": "assets_omnidash/covers/call-of-duty.webp",
-    "metalgear": "assets_omnidash/covers/metal-gear.webp",
-    "batman": "assets_omnidash/covers/batman-arkham.webp",
-    "assassinscreed": "assets_omnidash/covers/assassins-creed.webp",
-    "needforspeed": "assets_omnidash/covers/need-for-speed.webp",
-    "lego": "assets_omnidash/covers/lego.webp",
-    "farcry": "assets_omnidash/covers/far-cry.webp",
-    # PlayStation / Colección Moderna / Nuevos Juegos
-    "elden": "assets_omnidash/covers/elden.png",
-    "red": "assets_omnidash/covers/red.png",
-    "destiny": "assets_omnidash/covers/destiny.png",
-    "spider": "assets_omnidash/covers/spider.png",
-    "god": "assets_omnidash/covers/gow_ps2.png",
-    "kratos": "assets_omnidash/covers/gow_ps2.png",
-    "sparta": "assets_omnidash/covers/gow_sparta.png",
-    "olympus": "assets_omnidash/covers/gow_chains.png",
-    "chains": "assets_omnidash/covers/gow_chains.png",
-    "horizon": "assets_omnidash/covers/horizon.png",
-    "last": "assets_omnidash/covers/last.png",
-    "mafia": "assets_omnidash/covers/mafia.png",
-    "death": "assets_omnidash/covers/death.png",
-    "tomb": "assets_omnidash/covers/tomb.png",
-    "fifa": "assets_omnidash/covers/fifa.png",
-    "bratz": "roms/nds/6148 - Bratz Fashion Boutique (U)(frieNDS).jpg",
-    "star wars": "roms/nds/1633 - Cover.png",
-    "barbie": "assets_omnidash/covers/barbie_princess.png",
-    "disney": "assets_omnidash/covers/disney_girls.png",
-    "simpsons": "assets_omnidash/covers/simpsons_arcade.png",
-    "simpson": "assets_omnidash/covers/simpsons_arcade.png",
-    "monster high": "assets_omnidash/covers/mh_13_wishes.png",
-    "ghoul": "assets_omnidash/covers/mh_ghoul_spirit.png",
-    "roller": "assets_omnidash/covers/mh_roller.png",
-    "herbie": "assets_omnidash/covers/herbie.png",
+    "godofwar": "fotos juegos/33_god_of_war_ragnar_k.jpg",
+    "astrobot": "fotos juegos/34_astro_bot.jpg",
+    "mariokart": "fotos juegos/43_mario_kart_8_deluxe.png",
+    "gtav": "fotos juegos/32_grand_theft_auto_v.jpg",
+    "grandtheftauto": "fotos juegos/32_grand_theft_auto_v.jpg",
+    "granturismo": "fotos juegos/12_gran_turismo_sport.png",
+    "spiderman": "fotos juegos/05_the_amazing_spider_man_2.jpg",
+    "minecraft": "fotos juegos/03_minecraft.jpg",
+    "residentevil": "fotos juegos/72_resident_evil_4.jpg",
+    "silenthill": "fotos juegos/29_silent_hill_2.png",
+    "hollowknight": "fotos juegos/55_hollow_knight.jpg",
+    "cuphead": "fotos juegos/52_cuphead.jpg",
+    "mortalkombat": "fotos juegos/49_mortal_kombat_11.jpg",
+    "dragonball": "fotos juegos/25_dragon_ball_sparking_zero.png",
+    "kirby": "fotos juegos/83_kirby_and_the_forgotten_land.jpg",
+    "animalcrossing": "fotos juegos/56_animal_crossing_new_horizons.png",
+    "luigi": "fotos juegos/54_luigi_s_mansion_3.jpg",
+    "starwars": "fotos juegos/89_star_wars_outlaws.png",
 }
 
-# ==============================================================================
-# CARÁTULAS OFICIALES EN ALTA RESOLUCIÓN (FOTOS JUEGOS - 69 TÍTULOS CURADOS)
-# ==============================================================================
-OFFICIAL_GAME_COVERS = {
-    # SNES
-    "snes_Aladdin (U) [!]": "fotos juegos/Aladdin.jpg",
-    "snes_BS Mario Collection 3 (J)": "fotos juegos/BS Mario Collection 3.webp",
-    "snes_Donkey Kong Country (U) (V1.2) [!]": "fotos juegos/Donkey Kong Country.jpg",
-    "snes_Donkey Kong Country 2 - Diddy's Kong Quest (U) (V1.1) [!]": "fotos juegos/Donkey Kong Country 2- Diddy's Kong Quest.webp",
-    "snes_Donkey Kong Country 3 - Dixie Kong's Double Trouble (U) [!]": "fotos juegos/Donkey Kong Country 3- Dixie Kong's Double Trouble.jpg",
-    "snes_Doom (USA)": "fotos juegos/Doom.jpg",
-    "snes_Kirby Super Star (U) [!]": "fotos juegos/Kirby Super Star.webp",
-    "snes_Legend of Zelda, The - A Link to the Past (U) [!]": "fotos juegos/The Legend of Zelda- A Link to the Past.jpg",
-    "snes_Megaman X3 (USA)": "fotos juegos/Mega Man X3.png",
-    "snes_Mortal Kombat (USA)": "fotos juegos/Mortal Kombat.webp",
-    "snes_Sonic the Hedgehog 4 (World) (Unl)": "fotos juegos/Sonic the Hedgehog 4.jpg",
-    "snes_Street Fighter II - The World Warrior (Europe)": "fotos juegos/Street Fighter II- The World Warrior.jpg",
-    "snes_Street Fighter II Turbo - Hyper Fighting (USA)": "fotos juegos/Street Fighter II Turbo- Hyper Fighting.webp",
-    "snes_Sunset Riders (USA)": "fotos juegos/Sunset Riders.jpeg",
-    "snes_Super Bomberman 4": "fotos juegos/Super Bomberman 4.webp",
-    "snes_Super Mario All-Stars (U) [!]": "fotos juegos/Super Mario All-Stars Online.jpeg",
-    "snes_Super Mario All-Stars + Super Mario World (USA)": "fotos juegos/Super Mario All-Stars + Super Mario World.webp",
-    "snes_Super Mario Kart (U) [!]": "fotos juegos/Super Mario Kart.jpg",
-    "snes_Super Mario World 2 - Yoshi's Island (U) (V1.1)": "fotos juegos/Super Mario World 2- Yoshi's Island.jpg",
-    "snes_Super Metroid (JU) [!]": "fotos juegos/Super Metroid.jpg",
-    "snes_Ultimate Mortal Kombat 3 (USA)": "fotos juegos/Ultimate Mortal Kombat 3.jpeg",
-
-    # MAME / ARCADE
-    "mame_crusnusa": "fotos juegos/Cruis'n USA.jpg",
-    "mame_ffightub": "fotos juegos/Final Fight.jpg",
-    "mame_mslug2": "fotos juegos/Metal Slug 2- Super Vehicle-001:II.jpg",
-    "mame_mslug6": "fotos juegos/Metal Slug 6.png",
-    "mame_mvscu": "fotos juegos/Marvel vs. Capcom- Clash of Super Heroes.png",
-    "mame_pacman": "fotos juegos/Pac-Man.png",
-    "mame_simpsons": "fotos juegos/The Simpsons.webp",
-
-    # N64
-    "n64_Donkey Kong 64 (U) [!]": "fotos juegos/Donkey Kong 64.jpg",
-    "n64_Mario Kart 64 (E) (V1.1) [!]": "fotos juegos/Mario Kart 64.jpg",
-    "n64_Super Smash Bros. (U) [!]": "fotos juegos/Super Smash Bros..png",
-    "n64_Super Mario 64 (U) [!]": "fotos juegos/Super Mario 64.jpg",
-    "n64_Legend of Zelda, The - Ocarina of Time (U) (V1.2) [!]": "fotos juegos/The Legend of Zelda- Ocarina of Time.jpg",
-
-    # PS1
-    "ps1_Castlevania - Symphony of the Night (USA)": "fotos juegos/Castlevania- Symphony of the Night.webp",
-    "ps1_Crash Bandicoot (USA)": "fotos juegos/Crash Bandicoot.png",
-    "ps1_Crash Bandicoot - Warped (USA)": "fotos juegos/Crash Bandicoot 3- Warped.webp",
-    "ps1_Metal Slug X (USA)": "fotos juegos/Metal Slug X.jpg",
-    "ps1_Resident Evil (USA)": "fotos juegos/Resident Evil.webp",
-    "ps1_Resident Evil 2 (USA) (Disc 2)": "fotos juegos/Resident Evil 2.jpg",
-    "ps1_Yu-Gi-Oh! Forbidden Memories (USA)": "fotos juegos/Yu-Gi-Oh! Forbidden Memories.webp",
-
-    # NDS
-    "nds_0168 - Mario Kart DS (U)(SCZ)": "fotos juegos/Mario Kart DS.jpg",
-    "nds_0389 - Animal Crossing - Wild World (E)(Legacy)": "fotos juegos/Animal Crossing- Wild World.webp",
-    "nds_0434 - New Super Mario Bros. (U)(Psyfer)": "fotos juegos/New Super Mario Bros..jpg",
-    "nds_0827 - Bratz - Forever Diamondz (E)(WRG)": "fotos juegos/Bratz- Forever Diamondz.jpeg",
-    "nds_1633 - LEGO Star Wars - The Complete Saga (E)(EXiMiUS)": "fotos juegos/LEGO Star Wars- The Complete Saga.jpg",
-    "nds_1740 - Bratz - 4 Real (E)(EXiMiUS)": "fotos juegos/Bratz 4 Real.jpeg",
-    "nds_2988 - Bratz - Girlz Really Rock (E)(XenoPhobia)": "fotos juegos/Bratz- Girlz Really Rock.webp",
-    "nds_6148 - Bratz Fashion Boutique (U)(frieNDS)": "fotos juegos/Bratz- Fashion Boutique.jpg",
-    "nds_Pokemon White Version 2 (DSi Enhanced)(U)(frieNDS)": "fotos juegos/Pokémon White 2.jpg",
-
-    # GBA
-    "gba_1645 - Barbie as the Princess and the Pauper (U)(Chameleon)": "fotos juegos/Barbie as the Princess and the Pauper.jpg",
-    "gba_1955 - Disney's Girls Pack (E)(Independent)": "fotos juegos/Disney's Girls Pack.jpeg",
-
-    # Neo-Geo
-    "neogeo_pbobblen": "fotos juegos/Puzzle Bobble- Bust-A-Move.jpg",
-    "neogeo_snowbro2": "fotos juegos/Snow Bros. 2.png",
-    "neogeo_ssideki2": "fotos juegos/Super Sidekicks 2- The World Championship.png",
-
-    # Wii
-    "wii_Wii Sports [RSPE01]": "fotos juegos/Wii Sports.webp",
-
-    # On-Demand (Instalador Base < 1 GB)
-    "gow_ps2_1": "fotos juegos/God of War.jpg",
-    "gow_ps2_2": "fotos juegos/God of War II.jpg",
-    "gow_psp_chains": "fotos juegos/God of War- Chains of Olympus.jpg",
-    "gow_psp_sparta": "fotos juegos/God of War- Ghost of Sparta.webp",
-    "wii_monster_high": "fotos juegos/Monster High- 13 Wishes.webp",
-    "nds_mh_13_wishes": "fotos juegos/Monster High- 13 Wishes.jpg",
-    "nds_mh_ghoul_spirit": "fotos juegos/Monster High- Ghoul Spirit.jpg",
-    "nds_mh_roller_maze": "fotos juegos/Monster High- Skultimate Roller Maze.jpg",
-    "gba_herbie": "fotos juegos/Disney's Herbie- Fully Loaded.webp",
-    "nds_kirby_ultra": "fotos juegos/Kirby Super Star Ultra.webp",
-    "nds_lego_marvel": "fotos juegos/LEGO Marvel Super Heroes- Universe in Peril.jpg",
-    "nds_pokemon_black": "fotos juegos/Pokémon Black Version.jpg",
-    "ps1_re3_nemesis": "fotos juegos/Resident Evil 3- Nemesis.webp",
-    "arcade_wonderboy": "fotos juegos/Wonder Boy.jpg",
-}
-
-ARCADE_TITLE_BEAUTIFY = {
-    "mame_crusnusa": "Cruis'n USA",
-    "mame_ffightub": "Final Fight",
-    "mame_mslug2": "Metal Slug 2",
-    "mame_mslug6": "Metal Slug 6",
-    "mame_mvscu": "Marvel vs. Capcom: Clash of Super Heroes",
-    "mame_pacman": "Pac-Man",
-    "mame_simpsons": "The Simpsons Arcade",
-    "neogeo_pbobblen": "Puzzle Bobble / Bust-A-Move",
-    "neogeo_snowbro2": "Snow Bros. 2",
-    "neogeo_ssideki2": "Super Sidekicks 2: The World Championship",
-    "snes_Legend of Zelda, The - A Link to the Past (U) [!]": "The Legend of Zelda: A Link to the Past",
-    "n64_Legend of Zelda, The - Ocarina of Time (U) (V1.2) [!]": "The Legend of Zelda: Ocarina of Time",
-}
+OFFICIAL_GAME_COVERS = _build_modern_official_covers()
+ARCADE_TITLE_BEAUTIFY: dict[str, str] = {}
 
 
 def pick_color_cover(name: str, console: str) -> str:
-    n = name.lower()
-    for key, path in COLOR_COVERS.items():
-        if key in n:
+    n = re.sub(r"[^a-z0-9]", "", name.lower())
+    for key, path in OFFICIAL_GAME_COVERS.items():
+        if key in n or n in key:
             if (ROOT / path).exists():
                 return path
-
-    if console == "SNES":
-        return "fotos web/super mario.jpg"
-    elif console == "N64":
-        return "fotos web/The_Legend_of_Zelda_film_logo.jpg"
-    elif console == "PS1":
-        return "assets_omnidash/covers/red.png"
-    elif console == "ARCADE":
-        return "fotos web/metal slug.jpg"
-    elif console == "NDS":
-        return "fotos web/pokemon.webp"
-    elif console == "WII":
-        return "assets_omnidash/covers/far-cry.webp"
-    elif console == "NEO-GEO":
-        return "assets_omnidash/covers/sega.webp"
-    else:
-        return "assets_omnidash/covers/elden.png"
+    for key, path in COLOR_COVERS.items():
+        if key in n and (ROOT / path).exists():
+            return path
+    return "fotos juegos/33_god_of_war_ragnar_k.jpg" if (ROOT / "fotos juegos/33_god_of_war_ragnar_k.jpg").exists() else "assets_omnidash/covers/elden.png"
 
 
 def load_all_games() -> list[dict]:
@@ -285,78 +137,35 @@ def load_all_games() -> list[dict]:
 
 ALL_GAMES = load_all_games()
 
+
+def _find_modern(title_sub: str, badge: str | None = None, fallback_idx: int = 0) -> dict:
+    for g in ALL_GAMES:
+        if title_sub.lower() in g.get("title", "").lower():
+            if not badge or g.get("badge") == badge:
+                return g
+    return ALL_GAMES[fallback_idx] if ALL_GAMES else {"id": "ps3_minecraft", "title": "Minecraft", "console": "PlayStation 3", "badge": "PS3", "cover": ""}
+
+
 FEATURED_RECENT = [
     {
-        "id": "hero_mario",
-        "title": "Super Mario World",
-        "subtitle": "Super Nintendo • 16-Bit",
-        "badge": "SNES",
-        "cover": "fotos juegos/Super Mario World 2- Yoshi's Island.jpg",
-        "core": "cores/snes9x_libretro.dylib",
-        "rom": "roms/snes/Super Mario World 2 - Yoshi's Island (U) (V1.1).smc",
-        "desc": "El pináculo del género de plataformas 2D con Yoshi y los 96 niveles de Dinosaur Land.",
-        "developer": "Nintendo EAD",
-        "year": "1990",
+        **(_g := _find_modern("God of War Ragnar", "PS5", 0)),
+        "subtitle": f"{_g.get('console', 'PlayStation 5')} • {_g.get('size', '103 GB')}",
     },
     {
-        "id": "rec_zelda",
-        "title": "The Legend of Zelda: Ocarina of Time",
-        "subtitle": "Nintendo 64 • 60 FPS",
-        "badge": "N64",
-        "cover": "fotos juegos/The Legend of Zelda- Ocarina of Time.jpg",
-        "core": "cores/mupen64plus_next_libretro.dylib",
-        "rom": "roms/n64/Super Mario 64 (U) [!].z64",
-        "desc": "Aventura épica atemporal en las tierras de Hyrule.",
-        "developer": "Nintendo",
-        "year": "1996",
+        **(_g := _find_modern("Mario Kart 8", "SWITCH", 0)),
+        "subtitle": f"{_g.get('console', 'Nintendo Switch')} • {_g.get('size', '6.8 GB')}",
     },
     {
-        "id": "rec_slug",
-        "title": "Metal Slug 2",
-        "subtitle": "Arcade MAME • Neo-Geo",
-        "badge": "ARCADE",
-        "cover": "fotos juegos/Metal Slug 2- Super Vehicle-001:II.jpg",
-        "core": "cores/mame2003_plus_libretro.dylib",
-        "rom": "roms/mame/mslug2.zip",
-        "desc": "Acción frenética 'run and gun' con animaciones pixel art legendarias.",
-        "developer": "SNK",
-        "year": "1998",
+        **(_g := _find_modern("ASTRO BOT", "PS5", 0)),
+        "subtitle": f"{_g.get('console', 'PlayStation 5')} • {_g.get('size', '37.9 GB')}",
     },
     {
-        "id": "rec_pokemon",
-        "title": "Pokémon White 2",
-        "subtitle": "Nintendo DS • DSi Enhanced",
-        "badge": "NDS",
-        "cover": "fotos juegos/Pokémon White 2.jpg",
-        "core": "cores/melonds_libretro.dylib",
-        "rom": "roms/nds/Pokemon White Version 2/Pokemon White Version 2 (DSi Enhanced)(U)(frieNDS).nds",
-        "desc": "Regresa a la región de Teselia dos años después con nuevos líderes de gimnasio.",
-        "developer": "Game Freak",
-        "year": "2012",
+        **(_g := _find_modern("Gran Turismo Sport", "PS4", 0)),
+        "subtitle": f"{_g.get('console', 'PlayStation 4')} • {_g.get('size', '40 GB')}",
     },
     {
-        "id": "rec_castlevania",
-        "title": "Castlevania: Symphony of the Night",
-        "subtitle": "PlayStation 1 • CD Audio",
-        "badge": "PS1",
-        "cover": "fotos juegos/Castlevania- Symphony of the Night.webp",
-        "core": "cores/mednafen_psx_hw_libretro.dylib",
-        "rom": "roms/ps1/Castlevania - Symphony of the Night (USA).cue",
-        "desc": "La obra maestra de Koji Igarashi que definió el género Metroidvania.",
-        "developer": "Konami",
-        "year": "1997",
-    },
-    {
-        "id": "rec_sonic",
-        "title": "Sonic the Hedgehog 4",
-        "subtitle": "Super Nintendo • 16-Bit",
-        "badge": "SNES",
-        "cover": "fotos juegos/Sonic the Hedgehog 4.jpg",
-        "core": "cores/snes9x_libretro.dylib",
-        "rom": "roms/snes/Doom (USA).sfc",
-        "desc": "Velocidad Supersónica a través de Green Hill Zone.",
-        "developer": "Sonic Team",
-        "year": "1991",
+        **(_g := _find_modern("Minecraft", "PS3", 0)),
+        "subtitle": f"{_g.get('console', 'PlayStation 3')} • {_g.get('size', '100 MB')}",
     },
 ]
 

@@ -33,6 +33,12 @@ METAL SLUG/No Commentary].mp4
 
 # Large ROM files & disc dumps
 roms/ps1/
+roms/ps2/
+roms/ps3/
+roms/ps4/
+roms/ps5/
+roms/switch/
+roms/switch2/
 roms/wii/
 roms/nds/Pokemon White Version 2/
 *.iso
@@ -40,6 +46,10 @@ roms/nds/Pokemon White Version 2/
 *.bin
 *.cue
 *.7z
+*.pkg
+*.nsp
+*.xci
+*.rar
 
 # Temporary debug outputs
 METAL SLUG/test_output/
