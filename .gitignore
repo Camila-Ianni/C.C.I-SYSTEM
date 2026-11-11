@@ -73,3 +73,5 @@ tools/*.sfx
 tools/app.ico
 tools/*.ico
 system/Mupen64plus/
+saves/games/
+

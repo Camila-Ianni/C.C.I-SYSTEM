@@ -1754,14 +1754,26 @@ class LibraryGameCard(AcrylicGlassCard):
         sub_row.addWidget(ico)
 
         fps_val = game.get("fps", 60)
-        if game.get("on_demand"):
-            sub_lbl = QLabel(f"☁ En la nube  •  {game.get('size', 'Descargar')}")
-            sub_lbl.setStyleSheet("font-size: 13px; color: #56c9e9; font-weight: 600;")
-        else:
-            sub_lbl = QLabel(f"C.C.I.  •  {fps_val} FPS")
-            sub_lbl.setStyleSheet("font-size: 13px; color: #bdd1df; font-weight: 500;")
-        sub_row.addWidget(sub_lbl)
+        self.sub_lbl = QLabel("")
+        sub_row.addWidget(self.sub_lbl)
         sub_row.addStretch(1)
+        if not hasattr(LibraryGameCard, "refresh_game_state"):
+            def _refresh_game_state(card_self, g_data: dict):
+                card_self.game = g_data
+                f_val = g_data.get("fps", 60)
+                sz = g_data.get("size", "Descargar")
+                if g_data.get("on_demand"):
+                    if g_data.get("has_saved_data"):
+                        card_self.sub_lbl.setText(f"☁ Nube • {sz} • 💾 Progreso")
+                        card_self.sub_lbl.setStyleSheet("font-size: 12px; color: #56f0c8; font-weight: 700;")
+                    else:
+                        card_self.sub_lbl.setText(f"☁ En la nube  •  {sz}")
+                        card_self.sub_lbl.setStyleSheet("font-size: 13px; color: #56c9e9; font-weight: 600;")
+                else:
+                    card_self.sub_lbl.setText(f"💾 Instalado  •  {sz}" if sz else f"C.C.I.  •  {f_val} FPS")
+                    card_self.sub_lbl.setStyleSheet("font-size: 13px; color: #7ef29d; font-weight: 600;")
+            LibraryGameCard.refresh_game_state = _refresh_game_state
+        self.refresh_game_state(game)
 
         txt_box.addLayout(sub_row)
         lay.addLayout(txt_box)
@@ -1826,9 +1838,9 @@ class LibraryView(QWidget):
         back_btn.clicked.connect(self.back_home.emit)
         side_layout.addWidget(back_btn)
 
-        # Widget Storage: "Storage: 72% usado", "128 GB libres de 512 GB" (298 x 95 px)
+        # Widget Storage: Almacenamiento de consola en tiempo real + gestor tipo PS5
         storage_box = QFrame()
-        storage_box.setFixedHeight(95)
+        storage_box.setFixedHeight(120)
         storage_box.setStyleSheet("""
             QFrame {
                 background: rgba(20, 38, 54, 0.55);
@@ -1837,8 +1849,8 @@ class LibraryView(QWidget):
             }
         """)
         st_lay = QVBoxLayout(storage_box)
-        st_lay.setContentsMargins(14, 12, 14, 12)
-        st_lay.setSpacing(8)
+        st_lay.setContentsMargins(14, 10, 14, 10)
+        st_lay.setSpacing(6)
 
         st_top = QHBoxLayout()
         st_top.setSpacing(10)
@@ -1856,6 +1868,8 @@ class LibraryView(QWidget):
         st_title.setStyleSheet("font-size: 13px; font-weight: 700; color: #ffffff; border: none; background: transparent;")
         st_sub = QLabel("128 GB libres de 512 GB")
         st_sub.setStyleSheet("font-size: 11px; color: #bdd1df; border: none; background: transparent;")
+        self.st_title_lbl = st_title
+        self.st_sub_lbl = st_sub
         st_txt.addWidget(st_title)
         st_txt.addWidget(st_sub)
         st_top.addLayout(st_txt)
@@ -1880,6 +1894,27 @@ class LibraryView(QWidget):
             }
         """)
         st_lay.addWidget(self.storage_bar)
+
+        self.manage_storage_btn = QPushButton("💾  Gestionar almacenamiento")
+        self.manage_storage_btn.setFixedHeight(24)
+        self.manage_storage_btn.setCursor(Qt.PointingHandCursor)
+        self.manage_storage_btn.setStyleSheet("""
+            QPushButton {
+                background: rgba(39, 189, 231, 0.18);
+                border: 1px solid rgba(39, 189, 231, 0.55);
+                border-radius: 8px;
+                color: #d8f3ff;
+                font-size: 11px;
+                font-weight: 700;
+            }
+            QPushButton:hover {
+                background: rgba(39, 189, 231, 0.35);
+                border: 1px solid #27bde7;
+                color: #ffffff;
+            }
+        """)
+        self.manage_storage_btn.clicked.connect(self.open_storage_manager)
+        st_lay.addWidget(self.manage_storage_btn)
         side_layout.addWidget(storage_box)
 
         # Buscador interactivo con lupa (298 x 46 px)
@@ -2098,7 +2133,62 @@ class LibraryView(QWidget):
             card.mousePressEvent = lambda _, gm=g: self.open_game.emit(gm)
             self.all_cards.append(card)
 
+        self.refresh_storage_indicator()
         self._filter_games()
+
+    def refresh_storage_indicator(self):
+        try:
+            from backend.games.storage_manager import GameStorageManager
+            from backend.games.scanner_service import GameLibraryScannerService
+
+            summary = GameStorageManager.get_instance().get_storage_summary(
+                GameLibraryScannerService.get_instance()
+            )
+            used_pct = int(summary.get("used_pct", 0))
+            inst_cnt = int(summary.get("installed_count", 0))
+            inst_lbl = summary.get("installed_label", "0 B")
+            free_lbl = summary.get("disk_free_label", "—")
+            self.storage_bar.setValue(used_pct)
+            self.st_title_lbl.setText(f"Juegos: {inst_lbl} ({inst_cnt} inst.)")
+            self.st_sub_lbl.setText(f"{free_lbl} libres · {used_pct}% disco")
+        except Exception:
+            pass
+
+    def reload_library(self):
+        """Re-escanea el catálogo tras instalar/desinstalar y actualiza tarjetas y contadores en vivo."""
+        try:
+            from backend.games.scanner_service import GameLibraryScannerService
+
+            scanner = GameLibraryScannerService.get_instance()
+            fresh_games = scanner.refresh()
+            ALL_GAMES[:] = fresh_games
+            prioritized = self._get_prioritized_games(ALL_GAMES)
+            by_id = {str(c.game.get("id") or ""): c for c in self.all_cards}
+            new_cards: list[LibraryGameCard] = []
+            for g in prioritized:
+                gid = str(g.get("id") or "")
+                card = by_id.get(gid)
+                if card is not None:
+                    card.refresh_game_state(g)
+                    card.mousePressEvent = lambda _, gm=g: self.open_game.emit(gm)
+                    new_cards.append(card)
+                else:
+                    card = LibraryGameCard(g, self.scroll_content)
+                    card.mousePressEvent = lambda _, gm=g: self.open_game.emit(gm)
+                    new_cards.append(card)
+            self.all_cards = new_cards
+            if self.cat_buttons:
+                first_btn, first_code = self.cat_buttons[0]
+                if first_code == "todas":
+                    first_btn.setText(f"Todas ({len(ALL_GAMES)})")
+            self.refresh_storage_indicator()
+            self._filter_games()
+        except Exception as exc:
+            print(f"[OmniDash-Qt] Error recargando biblioteca: {exc}")
+
+    def open_storage_manager(self):
+        dlg = StorageManagerDialog(self, on_changed=self.reload_library)
+        dlg.exec()
 
     def wheelEvent(self, event):
         self.scroll.verticalScrollBar().setValue(
@@ -2675,9 +2765,187 @@ class GameDetailsGlassShell(AcrylicGlassCard):
         painter.drawLine(self.border_radius, 1, max(self.border_radius, w - self.border_radius), 1)
 
 
+class StorageManagerDialog(QDialog):
+    """Gestor de almacenamiento estilo consola PS5: permite liberar espacio desinstalando juegos sin perder su progreso."""
+
+    def __init__(self, parent=None, on_changed=None):
+        super().__init__(parent)
+        self.on_changed = on_changed
+        self.setWindowTitle("C.C.I. SYSTEM — Gestión de Almacenamiento de Consola")
+        self.setMinimumSize(680, 480)
+        self.setStyleSheet("""
+            QDialog {
+                background: #0b1826;
+                color: #ffffff;
+            }
+            QLabel {
+                color: #e4f2fc;
+            }
+        """)
+        self.main_lay = QVBoxLayout(self)
+        self.main_lay.setContentsMargins(24, 20, 24, 20)
+        self.main_lay.setSpacing(14)
+
+        hdr = QLabel("💾  Almacenamiento de Consola y Datos Guardados")
+        hdr.setStyleSheet("font-size: 20px; font-weight: 800; color: #ffffff;")
+        self.main_lay.addWidget(hdr)
+
+        sub = QLabel(
+            "Igual que en PlayStation, podés desinstalar juegos descargados para liberar espacio en disco "
+            "sin perder tus partidas guardadas ni tu progreso. Los juegos permanecen en tu Biblioteca listos para re-descargar."
+        )
+        sub.setWordWrap(True)
+        sub.setStyleSheet("font-size: 12px; color: #9fc5e0;")
+        self.main_lay.addWidget(sub)
+
+        self.summary_lbl = QLabel("")
+        self.summary_lbl.setStyleSheet("font-size: 13px; font-weight: 700; color: #56c9e9;")
+        self.main_lay.addWidget(self.summary_lbl)
+
+        self.bar = QProgressBar()
+        self.bar.setRange(0, 100)
+        self.bar.setFixedHeight(10)
+        self.bar.setTextVisible(False)
+        self.bar.setStyleSheet("""
+            QProgressBar {
+                background: rgba(255, 255, 255, 0.14);
+                border-radius: 5px;
+                border: none;
+            }
+            QProgressBar::chunk {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #1d9bf0, stop:1 #56f0c8);
+                border-radius: 5px;
+            }
+        """)
+        self.main_lay.addWidget(self.bar)
+
+        self.scroll = QScrollArea()
+        self.scroll.setWidgetResizable(True)
+        self.scroll.setStyleSheet("QScrollArea { background: rgba(14, 28, 44, 0.75); border: 1px solid rgba(86, 201, 233, 0.25); border-radius: 12px; }")
+        self.list_container = QWidget()
+        self.list_lay = QVBoxLayout(self.list_container)
+        self.list_lay.setContentsMargins(14, 14, 14, 14)
+        self.list_lay.setSpacing(10)
+        self.scroll.setWidget(self.list_container)
+        self.main_lay.addWidget(self.scroll, 1)
+
+        bottom_row = QHBoxLayout()
+        close_btn = QPushButton("Cerrar")
+        close_btn.setFixedSize(110, 34)
+        close_btn.setCursor(Qt.PointingHandCursor)
+        close_btn.setStyleSheet("""
+            QPushButton {
+                background: rgba(39, 189, 231, 0.22);
+                border: 1.5px solid #27bde7;
+                border-radius: 10px;
+                color: #ffffff;
+                font-weight: 700;
+            }
+        """)
+        close_btn.clicked.connect(self.accept)
+        bottom_row.addStretch(1)
+        bottom_row.addWidget(close_btn)
+        self.main_lay.addLayout(bottom_row)
+
+        self.refresh_list()
+
+    def refresh_list(self):
+        while self.list_lay.count():
+            item = self.list_lay.takeAt(0)
+            w = item.widget()
+            if w is not None:
+                w.deleteLater()
+
+        from backend.games.storage_manager import GameStorageManager
+        from backend.games.scanner_service import GameLibraryScannerService
+
+        scanner = GameLibraryScannerService.get_instance()
+        mgr = GameStorageManager.get_instance()
+        summary = mgr.get_storage_summary(scanner)
+
+        self.bar.setValue(int(summary.get("used_pct", 0)))
+        self.summary_lbl.setText(
+            f"Juegos instalados: {summary['installed_count']} ({summary['installed_label']})   •   "
+            f"En la nube: {summary['cloud_count']}   •   "
+            f"Espacio libre en disco: {summary['disk_free_label']} de {summary['disk_total_label']}"
+        )
+
+        items = summary.get("installed_items") or []
+        if not items:
+            empty_lbl = QLabel("No hay juegos instalados localmente en este momento. Todos tus juegos y partidas siguen disponibles en tu Biblioteca.")
+            empty_lbl.setWordWrap(True)
+            empty_lbl.setStyleSheet("font-size: 13px; color: #9fc5e0; padding: 18px;")
+            self.list_lay.addWidget(empty_lbl)
+        else:
+            for item in items:
+                row_frame = QFrame()
+                row_frame.setStyleSheet("""
+                    QFrame {
+                        background: rgba(20, 40, 60, 0.85);
+                        border: 1px solid rgba(166, 176, 184, 0.25);
+                        border-radius: 10px;
+                    }
+                """)
+                rlay = QHBoxLayout(row_frame)
+                rlay.setContentsMargins(14, 10, 14, 10)
+
+                info_v = QVBoxLayout()
+                t_lbl = QLabel(f"{item['title']}  ({item['badge']})")
+                t_lbl.setStyleSheet("font-size: 14px; font-weight: 800; color: #ffffff; border: none;")
+                s_lbl = QLabel(
+                    f"Tamaño en disco: {item['size_label']}   •   "
+                    f"Datos guardados: {item['save_slots']} slot(s)   •   "
+                    f"Tiempo jugado: {item['play_time_label']}"
+                )
+                s_lbl.setStyleSheet("font-size: 12px; color: #9fc5e0; border: none;")
+                info_v.addWidget(t_lbl)
+                info_v.addWidget(s_lbl)
+                rlay.addLayout(info_v, 1)
+
+                uninst_btn = QPushButton("🗑 Desinstalar (conservar progreso)")
+                uninst_btn.setFixedHeight(32)
+                uninst_btn.setCursor(Qt.PointingHandCursor)
+                uninst_btn.setStyleSheet("""
+                    QPushButton {
+                        background: rgba(235, 87, 87, 0.20);
+                        border: 1px solid rgba(235, 87, 87, 0.70);
+                        border-radius: 8px;
+                        color: #ffd6d6;
+                        font-size: 12px;
+                        font-weight: 700;
+                        padding: 0 12px;
+                    }
+                    QPushButton:hover {
+                        background: rgba(235, 87, 87, 0.42);
+                        color: #ffffff;
+                    }
+                """)
+                gid = str(item["id"])
+                uninst_btn.clicked.connect(lambda _, g_id=gid: self._handle_uninstall(g_id))
+                rlay.addWidget(uninst_btn)
+                self.list_lay.addWidget(row_frame)
+
+        self.list_lay.addStretch(1)
+
+    def _handle_uninstall(self, game_id: str):
+        from backend.games.storage_manager import GameStorageManager
+        from backend.games.scanner_service import GameLibraryScannerService
+
+        scanner = GameLibraryScannerService.get_instance()
+        mgr = GameStorageManager.get_instance()
+        ok, msg, _ = mgr.uninstall_game(game_id, scanner=scanner)
+        if callable(self.on_changed):
+            self.on_changed()
+        self.refresh_list()
+        if not ok:
+            QMessageBox.warning(self, "Desinstalación", msg)
+
+
 class GameDetailsView(QWidget):
     launch_game = Signal(dict)
     back_to_library = Signal()
+    uninstall_requested = Signal(dict)
+    install_package_requested = Signal(dict)
 
     # Iconografía SVG lineal cian consistente con la referencia
     _SVG_HISTORY = '<svg viewBox="0 0 24 24" fill="none" stroke="#29d4ee" stroke-width="1.85" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12a9 9 0 1 0 3-6.7L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l3 2"/></svg>'
@@ -2850,6 +3118,52 @@ class GameDetailsView(QWidget):
         action_row.addStretch(1)
 
         hero_left.addLayout(action_row)
+
+        storage_action_row = QHBoxLayout()
+        storage_action_row.setSpacing(8)
+
+        self.install_pkg_btn = QPushButton("⬇  INSTALAR PAQUETE")
+        self.install_pkg_btn.setFixedSize(168, 32)
+        self.install_pkg_btn.setCursor(Qt.PointingHandCursor)
+        self.install_pkg_btn.setStyleSheet("""
+            QPushButton {
+                background: rgba(39, 189, 231, 0.24);
+                border: 1.5px solid #27bde7;
+                border-radius: 9px;
+                color: #e8f8ff;
+                font-size: 11px;
+                font-weight: 800;
+            }
+            QPushButton:hover {
+                background: rgba(39, 189, 231, 0.42);
+                color: #ffffff;
+            }
+        """)
+        self.install_pkg_btn.clicked.connect(lambda: self.install_package_requested.emit(self.game))
+        storage_action_row.addWidget(self.install_pkg_btn)
+
+        self.uninstall_btn = QPushButton("🗑  LIBERAR ESPACIO")
+        self.uninstall_btn.setFixedSize(156, 32)
+        self.uninstall_btn.setCursor(Qt.PointingHandCursor)
+        self.uninstall_btn.setStyleSheet("""
+            QPushButton {
+                background: rgba(235, 87, 87, 0.20);
+                border: 1.5px solid rgba(235, 87, 87, 0.65);
+                border-radius: 9px;
+                color: #ffd6d6;
+                font-size: 11px;
+                font-weight: 800;
+            }
+            QPushButton:hover {
+                background: rgba(235, 87, 87, 0.38);
+                color: #ffffff;
+            }
+        """)
+        self.uninstall_btn.clicked.connect(lambda: self.uninstall_requested.emit(self.game))
+        storage_action_row.addWidget(self.uninstall_btn)
+        storage_action_row.addStretch(1)
+        hero_left.addLayout(storage_action_row)
+
         hero_left.addStretch(1)
 
         hero_inner.addLayout(hero_left, 30)
@@ -3197,10 +3511,35 @@ class GameDetailsView(QWidget):
                 }
             """)
 
-        self.val_last_played.setText("Hoy" if game.get("installed") else "Sin registrar aún")
-        self.val_play_time.setText("0h 0m")
-        self.val_saves.setText("Nube C.C.I." if game.get("on_demand") else "Local")
-        self.val_progress.setText(game.get("size", "—"))
+        try:
+            from backend.games.storage_manager import GameStorageManager
+
+            prog = GameStorageManager.get_instance().get_progress(str(game.get("id") or ""))
+        except Exception:
+            prog = {
+                "has_progress": False,
+                "last_played": "Hoy" if game.get("installed") else "Sin registrar aún",
+                "play_time_label": "0h 0m",
+                "saves_label": "Nube C.C.I." if game.get("on_demand") else "Local",
+                "progress_pct": 0,
+                "progress_label": "0%",
+                "save_slots": 0,
+            }
+
+        self.val_last_played.setText(
+            prog["last_played"] if prog.get("has_progress") else ("Hoy" if game.get("installed") else "Sin registrar aún")
+        )
+        self.val_play_time.setText(prog.get("play_time_label", "0h 0m"))
+        if prog.get("has_progress"):
+            self.val_saves.setText(f"{prog['saves_label']} (Conservados)")
+        else:
+            self.val_saves.setText("Nube C.C.I." if game.get("on_demand") else "Consola Local")
+
+        sz_display = game.get("size", "—")
+        if prog.get("progress_pct", 0) > 0:
+            self.val_progress.setText(f"{prog['progress_label']} · {sz_display}")
+        else:
+            self.val_progress.setText(sz_display)
 
         cover_pix = resolve_game_cover(game)
 
@@ -3208,9 +3547,13 @@ class GameDetailsView(QWidget):
             sz_txt = game.get("size") or "Nube"
             self.play_btn.setText(f"☁  NUBE · {sz_txt}")
             self.play_btn.setFixedWidth(max(150, min(210, 110 + len(sz_txt) * 8)))
+            self.install_pkg_btn.show()
+            self.uninstall_btn.hide()
         else:
             self.play_btn.setText("▶  JUGAR")
             self.play_btn.setFixedWidth(134)
+            self.install_pkg_btn.hide()
+            self.uninstall_btn.show()
 
         self._current_cover_pix = cover_pix
         if cover_pix and not cover_pix.isNull():
@@ -7503,6 +7846,8 @@ class OmniDashMainWindow(QMainWindow):
 
         self.details_view.back_to_library.connect(lambda: self.switch_view("LIBRARY"))
         self.details_view.launch_game.connect(self.launch_game)
+        self.details_view.uninstall_requested.connect(self.uninstall_game_prompt)
+        self.details_view.install_package_requested.connect(self.install_game_package_prompt)
 
         self.settings_view.wallpaper_changed.connect(self.set_wallpaper)
 
@@ -7697,10 +8042,22 @@ class OmniDashMainWindow(QMainWindow):
         proc.setProcessChannelMode(QProcess.MergedChannels)
         self._game_process = proc
         launched_pid: dict[str, int | None] = {"pid": None}
+        session_start_ts: dict[str, float] = {"t0": time.monotonic()}
 
         def _on_started():
+            session_start_ts["t0"] = time.monotonic()
             pid_val = int(proc.processId() or 0)
             launched_pid["pid"] = pid_val if pid_val > 0 else None
+            try:
+                from backend.games.storage_manager import GameStorageManager
+
+                GameStorageManager.get_instance().record_progress(
+                    game_id=game_id,
+                    title=title,
+                    last_played="Hoy",
+                )
+            except Exception:
+                pass
             if hasattr(self, "community_controller") and self.community_controller:
                 self.community_controller.notify_game_launched(
                     game_id=game_id,
@@ -7712,6 +8069,18 @@ class OmniDashMainWindow(QMainWindow):
                 )
 
         def _on_finished(exit_code: int, exit_status):
+            elapsed_s = max(1, int(time.monotonic() - session_start_ts["t0"]))
+            try:
+                from backend.games.storage_manager import GameStorageManager
+
+                GameStorageManager.get_instance().record_progress(
+                    game_id=game_id,
+                    title=title,
+                    last_played="Hoy",
+                    play_time_delta_s=elapsed_s,
+                )
+            except Exception:
+                pass
             if hasattr(self, "community_controller") and self.community_controller:
                 self.community_controller.notify_game_exited(
                     game_id=game_id,
@@ -7756,6 +8125,89 @@ class OmniDashMainWindow(QMainWindow):
         proc.errorOccurred.connect(_on_error)
         proc.start(program, arguments)
         return proc
+
+    def uninstall_game_prompt(self, game: dict, confirm: bool = True) -> bool:
+        """Desinstala el archivo del juego liberando espacio sin borrar progreso ni partidas guardadas."""
+        gid = str(game.get("id") or "")
+        title = game.get("title", "Juego")
+        size_txt = game.get("size", "—")
+        if not gid:
+            return False
+
+        if confirm:
+            ans = QMessageBox.question(
+                self,
+                f"Liberar espacio — {title}",
+                f"¿Querés desinstalar '{title}' ({size_txt}) para liberar espacio en disco?\n\n"
+                "• Tus partidas guardadas y progreso se conservarán intactos en la consola.\n"
+                "• El juego seguirá disponible en tu Biblioteca (En la nube) para volver a instalarlo cuando quieras.",
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.Yes,
+            )
+            if ans != QMessageBox.Yes:
+                return False
+
+        from backend.games.storage_manager import GameStorageManager
+        from backend.games.scanner_service import GameLibraryScannerService
+
+        scanner = GameLibraryScannerService.get_instance()
+        mgr = GameStorageManager.get_instance()
+        ok, msg, updated = mgr.uninstall_game(gid, scanner=scanner)
+        self.library_view.reload_library()
+        if updated:
+            self.details_view.load_game(updated)
+        if confirm:
+            QMessageBox.information(self, "Almacenamiento de consola", msg)
+        return ok
+
+    def install_game_package_prompt(self, game: dict, source_path: str | Path | None = None) -> bool:
+        """Instala un paquete local (.zip/.nsp/.xci/.pkg/.iso/.rar) verificando espacio libre y restaurando progreso."""
+        gid = str(game.get("id") or "")
+        title = game.get("title", "Juego")
+        plat_key = game.get("platform_key", "ps3")
+        if not gid:
+            return False
+
+        chosen_path = source_path
+        if not chosen_path:
+            file_str, _ = QFileDialog.getOpenFileName(
+                self,
+                f"Seleccionar paquete descargado para {title} ({plat_key.upper()})",
+                str(Path.home() / "Downloads"),
+                "Paquetes de Juego (*.zip *.nsp *.xci *.pkg *.iso *.rar *.7z *.bin *.cue *.chd);;Todos los archivos (*)",
+            )
+            if not file_str:
+                return False
+            chosen_path = Path(file_str)
+
+        from backend.games.storage_manager import GameStorageManager
+        from backend.games.scanner_service import GameLibraryScannerService
+
+        scanner = GameLibraryScannerService.get_instance()
+        mgr = GameStorageManager.get_instance()
+        ok, msg, updated = mgr.install_local_package(gid, chosen_path, scanner=scanner)
+        if not ok and "Espacio insuficiente" in msg:
+            if source_path is None:
+                ans = QMessageBox.warning(
+                    self,
+                    "Almacenamiento insuficiente",
+                    f"{msg}\n\n¿Querés abrir el Gestor de Almacenamiento para desinstalar otro juego sin perder su progreso?",
+                    QMessageBox.Yes | QMessageBox.No,
+                    QMessageBox.Yes,
+                )
+                if ans == QMessageBox.Yes:
+                    self.library_view.open_storage_manager()
+            return False
+
+        self.library_view.reload_library()
+        if updated:
+            self.details_view.load_game(updated)
+        if source_path is None:
+            if ok:
+                QMessageBox.information(self, "Juego instalado", msg)
+            else:
+                QMessageBox.warning(self, "Instalación de paquete", msg)
+        return ok
 
     def launch_game(self, game: dict):
         core = game.get("core")

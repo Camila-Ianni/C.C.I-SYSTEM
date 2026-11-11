@@ -407,6 +407,25 @@ class GameLibraryScannerService:
                 if progress_callback and total_files > 0:
                     progress_callback(processed, total_files, clean_title)
 
+        try:
+            from backend.games.storage_manager import GameStorageManager, parse_size_to_bytes
+
+            storage_mgr = GameStorageManager.get_instance(self.root_dir)
+            for item in catalog_games:
+                prog = storage_mgr.get_progress(str(item.get("id") or ""))
+                item["has_saved_data"] = prog["has_progress"]
+                item["save_slots"] = prog["save_slots"]
+                item["saves_label"] = prog["saves_label"]
+                item["play_time_seconds"] = prog["play_time_seconds"]
+                item["play_time_label"] = prog["play_time_label"]
+                item["progress_pct"] = prog["progress_pct"]
+                item["progress_label"] = prog["progress_label"]
+                item["last_played"] = prog["last_played"]
+                if not item.get("size_bytes"):
+                    item["size_bytes"] = parse_size_to_bytes(str(item.get("size") or ""))
+        except Exception:
+            pass
+
         with self._lock:
             self._cached_games = catalog_games
             self._is_scanning = False
