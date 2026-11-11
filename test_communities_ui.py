@@ -391,11 +391,12 @@ class TestCommunitiesUI(unittest.TestCase):
         self.assertTrue(engine.is_connected)
         self.assertEqual(engine.active_channel_name, vc_name)
 
-        # 2. Diagnósticos de red y transporte UDP
+        # 2. Diagnósticos honestos de transporte de voz (sin SFU LiveKit levantado en este entorno)
         diag = engine.get_diagnostics()
         self.assertTrue(diag["is_connected"])
-        self.assertIn("UDP/RTP", diag["protocol"])
-        self.assertGreater(diag["udp_port"], 0)
+        self.assertIn("Signaling Only", diag["protocol"])
+        self.assertFalse(diag["media_transport_active"])
+        self.assertIsNone(diag["latency_ms"])
         self.assertEqual(diag["sample_rate_hz"], 48000)
 
         # Renderizar vista con la barra de voz conectada y HUD overlay visible

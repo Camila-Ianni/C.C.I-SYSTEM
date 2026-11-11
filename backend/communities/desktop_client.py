@@ -19,6 +19,7 @@ import threading
 import time
 from typing import Any, Callable, Dict, List, Optional, Tuple
 from urllib.parse import urlparse
+import weakref
 
 import requests
 import socketio
@@ -755,14 +756,27 @@ class CommunityRealtimeBridge(QObject):
             except Exception:
                 pass
 
-    def emit_typing(self, channel_id: str, typing: bool = True) -> None:
+    def _emit_socket(self, event_name: str, payload: Dict[str, Any]) -> None:
         with self._lock:
             sio = self._sio
-        if sio and sio.connected and channel_id:
+        if sio and sio.connected:
             try:
-                sio.emit("community:typing", {"channel_id": channel_id, "typing": bool(typing)})
+                sio.emit(event_name, payload)
             except Exception:
                 pass
+
+    def emit_typing(self, channel_id: str, typing: bool = True) -> None:
+        if channel_id:
+            self._emit_socket("community:typing", {"channel_id": channel_id, "typing": bool(typing)})
+
+    def emit_voice_presence(self, channel_id: str, joined: bool = True) -> None:
+        if channel_id:
+            ev = "community:voice:join" if joined else "community:voice:leave"
+            self._emit_socket(ev, {"channel_id": channel_id})
+
+    def emit_voice_mute(self, channel_id: str, is_muted: bool) -> None:
+        if channel_id:
+            self._emit_socket("community:voice:mute", {"channel_id": channel_id, "is_muted": bool(is_muted)})
 
     def disconnect_sync(self) -> None:
         self._stop_flag = True
@@ -836,6 +850,7 @@ class CommunityController(QObject):
     notifications_updated = Signal(list, int)    # notifications, unread_count
     presence_self_changed = Signal(str, str)     # status, activity_visibility
     voice_state_changed = Signal(dict)
+    voice_participants_updated = Signal(list)
     realtime_status_changed = Signal(bool, str)
     error_occurred = Signal(str)
 
@@ -845,6 +860,7 @@ class CommunityController(QObject):
         session_path: Optional[Path] = None,
         parent=None,
         heartbeat_interval_ms: int = 18000,
+        enable_voice_audio_io: Optional[bool] = None,
     ):
         super().__init__(parent)
         self.api_url = api_url.rstrip("/")
@@ -852,6 +868,25 @@ class CommunityController(QObject):
         self.api = CommunityApiClient(self.api_url)
         self.realtime = CommunityRealtimeBridge(self)
         self.session: Optional[CommunitySession] = None
+
+        from backend.communities.voice_engine import DesktopVoiceEngine
+        self.voice_engine = DesktopVoiceEngine(enable_audio_io=enable_voice_audio_io)
+        self._active_voice_cred: Optional[Dict[str, Any]] = None
+        self._active_voice_reachable: bool = False
+        ctrl_ref = weakref.ref(self)
+
+        def _on_voice_participants(parts: List[Dict[str, Any]]) -> None:
+            ctrl = ctrl_ref()
+            if ctrl is not None:
+                ctrl._on_voice_engine_participants_changed(parts)
+
+        def _on_voice_state(diag: Dict[str, Any]) -> None:
+            ctrl = ctrl_ref()
+            if ctrl is not None:
+                ctrl._on_voice_engine_state_changed(diag)
+
+        self.voice_engine.on_participants_changed = _on_voice_participants
+        self.voice_engine.on_state_changed = _on_voice_state
 
         self.my_communities: List[Dict[str, Any]] = []
         self.public_communities: List[Dict[str, Any]] = []
@@ -1251,6 +1286,7 @@ class CommunityController(QObject):
                 pass
             self._active_game_id = None
             self._active_game_title = None
+        self.voice_engine.disconnect()
         if self.active_voice_channel and self.session:
             try:
                 self.api.leave_voice(self.active_voice_channel["id"])
@@ -1271,6 +1307,8 @@ class CommunityController(QObject):
         self.active_channel = None
         self.active_members = []
         self.active_voice_channel = None
+        self._active_voice_cred = None
+        self._active_voice_reachable = False
         self.active_friends = []
         self.incoming_friend_requests = []
         self.active_activity_feed = []
@@ -1298,6 +1336,12 @@ class CommunityController(QObject):
                 pass
             self._active_game_id = None
             self._active_game_title = None
+        self.voice_engine.disconnect()
+        if self.active_voice_channel and self.session:
+            try:
+                self.api.leave_voice(self.active_voice_channel["id"])
+            except Exception:
+                pass
         if self.session:
             try:
                 self.api.set_presence("offline")
@@ -1309,6 +1353,7 @@ class CommunityController(QObject):
     def _activate_session(self, sess: CommunitySession, persist: bool) -> None:
         self.session = sess
         self.api.set_token(sess.token)
+        self.voice_engine.set_identity(sess.user_id, sess.username)
         if persist:
             self._save_session(sess)
         self.run_async(
@@ -1915,13 +1960,80 @@ class CommunityController(QObject):
         return out
 
     # ------------------------------------------------------------------
-    # Voz y Streaming (P0.2: estado honesto sin peers ni LIVE simulado)
+    # Voz LiveKit WebRTC (P1-A) y fallback honesto a señalización
     # ------------------------------------------------------------------
-    def join_voice_channel(self, channel_id: str) -> Dict[str, Any]:
-        ch = next((c for c in self.active_channels if c["id"] == channel_id), None)
-        if not ch:
-            raise CommunityApiError("Canal de voz no encontrado.", status_code=404)
+    @staticmethod
+    def _is_ws_url_reachable(ws_url: str, timeout: float = 0.25) -> bool:
+        try:
+            from urllib.parse import urlparse
+            import socket
+            parsed = urlparse(str(ws_url or ""))
+            host = parsed.hostname
+            if not host:
+                return False
+            port = parsed.port or (443 if parsed.scheme == "wss" else 7880)
+            with socket.create_connection((host, port), timeout=timeout):
+                return True
+        except Exception:
+            return False
 
+    def _build_voice_state(
+        self,
+        ch: Dict[str, Any],
+        cred: Optional[Dict[str, Any]],
+        lk_reachable: bool,
+    ) -> Dict[str, Any]:
+        diag = self.voice_engine.get_diagnostics()
+        media_ready = bool(diag.get("media_transport_active"))
+        err = diag.get("last_error")
+        if media_ready:
+            lat = diag.get("latency_ms")
+            lat_txt = f" ({lat:.0f} ms)" if isinstance(lat, (int, float)) else ""
+            status_text = f"Audio WebRTC activo en {ch['name']}{lat_txt} — LiveKit SFU"
+        elif lk_reachable and err:
+            status_text = f"Solo señalización en {ch['name']} — Error RTC: {err}"
+        elif lk_reachable:
+            status_text = f"Token LiveKit emitido para {ch['name']} — Conectando audio WebRTC..."
+        else:
+            status_text = f"Token emitido para {ch['name']} — Servidor LiveKit SFU no alcanzable (solo señalización)"
+
+        return {
+            "connected": True,
+            "channel": ch,
+            "token_issued": bool((cred or {}).get("token")),
+            "livekit_url": (cred or {}).get("url"),
+            "room_name": (cred or {}).get("room_name"),
+            "media_ready": media_ready,
+            "livekit_media_plane": "reachable" if lk_reachable else "unreachable",
+            "is_muted": bool(diag.get("is_muted")),
+            "is_deafened": bool(diag.get("is_deafened")),
+            "is_speaking": bool(diag.get("is_speaking")),
+            "can_publish": bool(diag.get("can_publish", True)),
+            "latency_ms": diag.get("latency_ms"),
+            "participants": self.voice_engine.list_participants(),
+            "diagnostics": diag,
+            "status_text": status_text,
+        }
+
+    def _on_voice_engine_participants_changed(self, participants: List[Dict[str, Any]]) -> None:
+        if self.active_voice_channel is not None:
+            self.voice_participants_updated.emit(participants)
+
+    def _on_voice_engine_state_changed(self, diag: Dict[str, Any]) -> None:
+        if self.active_voice_channel is not None and diag.get("is_connected"):
+            state = self._build_voice_state(
+                self.active_voice_channel,
+                self._active_voice_cred,
+                self._active_voice_reachable,
+            )
+            self.voice_state_changed.emit(state)
+
+    def _connect_voice_worker(
+        self,
+        ch: Dict[str, Any],
+        enable_audio_io: Optional[bool] = None,
+    ) -> Tuple[Dict[str, Any], bool]:
+        channel_id = str(ch["id"])
         cred = self.api.request_voice_token(channel_id)
         health = {}
         try:
@@ -1929,31 +2041,101 @@ class CommunityController(QObject):
         except Exception:
             health = self.last_health
 
-        lk_reachable = health.get("livekit_media_plane") == "reachable"
+        lk_url = str(cred.get("url") or "")
+        lk_reachable = (health.get("livekit_media_plane") == "reachable") or self._is_ws_url_reachable(lk_url)
+        comm_id = str(ch.get("community_id") or (self.active_community or {}).get("id") or "")
+
         self.active_voice_channel = ch
-        state = {
-            "connected": True,
-            "channel": ch,
-            "token_issued": bool(cred.get("token")),
-            "livekit_url": cred.get("url"),
-            "media_ready": False,
-            "livekit_media_plane": "reachable" if lk_reachable else "unreachable",
-            "status_text": (
-                f"Señalización activa en {ch['name']} — Audio RTC pendiente (Fase 4 SDK LiveKit)"
-                if lk_reachable
-                else f"Token emitido para {ch['name']} — Servidor LiveKit SFU no alcanzable (solo señalización)"
-            ),
-        }
+        self._active_voice_cred = cred
+        self._active_voice_reachable = lk_reachable
+        if self.session:
+            self.voice_engine.set_identity(self.session.user_id, self.session.username)
+
+        self.voice_engine.connect(
+            community_id=comm_id,
+            channel_name=str(ch.get("name") or channel_id),
+            token_info=cred if lk_reachable else None,
+            enable_audio_io=enable_audio_io,
+            connect_timeout=4.0,
+        )
+        return cred, lk_reachable
+
+    def join_voice_channel(
+        self,
+        channel_id: str,
+        enable_audio_io: Optional[bool] = None,
+    ) -> Dict[str, Any]:
+        ch = next((c for c in self.active_channels if c["id"] == channel_id), None)
+        if not ch:
+            raise CommunityApiError("Canal de voz no encontrado.", status_code=404)
+
+        cred, lk_reachable = self._connect_voice_worker(ch, enable_audio_io=enable_audio_io)
+        self.realtime.emit_voice_presence(channel_id, joined=True)
+        state = self._build_voice_state(ch, cred, lk_reachable)
         self.voice_state_changed.emit(state)
         return state
 
-    def leave_voice_channel(self) -> None:
+    def join_voice_channel_async(
+        self,
+        channel_id: str,
+        on_success: Optional[Callable[[Dict[str, Any]], None]] = None,
+        on_error: Optional[Callable[[CommunityApiError], None]] = None,
+        enable_audio_io: Optional[bool] = None,
+    ) -> int:
+        ch = next((c for c in self.active_channels if c["id"] == channel_id), None)
+        if not ch:
+            err = CommunityApiError("Canal de voz no encontrado.", status_code=404)
+            self.error_occurred.emit(err.message)
+            if on_error:
+                on_error(err)
+            return -1
+
+        def _done(res: Tuple[Dict[str, Any], bool]) -> None:
+            cred, lk_reachable = res
+            self.realtime.emit_voice_presence(str(ch["id"]), joined=True)
+            state = self._build_voice_state(ch, cred, lk_reachable)
+            self.voice_state_changed.emit(state)
+            if on_success:
+                on_success(state)
+
+        return self.run_async(
+            "join_voice",
+            lambda: self._connect_voice_worker(ch, enable_audio_io=enable_audio_io),
+            on_success=_done,
+            on_error=on_error,
+            category="voice",
+        )
+
+    def set_voice_mute(self, muted: Optional[bool] = None) -> bool:
+        res = self.voice_engine.set_mute(muted)
         if self.active_voice_channel:
-            try:
-                self.api.leave_voice(self.active_voice_channel["id"])
-            except Exception:
-                pass
+            self.realtime.emit_voice_mute(str(self.active_voice_channel["id"]), res)
+        return res
+
+    def set_voice_deafen(self, deafened: Optional[bool] = None) -> bool:
+        res = self.voice_engine.set_deafen(deafened)
+        if self.active_voice_channel:
+            self.realtime.emit_voice_mute(str(self.active_voice_channel["id"]), self.voice_engine.is_muted)
+        return res
+
+    def get_voice_diagnostics(self) -> Dict[str, Any]:
+        return self.voice_engine.get_diagnostics()
+
+    def leave_voice_channel(self) -> None:
+        ch = self.active_voice_channel
         self.active_voice_channel = None
+        self._active_voice_cred = None
+        self._active_voice_reachable = False
+        self.voice_engine.disconnect()
+        if ch:
+            ch_id = str(ch["id"])
+            self.realtime.emit_voice_presence(ch_id, joined=False)
+            self.run_async(
+                "leave_voice",
+                lambda: self.api.leave_voice(ch_id),
+                on_error=lambda _e: None,
+                category="voice_leave",
+            )
         self.voice_state_changed.emit({"connected": False, "channel": None, "media_ready": False})
 
     def _on_rt_connected(self) -> None:

@@ -198,7 +198,7 @@ def _dispatch_mentions(
 
 def _probe_livekit_tcp(timeout: float = 0.25) -> bool:
     """Verifica por TCP si el puerto configurado de LiveKit SFU acepta conexiones reales."""
-    raw = config.livekit_ws_url or ""
+    raw = os.getenv("LIVEKIT_WS_URL") or config.livekit_ws_url or ""
     try:
         parsed = urlparse(raw)
         host = parsed.hostname
@@ -1916,7 +1916,7 @@ def health_check_route():
         "livekit_sfu": "ready",
         "livekit_token_signing": "ready",
         "livekit_media_plane": "reachable" if lk_tcp_ok else "unreachable",
-        "voice_media_transport": "signaling_only",
+        "voice_media_transport": "livekit_webrtc_ready" if lk_tcp_ok else "signaling_only",
         "realtime_socketio": "ready",
         "storage": "local_storage_ready",
         "metrics_scope": "process_local",

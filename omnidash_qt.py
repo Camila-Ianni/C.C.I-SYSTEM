@@ -5263,10 +5263,21 @@ class RightPanel(QWidget):
             self.voice_panel.setVisible(False)
             return
 
+        if "is_muted" in state:
+            self.mic_muted = bool(state.get("is_muted"))
+            self._update_mic_style()
+        if "is_deafened" in state:
+            self.headset_muted = bool(state.get("is_deafened"))
+            self._update_headset_style()
+
+        participants = state.get("participants")
+        p_count = len(participants) if isinstance(participants, list) else 0
+
         self.voice_panel.setVisible(True)
         self.v_chan.setText(channel_name or "Canal de voz")
         if self._media_ready:
-            self.v_st.setText("Voz conectada")
+            cnt_txt = f" · {p_count} en sala" if p_count > 0 else ""
+            self.v_st.setText(f"Voz conectada{cnt_txt}")
             self.v_st.setStyleSheet("font-size: 13px; font-weight: 800; color: #32D875;")
             self.v_media_lbl.setText(status_text or "Audio WebRTC activo.")
             self.v_media_lbl.setStyleSheet("font-size: 11px; color: #BDD4E4;")
@@ -5890,11 +5901,10 @@ class CommunityInteriorView(AcrylicGlassCard):
         if not self.controller:
             return
         if ch_type == "voice":
-            try:
-                self.controller.join_voice_channel(channel_id)
-                self.channel_sidebar.set_active_voice_channel(channel_id)
-            except CommunityApiError as exc:
-                self.chat_area.show_error(exc.message)
+            self.controller.join_voice_channel_async(
+                channel_id,
+                on_error=lambda exc: self.chat_area.show_error(exc.message),
+            )
         else:
             self.controller.select_channel_async(
                 channel_id,
@@ -6088,14 +6098,18 @@ class CommunityInteriorView(AcrylicGlassCard):
         ch = state.get("channel")
         self.channel_sidebar.set_active_voice_channel(str(ch["id"]) if isinstance(ch, dict) and ch.get("id") else None)
 
-    def _on_voice_toggled(self, action: str, _enabled: bool):
+    def _on_voice_toggled(self, action: str, enabled: bool):
         if not self.controller:
             return
-        if action == "disconnect":
+        if action == "mic":
+            self.controller.set_voice_mute(not enabled)
+        elif action == "headset":
+            self.controller.set_voice_deafen(not enabled)
+        elif action == "disconnect":
             self.controller.leave_voice_channel()
         elif action == "screen_unavailable":
             self.chat_area.show_error(
-                "Compartir pantalla requiere transporte multimedia LiveKit WebRTC nativo (disponible en Fase 4)."
+                "Compartir pantalla requiere captura + publicación de video WebRTC LiveKit (P1-B)."
             )
 
     def open_create_community_dialog(self):
