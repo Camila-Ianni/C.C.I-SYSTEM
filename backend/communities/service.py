@@ -344,6 +344,21 @@ class CommunitiesService:
             raise PermissionError("Se requiere permiso community.invites.create")
         return self.repo.create_invitation(community_id, requester_id, max_uses, expires_in_hours)
 
+    def list_invitations(self, community_id: str, requester_id: str) -> List[Dict[str, Any]]:
+        """Lista invitaciones de la comunidad validando permiso community.invites.create."""
+        if not self.has_permission(community_id, requester_id, "community.invites.create"):
+            raise PermissionError("Se requiere permiso community.invites.create")
+        return self.repo.list_invitations(community_id)
+
+    def revoke_invitation(self, community_id: str, code: str, requester_id: str) -> bool:
+        """Revoca una invitación activa validando permiso community.invites.create."""
+        if not self.has_permission(community_id, requester_id, "community.invites.create"):
+            raise PermissionError("Se requiere permiso community.invites.create")
+        ok = self.repo.revoke_invitation(community_id, code.strip().upper())
+        if not ok:
+            raise LookupError("Invitación no encontrada")
+        return True
+
     def join_via_invitation(self, code: str, user_id: str) -> Dict[str, Any]:
         """Procesa el ingreso de un usuario a la comunidad consumiendo la invitación."""
         inv = self.repo.get_invitation_by_code(code)
@@ -534,6 +549,33 @@ class CommunitiesService:
                     visible.append(ch)
         return visible
 
+    def update_channel(
+        self,
+        community_id: str,
+        channel_id: str,
+        requester_id: str,
+        name: Optional[str] = None,
+        topic: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """Actualiza nombre o tema de un canal validando channels.manage."""
+        if not self.has_permission(community_id, requester_id, "channels.manage"):
+            raise PermissionError("Se requiere permiso channels.manage")
+        ch = self.repo.get_channel(channel_id)
+        if not ch or ch["community_id"] != community_id:
+            raise LookupError("Canal no encontrado en esta comunidad")
+        fields: Dict[str, Any] = {}
+        if name is not None:
+            clean_name = name.strip()
+            if not clean_name:
+                raise ValueError("El nombre del canal no puede estar vacío")
+            fields["name"] = clean_name[:48]
+        if topic is not None:
+            fields["topic"] = topic.strip()[:200]
+        updated = self.repo.update_channel(channel_id, fields)
+        if not updated:
+            raise LookupError("Canal no encontrado")
+        return updated
+
     def delete_channel(self, community_id: str, channel_id: str, requester_id: str) -> bool:
         """Elimina un canal de la comunidad verificando channels.manage."""
         if not self.has_permission(community_id, requester_id, "channels.manage"):
@@ -566,6 +608,22 @@ class CommunitiesService:
     # MENSAJERÍA EN TIEMPO REAL E HISTORIAL PAGINADO
     # =========================================================================
 
+    def _enrich_message_fields(self, msg: Dict[str, Any]) -> Dict[str, Any]:
+        item = dict(msg)
+        atts = self.repo.list_message_attachments(item["id"])
+        if atts:
+            item["attachments"] = atts
+        item["reactions"] = self.repo.list_message_reactions(item["id"])
+        if item.get("reply_to_id"):
+            parent = self.repo.get_message(str(item["reply_to_id"]))
+            if parent:
+                item["reply_preview"] = {
+                    "id": parent["id"],
+                    "author_id": parent["author_id"],
+                    "content": str(parent.get("content") or "")[:120],
+                }
+        return item
+
     def send_message(
         self,
         community_id: str,
@@ -574,10 +632,12 @@ class CommunitiesService:
         content: str,
         reply_to_id: Optional[str] = None,
         attachments: Optional[List[Dict[str, Any]]] = None,
+        attachment_ids: Optional[List[str]] = None,
     ) -> Dict[str, Any]:
         """Publica un mensaje en un canal de texto validando permiso messages.send y límites."""
         clean_content = content.strip()
-        if not clean_content:
+        has_atts = bool(attachments) or bool(attachment_ids)
+        if not clean_content and not has_atts:
             raise ValueError("El contenido del mensaje no puede estar vacío")
         if len(clean_content) > 2000:
             raise ValueError("El mensaje excede el límite máximo de 2000 caracteres")
@@ -591,6 +651,9 @@ class CommunitiesService:
         if not self.has_permission(community_id, author_id, "messages.send", channel_id=channel_id):
             raise PermissionError("Acceso denegado: se requiere permiso messages.send")
 
+        if has_atts and not self.has_permission(community_id, author_id, "messages.attachments", channel_id=channel_id):
+            raise PermissionError("Acceso denegado: se requiere permiso messages.attachments")
+
         if self.repo.is_user_muted(community_id, author_id):
             raise PermissionError("El usuario se encuentra silenciado en esta comunidad")
 
@@ -602,11 +665,25 @@ class CommunitiesService:
         msg = self.repo.create_message(
             channel_id=channel_id,
             author_id=author_id,
-            content=clean_content,
+            content=clean_content or "[Imagen adjunta]",
             reply_to_id=reply_to_id,
         )
+        all_atts: List[Dict[str, Any]] = []
+        if attachment_ids:
+            for aid in attachment_ids:
+                staged = self.repo.consume_staged_attachment(str(aid), channel_id, author_id)
+                if staged:
+                    att_record = self.repo.add_message_attachment(
+                        attachment_id=staged["id"],
+                        message_id=msg["id"],
+                        storage_key=staged["storage_key"],
+                        filename=staged["filename"],
+                        content_type=staged["content_type"],
+                        size_bytes=staged["size_bytes"],
+                        checksum_sha256=staged["checksum_sha256"],
+                    )
+                    all_atts.append(att_record)
         if attachments:
-            msg["attachments"] = []
             for att in attachments:
                 att_record = self.repo.add_message_attachment(
                     attachment_id=str(uuid.uuid4()),
@@ -617,8 +694,11 @@ class CommunitiesService:
                     size_bytes=att.get("size_bytes", 0),
                     checksum_sha256=att.get("checksum_sha256", ""),
                 )
-                msg["attachments"].append(att_record)
-        return msg
+                all_atts.append(att_record)
+        enriched = self._enrich_message_fields(msg)
+        if all_atts and not enriched.get("attachments"):
+            enriched["attachments"] = all_atts
+        return enriched
 
     def list_channel_messages(
         self,
@@ -627,6 +707,7 @@ class CommunitiesService:
         requester_id: str,
         limit: int = 50,
         before_id: Optional[str] = None,
+        after_id: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
         """Recupera el historial paginado de mensajes validando permiso messages.read."""
         ch = self.repo.get_channel(channel_id)
@@ -637,12 +718,37 @@ class CommunitiesService:
             raise PermissionError("Acceso denegado: se requiere permiso messages.read")
 
         limit = max(1, min(100, limit))
-        msgs = self.repo.list_messages(channel_id, limit=limit, before_id=before_id)
-        for m in msgs:
-            atts = self.repo.list_message_attachments(m["id"])
-            if atts:
-                m["attachments"] = atts
-        return msgs
+        if after_id:
+            msgs = self.repo.list_messages_after(channel_id, after_id=after_id, limit=limit)
+        else:
+            msgs = self.repo.list_messages(channel_id, limit=limit, before_id=before_id)
+        return [self._enrich_message_fields(m) for m in msgs]
+
+    def toggle_message_reaction(
+        self,
+        community_id: str,
+        channel_id: str,
+        message_id: str,
+        requester_id: str,
+        emoji: str,
+    ) -> Dict[str, Any]:
+        clean_emoji = str(emoji or "").strip()
+        if not clean_emoji or len(clean_emoji) > 16:
+            raise ValueError("Emoji de reacción inválido")
+        ch = self.repo.get_channel(channel_id)
+        if not ch or ch["community_id"] != community_id:
+            raise LookupError("Canal no encontrado en esta comunidad")
+        if not self.has_permission(community_id, requester_id, "messages.read", channel_id=channel_id):
+            raise PermissionError("Acceso denegado: se requiere permiso messages.read")
+        if self.repo.is_user_muted(community_id, requester_id):
+            raise PermissionError("Usuario silenciado en esta comunidad")
+        msg = self.repo.get_message(message_id)
+        if not msg or msg["channel_id"] != channel_id:
+            raise LookupError("Mensaje no encontrado")
+        res = self.repo.toggle_reaction(message_id, requester_id, clean_emoji)
+        res["message_id"] = message_id
+        res["channel_id"] = channel_id
+        return res
 
     def edit_message(
         self,
@@ -671,7 +777,7 @@ class CommunitiesService:
         updated = self.repo.update_message(message_id, clean_content)
         if not updated:
             raise LookupError("Mensaje no encontrado")
-        return updated
+        return self._enrich_message_fields(updated)
 
     def delete_message(
         self,
@@ -696,36 +802,169 @@ class CommunitiesService:
     # PRESENCIA DE USUARIOS (ONLINE, IDLE, DND, INVISIBLE)
     # =========================================================================
 
+    def _mask_presence_for_viewer(self, entry: Dict[str, Any], viewer_id: Optional[str]) -> Dict[str, Any]:
+        res = dict(entry)
+        uid = str(res.get("user_id") or "")
+        is_self = (viewer_id is not None and str(viewer_id) == uid)
+        if not is_self and res.get("status") == "invisible":
+            res["status"] = "offline"
+        if not is_self and (res.get("status") == "offline" or res.get("activity_visibility") == "private"):
+            res["activity_type"] = None
+            res["activity_title"] = None
+            res["activity_game_id"] = None
+            res["activity_started_at"] = None
+            if res.get("status") == "offline":
+                res["custom_status"] = None
+        return res
+
     def set_user_presence(
         self,
         user_id: str,
         status: str = "online",
         custom_status: Optional[str] = None,
+        ttl_seconds: Optional[float] = None,
+        activity_visibility: Optional[str] = None,
     ) -> Dict[str, Any]:
-        """Actualiza el estado de presencia global del usuario."""
+        """Actualiza el estado de presencia global del usuario con TTL y visibilidad."""
         valid_statuses = {"online", "idle", "dnd", "invisible", "offline"}
         if status not in valid_statuses:
             raise ValueError(f"Estado de presencia inválido: {status}")
+        if activity_visibility is not None and activity_visibility not in {"communities", "friends", "private"}:
+            raise ValueError(f"Visibilidad de actividad inválida: {activity_visibility}")
 
-        return self.repo.set_presence(user_id, status=status, custom_status=custom_status)
+        return self.repo.set_presence(
+            user_id,
+            status=status,
+            custom_status=custom_status,
+            ttl_seconds=ttl_seconds,
+            activity_visibility=activity_visibility,
+        )
 
-    def get_user_presence(self, user_id: str, viewer_id: Optional[str] = None) -> Dict[str, Any]:
-        """Obtiene la presencia de un usuario; si está en 'invisible', se enmascara como 'offline'."""
-        p = self.repo.get_presence(user_id)
-        res = dict(p)
-        if res.get("status") == "invisible" and viewer_id != user_id:
-            res["status"] = "offline"
-        return res
+    def heartbeat_user_presence(self, user_id: str, ttl_seconds: Optional[float] = None) -> Dict[str, Any]:
+        """Renueva el heartbeat y TTL de presencia del usuario en SQLite."""
+        return self.repo.heartbeat_presence(user_id, ttl_seconds=ttl_seconds)
 
-    def list_user_presences(self, user_ids: List[str], viewer_id: Optional[str] = None) -> Dict[str, Dict[str, Any]]:
-        raw = self.repo.list_presences(user_ids)
-        result = {}
-        for uid, p in raw.items():
-            entry = dict(p)
-            if entry.get("status") == "invisible" and viewer_id != uid:
-                entry["status"] = "offline"
-            result[uid] = entry
-        return result
+    def get_user_presence(self, user_id: str, viewer_id: Optional[str] = None, now: Optional[float] = None) -> Dict[str, Any]:
+        """Obtiene la presencia de un usuario respetando TTL, invisible y privacidad de actividad."""
+        p = self.repo.get_presence(user_id, now=now)
+        return self._mask_presence_for_viewer(p, viewer_id)
+
+    def list_user_presences(
+        self,
+        user_ids: List[str],
+        viewer_id: Optional[str] = None,
+        now: Optional[float] = None,
+    ) -> Dict[str, Dict[str, Any]]:
+        raw = self.repo.list_presences(user_ids, now=now)
+        return {uid: self._mask_presence_for_viewer(p, viewer_id) for uid, p in raw.items()}
+
+    def report_game_activity(
+        self,
+        user_id: str,
+        action: str,
+        game_id: Optional[str] = None,
+        title: Optional[str] = None,
+        visibility: str = "communities",
+    ) -> Dict[str, Any]:
+        """Registra actividad real de juego (started/stopped) con control de privacidad."""
+        act = str(action or "").strip().lower()
+        if act not in ("started", "stopped"):
+            raise ValueError("action debe ser 'started' o 'stopped'")
+        vis = visibility if visibility in ("communities", "friends", "private") else "communities"
+        now = time.time()
+        prev = self.repo.get_presence(user_id)
+        cur_status = prev.get("status") if prev.get("status") in ("online", "idle", "dnd", "invisible") else "online"
+
+        if act == "started":
+            clean_title = str(title or game_id or "").strip()
+            if not clean_title:
+                raise ValueError("El título del juego es obligatorio al iniciar actividad")
+            presence = self.repo.set_presence(
+                user_id=user_id,
+                status=cur_status,
+                custom_status=f"Jugando: {clean_title}" if vis != "private" and cur_status != "invisible" else None,
+                activity_type="playing",
+                activity_title=clean_title,
+                activity_game_id=game_id,
+                activity_started_at=now,
+                activity_visibility=vis,
+                preserve_activity=False,
+            )
+            event = self.repo.record_activity_event(
+                user_id=user_id,
+                event_type="activity.game.started",
+                game_id=game_id,
+                title=clean_title,
+                visibility="private" if cur_status == "invisible" else vis,
+            )
+        else:
+            clean_title = str(title or prev.get("activity_title") or game_id or "Juego").strip()
+            presence = self.repo.set_presence(
+                user_id=user_id,
+                status=cur_status,
+                custom_status=None,
+                activity_type=None,
+                activity_title=None,
+                activity_game_id=None,
+                activity_started_at=None,
+                activity_visibility=vis,
+                preserve_activity=False,
+            )
+            event = self.repo.record_activity_event(
+                user_id=user_id,
+                event_type="activity.game.stopped",
+                game_id=game_id or prev.get("activity_game_id"),
+                title=clean_title,
+                visibility=vis,
+            )
+
+        comm_ids = [str(c["id"]) for c in self.repo.list_communities_for_user(user_id)] if vis != "private" else []
+        return {
+            "presence": presence,
+            "event": event,
+            "community_ids": comm_ids,
+        }
+
+    def get_activity_feed(
+        self,
+        viewer_id: str,
+        friend_ids: Optional[List[str]] = None,
+        limit: int = 40,
+    ) -> List[Dict[str, Any]]:
+        """Retorna eventos de actividad recientes deduplicados respetando privacidad y alcance social."""
+        friend_set = {str(f) for f in (friend_ids or []) if f}
+        member_ids = {str(viewer_id)} | friend_set
+        for c in self.repo.list_communities_for_user(viewer_id):
+            for m in self.repo.list_members(c["id"]):
+                if m.get("status") == "active":
+                    member_ids.add(str(m["user_id"]))
+
+        raw = self.repo.list_activity_events(list(member_ids), limit=max(limit * 2, 60))
+        visible: List[Dict[str, Any]] = []
+        seen_keys: set[tuple[str, str, str]] = set()
+        for ev in raw:
+            uid = str(ev.get("user_id") or "")
+            vis = str(ev.get("visibility") or "communities")
+            if uid != str(viewer_id):
+                if vis == "private":
+                    continue
+                if vis == "friends" and uid not in friend_set:
+                    continue
+            dedup_key = (uid, str(ev.get("event_type") or ""), str(ev.get("title") or ""))
+            if dedup_key in seen_keys and len(visible) < limit:
+                # Mantener el evento más reciente por usuario/tipo/título para evitar spam duplicado
+                continue
+            seen_keys.add(dedup_key)
+            visible.append(ev)
+            if len(visible) >= limit:
+                break
+        return visible
+
+    def list_notifications(self, user_id: str, unread_only: bool = False, limit: int = 40) -> List[Dict[str, Any]]:
+        return self.repo.list_notifications(user_id, unread_only=unread_only, limit=limit)
+
+    def mark_notifications_read(self, user_id: str, notification_ids: Optional[List[str]] = None) -> int:
+        return self.repo.mark_notifications_read(user_id, notification_ids=notification_ids)
 
     # =========================================================================
     # CANALES DE VOZ Y EMISIÓN DE TOKENS LIVEKIT

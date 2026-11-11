@@ -6,11 +6,16 @@ Expone endpoints bajo /api/v1/communities e invitaciones protegidos con autentic
 from __future__ import annotations
 
 import base64
+import hashlib
+import os
+import re
 import socket
 import time
-from typing import Any, Callable, Dict, Iterable, Optional
+import uuid
+from pathlib import Path
+from typing import Any, Callable, Dict, Iterable, List, Optional
 from urllib.parse import urlparse
-from flask import Blueprint, g, jsonify, request, Response
+from flask import Blueprint, g, jsonify, request, Response, send_file
 from backend.auth import require_auth
 from backend.communities.service import CommunitiesService, SoundCooldownError, StreamLimitError
 from backend.communities.stream_adapter import StreamValidationError
@@ -60,6 +65,111 @@ def _resolve_usernames(user_ids: Iterable[str]) -> Dict[str, str]:
     except Exception:
         pass
     return mapping
+
+
+_ALLOWED_IMAGE_MIME = {
+    "image/png": ".png",
+    "image/jpeg": ".jpg",
+    "image/jpg": ".jpg",
+    "image/webp": ".webp",
+    "image/gif": ".gif",
+}
+_MAX_ATTACHMENT_BYTES = 5 * 1024 * 1024
+
+
+def _attachments_dir(svc: CommunitiesService) -> Path:
+    dbp = str(getattr(svc.repo, "db_path", "") or "")
+    if dbp and dbp != ":memory:":
+        base = Path(dbp).resolve().parent / "attachments"
+    else:
+        base = Path(__file__).resolve().parent.parent.parent / ".cci-user-data" / "attachments"
+    base.mkdir(parents=True, exist_ok=True)
+    return base
+
+
+def _detect_image_mime(raw: bytes, claimed_mime: str = "", filename: str = "") -> Optional[str]:
+    if raw.startswith(b"\x89PNG\r\n\x1a\n"):
+        return "image/png"
+    if raw.startswith(b"\xff\xd8\xff"):
+        return "image/jpeg"
+    if raw.startswith((b"GIF87a", b"GIF89a")):
+        return "image/gif"
+    if len(raw) >= 12 and raw[:4] == b"RIFF" and raw[8:12] == b"WEBP":
+        return "image/webp"
+    ext = Path(filename).suffix.lower()
+    if claimed_mime.lower() in _ALLOWED_IMAGE_MIME and _ALLOWED_IMAGE_MIME[claimed_mime.lower()] == ext:
+        return "image/jpeg" if claimed_mime.lower() == "image/jpg" else claimed_mime.lower()
+    return None
+
+
+def _enrich_messages(msgs: List[Dict[str, Any]], fallback_names: Optional[Dict[str, str]] = None) -> List[Dict[str, Any]]:
+    ids: List[str] = []
+    for m in msgs:
+        if m.get("author_id"):
+            ids.append(str(m["author_id"]))
+        rp = m.get("reply_preview")
+        if isinstance(rp, dict) and rp.get("author_id"):
+            ids.append(str(rp["author_id"]))
+    names = _resolve_usernames(ids)
+    if fallback_names:
+        for k, v in fallback_names.items():
+            names.setdefault(str(k), str(v))
+    out: List[Dict[str, Any]] = []
+    for m in msgs:
+        item = dict(m)
+        aid = str(item.get("author_id") or "")
+        item["author_name"] = item.get("author_name") or names.get(aid) or aid
+        rp = item.get("reply_preview")
+        if isinstance(rp, dict):
+            rp_copy = dict(rp)
+            rpid = str(rp_copy.get("author_id") or "")
+            rp_copy["author_name"] = rp_copy.get("author_name") or names.get(rpid) or rpid
+            item["reply_preview"] = rp_copy
+        out.append(item)
+    return out
+
+
+def _broadcast_presence_to_communities(svc: CommunitiesService, user_id: str, raw_presence: Dict[str, Any]) -> None:
+    masked = svc._mask_presence_for_viewer(raw_presence, viewer_id=None)
+    uname = _resolve_usernames([user_id]).get(str(user_id), str(user_id))
+    payload = dict(masked)
+    payload["username"] = uname
+    payload["game"] = masked.get("activity_title")
+    for c in svc.repo.list_communities_for_user(user_id):
+        _emit_realtime("presence:updated", payload, room=f"comm_{c['id']}")
+
+
+def _dispatch_mentions(
+    svc: CommunitiesService,
+    community_id: str,
+    channel_id: str,
+    msg: Dict[str, Any],
+    sender_id: str,
+    sender_name: str,
+) -> None:
+    content = str(msg.get("content") or "")
+    raw_tags = {m.lower() for m in re.findall(r"@([A-Za-z0-9_.-]{2,32})", content)}
+    if not raw_tags:
+        return
+    members = svc.repo.list_members(community_id)
+    names = _resolve_usernames(m.get("user_id") for m in members if m.get("user_id"))
+    for m in members:
+        uid = str(m.get("user_id") or "")
+        if not uid or uid == str(sender_id):
+            continue
+        uname = names.get(uid, uid).lower()
+        if uname in raw_tags or uid.lower() in raw_tags:
+            notif = svc.repo.create_notification(
+                user_id=uid,
+                kind="mention",
+                actor_id=sender_id,
+                community_id=community_id,
+                channel_id=channel_id,
+                message_id=msg.get("id"),
+                title=f"@{sender_name} te mencionó",
+                body=content[:140],
+            )
+            _emit_realtime("notification:created", notif, room=f"user_{uid}")
 
 
 def _probe_livekit_tcp(timeout: float = 0.25) -> bool:
@@ -210,6 +320,32 @@ def create_invitation_route(community_id: str):
     try:
         inv = get_service().create_invitation(community_id, user_id, max_uses, expires_in_hours)
         return jsonify({"invitation": inv}), 201
+    except PermissionError as e:
+        return jsonify({"error": str(e)}), 403
+    except LookupError as e:
+        return jsonify({"error": str(e)}), 404
+
+
+@communities_bp.route("/communities/<community_id>/invitations", methods=["GET"])
+@require_auth
+def list_invitations_route(community_id: str):
+    user_id = g.current_user["user_id"]
+    try:
+        invs = get_service().list_invitations(community_id, user_id)
+        return jsonify({"invitations": invs}), 200
+    except PermissionError as e:
+        return jsonify({"error": str(e)}), 403
+    except LookupError as e:
+        return jsonify({"error": str(e)}), 404
+
+
+@communities_bp.route("/communities/<community_id>/invitations/<code_str>", methods=["DELETE"])
+@require_auth
+def revoke_invitation_route(community_id: str, code_str: str):
+    user_id = g.current_user["user_id"]
+    try:
+        get_service().revoke_invitation(community_id, code_str, user_id)
+        return jsonify({"status": "revoked", "code": code_str.upper()}), 200
     except PermissionError as e:
         return jsonify({"error": str(e)}), 403
     except LookupError as e:
@@ -430,12 +566,36 @@ def create_channel_route(community_id: str):
         return jsonify({"error": str(e)}), 403
 
 
+@communities_bp.route("/communities/<community_id>/channels/<channel_id>", methods=["PATCH"])
+@require_auth
+def update_channel_route(community_id: str, channel_id: str):
+    user_id = g.current_user["user_id"]
+    data = request.get_json() or {}
+    try:
+        ch = get_service().update_channel(
+            community_id=community_id,
+            channel_id=channel_id,
+            requester_id=user_id,
+            name=data.get("name"),
+            topic=data.get("topic"),
+        )
+        _emit_realtime("channel:updated", {"community_id": community_id, "channel": ch}, room=f"comm_{community_id}")
+        return jsonify({"channel": ch}), 200
+    except PermissionError as e:
+        return jsonify({"error": str(e)}), 403
+    except LookupError as e:
+        return jsonify({"error": str(e)}), 404
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+
+
 @communities_bp.route("/communities/<community_id>/channels/<channel_id>", methods=["DELETE"])
 @require_auth
 def delete_channel_route(community_id: str, channel_id: str):
     user_id = g.current_user["user_id"]
     try:
         get_service().delete_channel(community_id, channel_id, user_id)
+        _emit_realtime("channel:deleted", {"community_id": community_id, "channel_id": channel_id}, room=f"comm_{community_id}")
         return jsonify({"status": "deleted"}), 200
     except PermissionError as e:
         return jsonify({"error": str(e)}), 403
@@ -485,6 +645,7 @@ def get_channel_messages_route(channel_id: str):
     user_id = g.current_user["user_id"]
     limit = int(request.args.get("limit", 50))
     before_id = request.args.get("before_id")
+    after_id = request.args.get("after_id")
 
     ch = get_service().repo.get_channel(channel_id)
     if not ch:
@@ -497,15 +658,9 @@ def get_channel_messages_route(channel_id: str):
             requester_id=user_id,
             limit=limit,
             before_id=before_id,
+            after_id=after_id,
         )
-        names = _resolve_usernames(m.get("author_id") for m in msgs)
-        enriched = []
-        for m in msgs:
-            item = dict(m)
-            aid = str(item.get("author_id", ""))
-            item["author_name"] = item.get("author_name") or names.get(aid) or aid
-            enriched.append(item)
-        return jsonify({"messages": enriched}), 200
+        return jsonify({"messages": _enrich_messages(msgs)}), 200
     except PermissionError as e:
         return jsonify({"error": str(e)}), 403
     except LookupError as e:
@@ -520,24 +675,27 @@ def send_channel_message_route(channel_id: str):
     data = request.get_json() or {}
     content = data.get("content", "")
     reply_to_id = data.get("reply_to_id")
+    attachment_ids = data.get("attachment_ids")
 
-    ch = get_service().repo.get_channel(channel_id)
+    svc = get_service()
+    ch = svc.repo.get_channel(channel_id)
     if not ch:
         return jsonify({"error": "Canal no encontrado"}), 404
 
     try:
-        msg = get_service().send_message(
+        msg = svc.send_message(
             community_id=ch["community_id"],
             channel_id=channel_id,
             author_id=user_id,
             content=content,
             reply_to_id=reply_to_id,
+            attachment_ids=attachment_ids,
         )
-        msg = dict(msg)
-        msg["author_name"] = username
+        enriched = _enrich_messages([msg], fallback_names={user_id: username})[0]
         CommunityMetricsCollector.get_instance().increment("communities_messages_total")
-        _emit_realtime("message:created", msg, room=f"comm_chan_{channel_id}")
-        return jsonify({"message": msg}), 201
+        _emit_realtime("message:created", enriched, room=f"comm_chan_{channel_id}")
+        _dispatch_mentions(svc, ch["community_id"], channel_id, enriched, str(user_id), str(username))
+        return jsonify({"message": enriched}), 201
     except PermissionError as e:
         return jsonify({"error": str(e)}), 403
     except (ValueError, LookupError) as e:
@@ -564,10 +722,9 @@ def edit_channel_message_route(channel_id: str, message_id: str):
             requester_id=user_id,
             new_content=content,
         )
-        updated = dict(updated)
-        updated["author_name"] = _resolve_usernames([updated.get("author_id")]).get(str(updated.get("author_id")), username)
-        _emit_realtime("message:updated", updated, room=f"comm_chan_{channel_id}")
-        return jsonify({"message": updated}), 200
+        enriched = _enrich_messages([updated], fallback_names={user_id: username})[0]
+        _emit_realtime("message:updated", enriched, room=f"comm_chan_{channel_id}")
+        return jsonify({"message": enriched}), 200
     except PermissionError as e:
         return jsonify({"error": str(e)}), 403
     except (ValueError, LookupError) as e:
@@ -598,8 +755,122 @@ def delete_channel_message_route(channel_id: str, message_id: str):
         return jsonify({"error": str(e)}), 404
 
 
+@communities_bp.route("/channels/<channel_id>/messages/<message_id>/reactions", methods=["POST"])
+@require_auth
+def toggle_reaction_route(channel_id: str, message_id: str):
+    user_id = g.current_user["user_id"]
+    data = request.get_json() or {}
+    emoji = data.get("emoji", "")
+
+    svc = get_service()
+    ch = svc.repo.get_channel(channel_id)
+    if not ch:
+        return jsonify({"error": "Canal no encontrado"}), 404
+
+    try:
+        res = svc.toggle_message_reaction(
+            community_id=ch["community_id"],
+            channel_id=channel_id,
+            message_id=message_id,
+            requester_id=user_id,
+            emoji=emoji,
+        )
+        _emit_realtime("message:reaction_updated", res, room=f"comm_chan_{channel_id}")
+        return jsonify(res), 200
+    except PermissionError as e:
+        return jsonify({"error": str(e)}), 403
+    except (ValueError, LookupError) as e:
+        return jsonify({"error": str(e)}), 400
+
+
+@communities_bp.route("/channels/<channel_id>/attachments", methods=["POST"])
+@require_auth
+def upload_attachment_route(channel_id: str):
+    user_id = g.current_user["user_id"]
+    svc = get_service()
+    ch = svc.repo.get_channel(channel_id)
+    if not ch:
+        return jsonify({"error": "Canal no encontrado"}), 404
+    if not svc.has_permission(ch["community_id"], user_id, "messages.attachments", channel_id=channel_id):
+        return jsonify({"error": "Acceso denegado: se requiere permiso messages.attachments"}), 403
+
+    raw_bytes: bytes = b""
+    filename = "captura.png"
+    claimed_mime = ""
+    if "file" in request.files:
+        fobj = request.files["file"]
+        filename = Path(fobj.filename or "captura.png").name
+        claimed_mime = str(fobj.mimetype or "")
+        raw_bytes = fobj.read(_MAX_ATTACHMENT_BYTES + 1)
+    else:
+        data = request.get_json(silent=True) or {}
+        b64 = data.get("data_b64")
+        filename = Path(str(data.get("filename") or "captura.png")).name
+        claimed_mime = str(data.get("content_type") or "")
+        if b64:
+            try:
+                raw_bytes = base64.b64decode(b64, validate=True)
+            except Exception:
+                return jsonify({"error": "Contenido base64 inválido"}), 400
+
+    if not raw_bytes:
+        return jsonify({"error": "Archivo adjunto vacío"}), 400
+    if len(raw_bytes) > _MAX_ATTACHMENT_BYTES:
+        return jsonify({"error": "El adjunto supera el límite de 5 MB"}), 413
+
+    mime = _detect_image_mime(raw_bytes, claimed_mime=claimed_mime, filename=filename)
+    if not mime or mime not in _ALLOWED_IMAGE_MIME:
+        return jsonify({"error": "Solo se permiten imágenes PNG, JPEG, WEBP o GIF"}), 415
+
+    att_id = str(uuid.uuid4())
+    ext = _ALLOWED_IMAGE_MIME[mime]
+    storage_key = f"{att_id}{ext}"
+    store_dir = _attachments_dir(svc)
+    dest = (store_dir / storage_key).resolve()
+    if not dest.is_relative_to(store_dir.resolve()):
+        return jsonify({"error": "Ruta de almacenamiento inválida"}), 400
+    dest.write_bytes(raw_bytes)
+    sha256 = hashlib.sha256(raw_bytes).hexdigest()
+
+    staged = svc.repo.stage_attachment(
+        attachment_id=att_id,
+        channel_id=channel_id,
+        uploader_id=user_id,
+        storage_key=storage_key,
+        filename=filename[:120],
+        content_type=mime,
+        size_bytes=len(raw_bytes),
+        checksum_sha256=sha256,
+    )
+    return jsonify({"attachment": staged}), 201
+
+
+@communities_bp.route("/attachments/<attachment_id>", methods=["GET"])
+@require_auth
+def get_attachment_route(attachment_id: str):
+    user_id = g.current_user["user_id"]
+    svc = get_service()
+    att = svc.repo.get_attachment(attachment_id)
+    if not att:
+        return jsonify({"error": "Adjunto no encontrado"}), 404
+    msg = svc.repo.get_message(att["message_id"])
+    if not msg:
+        return jsonify({"error": "Mensaje asociado no encontrado"}), 404
+    ch = svc.repo.get_channel(msg["channel_id"])
+    if not ch:
+        return jsonify({"error": "Canal no encontrado"}), 404
+    if not svc.has_permission(ch["community_id"], user_id, "messages.read", channel_id=ch["id"]):
+        return jsonify({"error": "Acceso denegado a este adjunto"}), 403
+
+    store_dir = _attachments_dir(svc).resolve()
+    target = (store_dir / Path(att["storage_key"]).name).resolve()
+    if not target.is_relative_to(store_dir) or not target.exists():
+        return jsonify({"error": "Archivo no disponible en almacenamiento"}), 404
+    return send_file(target, mimetype=att["content_type"], download_name=att["filename"])
+
+
 # =============================================================================
-# RUTAS DE PRESENCIA DE USUARIO
+# RUTAS DE PRESENCIA DE USUARIO, HEARTBEAT, ACTIVIDAD Y NOTIFICACIONES
 # =============================================================================
 
 @communities_bp.route("/users/presence", methods=["GET"])
@@ -623,16 +894,120 @@ def set_presence_route():
     data = request.get_json() or {}
     status = data.get("status", "online")
     custom_status = data.get("custom_status")
+    ttl_seconds = data.get("ttl_seconds")
+    activity_visibility = data.get("activity_visibility")
 
+    svc = get_service()
     try:
-        updated = get_service().set_user_presence(
+        updated = svc.set_user_presence(
             user_id=user_id,
             status=status,
             custom_status=custom_status,
+            ttl_seconds=float(ttl_seconds) if ttl_seconds is not None else None,
+            activity_visibility=activity_visibility,
         )
+        _broadcast_presence_to_communities(svc, user_id, updated)
         return jsonify({"presence": updated}), 200
     except ValueError as e:
         return jsonify({"error": str(e)}), 400
+
+
+@communities_bp.route("/users/presence/heartbeat", methods=["POST"])
+@require_auth
+def heartbeat_presence_route():
+    user_id = g.current_user["user_id"]
+    data = request.get_json(silent=True) or {}
+    ttl_seconds = data.get("ttl_seconds")
+    svc = get_service()
+    updated = svc.heartbeat_user_presence(
+        user_id=user_id,
+        ttl_seconds=float(ttl_seconds) if ttl_seconds is not None else None,
+    )
+    return jsonify({"presence": updated}), 200
+
+
+@communities_bp.route("/users/activity/game", methods=["POST"])
+@require_auth
+def report_game_activity_route():
+    user_id = g.current_user["user_id"]
+    username = g.current_user.get("username", user_id)
+    data = request.get_json() or {}
+    action = data.get("action", "")
+    game_id = data.get("game_id")
+    title = data.get("title")
+    visibility = data.get("visibility", "communities")
+
+    svc = get_service()
+    try:
+        res = svc.report_game_activity(
+            user_id=user_id,
+            action=action,
+            game_id=game_id,
+            title=title,
+            visibility=visibility,
+        )
+        ev = dict(res["event"])
+        ev["username"] = username
+        ev_name = "activity:game_started" if action == "started" else "activity:game_stopped"
+        if ev.get("visibility") != "private" and res["presence"].get("status") != "invisible":
+            for cid in res["community_ids"]:
+                _emit_realtime(ev_name, ev, room=f"comm_{cid}")
+        _broadcast_presence_to_communities(svc, user_id, res["presence"])
+        return jsonify(res), 200
+    except ValueError as e:
+        return jsonify({"error": str(e)}), 400
+
+
+@communities_bp.route("/users/activity/feed", methods=["GET"])
+@require_auth
+def get_activity_feed_route():
+    viewer_id = g.current_user["user_id"]
+    limit = max(1, min(100, int(request.args.get("limit", 40))))
+    friend_ids: List[str] = []
+    try:
+        import cci_database
+        for f in cci_database.get_user_friends(viewer_id):
+            if f.get("status") == "accepted":
+                fid = f["addressee_id"] if f["requester_id"] == viewer_id else f["requester_id"]
+                friend_ids.append(str(fid))
+    except Exception:
+        pass
+
+    svc = get_service()
+    events = svc.get_activity_feed(viewer_id=viewer_id, friend_ids=friend_ids, limit=limit)
+    names = _resolve_usernames(e.get("user_id") for e in events)
+    enriched = []
+    for e in events:
+        item = dict(e)
+        uid = str(item.get("user_id") or "")
+        item["username"] = names.get(uid, uid)
+        enriched.append(item)
+    return jsonify({"events": enriched}), 200
+
+
+@communities_bp.route("/users/notifications", methods=["GET"])
+@require_auth
+def list_notifications_route():
+    user_id = g.current_user["user_id"]
+    unread_only = request.args.get("unread_only", "false").lower() == "true"
+    limit = max(1, min(100, int(request.args.get("limit", 40))))
+    items = get_service().list_notifications(user_id, unread_only=unread_only, limit=limit)
+    names = _resolve_usernames(i.get("actor_id") for i in items if i.get("actor_id"))
+    for i in items:
+        aid = str(i.get("actor_id") or "")
+        if aid:
+            i["actor_name"] = names.get(aid, aid)
+    return jsonify({"notifications": items}), 200
+
+
+@communities_bp.route("/users/notifications/read", methods=["POST"])
+@require_auth
+def mark_notifications_read_route():
+    user_id = g.current_user["user_id"]
+    data = request.get_json(silent=True) or {}
+    nids = data.get("notification_ids")
+    updated = get_service().mark_notifications_read(user_id, notification_ids=nids)
+    return jsonify({"marked_read": updated}), 200
 
 
 # =============================================================================

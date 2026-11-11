@@ -443,7 +443,72 @@ class CommunitiesRepository:
             CREATE INDEX IF NOT EXISTS idx_audit_community_created ON audit_log(community_id, created_at DESC);
             CREATE INDEX IF NOT EXISTS idx_voice_sessions_channel ON voice_sessions(channel_id, left_at);
             CREATE INDEX IF NOT EXISTS idx_stream_sessions_channel ON stream_sessions(channel_id, ended_at);
+
+            CREATE TABLE IF NOT EXISTS message_reactions (
+                id TEXT PRIMARY KEY,
+                message_id TEXT NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+                user_id TEXT NOT NULL,
+                emoji TEXT NOT NULL,
+                created_at REAL NOT NULL,
+                UNIQUE(message_id, user_id, emoji)
+            );
+
+            CREATE TABLE IF NOT EXISTS activity_events (
+                id TEXT PRIMARY KEY,
+                user_id TEXT NOT NULL,
+                event_type TEXT NOT NULL,
+                game_id TEXT NULL,
+                title TEXT NULL,
+                metadata_json TEXT NULL,
+                visibility TEXT NOT NULL DEFAULT 'communities',
+                created_at REAL NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS user_notifications (
+                id TEXT PRIMARY KEY,
+                user_id TEXT NOT NULL,
+                kind TEXT NOT NULL,
+                actor_id TEXT NULL,
+                community_id TEXT NULL,
+                channel_id TEXT NULL,
+                message_id TEXT NULL,
+                title TEXT NOT NULL,
+                body TEXT NULL,
+                is_read INTEGER NOT NULL DEFAULT 0,
+                created_at REAL NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS staged_attachments (
+                id TEXT PRIMARY KEY,
+                channel_id TEXT NOT NULL,
+                uploader_id TEXT NOT NULL,
+                storage_key TEXT NOT NULL,
+                filename TEXT NOT NULL,
+                content_type TEXT NOT NULL,
+                size_bytes INTEGER NOT NULL,
+                checksum_sha256 TEXT NOT NULL,
+                created_at REAL NOT NULL
+            );
+
+            CREATE INDEX IF NOT EXISTS idx_reactions_message ON message_reactions(message_id);
+            CREATE INDEX IF NOT EXISTS idx_activity_user_created ON activity_events(user_id, created_at DESC);
+            CREATE INDEX IF NOT EXISTS idx_notifications_user_read ON user_notifications(user_id, is_read, created_at DESC);
             """)
+
+            # Migración aditiva segura para user_presence (TTL + actividad real de juego)
+            presence_cols = {
+                r[1] for r in conn.execute("PRAGMA table_info(user_presence)").fetchall()
+            }
+            for col_name, col_def in (
+                ("activity_type", "TEXT NULL"),
+                ("activity_title", "TEXT NULL"),
+                ("activity_game_id", "TEXT NULL"),
+                ("activity_started_at", "REAL NULL"),
+                ("activity_visibility", "TEXT NOT NULL DEFAULT 'communities'"),
+                ("expires_at", "REAL NOT NULL DEFAULT 0"),
+            ):
+                if col_name not in presence_cols:
+                    conn.execute(f"ALTER TABLE user_presence ADD COLUMN {col_name} {col_def}")
 
             # Sembrar catálogo canónico de permisos
             canonical_permissions = [
@@ -912,6 +977,42 @@ class CommunitiesRepository:
             )
             return True
 
+    def list_invitations(self, community_id: str, include_revoked: bool = False) -> List[Dict[str, Any]]:
+        conn = self._get_connection()
+        if include_revoked:
+            rows = conn.execute(
+                """
+                SELECT * FROM invitations
+                WHERE community_id = ?
+                ORDER BY created_at DESC
+                """,
+                (community_id,),
+            ).fetchall()
+        else:
+            rows = conn.execute(
+                """
+                SELECT * FROM invitations
+                WHERE community_id = ? AND COALESCE(is_revoked, 0) = 0
+                ORDER BY created_at DESC
+                """,
+                (community_id,),
+            ).fetchall()
+        out = []
+        for r in rows:
+            d = dict(r)
+            d["is_revoked"] = bool(d.get("is_revoked"))
+            out.append(d)
+        return out
+
+    def revoke_invitation(self, community_id: str, code: str) -> bool:
+        conn = self._get_connection()
+        with self._tx_lock, conn:
+            cur = conn.execute(
+                "UPDATE invitations SET is_revoked = 1 WHERE community_id = ? AND code = ?",
+                (community_id, code),
+            )
+            return cur.rowcount > 0
+
     # =========================================================================
     # MENSAJERÍA, HISTORIAL Y ADJUNTOS
     # =========================================================================
@@ -990,6 +1091,76 @@ class CommunitiesRepository:
         ).fetchall()
         return [dict(r) for r in rows]
 
+    def get_attachment(self, attachment_id: str) -> Optional[Dict[str, Any]]:
+        conn = self._get_connection()
+        row = conn.execute(
+            "SELECT * FROM message_attachments WHERE id = ?",
+            (attachment_id,),
+        ).fetchone()
+        return dict(row) if row else None
+
+    def link_attachment_to_message(self, attachment_id: str, message_id: str) -> bool:
+        conn = self._get_connection()
+        with self._tx_lock, conn:
+            cur = conn.execute(
+                "UPDATE message_attachments SET message_id = ? WHERE id = ?",
+                (message_id, attachment_id),
+            )
+            return cur.rowcount > 0
+
+    def toggle_reaction(self, message_id: str, user_id: str, emoji: str) -> Dict[str, Any]:
+        conn = self._get_connection()
+        now = time.time()
+        with self._tx_lock, conn:
+            existing = conn.execute(
+                "SELECT id FROM message_reactions WHERE message_id = ? AND user_id = ? AND emoji = ?",
+                (message_id, user_id, emoji),
+            ).fetchone()
+            if existing:
+                conn.execute("DELETE FROM message_reactions WHERE id = ?", (existing[0],))
+                added = False
+            else:
+                conn.execute(
+                    "INSERT INTO message_reactions (id, message_id, user_id, emoji, created_at) VALUES (?, ?, ?, ?, ?)",
+                    (str(uuid.uuid4()), message_id, user_id, emoji, now),
+                )
+                added = True
+        return {"added": added, "reactions": self.list_message_reactions(message_id)}
+
+    def list_message_reactions(self, message_id: str) -> List[Dict[str, Any]]:
+        conn = self._get_connection()
+        rows = conn.execute(
+            "SELECT emoji, user_id FROM message_reactions WHERE message_id = ? ORDER BY created_at ASC",
+            (message_id,),
+        ).fetchall()
+        grouped: Dict[str, List[str]] = {}
+        for r in rows:
+            grouped.setdefault(r[0], []).append(r[1])
+        return [{"emoji": e, "count": len(uids), "user_ids": uids} for e, uids in grouped.items()]
+
+    def list_messages_after(
+        self,
+        channel_id: str,
+        after_id: str,
+        limit: int = 100,
+    ) -> List[Dict[str, Any]]:
+        conn = self._get_connection()
+        anchor = conn.execute("SELECT created_at FROM messages WHERE id = ?", (after_id,)).fetchone()
+        if not anchor:
+            return self.list_messages(channel_id, limit=limit)
+        rows = conn.execute(
+            """
+            SELECT * FROM messages
+            WHERE channel_id = ? AND deleted_at IS NULL AND created_at > ?
+            ORDER BY created_at ASC LIMIT ?
+            """,
+            (channel_id, anchor[0], limit),
+        ).fetchall()
+        result = [dict(r) for r in rows]
+        for r in result:
+            r["is_pinned"] = bool(r["is_pinned"])
+        return result
+
     def list_messages(
         self,
         channel_id: str,
@@ -1060,38 +1231,126 @@ class CommunitiesRepository:
         user_id: str,
         status: str = "online",
         custom_status: Optional[str] = None,
+        ttl_seconds: Optional[float] = None,
+        activity_type: Optional[str] = None,
+        activity_title: Optional[str] = None,
+        activity_game_id: Optional[str] = None,
+        activity_started_at: Optional[float] = None,
+        activity_visibility: Optional[str] = None,
+        preserve_activity: bool = True,
     ) -> Dict[str, Any]:
         now = time.time()
+        default_ttl = float(os.getenv("CCI_PRESENCE_TTL_SECONDS", "60"))
+        effective_ttl = max(0.0, float(ttl_seconds if ttl_seconds is not None else default_ttl))
+        expires_at = (now + effective_ttl) if status != "offline" else now
+
         conn = self._get_connection()
         with self._tx_lock, conn:
+            prev = conn.execute("SELECT * FROM user_presence WHERE user_id = ?", (user_id,)).fetchone()
+            prev_d = dict(prev) if prev else {}
+
+            if status == "offline":
+                a_type = None
+                a_title = None
+                a_gid = None
+                a_started = None
+            elif not preserve_activity or activity_type is not None or activity_title is not None:
+                a_type = activity_type
+                a_title = activity_title
+                a_gid = activity_game_id
+                a_started = activity_started_at if activity_started_at is not None else (now if a_title else None)
+            else:
+                a_type = prev_d.get("activity_type")
+                a_title = prev_d.get("activity_title")
+                a_gid = prev_d.get("activity_game_id")
+                a_started = prev_d.get("activity_started_at")
+
+            a_vis = activity_visibility or prev_d.get("activity_visibility") or "communities"
             conn.execute(
                 """
-                INSERT INTO user_presence (user_id, status, custom_status, last_seen)
-                VALUES (?, ?, ?, ?)
+                INSERT INTO user_presence (
+                    user_id, status, custom_status, last_seen,
+                    activity_type, activity_title, activity_game_id, activity_started_at, activity_visibility, expires_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(user_id) DO UPDATE SET
                     status = excluded.status,
                     custom_status = excluded.custom_status,
-                    last_seen = excluded.last_seen
+                    last_seen = excluded.last_seen,
+                    activity_type = excluded.activity_type,
+                    activity_title = excluded.activity_title,
+                    activity_game_id = excluded.activity_game_id,
+                    activity_started_at = excluded.activity_started_at,
+                    activity_visibility = excluded.activity_visibility,
+                    expires_at = excluded.expires_at
                 """,
-                (user_id, status, custom_status, now)
+                (user_id, status, custom_status, now, a_type, a_title, a_gid, a_started, a_vis, expires_at),
             )
         return self.get_presence(user_id)
 
-    def get_presence(self, user_id: str) -> Dict[str, Any]:
+    def heartbeat_presence(self, user_id: str, ttl_seconds: Optional[float] = None) -> Dict[str, Any]:
+        now = time.time()
+        default_ttl = float(os.getenv("CCI_PRESENCE_TTL_SECONDS", "60"))
+        effective_ttl = max(0.0, float(ttl_seconds if ttl_seconds is not None else default_ttl))
+        conn = self._get_connection()
+        with self._tx_lock, conn:
+            row = conn.execute("SELECT status, custom_status FROM user_presence WHERE user_id = ?", (user_id,)).fetchone()
+            if not row or row[0] == "offline":
+                return self.set_presence(user_id, status="online", ttl_seconds=effective_ttl)
+            conn.execute(
+                "UPDATE user_presence SET last_seen = ?, expires_at = ? WHERE user_id = ?",
+                (now, now + effective_ttl, user_id),
+            )
+        return self.get_presence(user_id)
+
+    @staticmethod
+    def _default_offline_presence(user_id: str, last_seen: float = 0.0) -> Dict[str, Any]:
+        return {
+            "user_id": user_id,
+            "status": "offline",
+            "custom_status": None,
+            "last_seen": last_seen,
+            "activity_type": None,
+            "activity_title": None,
+            "activity_game_id": None,
+            "activity_started_at": None,
+            "activity_visibility": "communities",
+            "expires_at": 0.0,
+        }
+
+    def _normalize_presence_row(self, row_dict: Dict[str, Any], now: float) -> Dict[str, Any]:
+        exp = float(row_dict.get("expires_at") or 0.0)
+        if row_dict.get("status") != "offline" and exp > 0 and now > exp:
+            # TTL expirado: persistir caída a offline y limpiar actividad obsoleta
+            uid = row_dict["user_id"]
+            conn = self._get_connection()
+            with self._tx_lock, conn:
+                conn.execute(
+                    """
+                    UPDATE user_presence
+                    SET status = 'offline',
+                        activity_type = NULL,
+                        activity_title = NULL,
+                        activity_game_id = NULL,
+                        activity_started_at = NULL
+                    WHERE user_id = ? AND expires_at > 0 AND expires_at < ?
+                    """,
+                    (uid, now),
+                )
+            return self._default_offline_presence(uid, last_seen=float(row_dict.get("last_seen") or 0.0))
+        return row_dict
+
+    def get_presence(self, user_id: str, now: Optional[float] = None) -> Dict[str, Any]:
         conn = self._get_connection()
         row = conn.execute("SELECT * FROM user_presence WHERE user_id = ?", (user_id,)).fetchone()
         if not row:
-            return {
-                "user_id": user_id,
-                "status": "offline",
-                "custom_status": None,
-                "last_seen": 0.0,
-            }
-        return dict(row)
+            return self._default_offline_presence(user_id)
+        return self._normalize_presence_row(dict(row), now if now is not None else time.time())
 
-    def list_presences(self, user_ids: List[str]) -> Dict[str, Dict[str, Any]]:
+    def list_presences(self, user_ids: List[str], now: Optional[float] = None) -> Dict[str, Dict[str, Any]]:
         if not user_ids:
             return {}
+        ts = now if now is not None else time.time()
         conn = self._get_connection()
         placeholders = ",".join("?" for _ in user_ids)
         rows = conn.execute(
@@ -1100,11 +1359,11 @@ class CommunitiesRepository:
         ).fetchall()
         result = {}
         for r in rows:
-            d = dict(r)
+            d = self._normalize_presence_row(dict(r), ts)
             result[d["user_id"]] = d
         for uid in user_ids:
             if uid not in result:
-                result[uid] = {"user_id": uid, "status": "offline", "custom_status": None, "last_seen": 0.0}
+                result[uid] = self._default_offline_presence(uid)
         return result
 
     # =========================================================================
@@ -1832,3 +2091,166 @@ class CommunitiesRepository:
         params.append(limit)
         rows = conn.execute(query, tuple(params)).fetchall()
         return [dict(r) for r in rows]
+
+    # =========================================================================
+    # ADJUNTOS EN ESPERA, ACTIVIDAD DE JUEGOS Y NOTIFICACIONES
+    # =========================================================================
+
+    def stage_attachment(
+        self,
+        attachment_id: str,
+        channel_id: str,
+        uploader_id: str,
+        storage_key: str,
+        filename: str,
+        content_type: str,
+        size_bytes: int,
+        checksum_sha256: str,
+    ) -> Dict[str, Any]:
+        now = time.time()
+        conn = self._get_connection()
+        with self._tx_lock, conn:
+            conn.execute(
+                """
+                INSERT INTO staged_attachments (
+                    id, channel_id, uploader_id, storage_key, filename, content_type, size_bytes, checksum_sha256, created_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (attachment_id, channel_id, uploader_id, storage_key, filename, content_type, size_bytes, checksum_sha256, now),
+            )
+        return {
+            "id": attachment_id,
+            "channel_id": channel_id,
+            "uploader_id": uploader_id,
+            "storage_key": storage_key,
+            "filename": filename,
+            "content_type": content_type,
+            "size_bytes": size_bytes,
+            "checksum_sha256": checksum_sha256,
+            "created_at": now,
+        }
+
+    def consume_staged_attachment(self, attachment_id: str, channel_id: str, uploader_id: str) -> Optional[Dict[str, Any]]:
+        conn = self._get_connection()
+        with self._tx_lock, conn:
+            row = conn.execute(
+                "SELECT * FROM staged_attachments WHERE id = ? AND channel_id = ? AND uploader_id = ?",
+                (attachment_id, channel_id, uploader_id),
+            ).fetchone()
+            if not row:
+                return None
+            conn.execute("DELETE FROM staged_attachments WHERE id = ?", (attachment_id,))
+            return dict(row)
+
+    def record_activity_event(
+        self,
+        user_id: str,
+        event_type: str,
+        game_id: Optional[str] = None,
+        title: Optional[str] = None,
+        metadata_json: Optional[str] = None,
+        visibility: str = "communities",
+    ) -> Dict[str, Any]:
+        ev_id = str(uuid.uuid4())
+        now = time.time()
+        conn = self._get_connection()
+        with self._tx_lock, conn:
+            conn.execute(
+                """
+                INSERT INTO activity_events (id, user_id, event_type, game_id, title, metadata_json, visibility, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (ev_id, user_id, event_type, game_id, title, metadata_json, visibility, now),
+            )
+        return {
+            "id": ev_id,
+            "user_id": user_id,
+            "event_type": event_type,
+            "game_id": game_id,
+            "title": title,
+            "metadata_json": metadata_json,
+            "visibility": visibility,
+            "created_at": now,
+        }
+
+    def list_activity_events(self, user_ids: List[str], limit: int = 50) -> List[Dict[str, Any]]:
+        if not user_ids:
+            return []
+        conn = self._get_connection()
+        placeholders = ",".join("?" for _ in user_ids)
+        rows = conn.execute(
+            f"""
+            SELECT * FROM activity_events
+            WHERE user_id IN ({placeholders})
+            ORDER BY created_at DESC
+            LIMIT ?
+            """,
+            (*user_ids, limit),
+        ).fetchall()
+        return [dict(r) for r in rows]
+
+    def create_notification(
+        self,
+        user_id: str,
+        kind: str,
+        title: str,
+        body: Optional[str] = None,
+        actor_id: Optional[str] = None,
+        community_id: Optional[str] = None,
+        channel_id: Optional[str] = None,
+        message_id: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        nid = str(uuid.uuid4())
+        now = time.time()
+        conn = self._get_connection()
+        with self._tx_lock, conn:
+            conn.execute(
+                """
+                INSERT INTO user_notifications (
+                    id, user_id, kind, actor_id, community_id, channel_id, message_id, title, body, is_read, created_at
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?)
+                """,
+                (nid, user_id, kind, actor_id, community_id, channel_id, message_id, title, body, now),
+            )
+        return {
+            "id": nid,
+            "user_id": user_id,
+            "kind": kind,
+            "actor_id": actor_id,
+            "community_id": community_id,
+            "channel_id": channel_id,
+            "message_id": message_id,
+            "title": title,
+            "body": body,
+            "is_read": False,
+            "created_at": now,
+        }
+
+    def list_notifications(self, user_id: str, unread_only: bool = False, limit: int = 40) -> List[Dict[str, Any]]:
+        conn = self._get_connection()
+        sql = "SELECT * FROM user_notifications WHERE user_id = ?"
+        if unread_only:
+            sql += " AND is_read = 0"
+        sql += " ORDER BY created_at DESC LIMIT ?"
+        rows = conn.execute(sql, (user_id, limit)).fetchall()
+        out = []
+        for r in rows:
+            d = dict(r)
+            d["is_read"] = bool(d.get("is_read"))
+            out.append(d)
+        return out
+
+    def mark_notifications_read(self, user_id: str, notification_ids: Optional[List[str]] = None) -> int:
+        conn = self._get_connection()
+        with self._tx_lock, conn:
+            if notification_ids:
+                placeholders = ",".join("?" for _ in notification_ids)
+                cur = conn.execute(
+                    f"UPDATE user_notifications SET is_read = 1 WHERE user_id = ? AND id IN ({placeholders})",
+                    (user_id, *notification_ids),
+                )
+            else:
+                cur = conn.execute("UPDATE user_notifications SET is_read = 1 WHERE user_id = ?", (user_id,))
+            return cur.rowcount

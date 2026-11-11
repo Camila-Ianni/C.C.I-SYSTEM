@@ -21,7 +21,7 @@ from urllib.parse import urlparse
 
 import requests
 import socketio
-from PySide6.QtCore import QObject, Signal
+from PySide6.QtCore import QObject, QTimer, Signal
 
 logger = logging.getLogger(__name__)
 
@@ -231,6 +231,33 @@ class CommunityApiClient:
         data = self._request("POST", f"/api/v1/communities/{community_id}/invitations", json_body=payload)
         return dict(data.get("invitation") or {})
 
+    def list_invitations(self, community_id: str) -> List[Dict[str, Any]]:
+        data = self._request("GET", f"/api/v1/communities/{community_id}/invitations")
+        return list(data.get("invitations") or [])
+
+    def revoke_invitation(self, community_id: str, code: str) -> Dict[str, Any]:
+        return self._request("DELETE", f"/api/v1/communities/{community_id}/invitations/{code}")
+
+    def moderate_member(
+        self,
+        community_id: str,
+        target_id: str,
+        action: str,
+        duration_seconds: Optional[int] = None,
+        reason: str = "",
+    ) -> Dict[str, Any]:
+        act = action.lower()
+        if act not in ("kick", "mute", "unmute", "ban"):
+            raise CommunityApiError(f"Acción de moderación inválida: {action}", status_code=400)
+        body: Dict[str, Any] = {"target_user_id": target_id, "reason": reason}
+        if act == "mute" and duration_seconds is not None:
+            body["duration_minutes"] = max(1, int(round(float(duration_seconds) / 60.0)))
+        return self._request(
+            "POST",
+            f"/api/v1/communities/{community_id}/moderation/{act}",
+            json_body=body,
+        )
+
     def join_via_invitation(self, raw_code_or_link: str) -> Dict[str, Any]:
         code = _extract_invite_code(raw_code_or_link)
         if not code:
@@ -268,24 +295,100 @@ class CommunityApiClient:
         )
         return dict(data.get("channel") or {})
 
+    def update_channel(
+        self,
+        community_id: str,
+        channel_id: str,
+        name: Optional[str] = None,
+        topic: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        body: Dict[str, Any] = {}
+        if name is not None:
+            body["name"] = name
+        if topic is not None:
+            body["topic"] = topic
+        data = self._request("PATCH", f"/api/v1/communities/{community_id}/channels/{channel_id}", json_body=body)
+        return dict(data.get("channel") or {})
+
+    def delete_channel(self, community_id: str, channel_id: str) -> Dict[str, Any]:
+        return self._request("DELETE", f"/api/v1/communities/{community_id}/channels/{channel_id}")
+
     def list_messages(
         self,
         channel_id: str,
         limit: int = 50,
         before_id: Optional[str] = None,
+        after_id: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
         params: Dict[str, Any] = {"limit": limit}
         if before_id:
             params["before_id"] = before_id
+        if after_id:
+            params["after_id"] = after_id
         data = self._request("GET", f"/api/v1/channels/{channel_id}/messages", params=params)
         return list(data.get("messages") or [])
 
-    def send_message(self, channel_id: str, content: str, reply_to_id: Optional[str] = None) -> Dict[str, Any]:
+    def send_message(
+        self,
+        channel_id: str,
+        content: str,
+        reply_to_id: Optional[str] = None,
+        attachment_ids: Optional[List[str]] = None,
+    ) -> Dict[str, Any]:
         payload: Dict[str, Any] = {"content": content}
         if reply_to_id:
             payload["reply_to_id"] = reply_to_id
+        if attachment_ids:
+            payload["attachment_ids"] = list(attachment_ids)
         data = self._request("POST", f"/api/v1/channels/{channel_id}/messages", json_body=payload)
         return dict(data.get("message") or {})
+
+    def toggle_reaction(self, channel_id: str, message_id: str, emoji: str) -> Dict[str, Any]:
+        return self._request(
+            "POST",
+            f"/api/v1/channels/{channel_id}/messages/{message_id}/reactions",
+            json_body={"emoji": emoji},
+        )
+
+    def upload_attachment(self, channel_id: str, file_path: str | Path) -> Dict[str, Any]:
+        p = Path(file_path)
+        if not p.exists() or not p.is_file():
+            raise CommunityApiError("Archivo adjunto no encontrado en disco.", status_code=400)
+        url = f"{self.api_url}/api/v1/channels/{channel_id}/attachments"
+        hdrs = {}
+        if self.token:
+            hdrs["Authorization"] = f"Bearer {self.token}"
+        try:
+            with p.open("rb") as fh:
+                resp = self._http.post(url, headers=hdrs, files={"file": (p.name, fh)}, timeout=max(self.timeout, 12.0))
+        except requests.RequestException as exc:
+            raise CommunityApiError(f"Error subiendo adjunto: {exc}", status_code=0, code="NETWORK_ERROR") from exc
+        data: Dict[str, Any] = {}
+        try:
+            parsed = resp.json()
+            if isinstance(parsed, dict):
+                data = parsed
+        except Exception:
+            data = {}
+        if resp.status_code >= 400:
+            raise CommunityApiError(
+                str(data.get("error") or data.get("message") or f"Error HTTP {resp.status_code}"),
+                status_code=resp.status_code,
+            )
+        return dict(data.get("attachment") or {})
+
+    def download_attachment_bytes(self, attachment_id: str) -> bytes:
+        url = f"{self.api_url}/api/v1/attachments/{attachment_id}"
+        hdrs = {}
+        if self.token:
+            hdrs["Authorization"] = f"Bearer {self.token}"
+        try:
+            resp = self._http.get(url, headers=hdrs, timeout=self.timeout)
+        except requests.RequestException as exc:
+            raise CommunityApiError(f"Error descargando adjunto: {exc}", status_code=0) from exc
+        if resp.status_code >= 400:
+            raise CommunityApiError(f"Adjunto no disponible (HTTP {resp.status_code})", status_code=resp.status_code)
+        return bytes(resp.content)
 
     def edit_message(self, channel_id: str, message_id: str, content: str) -> Dict[str, Any]:
         data = self._request(
@@ -305,13 +408,68 @@ class CommunityApiClient:
         data = self._request("GET", "/api/v1/users/presence", params={"user_ids": ",".join(cleaned)})
         return dict(data.get("presences") or {})
 
-    def set_presence(self, status: str = "online", custom_status: Optional[str] = None) -> Dict[str, Any]:
+    def set_presence(
+        self,
+        status: str = "online",
+        custom_status: Optional[str] = None,
+        activity_visibility: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        body: Dict[str, Any] = {"status": status, "custom_status": custom_status}
+        if activity_visibility is not None:
+            body["activity_visibility"] = activity_visibility
+        data = self._request("POST", "/api/v1/users/presence", json_body=body)
+        return dict(data.get("presence") or {})
+
+    def heartbeat_presence(self) -> Dict[str, Any]:
+        data = self._request("POST", "/api/v1/users/presence/heartbeat", json_body={})
+        return dict(data.get("presence") or {})
+
+    def report_game_activity(
+        self,
+        action: str,
+        game_id: Optional[str] = None,
+        title: Optional[str] = None,
+        visibility: str = "communities",
+    ) -> Dict[str, Any]:
+        return self._request(
+            "POST",
+            "/api/v1/users/activity/game",
+            json_body={
+                "action": action,
+                "game_id": game_id,
+                "title": title,
+                "visibility": visibility,
+            },
+        )
+
+    def get_activity_feed(self, limit: int = 40) -> List[Dict[str, Any]]:
+        data = self._request("GET", "/api/v1/users/activity/feed", params={"limit": limit})
+        return list(data.get("events") or [])
+
+    def list_notifications(self, unread_only: bool = False) -> List[Dict[str, Any]]:
+        data = self._request(
+            "GET",
+            "/api/v1/users/notifications",
+            params={"unread_only": "true" if unread_only else "false"},
+        )
+        return list(data.get("notifications") or [])
+
+    def mark_notifications_read(self, notification_ids: Optional[List[str]] = None) -> int:
         data = self._request(
             "POST",
-            "/api/v1/users/presence",
-            json_body={"status": status, "custom_status": custom_status},
+            "/api/v1/users/notifications/read",
+            json_body={"notification_ids": notification_ids} if notification_ids else {},
         )
-        return dict(data.get("presence") or {})
+        return int(data.get("marked_read") or 0)
+
+    def get_friends(self, user_id: str) -> Dict[str, Any]:
+        return self._request("GET", f"/api/v1/friends/{user_id}")
+
+    def send_friend_request(self, target_username: str) -> Dict[str, Any]:
+        return self._request("POST", "/api/v1/friends/request", json_body={"target_username": target_username})
+
+    def respond_friend_request(self, requester_id: str, action: str = "accept") -> Dict[str, Any]:
+        return self._request("POST", "/api/v1/friends/respond", json_body={"requester_id": requester_id, "action": action})
 
     def request_voice_token(self, channel_id: str) -> Dict[str, Any]:
         return self._request("POST", f"/api/v1/channels/{channel_id}/voice-token", json_body={})
@@ -338,10 +496,16 @@ class CommunityRealtimeBridge(QObject):
     message_created = Signal(dict)
     message_updated = Signal(dict)
     message_deleted = Signal(dict)
+    reaction_updated = Signal(dict)
     channel_created = Signal(dict)
+    channel_updated = Signal(dict)
+    channel_deleted = Signal(dict)
     member_joined = Signal(dict)
     member_left = Signal(dict)
     presence_updated = Signal(dict)
+    typing_updated = Signal(dict)
+    activity_updated = Signal(dict)
+    notification_received = Signal(dict)
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -422,6 +586,41 @@ class CommunityRealtimeBridge(QObject):
             if isinstance(data, dict):
                 self.presence_updated.emit(data)
 
+        @sio.on("message:reaction_updated")
+        def on_react_upd(data):
+            if isinstance(data, dict):
+                self.reaction_updated.emit(data)
+
+        @sio.on("channel:updated")
+        def on_chan_upd(data):
+            if isinstance(data, dict):
+                self.channel_updated.emit(data)
+
+        @sio.on("channel:deleted")
+        def on_chan_del(data):
+            if isinstance(data, dict):
+                self.channel_deleted.emit(data)
+
+        @sio.on("typing:updated")
+        def on_typing_upd(data):
+            if isinstance(data, dict):
+                self.typing_updated.emit(data)
+
+        @sio.on("activity:game_started")
+        def on_act_start(data):
+            if isinstance(data, dict):
+                self.activity_updated.emit({"event": "started", **data})
+
+        @sio.on("activity:game_stopped")
+        def on_act_stop(data):
+            if isinstance(data, dict):
+                self.activity_updated.emit({"event": "stopped", **data})
+
+        @sio.on("notification:created")
+        def on_notif_created(data):
+            if isinstance(data, dict):
+                self.notification_received.emit(data)
+
         with self._lock:
             self._sio = sio
 
@@ -481,6 +680,15 @@ class CommunityRealtimeBridge(QObject):
             except Exception:
                 pass
 
+    def emit_typing(self, channel_id: str, typing: bool = True) -> None:
+        with self._lock:
+            sio = self._sio
+        if sio and sio.connected and channel_id:
+            try:
+                sio.emit("community:typing", {"channel_id": channel_id, "typing": bool(typing)})
+            except Exception:
+                pass
+
     def disconnect_sync(self) -> None:
         self._stop_flag = True
         with self._lock:
@@ -503,15 +711,28 @@ class CommunityController(QObject):
     communities_updated = Signal(list, list)  # my_communities, public_communities
     community_opened = Signal(dict)        # community payload + channels + members
     channel_messages_loaded = Signal(str, list)  # channel_id, messages
+    messages_synced = Signal(str, list)          # channel_id, missed_messages
     message_received = Signal(dict)
     message_updated = Signal(dict)
     message_deleted = Signal(dict)
+    reaction_updated = Signal(dict)
+    typing_updated = Signal(dict)
     members_updated = Signal(list)
+    friends_updated = Signal(list, list)         # friends, incoming_requests
+    activity_feed_updated = Signal(list)
+    notifications_updated = Signal(list, int)    # notifications, unread_count
+    presence_self_changed = Signal(str, str)     # status, activity_visibility
     voice_state_changed = Signal(dict)
     realtime_status_changed = Signal(bool, str)
     error_occurred = Signal(str)
 
-    def __init__(self, api_url: str = DEFAULT_API_URL, session_path: Optional[Path] = None, parent=None):
+    def __init__(
+        self,
+        api_url: str = DEFAULT_API_URL,
+        session_path: Optional[Path] = None,
+        parent=None,
+        heartbeat_interval_ms: int = 18000,
+    ):
         super().__init__(parent)
         self.api_url = api_url.rstrip("/")
         self.session_path = session_path or default_session_path()
@@ -527,7 +748,22 @@ class CommunityController(QObject):
         self.active_members: List[Dict[str, Any]] = []
         self.active_voice_channel: Optional[Dict[str, Any]] = None
         self.active_streams: List[Dict[str, Any]] = []
+        self.active_friends: List[Dict[str, Any]] = []
+        self.incoming_friend_requests: List[Dict[str, Any]] = []
+        self.active_activity_feed: List[Dict[str, Any]] = []
+        self.active_notifications: List[Dict[str, Any]] = []
+        self.unread_notifications_count: int = 0
+        self.current_presence_status: str = "online"
+        self.activity_visibility: str = "communities"
+        self._last_synced_msg_id: Optional[str] = None
+        self._active_game_id: Optional[str] = None
+        self._active_game_title: Optional[str] = None
         self.last_health: Dict[str, Any] = {}
+
+        self._heartbeat_interval_ms = max(0, int(heartbeat_interval_ms))
+        self._heartbeat_timer = QTimer(self)
+        self._heartbeat_timer.setInterval(self._heartbeat_interval_ms or 18000)
+        self._heartbeat_timer.timeout.connect(self._send_heartbeat)
 
         self.realtime.connected.connect(self._on_rt_connected)
         self.realtime.disconnected.connect(self._on_rt_disconnected)
@@ -535,10 +771,16 @@ class CommunityController(QObject):
         self.realtime.message_created.connect(self._on_rt_message_created)
         self.realtime.message_updated.connect(self._on_rt_message_updated)
         self.realtime.message_deleted.connect(self._on_rt_message_deleted)
+        self.realtime.reaction_updated.connect(self._on_rt_reaction_updated)
         self.realtime.channel_created.connect(self._on_rt_channel_created)
+        self.realtime.channel_updated.connect(self._on_rt_channel_updated)
+        self.realtime.channel_deleted.connect(self._on_rt_channel_deleted)
         self.realtime.member_joined.connect(self._on_rt_member_change)
         self.realtime.member_left.connect(self._on_rt_member_change)
         self.realtime.presence_updated.connect(self._on_rt_presence_updated)
+        self.realtime.typing_updated.connect(self._on_rt_typing_updated)
+        self.realtime.activity_updated.connect(self._on_rt_activity_updated)
+        self.realtime.notification_received.connect(self._on_rt_notification_received)
 
     # ------------------------------------------------------------------
     # Sesión & Salud
@@ -632,9 +874,27 @@ class CommunityController(QObject):
         return sess
 
     def logout(self) -> None:
+        self._heartbeat_timer.stop()
+        if self._active_game_title and self.session:
+            try:
+                self.api.report_game_activity(
+                    "stopped",
+                    game_id=self._active_game_id,
+                    title=self._active_game_title,
+                    visibility=self.activity_visibility,
+                )
+            except Exception:
+                pass
+            self._active_game_id = None
+            self._active_game_title = None
         if self.active_voice_channel and self.session:
             try:
                 self.api.leave_voice(self.active_voice_channel["id"])
+            except Exception:
+                pass
+        if self.session:
+            try:
+                self.api.set_presence("offline")
             except Exception:
                 pass
         self.realtime.disconnect_sync()
@@ -647,9 +907,38 @@ class CommunityController(QObject):
         self.active_channel = None
         self.active_members = []
         self.active_voice_channel = None
+        self.active_friends = []
+        self.incoming_friend_requests = []
+        self.active_activity_feed = []
+        self.active_notifications = []
+        self.unread_notifications_count = 0
+        self._last_synced_msg_id = None
         self.clear_saved_session()
         self.voice_state_changed.emit({"connected": False, "channel": None, "media_ready": False})
+        self.notifications_updated.emit([], 0)
         self.session_changed.emit(None)
+
+    def shutdown(self) -> None:
+        """Cierra timers, actividad de juego activa y conexión realtime al cerrar la app sin borrar la sesión persistida."""
+        self._heartbeat_timer.stop()
+        if self._active_game_title and self.session:
+            try:
+                self.api.report_game_activity(
+                    "stopped",
+                    game_id=self._active_game_id,
+                    title=self._active_game_title,
+                    visibility=self.activity_visibility,
+                )
+            except Exception:
+                pass
+            self._active_game_id = None
+            self._active_game_title = None
+        if self.session:
+            try:
+                self.api.set_presence("offline")
+            except Exception:
+                pass
+        self.realtime.disconnect_sync()
 
     def _activate_session(self, sess: CommunitySession, persist: bool) -> None:
         self.session = sess
@@ -657,11 +946,21 @@ class CommunityController(QObject):
         if persist:
             self._save_session(sess)
         try:
-            self.api.set_presence("online")
+            self.api.set_presence(
+                self.current_presence_status,
+                activity_visibility=self.activity_visibility,
+            )
         except Exception:
             pass
         self.realtime.connect_with_token(self.api_url, sess.token)
+        if self._heartbeat_interval_ms > 0:
+            self._heartbeat_timer.start()
         self.session_changed.emit(sess)
+        self.presence_self_changed.emit(self.current_presence_status, self.activity_visibility)
+        try:
+            self.refresh_activity_and_notifications()
+        except Exception:
+            pass
 
     def _save_session(self, sess: CommunitySession) -> None:
         try:
@@ -727,6 +1026,30 @@ class CommunityController(QObject):
     def create_invitation(self, community_id: str) -> Dict[str, Any]:
         return self.api.create_invitation(community_id)
 
+    def list_invitations(self, community_id: str) -> List[Dict[str, Any]]:
+        return self.api.list_invitations(community_id)
+
+    def revoke_invitation(self, community_id: str, code: str) -> bool:
+        return self.api.revoke_invitation(community_id, code)
+
+    def moderate_member(
+        self,
+        community_id: str,
+        user_id: str,
+        action: str,
+        duration_seconds: Optional[int] = None,
+        reason: str = "",
+    ) -> Dict[str, Any]:
+        res = self.api.moderate_member(
+            community_id,
+            user_id,
+            action,
+            duration_seconds=duration_seconds,
+            reason=reason,
+        )
+        self.refresh_members()
+        return res
+
     def leave_community(self, community_id: str) -> None:
         self.api.leave_community(community_id)
         if self.active_community and self.active_community["id"] == community_id:
@@ -776,6 +1099,39 @@ class CommunityController(QObject):
             self.select_channel(ch["id"])
         return ch
 
+    def update_channel(self, channel_id: str, name: Optional[str] = None, topic: Optional[str] = None) -> Dict[str, Any]:
+        if not self.active_community:
+            raise CommunityApiError("No hay una comunidad abierta.", status_code=400)
+        ch = self.api.update_channel(self.active_community["id"], channel_id, name=name, topic=topic)
+        for i, existing in enumerate(self.active_channels):
+            if existing["id"] == channel_id:
+                self.active_channels[i] = ch
+                break
+        if self.active_channel and self.active_channel["id"] == channel_id:
+            self.active_channel = ch
+        self.community_opened.emit({
+            "community": self.active_community,
+            "channels": list(self.active_channels),
+            "members": list(self.active_members),
+        })
+        return ch
+
+    def delete_channel(self, channel_id: str) -> bool:
+        if not self.active_community:
+            raise CommunityApiError("No hay una comunidad abierta.", status_code=400)
+        self.api.delete_channel(self.active_community["id"], channel_id)
+        self.active_channels = [c for c in self.active_channels if c["id"] != channel_id]
+        if self.active_channel and self.active_channel["id"] == channel_id:
+            self.active_channel = None
+            self._last_synced_msg_id = None
+            self.channel_messages_loaded.emit("", [])
+        self.community_opened.emit({
+            "community": self.active_community,
+            "channels": list(self.active_channels),
+            "members": list(self.active_members),
+        })
+        return True
+
     def select_channel(self, channel_id: str) -> List[Dict[str, Any]]:
         ch = next((c for c in self.active_channels if c["id"] == channel_id), None)
         if not ch:
@@ -783,13 +1139,165 @@ class CommunityController(QObject):
         self.active_channel = ch
         self.realtime.join_channel_room(channel_id)
         msgs = self.api.list_messages(channel_id, limit=50)
+        self._last_synced_msg_id = msgs[-1]["id"] if msgs else None
         self.channel_messages_loaded.emit(channel_id, msgs)
         return msgs
 
-    def send_message(self, content: str, reply_to_id: Optional[str] = None) -> Dict[str, Any]:
+    def load_older_messages(self, before_id: str, limit: int = 40) -> List[Dict[str, Any]]:
+        if not self.active_channel:
+            return []
+        return self.api.list_messages(self.active_channel["id"], limit=limit, before_id=before_id)
+
+    def send_message(
+        self,
+        content: str,
+        reply_to_id: Optional[str] = None,
+        attachment_ids: Optional[List[str]] = None,
+    ) -> Dict[str, Any]:
         if not self.active_channel:
             raise CommunityApiError("Seleccioná un canal de texto primero.", status_code=400)
-        return self.api.send_message(self.active_channel["id"], content=content, reply_to_id=reply_to_id)
+        return self.api.send_message(
+            self.active_channel["id"],
+            content=content,
+            reply_to_id=reply_to_id,
+            attachment_ids=attachment_ids,
+        )
+
+    def edit_message(self, message_id: str, content: str) -> Dict[str, Any]:
+        if not self.active_channel:
+            raise CommunityApiError("Seleccioná un canal de texto primero.", status_code=400)
+        return self.api.edit_message(self.active_channel["id"], message_id, content)
+
+    def delete_message(self, message_id: str) -> bool:
+        if not self.active_channel:
+            raise CommunityApiError("Seleccioná un canal de texto primero.", status_code=400)
+        return self.api.delete_message(self.active_channel["id"], message_id)
+
+    def toggle_reaction(self, message_id: str, emoji: str) -> Dict[str, Any]:
+        if not self.active_channel:
+            raise CommunityApiError("Seleccioná un canal de texto primero.", status_code=400)
+        return self.api.toggle_reaction(self.active_channel["id"], message_id, emoji)
+
+    def upload_attachment(self, file_path: str) -> Dict[str, Any]:
+        if not self.active_channel:
+            raise CommunityApiError("Seleccioná un canal de texto primero.", status_code=400)
+        return self.api.upload_attachment(self.active_channel["id"], file_path)
+
+    def emit_typing(self, typing: bool = True) -> None:
+        if self.active_channel:
+            self.realtime.emit_typing(self.active_channel["id"], typing=typing)
+
+    # ------------------------------------------------------------------
+    # Presencia, Actividad de Juego, Notificaciones y Amigos (Fase 3 / Unificación)
+    # ------------------------------------------------------------------
+    def _send_heartbeat(self) -> None:
+        if not self.session:
+            return
+        try:
+            self.api.heartbeat_presence(
+                status=self.current_presence_status,
+                activity_visibility=self.activity_visibility,
+            )
+        except Exception:
+            pass
+
+    def set_status(self, status: str, custom_status: Optional[str] = None, activity_visibility: Optional[str] = None) -> Dict[str, Any]:
+        self.current_presence_status = status
+        if activity_visibility is not None:
+            self.activity_visibility = activity_visibility
+        res = self.api.set_presence(
+            status=status,
+            custom_status=custom_status,
+            activity_visibility=self.activity_visibility,
+        )
+        self.presence_self_changed.emit(self.current_presence_status, self.activity_visibility)
+        if self.active_community:
+            try:
+                self.refresh_members()
+            except Exception:
+                pass
+        return res
+
+    def set_activity_visibility(self, visibility: str) -> Dict[str, Any]:
+        return self.set_status(self.current_presence_status, activity_visibility=visibility)
+
+    def report_game_activity(
+        self,
+        action: str,
+        game_id: Optional[str] = None,
+        title: Optional[str] = None,
+    ) -> Optional[Dict[str, Any]]:
+        if not self.session:
+            return None
+        if action == "started":
+            self._active_game_id = game_id
+            self._active_game_title = title
+        else:
+            self._active_game_id = None
+            self._active_game_title = None
+        try:
+            res = self.api.report_game_activity(
+                action=action,
+                game_id=game_id,
+                title=title,
+                visibility=self.activity_visibility,
+            )
+            self.refresh_activity_and_notifications()
+            return res
+        except Exception:
+            return None
+
+    def refresh_activity_and_notifications(self) -> None:
+        if not self.session:
+            return
+        try:
+            feed = self.api.get_activity_feed(limit=30)
+            self.active_activity_feed = feed
+            self.activity_feed_updated.emit(feed)
+        except Exception:
+            pass
+        try:
+            notifs = self.api.list_notifications()
+            unread = sum(1 for n in notifs if not n.get("is_read"))
+            self.active_notifications = notifs
+            self.unread_notifications_count = unread
+            self.notifications_updated.emit(notifs, unread)
+        except Exception:
+            pass
+
+    def mark_all_notifications_read(self) -> None:
+        if not self.session:
+            return
+        self.api.mark_notifications_read(None)
+        self.refresh_activity_and_notifications()
+
+    def refresh_friends(self) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+        if not self.session:
+            return [], []
+        data = self.api.get_friends(self.session.user_id)
+        friends = list(data.get("friends") or [])
+        pending_raw = data.get("pending")
+        if isinstance(pending_raw, dict):
+            incoming = list(pending_raw.get("incoming") or [])
+        else:
+            incoming = list(data.get("incoming_requests") or [])
+        self.active_friends = friends
+        self.incoming_friend_requests = incoming
+        self.friends_updated.emit(friends, incoming)
+        return friends, incoming
+
+    def send_friend_request(self, target_username: str) -> Dict[str, Any]:
+        res = self.api.send_friend_request(target_username=target_username)
+        self.refresh_friends()
+        return res
+
+    def respond_friend_request(self, from_user_id: str, accept: bool = True) -> Dict[str, Any]:
+        res = self.api.respond_friend_request(
+            requester_id=from_user_id,
+            action="accept" if accept else "reject",
+        )
+        self.refresh_friends()
+        return res
 
     def refresh_members(self) -> List[Dict[str, Any]]:
         if not self.active_community:
@@ -814,6 +1322,9 @@ class CommunityController(QObject):
             p = pres_map.get(uid) or {}
             item["presence_status"] = p.get("status", "offline")
             item["custom_status"] = p.get("custom_status")
+            item["activity_type"] = p.get("activity_type")
+            item["activity_title"] = p.get("activity_title")
+            item["activity_game_id"] = p.get("activity_game_id")
             out.append(item)
         return out
 
@@ -861,12 +1372,24 @@ class CommunityController(QObject):
 
     def _on_rt_connected(self) -> None:
         self.realtime_status_changed.emit(True, "Realtime Socket.IO conectado")
+        # Recuperación automática tras reconexión: traer mensajes faltantes sin duplicar
+        if self.session and self.active_channel and self._last_synced_msg_id:
+            ch_id = self.active_channel["id"]
+            try:
+                missed = self.api.list_messages(ch_id, limit=100, after_id=self._last_synced_msg_id)
+                if missed:
+                    self._last_synced_msg_id = missed[-1]["id"]
+                    self.messages_synced.emit(ch_id, missed)
+            except Exception:
+                pass
 
     def _on_rt_disconnected(self, reason: str) -> None:
         self.realtime_status_changed.emit(False, reason)
 
     def _on_rt_message_created(self, msg: Dict[str, Any]) -> None:
         if self.active_channel and msg.get("channel_id") == self.active_channel["id"]:
+            if msg.get("id"):
+                self._last_synced_msg_id = str(msg["id"])
             self.message_received.emit(msg)
 
     def _on_rt_message_updated(self, msg: Dict[str, Any]) -> None:
@@ -876,6 +1399,10 @@ class CommunityController(QObject):
     def _on_rt_message_deleted(self, payload: Dict[str, Any]) -> None:
         if self.active_channel and payload.get("channel_id") == self.active_channel["id"]:
             self.message_deleted.emit(payload)
+
+    def _on_rt_reaction_updated(self, payload: Dict[str, Any]) -> None:
+        if self.active_channel and payload.get("channel_id") == self.active_channel["id"]:
+            self.reaction_updated.emit(payload)
 
     def _on_rt_channel_created(self, payload: Dict[str, Any]) -> None:
         if self.active_community and payload.get("community_id") == self.active_community["id"]:
@@ -888,6 +1415,35 @@ class CommunityController(QObject):
                     "members": list(self.active_members),
                 })
 
+    def _on_rt_channel_updated(self, payload: Dict[str, Any]) -> None:
+        ch = payload.get("channel") or {}
+        if self.active_community and payload.get("community_id") == self.active_community["id"] and ch.get("id"):
+            for i, existing in enumerate(self.active_channels):
+                if existing["id"] == ch["id"]:
+                    self.active_channels[i] = ch
+                    break
+            if self.active_channel and self.active_channel["id"] == ch["id"]:
+                self.active_channel = ch
+            self.community_opened.emit({
+                "community": self.active_community,
+                "channels": list(self.active_channels),
+                "members": list(self.active_members),
+            })
+
+    def _on_rt_channel_deleted(self, payload: Dict[str, Any]) -> None:
+        ch_id = payload.get("channel_id")
+        if self.active_community and payload.get("community_id") == self.active_community["id"] and ch_id:
+            self.active_channels = [c for c in self.active_channels if c["id"] != ch_id]
+            if self.active_channel and self.active_channel["id"] == ch_id:
+                self.active_channel = None
+                self._last_synced_msg_id = None
+                self.channel_messages_loaded.emit("", [])
+            self.community_opened.emit({
+                "community": self.active_community,
+                "channels": list(self.active_channels),
+                "members": list(self.active_members),
+            })
+
     def _on_rt_member_change(self, payload: Dict[str, Any]) -> None:
         if self.active_community and payload.get("community_id") == self.active_community["id"]:
             try:
@@ -897,13 +1453,28 @@ class CommunityController(QObject):
 
     def _on_rt_presence_updated(self, presence: Dict[str, Any]) -> None:
         uid = str(presence.get("user_id") or "")
-        if not uid or not self.active_members:
+        if not uid:
             return
         changed = False
         for m in self.active_members:
             if str(m.get("user_id")) == uid:
                 m["presence_status"] = presence.get("status", "offline")
                 m["custom_status"] = presence.get("custom_status")
+                m["activity_type"] = presence.get("activity_type")
+                m["activity_title"] = presence.get("activity_title")
+                m["activity_game_id"] = presence.get("activity_game_id")
                 changed = True
         if changed:
             self.members_updated.emit(list(self.active_members))
+
+    def _on_rt_typing_updated(self, payload: Dict[str, Any]) -> None:
+        if self.active_channel and payload.get("channel_id") == self.active_channel["id"]:
+            self.typing_updated.emit(payload)
+
+    def _on_rt_activity_updated(self, payload: Dict[str, Any]) -> None:
+        if self.session:
+            self.refresh_activity_and_notifications()
+
+    def _on_rt_notification_received(self, payload: Dict[str, Any]) -> None:
+        if self.session:
+            self.refresh_activity_and_notifications()

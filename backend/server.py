@@ -56,6 +56,9 @@ def on_socket_connect(auth=None):
     if not payload:
         # En Flask-SocketIO, retornar False rechaza el handshake inmediatamente
         return False
+    uid = payload.get("user_id")
+    if uid:
+        join_room(f"user_{uid}")
     return True
 
 
@@ -278,9 +281,19 @@ def send_friend_request():
     data = request.get_json() or {}
     requester = g.current_user["user_id"]
     addressee = data.get("addressee_id")
+    target_username = str(data.get("target_username") or "").strip().lstrip("@")
+    if not addressee and target_username:
+        with cci_database.get_db() as conn:
+            row = conn.execute(
+                "SELECT id FROM accounts WHERE UPPER(username) = ?",
+                (target_username.upper(),),
+            ).fetchone()
+            if not row:
+                return jsonify({"success": False, "error": f"Usuario @{target_username} no encontrado."}), 404
+            addressee = str(row["id"])
     if not addressee:
-        return jsonify({"success": False, "error": "addressee_id es requerido."}), 400
-    res = friends_svc.send_friend_request(requester, addressee)
+        return jsonify({"success": False, "error": "addressee_id o target_username es requerido."}), 400
+    res = friends_svc.send_friend_request(requester, str(addressee))
     status_code = 200 if res.get("success") else 400
     return jsonify(res), status_code
 
@@ -1014,11 +1027,20 @@ def on_community_message_delete(data: Dict[str, Any]):
 @socketio.on("community:typing")
 @require_socket_auth
 def on_community_typing(data: Dict[str, Any]):
+    from backend.communities.service import CommunitiesService
     user_id = data.get("user_id")
+    username = data.get("sender_name") or user_id
     channel_id = data.get("channel_id")
     typing = bool(data.get("typing", True))
-    if channel_id and user_id:
-        emit("typing:started", {"user_id": user_id, "channel_id": channel_id, "typing": typing}, to=f"comm_chan_{channel_id}", include_self=False)
+    if not channel_id or not user_id:
+        return
+    comm_svc = CommunitiesService.get_instance()
+    ch = comm_svc.repo.get_channel(channel_id)
+    if not ch or not comm_svc.has_permission(ch["community_id"], user_id, "messages.read", channel_id=channel_id):
+        return
+    payload = {"user_id": user_id, "username": username, "channel_id": channel_id, "typing": typing}
+    emit("typing:started", payload, to=f"comm_chan_{channel_id}", include_self=False)
+    emit("typing:updated", payload, to=f"comm_chan_{channel_id}", include_self=False)
 
 
 @socketio.on("community:presence:update")
@@ -1032,7 +1054,9 @@ def on_community_presence_update(data: Dict[str, Any]):
     comm_svc = CommunitiesService.get_instance()
     try:
         p = comm_svc.set_user_presence(user_id=user_id, status=status, custom_status=custom_status)
-        emit("presence:updated", p, broadcast=True, include_self=False)
+        masked = comm_svc._mask_presence_for_viewer(p, viewer_id=None)
+        for c in comm_svc.repo.list_communities_for_user(user_id):
+            emit("presence:updated", masked, to=f"comm_{c['id']}", include_self=False)
     except Exception as e:
         emit("community:error", {"error": str(e)})
 

@@ -44,8 +44,22 @@ class FriendsService:
     # ==============================================================================
 
     def update_presence(self, user_id: str, status: str = "online", current_game: Optional[str] = None) -> Dict[str, Any]:
-        """Actualiza el estado de presencia de un usuario (online, away, busy, offline)."""
-        valid_status = status.lower() if status.lower() in ("online", "away", "busy", "offline") else "online"
+        """Actualiza la presencia persistida (unificada con CommunitiesRepository SQLite WAL)."""
+        valid_status = status.lower() if status.lower() in ("online", "away", "busy", "idle", "dnd", "invisible", "offline") else "online"
+        repo_status = {"away": "idle", "busy": "dnd"}.get(valid_status, valid_status)
+        try:
+            from backend.communities.repository import CommunitiesRepository
+            repo = CommunitiesRepository.get_instance()
+            repo.set_presence(
+                user_id=user_id,
+                status=repo_status,
+                custom_status=current_game,
+                activity_type="playing" if current_game else None,
+                activity_title=current_game,
+                preserve_activity=False,
+            )
+        except Exception:
+            pass
         data = {
             "user_id": user_id,
             "status": valid_status,
@@ -56,13 +70,28 @@ class FriendsService:
         return data
 
     def get_presence(self, user_id: str) -> Dict[str, Any]:
-        """Retorna la presencia de un usuario o 'offline' por defecto."""
-        return self._presence.get(user_id, {
-            "user_id": user_id,
-            "status": PresenceStatus.OFFLINE.value,
-            "current_game": None,
-            "last_seen": 0.0,
-        })
+        """Retorna la presencia persistida con expiración TTL o 'offline' por defecto."""
+        try:
+            from backend.communities.repository import CommunitiesRepository
+            p = CommunitiesRepository.get_instance().get_presence(user_id)
+            st = str(p.get("status") or "offline")
+            legacy_st = {"idle": "away", "dnd": "busy"}.get(st, st)
+            if legacy_st == "invisible":
+                legacy_st = "offline"
+            game = p.get("activity_title") or p.get("custom_status")
+            return {
+                "user_id": user_id,
+                "status": legacy_st,
+                "current_game": None if legacy_st == "offline" else game,
+                "last_seen": float(p.get("last_seen") or 0.0),
+            }
+        except Exception:
+            return self._presence.get(user_id, {
+                "user_id": user_id,
+                "status": PresenceStatus.OFFLINE.value,
+                "current_game": None,
+                "last_seen": 0.0,
+            })
 
     # ==============================================================================
     # 2. GESTIÓN DE AMISTADES Y SOLICITUDES
@@ -128,14 +157,29 @@ class FriendsService:
         return {"success": True, "message": f"Usuario {target_id} bloqueado."}
 
     def get_friends_list(self, user_id: str) -> List[Dict[str, Any]]:
-        """Obtiene la lista de amigos con su estado de presencia en tiempo real."""
+        """Obtiene la lista de amigos con su estado de presencia en tiempo real y nombre real."""
         raw_friends = cci_database.get_user_friends(user_id)
+        fids = [
+            f["addressee_id"] if f["requester_id"] == user_id else f["requester_id"]
+            for f in raw_friends
+        ]
+        names: Dict[str, str] = {}
+        numeric = [int(x) for x in fids if str(x).isdigit()]
+        if numeric:
+            try:
+                with cci_database.get_db() as conn:
+                    ph = ",".join("?" for _ in numeric)
+                    for r in conn.execute(f"SELECT id, username FROM accounts WHERE id IN ({ph})", numeric).fetchall():
+                        names[str(r["id"])] = str(r["username"])
+            except Exception:
+                pass
         result = []
         for f in raw_friends:
             friend_id = f["addressee_id"] if f["requester_id"] == user_id else f["requester_id"]
             presence = self.get_presence(friend_id)
             result.append({
                 "friend_id": friend_id,
+                "username": names.get(str(friend_id), str(friend_id)),
                 "status": f["status"],
                 "since": f["updated_at"],
                 "presence": presence["status"],

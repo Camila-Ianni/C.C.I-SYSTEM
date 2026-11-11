@@ -27,7 +27,7 @@ from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QStackedWidget,
     QLabel, QPushButton, QLineEdit, QScrollArea, QGridLayout, QFrame, QSizePolicy,
     QProgressBar, QSlider, QFileDialog, QGraphicsDropShadowEffect, QDialog, QMessageBox,
-    QComboBox
+    QComboBox, QMenu, QCheckBox, QInputDialog
 )
 
 from cci_console import CATALOG, UserData
@@ -481,6 +481,7 @@ class AcrylicGlassCard(QFrame):
 # ==============================================================================
 class OmniDashNavBar(QWidget):
     navigate = Signal(str)
+    notifications_clicked = Signal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -601,15 +602,32 @@ class OmniDashNavBar(QWidget):
         status_box.setSpacing(14)
         status_box.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
 
-        # Campana con indicador 1
-        bell_lbl = QLabel()
-        bell_lbl.setCursor(Qt.PointingHandCursor)
-        bell_p = ROOT / "assets_omnidash" / "icons" / "bell_badge.png"
+        # Campana interactiva con badge real de menciones/notificaciones (sin "1" hardcodeado)
+        bell_wrap = QWidget()
+        bell_wrap.setFixedSize(32, 30)
+        self.bell_btn = QPushButton(bell_wrap)
+        self.bell_btn.setGeometry(0, 2, 26, 26)
+        self.bell_btn.setCursor(Qt.PointingHandCursor)
+        self.bell_btn.setToolTip("Notificaciones y menciones")
+        self.bell_btn.setStyleSheet("QPushButton { background: transparent; border: none; } QPushButton:hover { background: rgba(255,255,255,0.12); border-radius: 13px; }")
+        bell_p = ROOT / "assets_omnidash" / "icons" / "alert.png"
         if not bell_p.exists():
-            bell_p = ROOT / "assets_omnidash" / "icons" / "alert.png"
+            bell_p = ROOT / "assets_omnidash" / "icons" / "bell_badge.png"
         if bell_p.exists():
-            bell_lbl.setPixmap(QPixmap(str(bell_p)).scaled(26, 26, Qt.KeepAspectRatio, Qt.SmoothTransformation))
-        status_box.addWidget(bell_lbl)
+            self.bell_btn.setIcon(QIcon(str(bell_p)))
+            self.bell_btn.setIconSize(QSize(22, 22))
+        else:
+            self.bell_btn.setText("🔔")
+        self.bell_btn.clicked.connect(self.notifications_clicked.emit)
+
+        self.bell_badge = QLabel("", bell_wrap)
+        self.bell_badge.setGeometry(16, 0, 15, 15)
+        self.bell_badge.setAlignment(Qt.AlignCenter)
+        self.bell_badge.setStyleSheet(
+            "background: #E94B56; color: #ffffff; font-size: 9px; font-weight: 800; border-radius: 7.5px;"
+        )
+        self.bell_badge.setVisible(False)
+        status_box.addWidget(bell_wrap)
 
         # WiFi
         wifi_lbl = QLabel()
@@ -653,6 +671,13 @@ class OmniDashNavBar(QWidget):
         self.timer.timeout.connect(self._update_clock)
         self.timer.start(1000)
         self._update_clock()
+
+    def set_unread_notifications(self, count: int):
+        if count and count > 0:
+            self.bell_badge.setText(str(count) if count < 10 else "9+")
+            self.bell_badge.setVisible(True)
+        else:
+            self.bell_badge.setVisible(False)
 
     def set_active_view(self, view_id: str):
         self.current_view = view_id
@@ -3913,6 +3938,8 @@ class ServerRail(QWidget):
 class ChannelSidebar(AcrylicGlassCard):
     channel_selected = Signal(str, str)       # channel_id, type
     create_channel_requested = Signal(str)    # "text" | "voice"
+    edit_channel_requested = Signal(str)      # channel_id
+    delete_channel_requested = Signal(str)    # channel_id
     leave_community_requested = Signal()
 
     def __init__(self, parent=None):
@@ -4079,6 +4106,10 @@ class ChannelSidebar(AcrylicGlassCard):
                 btn.setCursor(Qt.PointingHandCursor)
                 btn.setFixedHeight(32)
                 btn.clicked.connect(lambda _, c=cid: self._on_channel_click(c, "text"))
+                btn.setContextMenuPolicy(Qt.CustomContextMenu)
+                btn.customContextMenuRequested.connect(
+                    lambda pos, b=btn, c=cid: self._show_channel_context_menu(c, b.mapToGlobal(pos))
+                )
                 self._text_list_layout.addWidget(btn)
                 self.text_buttons[cid] = btn
             if not self.active_channel_id:
@@ -4099,6 +4130,10 @@ class ChannelSidebar(AcrylicGlassCard):
                     btn.setIcon(QIcon(str(vip)))
                     btn.setIconSize(QSize(15, 15))
                 btn.clicked.connect(lambda _, c=cid: self._on_channel_click(c, "voice"))
+                btn.setContextMenuPolicy(Qt.CustomContextMenu)
+                btn.customContextMenuRequested.connect(
+                    lambda pos, b=btn, c=cid: self._show_channel_context_menu(c, b.mapToGlobal(pos))
+                )
                 self._voice_list_layout.addWidget(btn)
                 self.voice_buttons[cid] = btn
 
@@ -4117,6 +4152,17 @@ class ChannelSidebar(AcrylicGlassCard):
             self.active_channel_id = channel_id
         self._style_channels()
         self.channel_selected.emit(channel_id, ch_type)
+
+    def _show_channel_context_menu(self, channel_id: str, global_pos):
+        menu = QMenu(self)
+        menu.setStyleSheet("QMenu { background: #102438; color: #ffffff; border: 1px solid rgba(53,200,241,0.45); } QMenu::item:selected { background: rgba(53,200,241,0.3); }")
+        edit_act = menu.addAction("Editar canal")
+        del_act = menu.addAction("Eliminar canal")
+        chosen = menu.exec(global_pos)
+        if chosen == edit_act:
+            self.edit_channel_requested.emit(channel_id)
+        elif chosen == del_act:
+            self.delete_channel_requested.emit(channel_id)
 
     def _style_channels(self):
         for cid, btn in self.text_buttons.items():
@@ -4162,6 +4208,11 @@ class ChannelSidebar(AcrylicGlassCard):
 
 
 class ChatMessageWidget(QWidget):
+    reply_requested = Signal(str, str, str)      # message_id, author, snippet
+    edit_requested = Signal(str, str)            # message_id, current_text
+    delete_requested = Signal(str)               # message_id
+    reaction_toggled = Signal(str, str)          # message_id, emoji
+
     def __init__(
         self,
         message_id: str,
@@ -4171,10 +4222,17 @@ class ChatMessageWidget(QWidget):
         avatar_path: Optional[Path] = None,
         is_self: bool = False,
         edited: bool = False,
+        reply_preview: Optional[dict] = None,
+        reactions: Optional[list] = None,
+        attachments: Optional[list] = None,
+        image_loader=None,
+        can_moderate: bool = False,
         parent=None,
     ):
         super().__init__(parent)
         self.message_id = message_id
+        self.author = author
+        self.current_text = text
         self.setAttribute(Qt.WA_TranslucentBackground, True)
         self.setStyleSheet("background: transparent;")
         layout = QHBoxLayout(self)
@@ -4196,7 +4254,7 @@ class ChatMessageWidget(QWidget):
         layout.addWidget(av_lbl, 0, Qt.AlignTop)
 
         content_lay = QVBoxLayout()
-        content_lay.setSpacing(3)
+        content_lay.setSpacing(4)
 
         hdr_row = QHBoxLayout()
         hdr_row.setSpacing(6)
@@ -4210,25 +4268,133 @@ class ChatMessageWidget(QWidget):
         self.time_lbl.setStyleSheet("font-size: 11px; color: #BDD4E4; font-weight: 600;")
         hdr_row.addWidget(self.time_lbl)
         hdr_row.addStretch(1)
+
+        act_style = (
+            "QPushButton { background: rgba(255,255,255,0.06); border: none; border-radius: 6px; "
+            "color: #BDD4E4; font-size: 11px; padding: 2px 6px; } "
+            "QPushButton:hover { background: rgba(53,200,241,0.24); color: #ffffff; }"
+        )
+        reply_btn = QPushButton("↩")
+        reply_btn.setToolTip("Responder")
+        reply_btn.setCursor(Qt.PointingHandCursor)
+        reply_btn.setStyleSheet(act_style)
+        reply_btn.clicked.connect(
+            lambda: self.reply_requested.emit(self.message_id, self.author, self.current_text[:60])
+        )
+        hdr_row.addWidget(reply_btn)
+
+        for emo in ("👍", "🔥", "🎮"):
+            eb = QPushButton(emo)
+            eb.setCursor(Qt.PointingHandCursor)
+            eb.setStyleSheet(act_style)
+            eb.clicked.connect(lambda _, e=emo: self.reaction_toggled.emit(self.message_id, e))
+            hdr_row.addWidget(eb)
+
+        if is_self:
+            edit_btn = QPushButton("✎")
+            edit_btn.setToolTip("Editar")
+            edit_btn.setCursor(Qt.PointingHandCursor)
+            edit_btn.setStyleSheet(act_style)
+            edit_btn.clicked.connect(lambda: self.edit_requested.emit(self.message_id, self.current_text))
+            hdr_row.addWidget(edit_btn)
+
+        if is_self or can_moderate:
+            del_btn = QPushButton("🗑")
+            del_btn.setToolTip("Eliminar")
+            del_btn.setCursor(Qt.PointingHandCursor)
+            del_btn.setStyleSheet(act_style)
+            del_btn.clicked.connect(lambda: self.delete_requested.emit(self.message_id))
+            hdr_row.addWidget(del_btn)
+
         content_lay.addLayout(hdr_row)
+
+        if isinstance(reply_preview, dict) and reply_preview.get("id"):
+            r_auth = str(reply_preview.get("author_name") or reply_preview.get("author_id") or "Usuario")
+            r_txt = str(reply_preview.get("content") or "")[:72]
+            rep_lbl = QLabel(f"↩ Respuesta a @{r_auth}: {r_txt}")
+            rep_lbl.setStyleSheet(
+                "font-size: 11px; color: #a5d8ff; padding: 3px 8px; "
+                "background: rgba(53,200,241,0.12); border-left: 2px solid #35C8F1; border-radius: 4px;"
+            )
+            content_lay.addWidget(rep_lbl)
 
         self.txt_lbl = QLabel(text)
         self.txt_lbl.setStyleSheet("font-size: 14px; font-weight: 500; color: #F4F6F8;")
         self.txt_lbl.setWordWrap(True)
         self.txt_lbl.setTextInteractionFlags(Qt.TextSelectableByMouse)
+        self.txt_lbl.setVisible(bool(text))
         content_lay.addWidget(self.txt_lbl)
+
+        if attachments:
+            att_row = QHBoxLayout()
+            att_row.setSpacing(8)
+            for att in attachments:
+                aid = str(att.get("id") or "")
+                fname = str(att.get("filename") or "imagen")
+                raw = image_loader(aid) if (image_loader and aid) else None
+                if raw:
+                    pm = QPixmap()
+                    if pm.loadFromData(raw):
+                        img_lbl = QLabel()
+                        img_lbl.setPixmap(pm.scaled(220, 140, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+                        img_lbl.setStyleSheet("border: 1px solid rgba(255,255,255,0.22); border-radius: 8px; padding: 2px;")
+                        att_row.addWidget(img_lbl)
+                        continue
+                pill = QLabel(f"🖼 {fname}")
+                pill.setStyleSheet("font-size: 11px; color: #cbe6ff; background: rgba(255,255,255,0.08); padding: 4px 8px; border-radius: 6px;")
+                att_row.addWidget(pill)
+            att_row.addStretch(1)
+            content_lay.addLayout(att_row)
+
+        self.reactions_row = QHBoxLayout()
+        self.reactions_row.setSpacing(6)
+        self.reactions_wrap = QWidget()
+        self.reactions_wrap.setLayout(self.reactions_row)
+        self.reactions_wrap.setVisible(False)
+        content_lay.addWidget(self.reactions_wrap)
+        self.update_reactions(reactions or [])
 
         layout.addLayout(content_lay, 1)
 
     def update_content(self, new_text: str, edited: bool = True):
+        self.current_text = new_text
         self.txt_lbl.setText(new_text)
+        self.txt_lbl.setVisible(bool(new_text))
         if edited and "(editado)" not in self.time_lbl.text():
             self.time_lbl.setText(f"{self.time_lbl.text()} (editado)")
+
+    def update_reactions(self, reactions: list):
+        _clear_layout_widgets(self.reactions_row)
+        if not reactions:
+            self.reactions_wrap.setVisible(False)
+            return
+        for r in reactions:
+            emo = str(r.get("emoji") or "")
+            cnt = int(r.get("count") or 0)
+            if not emo or cnt <= 0:
+                continue
+            chip = QPushButton(f"{emo} {cnt}")
+            chip.setCursor(Qt.PointingHandCursor)
+            chip.setStyleSheet(
+                "QPushButton { background: rgba(53,200,241,0.16); border: 1px solid rgba(53,200,241,0.4); "
+                "border-radius: 10px; color: #ffffff; font-size: 11px; font-weight: 700; padding: 2px 8px; } "
+                "QPushButton:hover { background: rgba(53,200,241,0.34); }"
+            )
+            chip.clicked.connect(lambda _, e=emo: self.reaction_toggled.emit(self.message_id, e))
+            self.reactions_row.addWidget(chip)
+        self.reactions_row.addStretch(1)
+        self.reactions_wrap.setVisible(True)
 
 
 class CentralChatWidget(AcrylicGlassCard):
     message_submit_requested = Signal(str)
     refresh_requested = Signal()
+    older_messages_requested = Signal(str)        # oldest_message_id
+    message_edit_requested = Signal(str, str)     # message_id, new_text
+    message_delete_requested = Signal(str)        # message_id
+    reaction_toggle_requested = Signal(str, str)  # message_id, emoji
+    attachment_upload_requested = Signal(str)     # local_path
+    typing_changed = Signal(bool)
 
     def __init__(self, parent=None):
         super().__init__(
@@ -4239,6 +4405,20 @@ class CentralChatWidget(AcrylicGlassCard):
             glow_radius=10,
         )
         self._msg_widgets: dict[str, ChatMessageWidget] = {}
+        self._msg_order: list[str] = []
+        self._current_user_id: str = ""
+        self._can_moderate: bool = False
+        self._image_loader = None
+        self._reply_to_id: Optional[str] = None
+        self._editing_msg_id: Optional[str] = None
+        self._pending_attachments: list[dict] = []
+        self._last_typing_emit = 0.0
+        self._typing_peers: dict[str, str] = {}
+
+        self._typing_clear_timer = QTimer(self)
+        self._typing_clear_timer.setSingleShot(True)
+        self._typing_clear_timer.setInterval(3500)
+        self._typing_clear_timer.timeout.connect(self._clear_typing_indicator)
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(16, 12, 16, 14)
@@ -4258,6 +4438,17 @@ class CentralChatWidget(AcrylicGlassCard):
         t_box.addWidget(self.c_topic)
         c_hdr.addLayout(t_box)
         c_hdr.addStretch(1)
+
+        self.load_older_btn = QPushButton("↑ Anteriores")
+        self.load_older_btn.setCursor(Qt.PointingHandCursor)
+        self.load_older_btn.setVisible(False)
+        self.load_older_btn.setStyleSheet(
+            "QPushButton { background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.18); "
+            "border-radius: 8px; color: #BDD4E4; font-size: 11px; font-weight: 700; padding: 4px 10px; } "
+            "QPushButton:hover { background: rgba(53,200,241,0.22); color: #ffffff; }"
+        )
+        self.load_older_btn.clicked.connect(self._on_load_older_clicked)
+        c_hdr.addWidget(self.load_older_btn)
 
         self.rt_badge = QLabel("● Offline")
         self.rt_badge.setStyleSheet("font-size: 11px; font-weight: 700; color: #7f95a6; padding: 4px 10px; background: rgba(255,255,255,0.06); border-radius: 10px;")
@@ -4320,6 +4511,29 @@ class CentralChatWidget(AcrylicGlassCard):
         self.scroll.setWidget(self.msgs_container)
         layout.addWidget(self.scroll, 1)
 
+        self.typing_lbl = QLabel("")
+        self.typing_lbl.setVisible(False)
+        self.typing_lbl.setStyleSheet("font-size: 11px; color: #35C8F1; font-style: italic; padding-left: 8px;")
+        layout.addWidget(self.typing_lbl)
+
+        self.context_bar = QFrame()
+        self.context_bar.setVisible(False)
+        self.context_bar.setStyleSheet(
+            "QFrame { background: rgba(53,200,241,0.14); border: 1px solid rgba(53,200,241,0.35); border-radius: 10px; }"
+        )
+        ctx_lay = QHBoxLayout(self.context_bar)
+        ctx_lay.setContentsMargins(10, 4, 8, 4)
+        self.context_lbl = QLabel("")
+        self.context_lbl.setStyleSheet("font-size: 11px; color: #dff5ff; border: none; background: transparent;")
+        ctx_cancel = QPushButton("✕")
+        ctx_cancel.setFixedSize(22, 22)
+        ctx_cancel.setCursor(Qt.PointingHandCursor)
+        ctx_cancel.setStyleSheet("background: transparent; border: none; color: #ffffff; font-weight: 800;")
+        ctx_cancel.clicked.connect(self.clear_compose_context)
+        ctx_lay.addWidget(self.context_lbl, 1)
+        ctx_lay.addWidget(ctx_cancel)
+        layout.addWidget(self.context_bar)
+
         comp_frame = QFrame()
         comp_frame.setFixedHeight(52)
         comp_frame.setStyleSheet("""
@@ -4330,13 +4544,25 @@ class CentralChatWidget(AcrylicGlassCard):
             }
         """)
         comp_lay = QHBoxLayout(comp_frame)
-        comp_lay.setContentsMargins(14, 0, 12, 0)
+        comp_lay.setContentsMargins(12, 0, 12, 0)
         comp_lay.setSpacing(8)
+
+        self.attach_btn = QPushButton("📎")
+        self.attach_btn.setFixedSize(32, 32)
+        self.attach_btn.setCursor(Qt.PointingHandCursor)
+        self.attach_btn.setToolTip("Adjuntar imagen (PNG/JPEG/WEBP/GIF)")
+        self.attach_btn.setStyleSheet(
+            "QPushButton { background: rgba(255,255,255,0.08); border: none; border-radius: 16px; color: #BDD4E4; font-size: 14px; } "
+            "QPushButton:hover { background: rgba(53,200,241,0.28); color: #ffffff; }"
+        )
+        self.attach_btn.clicked.connect(self._on_pick_attachment)
+        comp_lay.addWidget(self.attach_btn)
 
         self.msg_input = QLineEdit()
         self.msg_input.setPlaceholderText("Enviar mensaje...")
         self.msg_input.setStyleSheet("QLineEdit { background: transparent; border: none; color: #ffffff; font-size: 13px; padding-left: 4px; }")
         self.msg_input.returnPressed.connect(self._on_submit)
+        self.msg_input.textChanged.connect(self._on_input_text_changed)
         comp_lay.addWidget(self.msg_input, 1)
 
         self.send_btn = QPushButton("➤")
@@ -4350,6 +4576,12 @@ class CentralChatWidget(AcrylicGlassCard):
         comp_lay.addWidget(self.send_btn)
 
         layout.addWidget(comp_frame)
+
+    def set_attachment_loader(self, loader):
+        self._image_loader = loader
+
+    def set_can_moderate(self, can_mod: bool):
+        self._can_moderate = bool(can_mod)
 
     def set_realtime_status(self, connected: bool, detail: str = ""):
         if connected:
@@ -4370,6 +4602,9 @@ class CentralChatWidget(AcrylicGlassCard):
 
     def set_channel(self, channel: Optional[dict]):
         self.show_error("")
+        self.clear_compose_context()
+        self._typing_peers.clear()
+        self._clear_typing_indicator()
         if channel:
             name = str(channel.get("name") or "general")
             self.c_title.setText(f"# {name}")
@@ -4377,15 +4612,45 @@ class CentralChatWidget(AcrylicGlassCard):
             self.msg_input.setPlaceholderText(f"Enviar mensaje a #{name}...")
             self.msg_input.setEnabled(True)
             self.send_btn.setEnabled(True)
+            self.attach_btn.setEnabled(True)
         else:
             self.c_title.setText("# Sin canal")
             self.c_topic.setText("No hay canales disponibles")
             self.msg_input.setPlaceholderText("Seleccioná un canal...")
             self.msg_input.setEnabled(False)
             self.send_btn.setEnabled(False)
+            self.attach_btn.setEnabled(False)
+            self.load_older_btn.setVisible(False)
+
+    def _build_msg_widget(self, msg: dict, current_user_id: str) -> ChatMessageWidget:
+        mid = str(msg.get("id") or "")
+        author_id = str(msg.get("author_id") or "")
+        author_name = str(msg.get("author_name") or author_id or "Usuario")
+        time_str = _format_message_time(msg.get("created_at"))
+        w = ChatMessageWidget(
+            message_id=mid,
+            author=author_name,
+            time_str=time_str,
+            text=str(msg.get("content") or ""),
+            is_self=(bool(current_user_id) and author_id == str(current_user_id)),
+            edited=bool(msg.get("edited_at")),
+            reply_preview=msg.get("reply_preview"),
+            reactions=msg.get("reactions"),
+            attachments=msg.get("attachments"),
+            image_loader=self._image_loader,
+            can_moderate=self._can_moderate,
+            parent=self.msgs_container,
+        )
+        w.reply_requested.connect(self._set_reply_target)
+        w.edit_requested.connect(self._start_edit_message)
+        w.delete_requested.connect(self.message_delete_requested.emit)
+        w.reaction_toggled.connect(self.reaction_toggle_requested.emit)
+        return w
 
     def set_messages(self, messages: list[dict], current_user_id: str = ""):
+        self._current_user_id = current_user_id
         self._msg_widgets.clear()
+        self._msg_order.clear()
         _clear_layout_widgets(self.msgs_layout, keep_trailing_stretch=True)
 
         self.empty_lbl = QLabel("No hay mensajes en este canal todavía.")
@@ -4396,43 +4661,157 @@ class CentralChatWidget(AcrylicGlassCard):
         for m in messages or []:
             self.append_or_update_message(m, current_user_id=current_user_id, scroll_to_bottom=False)
         self.empty_lbl.setVisible(len(self._msg_widgets) == 0)
+        self.load_older_btn.setVisible(len(self._msg_order) >= 20)
         QTimer.singleShot(20, self._scroll_bottom)
+
+    def prepend_messages(self, older_messages: list[dict], current_user_id: str = ""):
+        if not older_messages:
+            self.load_older_btn.setVisible(False)
+            return
+        added = 0
+        # Insert after empty_lbl (index 1)
+        pos = 1
+        for m in older_messages:
+            mid = str(m.get("id") or "")
+            if not mid or mid in self._msg_widgets:
+                continue
+            w = self._build_msg_widget(m, current_user_id or self._current_user_id)
+            self._msg_widgets[mid] = w
+            self._msg_order.insert(added, mid)
+            self.msgs_layout.insertWidget(pos, w)
+            pos += 1
+            added += 1
+        if added == 0:
+            self.load_older_btn.setVisible(False)
+        self.empty_lbl.setVisible(len(self._msg_widgets) == 0)
+
+    def sync_new_messages(self, missed_messages: list[dict], current_user_id: str = ""):
+        """Sincroniza mensajes perdidos tras reconexión sin duplicar IDs ya renderizados."""
+        for m in missed_messages or []:
+            self.append_or_update_message(m, current_user_id=current_user_id or self._current_user_id, scroll_to_bottom=False)
+        if missed_messages:
+            QTimer.singleShot(20, self._scroll_bottom)
 
     def append_or_update_message(self, msg: dict, current_user_id: str = "", scroll_to_bottom: bool = True):
         mid = str(msg.get("id") or "")
         if not mid:
             return
+        if current_user_id:
+            self._current_user_id = current_user_id
         content = str(msg.get("content") or "")
         edited = bool(msg.get("edited_at"))
         if mid in self._msg_widgets:
             self._msg_widgets[mid].update_content(content, edited=edited)
+            if "reactions" in msg:
+                self._msg_widgets[mid].update_reactions(msg.get("reactions") or [])
             return
 
-        author_id = str(msg.get("author_id") or "")
-        author_name = str(msg.get("author_name") or author_id or "Usuario")
-        time_str = _format_message_time(msg.get("created_at"))
-        w = ChatMessageWidget(
-            message_id=mid,
-            author=author_name,
-            time_str=time_str,
-            text=content,
-            is_self=(bool(current_user_id) and author_id == str(current_user_id)),
-            edited=edited,
-            parent=self.msgs_container,
-        )
+        w = self._build_msg_widget(msg, self._current_user_id)
         self._msg_widgets[mid] = w
+        self._msg_order.append(mid)
         self.empty_lbl.setVisible(False)
         insert_idx = max(0, self.msgs_layout.count() - 1)
         self.msgs_layout.insertWidget(insert_idx, w)
         if scroll_to_bottom:
             QTimer.singleShot(20, self._scroll_bottom)
 
+    def update_message_reactions(self, message_id: str, reactions: list):
+        w = self._msg_widgets.get(str(message_id))
+        if w is not None:
+            w.update_reactions(reactions or [])
+
     def remove_message(self, message_id: str):
-        w = self._msg_widgets.pop(str(message_id), None)
+        mid = str(message_id)
+        w = self._msg_widgets.pop(mid, None)
+        if mid in self._msg_order:
+            self._msg_order.remove(mid)
         if w is not None:
             self.msgs_layout.removeWidget(w)
             w.deleteLater()
         self.empty_lbl.setVisible(len(self._msg_widgets) == 0)
+
+    def show_typing_peer(self, user_id: str, username: str, typing: bool):
+        if str(user_id) == str(self._current_user_id):
+            return
+        if typing:
+            self._typing_peers[str(user_id)] = username or "Alguien"
+        else:
+            self._typing_peers.pop(str(user_id), None)
+        self._refresh_typing_label()
+        if self._typing_peers:
+            self._typing_clear_timer.start()
+
+    def _clear_typing_indicator(self):
+        self._typing_peers.clear()
+        self._refresh_typing_label()
+
+    def _refresh_typing_label(self):
+        names = list(self._typing_peers.values())
+        if not names:
+            self.typing_lbl.setVisible(False)
+            self.typing_lbl.setText("")
+        elif len(names) == 1:
+            self.typing_lbl.setText(f"{names[0]} está escribiendo...")
+            self.typing_lbl.setVisible(True)
+        else:
+            self.typing_lbl.setText(f"{', '.join(names[:3])} están escribiendo...")
+            self.typing_lbl.setVisible(True)
+
+    def _set_reply_target(self, message_id: str, author: str, snippet: str):
+        self._editing_msg_id = None
+        self._reply_to_id = message_id
+        self._refresh_context_bar(f"↩ Respondiendo a @{author}: {snippet}")
+        self.msg_input.setFocus()
+
+    def _start_edit_message(self, message_id: str, current_text: str):
+        self._reply_to_id = None
+        self._editing_msg_id = message_id
+        self.msg_input.setText(current_text)
+        self.msg_input.setFocus()
+        self._refresh_context_bar("✎ Editando tu mensaje (Enter para guardar)")
+
+    def add_uploaded_attachment(self, att: dict):
+        if att and att.get("id"):
+            self._pending_attachments.append(att)
+            names = ", ".join(str(a.get("filename") or "imagen") for a in self._pending_attachments)
+            self._refresh_context_bar(f"📎 Adjuntos ({len(self._pending_attachments)}): {names}")
+
+    def consume_compose_meta(self) -> tuple[Optional[str], list[str]]:
+        reply_id = self._reply_to_id
+        att_ids = [str(a["id"]) for a in self._pending_attachments if a.get("id")]
+        self.clear_compose_context()
+        return reply_id, att_ids
+
+    def clear_compose_context(self):
+        self._reply_to_id = None
+        self._editing_msg_id = None
+        self._pending_attachments.clear()
+        self.context_bar.setVisible(False)
+        self.context_lbl.setText("")
+
+    def _refresh_context_bar(self, text: str):
+        self.context_lbl.setText(text)
+        self.context_bar.setVisible(True)
+
+    def _on_pick_attachment(self):
+        path, _ = QFileDialog.getOpenFileName(
+            self,
+            "Adjuntar imagen",
+            str(ROOT),
+            "Imágenes (*.png *.jpg *.jpeg *.webp *.gif)",
+        )
+        if path:
+            self.attachment_upload_requested.emit(path)
+
+    def _on_load_older_clicked(self):
+        if self._msg_order:
+            self.older_messages_requested.emit(self._msg_order[0])
+
+    def _on_input_text_changed(self, txt: str):
+        now = time.monotonic()
+        if txt.strip() and now - self._last_typing_emit >= 2.0:
+            self._last_typing_emit = now
+            self.typing_changed.emit(True)
 
     def _scroll_bottom(self):
         bar = self.scroll.verticalScrollBar()
@@ -4441,13 +4820,23 @@ class CentralChatWidget(AcrylicGlassCard):
 
     def _on_submit(self):
         txt = self.msg_input.text().strip()
-        if not txt:
+        if self._editing_msg_id:
+            if not txt:
+                return
+            mid = self._editing_msg_id
+            self.clear_compose_context()
+            self.msg_input.clear()
+            self.message_edit_requested.emit(mid, txt)
+            return
+        if not txt and not self._pending_attachments:
             return
         self.show_error("")
         self.message_submit_requested.emit(txt)
 
 
 class MemberItemWidget(QWidget):
+    moderation_requested = Signal(str, str)  # user_id, action
+
     def __init__(
         self,
         name: str,
@@ -4455,11 +4844,22 @@ class MemberItemWidget(QWidget):
         is_online: bool,
         avatar_path: Optional[Path] = None,
         has_crown: bool = False,
+        user_id: str = "",
+        presence_status: str = "offline",
+        is_muted: bool = False,
+        can_moderate: bool = False,
         parent=None,
     ):
         super().__init__(parent)
+        self.user_id = user_id
+        self.is_muted = is_muted
+        self.can_moderate = can_moderate and bool(user_id)
         self.setAttribute(Qt.WA_TranslucentBackground, True)
         self.setStyleSheet("background: transparent;")
+        if self.can_moderate:
+            self.setContextMenuPolicy(Qt.CustomContextMenu)
+            self.customContextMenuRequested.connect(self._show_mod_menu)
+
         layout = QHBoxLayout(self)
         layout.setContentsMargins(4, 5, 4, 5)
         layout.setSpacing(12)
@@ -4484,10 +4884,15 @@ class MemberItemWidget(QWidget):
 
         dot = QLabel(av_container)
         dot.setGeometry(30, 30, 13, 13)
-        if not is_online:
+        st_low = (presence_status or "").lower()
+        if not is_online or st_low in ("offline", "invisible"):
             dot_col = "#7f95a6"
         elif "jugando" in status_text.lower():
             dot_col = "#A77AE4"
+        elif st_low in ("idle", "away"):
+            dot_col = "#FFD166"
+        elif st_low in ("dnd", "busy"):
+            dot_col = "#E94B56"
         else:
             dot_col = "#32D875"
         dot.setStyleSheet(f"background: {dot_col}; border: 2.2px solid #102638; border-radius: 6.5px;")
@@ -4499,7 +4904,7 @@ class MemberItemWidget(QWidget):
 
         n_row = QHBoxLayout()
         n_row.setSpacing(5)
-        nl = QLabel(name)
+        nl = QLabel(f"{name} 🔇" if is_muted else name)
         nl.setStyleSheet(f"font-size: 15px; font-weight: 700; color: {'#ffffff' if is_online else '#91A5B3'};")
         n_row.addWidget(nl)
 
@@ -4516,6 +4921,10 @@ class MemberItemWidget(QWidget):
             st_color = "#657C8D"
         elif "jugando" in status_text.lower():
             st_color = "#32D875"
+        elif st_low in ("idle", "away"):
+            st_color = "#FFD166"
+        elif st_low in ("dnd", "busy"):
+            st_color = "#ffb3b8"
         else:
             st_color = "#7f95a6"
         st.setStyleSheet(f"font-size: 12px; font-weight: 500; color: {st_color};")
@@ -4523,14 +4932,32 @@ class MemberItemWidget(QWidget):
 
         layout.addLayout(info, 1)
 
+    def _show_mod_menu(self, pos):
+        menu = QMenu(self)
+        menu.setStyleSheet("QMenu { background: #102438; color: #ffffff; border: 1px solid rgba(53,200,241,0.45); } QMenu::item:selected { background: rgba(53,200,241,0.3); }")
+        mute_act = menu.addAction("Quitar silencio" if self.is_muted else "Silenciar (10 min)")
+        kick_act = menu.addAction("Expulsar de la comunidad")
+        ban_act = menu.addAction("Banear permanentemente")
+        chosen = menu.exec(self.mapToGlobal(pos))
+        if chosen == mute_act:
+            self.moderation_requested.emit(self.user_id, "unmute" if self.is_muted else "mute")
+        elif chosen == kick_act:
+            self.moderation_requested.emit(self.user_id, "kick")
+        elif chosen == ban_act:
+            self.moderation_requested.emit(self.user_id, "ban")
+
 
 class RightPanel(QWidget):
     voice_toggled = Signal(str, bool)
+    self_presence_changed = Signal(str, str)       # status, activity_visibility
+    member_moderation_requested = Signal(str, str)  # user_id, action
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setFixedWidth(305)
         self._media_ready = False
+        self._can_moderate = False
+        self._self_user_id = ""
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(12)
@@ -4546,6 +4973,28 @@ class RightPanel(QWidget):
         mem_lay = QVBoxLayout(self.members_card)
         mem_lay.setContentsMargins(12, 12, 12, 12)
         mem_lay.setSpacing(6)
+
+        pres_box = QVBoxLayout()
+        pres_box.setSpacing(4)
+        self.status_combo = QComboBox()
+        self.status_combo.addItem("🟢 En línea", "online")
+        self.status_combo.addItem("🌙 Ausente", "idle")
+        self.status_combo.addItem("⛔ No molestar", "dnd")
+        self.status_combo.addItem("👻 Invisible", "invisible")
+        self.status_combo.setFixedHeight(28)
+        self.status_combo.setStyleSheet(
+            "QComboBox { background: rgba(14, 28, 44, 0.8); border: 1px solid rgba(145,165,179,0.35); "
+            "border-radius: 8px; color: #ffffff; font-size: 12px; padding: 2px 8px; }"
+        )
+        self.status_combo.currentIndexChanged.connect(self._on_self_presence_ui_changed)
+        pres_box.addWidget(self.status_combo)
+
+        self.share_game_chk = QCheckBox("Mostrar juego activo")
+        self.share_game_chk.setChecked(True)
+        self.share_game_chk.setStyleSheet("font-size: 11px; color: #BDD4E4;")
+        self.share_game_chk.toggled.connect(self._on_self_presence_ui_changed)
+        pres_box.addWidget(self.share_game_chk)
+        mem_lay.addLayout(pres_box)
 
         m_scroll = QScrollArea()
         m_scroll.setWidgetResizable(True)
@@ -4700,15 +5149,28 @@ class RightPanel(QWidget):
             role = str(m.get("role") or "member").lower()
             pinfo = presence.get(uid) or {}
             p_status = str(m.get("presence_status") or m.get("presence") or pinfo.get("status") or "offline").lower()
-            is_online = p_status in ("online", "playing", "in_game")
-            game = m.get("custom_status") or pinfo.get("game")
+            is_online = p_status in ("online", "idle", "dnd", "away", "busy", "playing", "in_game")
+            game = m.get("activity_title") or m.get("custom_status") or pinfo.get("game")
             if is_online and game:
                 st_text = f"🎮 Jugando: {game}"
+            elif p_status in ("idle", "away"):
+                st_text = "Ausente"
+            elif p_status in ("dnd", "busy"):
+                st_text = "No molestar"
             elif is_online:
                 st_text = "En línea" if role not in ("owner", "admin") else f"En línea • {role}"
             else:
                 st_text = "Desconectado"
-            entry = (name, st_text, is_online, role in ("owner", "admin"))
+            entry = (
+                uid,
+                name,
+                st_text,
+                is_online,
+                role in ("owner", "admin"),
+                p_status,
+                bool(m.get("is_muted")),
+                bool(self._can_moderate and uid and uid != self._self_user_id and role != "owner"),
+            )
             if is_online:
                 online_items.append(entry)
             else:
@@ -4720,9 +5182,24 @@ class RightPanel(QWidget):
         self.m_lay.insertWidget(insert_pos, on_hdr)
         insert_pos += 1
 
+        def _make_member_widget(ent):
+            m_uid, m_name, m_st, m_on, m_crown, m_pstat, m_muted, m_mod = ent
+            mw = MemberItemWidget(
+                m_name,
+                m_st,
+                m_on,
+                has_crown=m_crown,
+                user_id=m_uid,
+                presence_status=m_pstat,
+                is_muted=m_muted,
+                can_moderate=m_mod,
+            )
+            mw.moderation_requested.connect(self.member_moderation_requested.emit)
+            return mw
+
         if online_items:
-            for name, st, is_on, crown in online_items:
-                self.m_lay.insertWidget(insert_pos, MemberItemWidget(name, st, is_on, has_crown=crown))
+            for ent in online_items:
+                self.m_lay.insertWidget(insert_pos, _make_member_widget(ent))
                 insert_pos += 1
         else:
             none_on = QLabel("Nadie en línea todavía.")
@@ -4735,9 +5212,28 @@ class RightPanel(QWidget):
         self.m_lay.insertWidget(insert_pos, off_hdr)
         insert_pos += 1
 
-        for name, st, is_on, crown in offline_items:
-            self.m_lay.insertWidget(insert_pos, MemberItemWidget(name, st, is_on, has_crown=crown))
+        for ent in offline_items:
+            self.m_lay.insertWidget(insert_pos, _make_member_widget(ent))
             insert_pos += 1
+
+    def set_moderation_context(self, self_user_id: str, can_moderate: bool):
+        self._self_user_id = str(self_user_id or "")
+        self._can_moderate = bool(can_moderate)
+
+    def sync_self_presence_ui(self, status: str, visibility: str):
+        self.status_combo.blockSignals(True)
+        self.share_game_chk.blockSignals(True)
+        idx = self.status_combo.findData(status)
+        if idx >= 0:
+            self.status_combo.setCurrentIndex(idx)
+        self.share_game_chk.setChecked(visibility != "private")
+        self.status_combo.blockSignals(False)
+        self.share_game_chk.blockSignals(False)
+
+    def _on_self_presence_ui_changed(self):
+        status = str(self.status_combo.currentData() or "online")
+        vis = "communities" if self.share_game_chk.isChecked() else "private"
+        self.self_presence_changed.emit(status, vis)
 
     def set_voice_state(self, state: dict):
         connected = bool(state.get("connected"))
@@ -5231,16 +5727,28 @@ class CommunityInteriorView(AcrylicGlassCard):
         self.channel_sidebar = ChannelSidebar(self)
         self.channel_sidebar.channel_selected.connect(self._on_channel_selected)
         self.channel_sidebar.create_channel_requested.connect(self.open_create_channel_dialog)
+        self.channel_sidebar.edit_channel_requested.connect(self._on_edit_channel_requested)
+        self.channel_sidebar.delete_channel_requested.connect(self._on_delete_channel_requested)
         self.channel_sidebar.leave_community_requested.connect(self._on_leave_community)
         body_row.addWidget(self.channel_sidebar)
 
         self.chat_area = CentralChatWidget(self)
         self.chat_area.message_submit_requested.connect(self._on_send_message)
         self.chat_area.refresh_requested.connect(self._on_refresh_messages)
+        self.chat_area.older_messages_requested.connect(self._on_load_older_messages)
+        self.chat_area.message_edit_requested.connect(self._on_edit_message)
+        self.chat_area.message_delete_requested.connect(self._on_delete_message)
+        self.chat_area.reaction_toggle_requested.connect(self._on_toggle_reaction)
+        self.chat_area.attachment_upload_requested.connect(self._on_upload_attachment)
+        self.chat_area.typing_changed.connect(self._on_local_typing)
+        if self.controller:
+            self.chat_area.set_attachment_loader(self._load_attachment_bytes)
         body_row.addWidget(self.chat_area, 1)
 
         self.right_panel = RightPanel(self)
         self.right_panel.voice_toggled.connect(self._on_voice_toggled)
+        self.right_panel.self_presence_changed.connect(self._on_self_presence_changed)
+        self.right_panel.member_moderation_requested.connect(self._on_member_moderation_requested)
         body_row.addWidget(self.right_panel)
 
         main_lay.addLayout(body_row, 1)
@@ -5253,13 +5761,25 @@ class CommunityInteriorView(AcrylicGlassCard):
         ctrl.communities_updated.connect(lambda mine, _pub: self.rail.set_communities(mine))
         ctrl.community_opened.connect(self._on_community_opened)
         ctrl.channel_messages_loaded.connect(self._on_messages_loaded)
+        ctrl.messages_synced.connect(self._on_messages_synced)
         ctrl.message_received.connect(self._on_message_received)
         ctrl.message_updated.connect(self._on_message_updated)
         ctrl.message_deleted.connect(self._on_message_deleted)
+        ctrl.reaction_updated.connect(self._on_reaction_updated)
+        ctrl.typing_updated.connect(self._on_typing_updated)
         ctrl.members_updated.connect(self._on_members_updated)
+        ctrl.presence_self_changed.connect(self.right_panel.sync_self_presence_ui)
         ctrl.voice_state_changed.connect(self._on_voice_state_changed)
         ctrl.realtime_status_changed.connect(self.chat_area.set_realtime_status)
         ctrl.error_occurred.connect(self.chat_area.show_error)
+
+    def _load_attachment_bytes(self, attachment_id: str) -> Optional[bytes]:
+        if not self.controller or not self.controller.session:
+            return None
+        try:
+            return self.controller.api.download_attachment_bytes(attachment_id)
+        except Exception:
+            return None
 
     def _current_user_id(self) -> str:
         return str(self.controller.session.user_id) if (self.controller and self.controller.session) else ""
@@ -5296,9 +5816,18 @@ class CommunityInteriorView(AcrylicGlassCard):
         if comm:
             self.rail.set_active_community(str(comm["id"]))
         self._all_members = members
+        my_uid = self._current_user_id()
+        my_role = next(
+            (str(m.get("role") or "member").lower() for m in members if str(m.get("user_id")) == my_uid),
+            "member",
+        )
+        can_mod = my_role in ("owner", "admin", "moderator")
+        self.chat_area.set_can_moderate(can_mod)
+        self.right_panel.set_moderation_context(my_uid, can_mod)
         online_count = sum(
             1 for m in members
-            if str(m.get("presence_status") or m.get("presence") or "").lower() in ("online", "playing", "in_game")
+            if str(m.get("presence_status") or m.get("presence") or "").lower()
+            in ("online", "idle", "dnd", "away", "busy", "playing", "in_game")
         )
         active_text_id = (
             str(self.controller.active_channel["id"])
@@ -5340,6 +5869,11 @@ class CommunityInteriorView(AcrylicGlassCard):
             self.chat_area.set_channel(None)
         self.chat_area.set_messages(messages, current_user_id=self._current_user_id())
 
+    def _on_messages_synced(self, channel_id: str, missed_messages: list):
+        active_id = str(self.controller.active_channel["id"]) if (self.controller and self.controller.active_channel) else ""
+        if active_id and str(channel_id) == active_id:
+            self.chat_area.sync_new_messages(missed_messages, current_user_id=self._current_user_id())
+
     def _on_message_received(self, msg: dict):
         active_id = str(self.controller.active_channel["id"]) if (self.controller and self.controller.active_channel) else ""
         if active_id and str(msg.get("channel_id") or "") == active_id:
@@ -5354,6 +5888,18 @@ class CommunityInteriorView(AcrylicGlassCard):
         mid = str(payload.get("id") or payload.get("message_id") or "")
         if mid:
             self.chat_area.remove_message(mid)
+
+    def _on_reaction_updated(self, payload: dict):
+        mid = str(payload.get("message_id") or "")
+        if mid:
+            self.chat_area.update_message_reactions(mid, payload.get("reactions") or [])
+
+    def _on_typing_updated(self, payload: dict):
+        self.chat_area.show_typing_peer(
+            str(payload.get("user_id") or ""),
+            str(payload.get("username") or "Alguien"),
+            bool(payload.get("typing", True)),
+        )
 
     def _on_members_updated(self, members: list):
         self._all_members = list(members or [])
@@ -5376,10 +5922,100 @@ class CommunityInteriorView(AcrylicGlassCard):
     def _on_send_message(self, text: str):
         if not self.controller:
             return
+        reply_id, att_ids = self.chat_area.consume_compose_meta()
         try:
-            msg = self.controller.send_message(text)
+            msg = self.controller.send_message(text, reply_to_id=reply_id, attachment_ids=att_ids or None)
             self.chat_area.msg_input.clear()
             self.chat_area.append_or_update_message(msg, current_user_id=self._current_user_id())
+        except CommunityApiError as exc:
+            self.chat_area.show_error(exc.message)
+
+    def _on_load_older_messages(self, before_id: str):
+        if not self.controller:
+            return
+        try:
+            older = self.controller.load_older_messages(before_id, limit=40)
+            self.chat_area.prepend_messages(older, current_user_id=self._current_user_id())
+        except CommunityApiError as exc:
+            self.chat_area.show_error(exc.message)
+
+    def _on_edit_message(self, message_id: str, new_text: str):
+        if not self.controller:
+            return
+        try:
+            msg = self.controller.edit_message(message_id, new_text)
+            self.chat_area.append_or_update_message(msg, current_user_id=self._current_user_id(), scroll_to_bottom=False)
+        except CommunityApiError as exc:
+            self.chat_area.show_error(exc.message)
+
+    def _on_delete_message(self, message_id: str):
+        if not self.controller:
+            return
+        try:
+            self.controller.delete_message(message_id)
+            self.chat_area.remove_message(message_id)
+        except CommunityApiError as exc:
+            self.chat_area.show_error(exc.message)
+
+    def _on_toggle_reaction(self, message_id: str, emoji: str):
+        if not self.controller:
+            return
+        try:
+            res = self.controller.toggle_reaction(message_id, emoji)
+            self.chat_area.update_message_reactions(message_id, res.get("reactions") or [])
+        except CommunityApiError as exc:
+            self.chat_area.show_error(exc.message)
+
+    def _on_upload_attachment(self, file_path: str):
+        if not self.controller:
+            return
+        try:
+            att = self.controller.upload_attachment(file_path)
+            self.chat_area.add_uploaded_attachment(att)
+        except CommunityApiError as exc:
+            self.chat_area.show_error(exc.message)
+
+    def _on_local_typing(self, typing: bool):
+        if self.controller:
+            self.controller.emit_typing(typing=typing)
+
+    def _on_edit_channel_requested(self, channel_id: str):
+        if not self.controller:
+            return
+        ch = next((c for c in self.controller.active_channels if c["id"] == channel_id), None)
+        if not ch:
+            return
+        new_name, ok = QInputDialog.getText(self, "Editar canal", "Nuevo nombre del canal:", text=str(ch.get("name") or ""))
+        if not ok or not new_name.strip():
+            return
+        try:
+            self.controller.update_channel(channel_id, name=new_name.strip())
+        except CommunityApiError as exc:
+            self.chat_area.show_error(exc.message)
+
+    def _on_delete_channel_requested(self, channel_id: str):
+        if not self.controller:
+            return
+        try:
+            self.controller.delete_channel(channel_id)
+        except CommunityApiError as exc:
+            self.chat_area.show_error(exc.message)
+
+    def _on_self_presence_changed(self, status: str, visibility: str):
+        if not self.controller:
+            return
+        try:
+            self.controller.set_status(status=status, activity_visibility=visibility)
+        except CommunityApiError as exc:
+            self.chat_area.show_error(exc.message)
+
+    def _on_member_moderation_requested(self, user_id: str, action: str):
+        if not self.controller or not self.controller.active_community:
+            return
+        cid = str(self.controller.active_community["id"])
+        dur = 600 if action == "mute" else None
+        try:
+            self.controller.moderate_member(cid, user_id, action, duration_seconds=dur)
         except CommunityApiError as exc:
             self.chat_area.show_error(exc.message)
 
@@ -5546,8 +6182,8 @@ class CommunityInteriorView(AcrylicGlassCard):
         code = str(inv.get("code") or "")
         link = f"cci://invite/{code}" if code else ""
         dlg = QDialog(self)
-        dlg.setWindowTitle("Invitación generada")
-        dlg.setFixedWidth(420)
+        dlg.setWindowTitle("Invitaciones de comunidad")
+        dlg.setFixedWidth(460)
         dlg.setStyleSheet("QDialog { background: #0e1e2e; color: #ffffff; } QLabel { color: #ffffff; }")
         lay = QVBoxLayout(dlg)
         lay.setSpacing(10)
@@ -5563,6 +6199,40 @@ class CommunityInteriorView(AcrylicGlassCard):
         lay.addWidget(code_box)
         lay.addWidget(QLabel("Enlace C.C.I.:"))
         lay.addWidget(link_box)
+
+        inv_list_lbl = QLabel("Invitaciones activas:")
+        inv_list_lbl.setStyleSheet("font-weight: 700; color: #35C8F1; margin-top: 6px;")
+        lay.addWidget(inv_list_lbl)
+        inv_list_box = QVBoxLayout()
+        lay.addLayout(inv_list_box)
+
+        def _reload_invites():
+            _clear_layout_widgets(inv_list_box)
+            try:
+                active_invs = self.controller.list_invitations(cid)
+            except CommunityApiError:
+                active_invs = []
+            for item in active_invs[:6]:
+                row_w = QWidget()
+                row = QHBoxLayout(row_w)
+                row.setContentsMargins(0, 2, 0, 2)
+                icode = str(item.get("code") or "")
+                uses = f"{item.get('uses_count', 0)} usos"
+                row.addWidget(QLabel(f"{icode}  ({uses})"), 1)
+                rev_b = QPushButton("Revocar")
+                rev_b.setStyleSheet("background: rgba(233,75,86,0.28); border: 1px solid #E94B56; border-radius: 6px; padding: 3px 8px; color: #ffd6d9; font-size: 11px;")
+                rev_b.clicked.connect(lambda _, c=icode: (_revoke(c)))
+                row.addWidget(rev_b)
+                inv_list_box.addWidget(row_w)
+
+        def _revoke(icode: str):
+            try:
+                self.controller.revoke_invitation(cid, icode)
+                _reload_invites()
+            except CommunityApiError as exc:
+                self.chat_area.show_error(exc.message)
+
+        _reload_invites()
 
         btns = QHBoxLayout()
         copy_b = QPushButton("Copiar código")
@@ -5652,11 +6322,59 @@ class CommunityExploreView(QWidget):
         self.scroll.setWidget(self.cards_container)
         p_lay.addWidget(self.scroll, 1)
 
+        bottom_row = QHBoxLayout()
+        bottom_row.setSpacing(12)
+
+        # Panel real de Amigos (Unificación legacy FriendsService + Communities)
+        friends_card = AcrylicGlassCard(self, border_radius=14)
+        f_lay = QVBoxLayout(friends_card)
+        f_lay.setContentsMargins(14, 12, 14, 12)
+        f_lay.setSpacing(8)
+        f_hdr = QLabel("Amigos y solicitudes")
+        f_hdr.setStyleSheet("font-size: 13px; font-weight: 800; color: #35C8F1;")
+        f_lay.addWidget(f_hdr)
+
+        add_f_row = QHBoxLayout()
+        self.friend_user_inp = _styled_input("Agregar amigo (@username)")
+        self.friend_user_inp.setFixedHeight(32)
+        self.add_friend_btn = QPushButton("Agregar")
+        self.add_friend_btn.setProperty("class", "glassBtn")
+        self.add_friend_btn.setCursor(Qt.PointingHandCursor)
+        self.add_friend_btn.clicked.connect(self._on_add_friend_clicked)
+        add_f_row.addWidget(self.friend_user_inp, 1)
+        add_f_row.addWidget(self.add_friend_btn)
+        f_lay.addLayout(add_f_row)
+
+        self.friends_list_box = QVBoxLayout()
+        self.friends_list_box.setSpacing(4)
+        f_lay.addLayout(self.friends_list_box)
+        bottom_row.addWidget(friends_card, 1)
+
+        # Panel real de Actividad reciente (solo eventos persistidos reales)
+        act_card = AcrylicGlassCard(self, border_radius=14)
+        a_lay = QVBoxLayout(act_card)
+        a_lay.setContentsMargins(14, 12, 14, 12)
+        a_lay.setSpacing(8)
+        a_hdr = QLabel("Actividad reciente")
+        a_hdr.setStyleSheet("font-size: 13px; font-weight: 800; color: #32D875;")
+        a_lay.addWidget(a_hdr)
+        self.activity_list_box = QVBoxLayout()
+        self.activity_list_box.setSpacing(4)
+        a_lay.addLayout(self.activity_list_box)
+        a_lay.addStretch(1)
+        bottom_row.addWidget(act_card, 1)
+
+        p_lay.addLayout(bottom_row)
+
         layout.addWidget(self.panel)
 
         if self.controller:
             self.controller.communities_updated.connect(self.render_communities)
+            self.controller.friends_updated.connect(self.render_friends)
+            self.controller.activity_feed_updated.connect(self.render_activity_feed)
             self.controller.session_changed.connect(self._on_session_changed)
+            self.render_friends([], [])
+            self.render_activity_feed([])
 
     def show_error(self, message: str):
         if message:
@@ -5668,6 +6386,8 @@ class CommunityExploreView(QWidget):
     def _on_session_changed(self, sess):
         if sess is None:
             self.render_communities([], [])
+            self.render_friends([], [])
+            self.render_activity_feed([])
 
     def refresh(self):
         if not self.controller:
@@ -5675,8 +6395,73 @@ class CommunityExploreView(QWidget):
         self.show_error("")
         try:
             self.controller.refresh_communities()
+            self.controller.refresh_friends()
+            self.controller.refresh_activity_and_notifications()
         except CommunityApiError as exc:
             self.show_error(exc.message)
+
+    def _on_add_friend_clicked(self):
+        if not self.controller:
+            return
+        uname = self.friend_user_inp.text().strip().lstrip("@")
+        if not uname:
+            return
+        self.show_error("")
+        try:
+            self.controller.send_friend_request(uname)
+            self.friend_user_inp.clear()
+        except CommunityApiError as exc:
+            self.show_error(exc.message)
+
+    def render_friends(self, friends: list, incoming_requests: list):
+        _clear_layout_widgets(self.friends_list_box)
+        for req in (incoming_requests or [])[:4]:
+            row_w = QWidget()
+            row = QHBoxLayout(row_w)
+            row.setContentsMargins(0, 2, 0, 2)
+            from_id = str(req.get("requester_id") or req.get("from_user_id") or "")
+            from_name = str(req.get("username") or from_id)
+            row.addWidget(QLabel(f"Solicitud de @{from_name}"), 1)
+            acc_b = QPushButton("Aceptar")
+            acc_b.setStyleSheet("background: rgba(50,216,117,0.28); border: 1px solid #32D875; border-radius: 6px; padding: 2px 8px; color: #ffffff; font-size: 11px;")
+            acc_b.clicked.connect(lambda _, u=from_id: self.controller and self.controller.respond_friend_request(u, True))
+            rej_b = QPushButton("Rechazar")
+            rej_b.setStyleSheet("background: rgba(233,75,86,0.25); border: 1px solid #E94B56; border-radius: 6px; padding: 2px 8px; color: #ffd6d9; font-size: 11px;")
+            rej_b.clicked.connect(lambda _, u=from_id: self.controller and self.controller.respond_friend_request(u, False))
+            row.addWidget(acc_b)
+            row.addWidget(rej_b)
+            self.friends_list_box.addWidget(row_w)
+
+        if friends:
+            for f in friends[:6]:
+                fname = str(f.get("username") or f.get("friend_id") or f.get("user_id") or "Amigo")
+                fst = str(f.get("status") or "offline")
+                fgame = f.get("current_game")
+                desc = f"🎮 {fgame}" if fgame else fst
+                lbl = QLabel(f"● @{fname} — {desc}")
+                col = "#32D875" if fst == "online" else "#91A5B3"
+                lbl.setStyleSheet(f"font-size: 12px; color: {col};")
+                self.friends_list_box.addWidget(lbl)
+        elif not incoming_requests:
+            empty_f = QLabel("Sin amigos agregados todavía.")
+            empty_f.setStyleSheet("font-size: 12px; color: #91A5B3;")
+            self.friends_list_box.addWidget(empty_f)
+
+    def render_activity_feed(self, events: list):
+        _clear_layout_widgets(self.activity_list_box)
+        if not events:
+            lbl = QLabel("Sin actividad reciente de juegos.")
+            lbl.setStyleSheet("font-size: 12px; color: #91A5B3;")
+            self.activity_list_box.addWidget(lbl)
+            return
+        for ev in events[:6]:
+            uname = str(ev.get("username") or ev.get("user_id") or "Jugador")
+            title = str(ev.get("game_title") or ev.get("game_id") or "Juego")
+            etype = str(ev.get("event_type") or "")
+            verb = "inició" if "started" in etype else "dejó de jugar"
+            lbl = QLabel(f"🎮 @{uname} {verb} {title}")
+            lbl.setStyleSheet("font-size: 12px; color: #dff5ff;")
+            self.activity_list_box.addWidget(lbl)
 
     def render_communities(self, my_communities: list, public_communities: list):
         _clear_layout_widgets(self.cards_layout, keep_trailing_stretch=True)
@@ -6069,6 +6854,10 @@ class OmniDashMainWindow(QMainWindow):
 
         self.settings_view.wallpaper_changed.connect(self.set_wallpaper)
 
+        self.nav_bar.notifications_clicked.connect(self.open_notifications_dialog)
+        self.community_controller.notifications_updated.connect(
+            lambda _notifs, unread: self.nav_bar.set_unread_notifications(unread)
+        )
         self.community_controller.session_changed.connect(lambda _s: self._sync_session_ui())
         self.community_controller.communities_updated.connect(lambda _m, _p: self._sync_session_ui())
         self._sync_session_ui()
@@ -6156,9 +6945,45 @@ class OmniDashMainWindow(QMainWindow):
             self.communities_view.activate_view(for_explore=False)
         self.nav_bar.set_active_view(view_id)
 
+    def open_notifications_dialog(self):
+        dlg = QDialog(self)
+        dlg.setWindowTitle("Notificaciones y menciones")
+        dlg.setFixedWidth(440)
+        dlg.setStyleSheet("QDialog { background: #0e1e2e; color: #ffffff; } QLabel { color: #ffffff; }")
+        lay = QVBoxLayout(dlg)
+        lay.setSpacing(10)
+
+        if not self.community_controller.session:
+            lay.addWidget(QLabel("Iniciá sesión en Comunidades para ver tus notificaciones y @menciones."))
+        else:
+            self.community_controller.refresh_activity_and_notifications()
+            notifs = list(self.community_controller.active_notifications or [])
+            if not notifs:
+                lay.addWidget(QLabel("No tenés notificaciones pendientes."))
+            else:
+                for n in notifs[:12]:
+                    prefix = "🔵 " if not n.get("is_read") else "• "
+                    lbl = QLabel(f"{prefix}{n.get('title', 'Notificación')}: {n.get('body', '')}")
+                    lbl.setWordWrap(True)
+                    lbl.setStyleSheet("font-size: 12px; color: #dff5ff; padding: 4px; background: rgba(255,255,255,0.06); border-radius: 6px;")
+                    lay.addWidget(lbl)
+
+        btns = QHBoxLayout()
+        if self.community_controller.session and self.community_controller.unread_notifications_count > 0:
+            read_b = QPushButton("Marcar todas como leídas")
+            read_b.clicked.connect(lambda: (self.community_controller.mark_all_notifications_read(), dlg.accept()))
+            btns.addWidget(read_b)
+        btns.addStretch(1)
+        close_b = QPushButton("Cerrar")
+        close_b.setStyleSheet("background: #35C8F1; color: #051624; font-weight: 800; padding: 8px 16px; border-radius: 8px;")
+        close_b.clicked.connect(dlg.accept)
+        btns.addWidget(close_b)
+        lay.addLayout(btns)
+        dlg.exec()
+
     def closeEvent(self, event):
         if hasattr(self, "community_controller") and self.community_controller:
-            self.community_controller.realtime.disconnect_sync()
+            self.community_controller.shutdown()
         super().closeEvent(event)
 
     def show_details(self, game: dict):
@@ -6223,7 +7048,21 @@ class OmniDashMainWindow(QMainWindow):
             proc.setProcessChannelMode(QProcess.MergedChannels)
             self._game_process = proc
 
+            def _on_started():
+                if hasattr(self, "community_controller") and self.community_controller:
+                    self.community_controller.report_game_activity(
+                        "started",
+                        game_id=str(gid or title),
+                        title=title,
+                    )
+
             def _on_finished(exit_code: int, exit_status):
+                if hasattr(self, "community_controller") and self.community_controller:
+                    self.community_controller.report_game_activity(
+                        "stopped",
+                        game_id=str(gid or title),
+                        title=title,
+                    )
                 raw_out = bytes(proc.readAllStandardOutput()).decode("utf-8", errors="ignore").strip()
                 if exit_code != 0:
                     err_line = raw_out.splitlines()[-1] if raw_out else f"Código de salida {exit_code}"
@@ -6239,6 +7078,12 @@ class OmniDashMainWindow(QMainWindow):
                 self.raise_()
 
             def _on_error(proc_err):
+                if hasattr(self, "community_controller") and self.community_controller:
+                    self.community_controller.report_game_activity(
+                        "stopped",
+                        game_id=str(gid or title),
+                        title=title,
+                    )
                 print(f"[OmniDash-Qt] Error de proceso lanzando {title}: {proc_err}")
                 QMessageBox.warning(
                     self,
@@ -6248,6 +7093,7 @@ class OmniDashMainWindow(QMainWindow):
                 self._game_process = None
                 proc.deleteLater()
 
+            proc.started.connect(_on_started)
             proc.finished.connect(_on_finished)
             proc.errorOccurred.connect(_on_error)
             proc.start(
