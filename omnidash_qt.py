@@ -20,7 +20,7 @@ os.environ.setdefault("QT_LOGGING_RULES", "qt.qpa.fonts=false")
 os.environ.setdefault("PYGAME_HIDE_SUPPORT_PROMPT", "1")
 
 from PySide6.QtCore import (
-    Qt, QSize, QTimer, QRectF, QPropertyAnimation, QEasingCurve, Signal, Slot, QPoint, QByteArray, QProcess
+    Qt, QSize, QTimer, QRectF, QPropertyAnimation, QEasingCurve, Signal, Slot, QPoint, QPointF, QByteArray, QProcess
 )
 from PySide6.QtGui import (
     QColor, QFont, QIcon, QPainter, QPainterPath, QPixmap, QLinearGradient, QRadialGradient, QBrush, QPen, QImage, QPalette
@@ -696,10 +696,7 @@ class OmniDashNavBar(QWidget):
     def set_active_view(self, view_id: str):
         self.current_view = view_id
         if hasattr(self, "left_stack"):
-            if view_id in ("COMMUNITY", "COMMUNITIES"):
-                self.left_stack.setCurrentIndex(1)
-            else:
-                self.left_stack.setCurrentIndex(0)
+            self.left_stack.setCurrentIndex(0)
         self._update_nav_styles()
 
     def _on_nav_click(self, view_id: str):
@@ -6001,124 +5998,688 @@ def _styled_input(placeholder: str = "", password: bool = False) -> QLineEdit:
     return inp
 
 
+def _make_auth_vector_icon(kind: str, size: int = 22, color: QColor = QColor(255, 255, 255)) -> QPixmap:
+    """Dibuja íconos vectoriales nítidos para la pantalla de inicio de sesión de C.C.I. Communities."""
+    pm = QPixmap(size * 2, size * 2)
+    pm.fill(Qt.transparent)
+    p = QPainter(pm)
+    p.setRenderHint(QPainter.Antialiasing, True)
+    s = float(size * 2)
+    pen = QPen(color, max(2.2, s * 0.075), Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin)
+    p.setPen(pen)
+    p.setBrush(Qt.NoBrush)
+
+    if kind == "chat_dots":
+        r = QRectF(s * 0.16, s * 0.18, s * 0.68, s * 0.50)
+        path = QPainterPath()
+        path.addRoundedRect(r, s * 0.12, s * 0.12)
+        p.drawPath(path)
+        tail = QPainterPath()
+        tail.moveTo(s * 0.34, s * 0.68)
+        tail.lineTo(s * 0.26, s * 0.84)
+        tail.lineTo(s * 0.48, s * 0.68)
+        p.drawPath(tail)
+        p.setPen(Qt.NoPen)
+        p.setBrush(color)
+        p.drawEllipse(QPointF(s * 0.40, s * 0.43), s * 0.045, s * 0.045)
+        p.drawEllipse(QPointF(s * 0.58, s * 0.43), s * 0.045, s * 0.045)
+    elif kind == "mic":
+        p.drawRoundedRect(QRectF(s * 0.36, s * 0.14, s * 0.28, s * 0.44), s * 0.14, s * 0.14)
+        p.drawArc(QRectF(s * 0.24, s * 0.28, s * 0.52, s * 0.44), 180 * 16, 180 * 16)
+        p.drawLine(QPointF(s * 0.50, s * 0.72), QPointF(s * 0.50, s * 0.86))
+        p.drawLine(QPointF(s * 0.36, s * 0.86), QPointF(s * 0.64, s * 0.86))
+    elif kind == "stream_tv":
+        p.drawRoundedRect(QRectF(s * 0.14, s * 0.18, s * 0.72, s * 0.52), s * 0.09, s * 0.09)
+        p.drawLine(QPointF(s * 0.34, s * 0.82), QPointF(s * 0.66, s * 0.82))
+        p.drawLine(QPointF(s * 0.50, s * 0.70), QPointF(s * 0.50, s * 0.82))
+        tri = QPainterPath()
+        tri.moveTo(s * 0.44, s * 0.34)
+        tri.lineTo(s * 0.60, s * 0.44)
+        tri.lineTo(s * 0.44, s * 0.54)
+        tri.closeSubpath()
+        p.setBrush(color)
+        p.drawPath(tri)
+    elif kind == "live_waves":
+        p.setPen(Qt.NoPen)
+        p.setBrush(color)
+        p.drawEllipse(QPointF(s * 0.50, s * 0.50), s * 0.07, s * 0.07)
+        p.setBrush(Qt.NoBrush)
+        p.setPen(pen)
+        r1 = QRectF(s * 0.30, s * 0.30, s * 0.40, s * 0.40)
+        p.drawArc(r1, -45 * 16, 90 * 16)
+        p.drawArc(r1, 135 * 16, 90 * 16)
+        r2 = QRectF(s * 0.14, s * 0.14, s * 0.72, s * 0.72)
+        p.drawArc(r2, -45 * 16, 90 * 16)
+        p.drawArc(r2, 135 * 16, 90 * 16)
+    elif kind == "mail":
+        p.drawRoundedRect(QRectF(s * 0.14, s * 0.24, s * 0.72, s * 0.52), s * 0.08, s * 0.08)
+        flap = QPainterPath()
+        flap.moveTo(s * 0.17, s * 0.28)
+        flap.lineTo(s * 0.50, s * 0.52)
+        flap.lineTo(s * 0.83, s * 0.28)
+        p.drawPath(flap)
+    elif kind == "lock":
+        p.drawRoundedRect(QRectF(s * 0.22, s * 0.44, s * 0.56, s * 0.42), s * 0.09, s * 0.09)
+        p.drawArc(QRectF(s * 0.32, s * 0.18, s * 0.36, s * 0.46), 0, 180 * 16)
+        p.setPen(Qt.NoPen)
+        p.setBrush(color)
+        p.drawEllipse(QPointF(s * 0.50, s * 0.63), s * 0.05, s * 0.05)
+    elif kind == "eye":
+        path = QPainterPath()
+        path.moveTo(s * 0.12, s * 0.50)
+        path.quadTo(s * 0.50, s * 0.20, s * 0.88, s * 0.50)
+        path.quadTo(s * 0.50, s * 0.80, s * 0.12, s * 0.50)
+        p.drawPath(path)
+        p.drawEllipse(QPointF(s * 0.50, s * 0.50), s * 0.12, s * 0.12)
+    elif kind == "login_enter":
+        door = QPainterPath()
+        door.moveTo(s * 0.46, s * 0.20)
+        door.lineTo(s * 0.78, s * 0.20)
+        door.lineTo(s * 0.78, s * 0.80)
+        door.lineTo(s * 0.46, s * 0.80)
+        p.drawPath(door)
+        p.drawLine(QPointF(s * 0.18, s * 0.50), QPointF(s * 0.60, s * 0.50))
+        p.drawLine(QPointF(s * 0.46, s * 0.36), QPointF(s * 0.60, s * 0.50))
+        p.drawLine(QPointF(s * 0.46, s * 0.64), QPointF(s * 0.60, s * 0.50))
+    elif kind == "user_plus":
+        p.drawEllipse(QPointF(s * 0.42, s * 0.34), s * 0.15, s * 0.15)
+        p_arc = QRectF(s * 0.18, s * 0.54, s * 0.48, s * 0.38)
+        p.drawArc(p_arc, 0, 180 * 16)
+        p.drawLine(QPointF(s * 0.76, s * 0.36), QPointF(s * 0.76, s * 0.60))
+        p.drawLine(QPointF(s * 0.64, s * 0.48), QPointF(s * 0.88, s * 0.48))
+    elif kind == "gamepad":
+        p.drawRoundedRect(QRectF(s * 0.14, s * 0.28, s * 0.72, s * 0.44), s * 0.18, s * 0.18)
+        p.drawLine(QPointF(s * 0.30, s * 0.50), QPointF(s * 0.42, s * 0.50))
+        p.drawLine(QPointF(s * 0.36, s * 0.44), QPointF(s * 0.36, s * 0.56))
+        p.setPen(Qt.NoPen)
+        p.setBrush(color)
+        p.drawEllipse(QPointF(s * 0.64, s * 0.45), s * 0.04, s * 0.04)
+        p.drawEllipse(QPointF(s * 0.72, s * 0.54), s * 0.04, s * 0.04)
+    elif kind == "spotify":
+        p.setPen(Qt.NoPen)
+        p.setBrush(QColor(30, 215, 96))
+        p.drawEllipse(QPointF(s * 0.50, s * 0.50), s * 0.40, s * 0.40)
+        p.setBrush(Qt.NoBrush)
+        p.setPen(QPen(QColor(6, 22, 34), max(2.2, s * 0.075), Qt.SolidLine, Qt.RoundCap))
+        p.drawArc(QRectF(s * 0.26, s * 0.34, s * 0.48, s * 0.26), 25 * 16, 130 * 16)
+        p.drawArc(QRectF(s * 0.30, s * 0.47, s * 0.40, s * 0.22), 25 * 16, 130 * 16)
+        p.drawArc(QRectF(s * 0.34, s * 0.60, s * 0.32, s * 0.18), 25 * 16, 130 * 16)
+
+    p.end()
+    return pm.scaled(size, size, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+
+
+class _AuthFeatureCard(QFrame):
+    """Tarjeta de funcionalidad (Grupos y chat, Salas de voz, Streaming, Actividad) con borde neón cian activo."""
+    clicked = Signal()
+
+    def __init__(self, icon_kind: str, title: str, subtitle: str, active: bool = False, parent=None):
+        super().__init__(parent)
+        self._icon_kind = icon_kind
+        self._active = active
+        self.setCursor(Qt.PointingHandCursor)
+        self.setFixedHeight(138)
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+
+        lay = QVBoxLayout(self)
+        lay.setContentsMargins(12, 14, 12, 14)
+        lay.setSpacing(6)
+        lay.setAlignment(Qt.AlignCenter)
+
+        self.icon_box = QLabel()
+        self.icon_box.setFixedSize(44, 40)
+        self.icon_box.setAlignment(Qt.AlignCenter)
+        lay.addWidget(self.icon_box, 0, Qt.AlignHCenter)
+
+        self.title_lbl = QLabel(title)
+        self.title_lbl.setAlignment(Qt.AlignCenter)
+        self.title_lbl.setStyleSheet("font-size: 13.5px; font-weight: 800; color: #FFFFFF; background: transparent;")
+        lay.addWidget(self.title_lbl)
+
+        self.sub_lbl = QLabel(subtitle)
+        self.sub_lbl.setAlignment(Qt.AlignCenter)
+        self.sub_lbl.setWordWrap(True)
+        self.sub_lbl.setStyleSheet("font-size: 11px; font-weight: 500; color: rgba(200, 224, 240, 0.88); background: transparent;")
+        lay.addWidget(self.sub_lbl)
+
+        self.set_active(active)
+
+    def set_active(self, active: bool):
+        self._active = active
+        ico_col = QColor(42, 236, 255) if active else QColor(225, 242, 252)
+        self.icon_box.setPixmap(_make_auth_vector_icon(self._icon_kind, 24, ico_col))
+        if active:
+            self.icon_box.setStyleSheet(
+                "background: rgba(34, 218, 255, 0.18); border: 1.4px solid rgba(62, 238, 255, 0.85); border-radius: 11px;"
+            )
+        else:
+            self.icon_box.setStyleSheet("background: transparent; border: none;")
+        self.update()
+
+    def mousePressEvent(self, event):
+        if event.button() == Qt.LeftButton:
+            self.clicked.emit()
+        super().mousePressEvent(event)
+
+    def paintEvent(self, event):
+        p = QPainter(self)
+        p.setRenderHint(QPainter.Antialiasing, True)
+        rect = QRectF(self.rect()).adjusted(2.0, 2.0, -2.0, -2.0)
+        path = QPainterPath()
+        path.addRoundedRect(rect, 16.0, 16.0)
+
+        if self._active:
+            grad = QLinearGradient(rect.topLeft(), rect.bottomLeft())
+            grad.setColorAt(0.0, QColor(18, 72, 98, 210))
+            grad.setColorAt(1.0, QColor(10, 38, 56, 225))
+            p.fillPath(path, grad)
+            p.setPen(QPen(QColor(38, 232, 255, 95), 4.0))
+            p.drawPath(path)
+            p.setPen(QPen(QColor(56, 242, 255, 245), 1.8))
+            p.drawPath(path)
+        else:
+            grad = QLinearGradient(rect.topLeft(), rect.bottomLeft())
+            grad.setColorAt(0.0, QColor(14, 34, 50, 185))
+            grad.setColorAt(1.0, QColor(9, 24, 37, 200))
+            p.fillPath(path, grad)
+            p.setPen(QPen(QColor(120, 175, 205, 78), 1.1))
+            p.drawPath(path)
+        p.end()
+
+
+class _AuthActivityCard(QFrame):
+    """Tarjeta inferior de actividad en vivo (Luca / Mortal Kombat 1, Sofi / Daft Punk, Mateo / En vivo)."""
+
+    def __init__(
+        self,
+        badge_kind: str,
+        line1_html: str,
+        line2_html: str,
+        art_rel_path: str,
+        highlight_border: bool = False,
+        parent=None,
+    ):
+        super().__init__(parent)
+        self._highlight = highlight_border
+        self._art_pm: Optional[QPixmap] = None
+        art_p = ROOT / art_rel_path
+        if art_p.exists():
+            self._art_pm = QPixmap(str(art_p))
+
+        self.setFixedHeight(78)
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Fixed)
+
+        lay = QVBoxLayout(self)
+        lay.setContentsMargins(14, 10, 14, 10)
+        lay.setSpacing(2)
+
+        ico_lbl = QLabel()
+        ico_lbl.setFixedSize(20, 18)
+        ico_col = QColor(42, 234, 255) if badge_kind == "gamepad" else QColor(230, 245, 255)
+        ico_lbl.setPixmap(_make_auth_vector_icon(badge_kind, 17, ico_col))
+        ico_lbl.setStyleSheet("background: transparent;")
+        lay.addWidget(ico_lbl, 0, Qt.AlignLeft)
+
+        lay.addStretch(1)
+
+        l1 = QLabel(line1_html)
+        l1.setStyleSheet("font-size: 11.5px; color: rgba(230, 244, 255, 0.95); background: transparent;")
+        lay.addWidget(l1)
+
+        l2 = QLabel(line2_html)
+        l2.setStyleSheet("font-size: 12px; font-weight: 800; color: #FFFFFF; background: transparent;")
+        lay.addWidget(l2)
+
+    def paintEvent(self, event):
+        p = QPainter(self)
+        p.setRenderHint(QPainter.Antialiasing, True)
+        p.setRenderHint(QPainter.SmoothPixmapTransform, True)
+        rect = QRectF(self.rect()).adjusted(1.5, 1.5, -1.5, -1.5)
+        path = QPainterPath()
+        path.addRoundedRect(rect, 14.0, 14.0)
+
+        p.save()
+        p.setClipPath(path)
+        grad = QLinearGradient(rect.topLeft(), rect.bottomRight())
+        grad.setColorAt(0.0, QColor(13, 33, 49, 220))
+        grad.setColorAt(1.0, QColor(8, 21, 34, 235))
+        p.fillPath(path, grad)
+
+        if self._art_pm and not self._art_pm.isNull():
+            art_w = int(rect.height() * 1.18)
+            art_rect = QRectF(rect.right() - art_w, rect.top(), art_w, rect.height())
+            scaled = self._art_pm.scaled(
+                int(art_rect.width()),
+                int(art_rect.height()),
+                Qt.KeepAspectRatioByExpanding,
+                Qt.SmoothTransformation,
+            )
+            p.drawPixmap(int(art_rect.left()), int(art_rect.top()), scaled)
+        p.restore()
+
+        if self._highlight:
+            p.setPen(QPen(QColor(64, 218, 245, 170), 1.5))
+        else:
+            p.setPen(QPen(QColor(115, 175, 205, 80), 1.1))
+        p.drawPath(path)
+        p.end()
+
+
+class _CyanVerticalAccentBar(QWidget):
+    """Barra vertical cian luminosa junto al título C.C.I. Communities."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setFixedSize(10, 88)
+
+    def paintEvent(self, event):
+        p = QPainter(self)
+        p.setRenderHint(QPainter.Antialiasing, True)
+        glow_r = QRectF(1.0, 2.0, 8.0, self.height() - 4.0)
+        p.setPen(Qt.NoPen)
+        p.setBrush(QColor(38, 236, 255, 85))
+        p.drawRoundedRect(glow_r, 4.0, 4.0)
+
+        core_r = QRectF(2.5, 4.0, 5.0, self.height() - 8.0)
+        grad = QLinearGradient(core_r.topLeft(), core_r.bottomLeft())
+        grad.setColorAt(0.0, QColor(82, 248, 255))
+        grad.setColorAt(1.0, QColor(18, 198, 242))
+        p.setBrush(grad)
+        p.drawRoundedRect(core_r, 2.5, 2.5)
+        p.end()
+
+
+def _build_icon_input_capsule(
+    line_edit: QLineEdit,
+    icon_kind: str,
+    trailing_widget: Optional[QWidget] = None,
+) -> QFrame:
+    """Envuelve un QLineEdit dentro de una cápsula oscura traslúcida con ícono a la izquierda."""
+    wrap = QFrame()
+    wrap.setFixedHeight(44)
+    wrap.setStyleSheet("""
+        QFrame {
+            background: rgba(7, 20, 32, 0.78);
+            border: 1px solid rgba(110, 175, 210, 0.36);
+            border-radius: 11px;
+        }
+        QFrame:focus-within {
+            border: 1.5px solid #29E8FF;
+            background: rgba(9, 25, 40, 0.90);
+        }
+    """)
+    h = QHBoxLayout(wrap)
+    h.setContentsMargins(13, 0, 10, 0)
+    h.setSpacing(10)
+
+    ico = QLabel()
+    ico.setFixedSize(18, 18)
+    ico.setPixmap(_make_auth_vector_icon(icon_kind, 17, QColor(175, 210, 232)))
+    ico.setStyleSheet("border: none; background: transparent;")
+    h.addWidget(ico)
+
+    line_edit.setFixedHeight(40)
+    line_edit.setStyleSheet("""
+        QLineEdit {
+            background: transparent;
+            border: none;
+            color: #FFFFFF;
+            font-size: 13px;
+            font-weight: 500;
+            padding: 0px;
+        }
+    """)
+    h.addWidget(line_edit, 1)
+
+    if trailing_widget is not None:
+        h.addWidget(trailing_widget)
+
+    return wrap
+
+
 class CommunityAuthView(AcrylicGlassCard):
-    """Pantalla real de autenticación JWT para Comunidades (sin identidades demo)."""
+    """Pantalla real de autenticación JWT para C.C.I. Communities con diseño Frutiger Aero 1:1."""
 
     def __init__(self, controller: CommunityController, parent=None):
         super().__init__(
             parent,
-            border_radius=24,
-            border_color=QColor(145, 165, 179, 85),
-            glow_color=QColor(0, 0, 0, 70),
-            glow_radius=12,
+            border_radius=26,
+            border_color=QColor(78, 182, 222, 115),
+            glow_color=QColor(0, 0, 0, 85),
+            glow_radius=14,
         )
         self.controller = controller
         self._mode = "login"
+        self._pwd_visible = False
+
+        bg_path = ROOT / "assets_omnidash" / "communities" / "auth_hero_bg.png"
+        self._hero_bg = QPixmap(str(bg_path)) if bg_path.exists() else QPixmap()
 
         root = QVBoxLayout(self)
-        root.setContentsMargins(36, 28, 36, 28)
-        root.setSpacing(14)
+        root.setContentsMargins(34, 18, 34, 22)
+        root.setSpacing(10)
 
-        hdr = QHBoxLayout()
-        title_box = QVBoxLayout()
-        title_box.setSpacing(3)
-        title = QLabel("C.C.I. Communities — Iniciar sesión")
-        title.setStyleSheet("font-size: 22px; font-weight: 800; color: #ffffff;")
-        sub = QLabel("Conecta tu cuenta real para acceder a comunidades, mensajería en tiempo real e invitaciones.")
-        sub.setStyleSheet("font-size: 12px; color: #BDD4E4;")
-        title_box.addWidget(title)
-        title_box.addWidget(sub)
-        hdr.addLayout(title_box, 1)
+        # ── 1. FILA SUPERIOR: Cápsula de Jugador (Izquierda) ──
+        top_bar = QHBoxLayout()
+        top_bar.setContentsMargins(0, 0, 0, 0)
 
-        self.backend_lbl = QLabel("● Verificando servidor...")
-        self.backend_lbl.setStyleSheet(
-            "font-size: 12px; font-weight: 700; color: #ffd166; padding: 6px 12px; "
-            "background: rgba(255,209,102,0.12); border-radius: 12px;"
+        self.player_pill = QFrame(self)
+        self.player_pill.setFixedHeight(40)
+        self.player_pill.setStyleSheet("""
+            QFrame {
+                background: rgba(9, 26, 42, 0.78);
+                border: 1px solid rgba(110, 182, 220, 0.36);
+                border-radius: 20px;
+            }
+        """)
+        pp_lay = QHBoxLayout(self.player_pill)
+        pp_lay.setContentsMargins(5, 4, 14, 4)
+        pp_lay.setSpacing(8)
+
+        av_lbl = QLabel()
+        av_p = ROOT / "assets_omnidash" / "spidey_avatar.png"
+        if av_p.exists():
+            av_lbl.setPixmap(get_rounded_pixmap(QPixmap(str(av_p)), 30, 30, 15))
+        av_lbl.setStyleSheet("border: none; background: transparent;")
+        pp_lay.addWidget(av_lbl)
+
+        self.auth_player_lbl = QLabel("Alex  <span style='color:#23E4FF;'>●</span>  <b>18,450 G</b>")
+        self.auth_player_lbl.setStyleSheet("border: none; background: transparent; color: #FFFFFF; font-size: 12.5px; font-weight: 700;")
+        pp_lay.addWidget(self.auth_player_lbl)
+
+        top_bar.addWidget(self.player_pill, 0, Qt.AlignLeft)
+        top_bar.addStretch(1)
+        root.addLayout(top_bar)
+
+        # ── 2. CUERPO DE DOS COLUMNAS (Showcase Izquierda + Tarjeta Auth Derecha) ──
+        body_row = QHBoxLayout()
+        body_row.setContentsMargins(4, 4, 4, 4)
+        body_row.setSpacing(28)
+
+        # ================== COLUMNA IZQUIERDA ==================
+        left_col = QVBoxLayout()
+        left_col.setContentsMargins(0, 18, 0, 0)
+        left_col.setSpacing(14)
+
+        hero_title_row = QHBoxLayout()
+        hero_title_row.setContentsMargins(0, 0, 0, 0)
+        hero_title_row.setSpacing(14)
+
+        accent_bar = _CyanVerticalAccentBar(self)
+        hero_title_row.addWidget(accent_bar, 0, Qt.AlignTop)
+
+        title_stack = QVBoxLayout()
+        title_stack.setContentsMargins(0, 0, 0, 0)
+        title_stack.setSpacing(0)
+
+        lbl_cci = QLabel("C.C.I.")
+        lbl_cci.setStyleSheet(
+            "font-size: 44px; font-weight: 900; font-style: italic; color: #FFFFFF; "
+            "letter-spacing: 1px; line-height: 0.95; background: transparent;"
         )
-        hdr.addWidget(self.backend_lbl)
+        lbl_comm = QLabel("Communities")
+        lbl_comm.setStyleSheet(
+            "font-size: 42px; font-weight: 900; font-style: italic; color: #FFFFFF; "
+            "letter-spacing: 0.5px; line-height: 0.95; background: transparent;"
+        )
+        title_stack.addWidget(lbl_cci)
+        title_stack.addWidget(lbl_comm)
+        hero_title_row.addLayout(title_stack)
+        hero_title_row.addStretch(1)
+        left_col.addLayout(hero_title_row)
 
-        self.retry_btn = QPushButton("Reintentar conexión")
-        self.retry_btn.setProperty("class", "glassBtn")
-        self.retry_btn.setCursor(Qt.PointingHandCursor)
-        self.retry_btn.clicked.connect(lambda: self.controller.check_backend_async(auto_start=True))
-        hdr.addWidget(self.retry_btn)
-        root.addLayout(hdr)
+        hero_sub = QLabel("Conecta con jugadores, crea grupos,\nconversa, transmite y comparte tu experiencia.")
+        hero_sub.setStyleSheet(
+            "font-size: 15px; font-weight: 500; color: rgba(224, 240, 252, 0.92); "
+            "line-height: 1.35; background: transparent;"
+        )
+        left_col.addWidget(hero_sub)
+        left_col.addSpacing(6)
 
-        center_row = QHBoxLayout()
-        center_row.addStretch(1)
+        feat_row = QHBoxLayout()
+        feat_row.setContentsMargins(0, 0, 0, 0)
+        feat_row.setSpacing(12)
 
+        features_spec = [
+            ("chat_dots", "Grupos y chat", "Conversaciones por\ntexto con tu comunidad.", True),
+            ("mic", "Salas de voz", "Habla en tiempo real\ncon tu equipo.", False),
+            ("stream_tv", "Streaming", "Comparte tu juego\nen vivo.", False),
+            ("live_waves", "Actividad", "Descubre qué están\njugando tus amigos.", False),
+        ]
+        self._feature_cards: list[_AuthFeatureCard] = []
+        for idx, (ikind, ftitle, fsub, is_act) in enumerate(features_spec):
+            fc = _AuthFeatureCard(ikind, ftitle, fsub, active=is_act, parent=self)
+            fc.clicked.connect(lambda i=idx: self._select_feature_card(i))
+            feat_row.addWidget(fc, 1)
+            self._feature_cards.append(fc)
+
+        left_col.addLayout(feat_row)
+
+        dot_lbl = QLabel("●")
+        dot_lbl.setStyleSheet("color: #36EEFF; font-size: 7px; padding-left: 14px; background: transparent;")
+        left_col.addWidget(dot_lbl)
+
+        act_row = QHBoxLayout()
+        act_row.setContentsMargins(0, 0, 0, 0)
+        act_row.setSpacing(12)
+
+        act1 = _AuthActivityCard(
+            "gamepad",
+            "<b>Luca</b> está jugando",
+            "Mortal Kombat 1",
+            "assets_omnidash/communities/act_mk1.png",
+            highlight_border=True,
+            parent=self,
+        )
+        act2 = _AuthActivityCard(
+            "spotify",
+            "<b>Sofi</b> está escuchando",
+            "Daft Punk",
+            "assets_omnidash/communities/act_daftpunk.png",
+            highlight_border=False,
+            parent=self,
+        )
+        act3 = _AuthActivityCard(
+            "live_waves",
+            "<b>Mateo</b> está en vivo",
+            "(12 espectadores)",
+            "assets_omnidash/communities/act_stream_racing.png",
+            highlight_border=False,
+            parent=self,
+        )
+        act_row.addWidget(act1, 1)
+        act_row.addWidget(act2, 1)
+        act_row.addWidget(act3, 1)
+        left_col.addLayout(act_row)
+        left_col.addStretch(1)
+
+        body_row.addLayout(left_col, 1)
+
+        # ================== COLUMNA DERECHA (TARJETA CRISTAL LOGIN / REGISTRO) ==================
         card = AcrylicGlassCard(
             self,
-            border_radius=18,
-            border_color=QColor(53, 200, 241, 120),
-            glow_color=QColor(0, 0, 0, 45),
-            glow_radius=10,
+            border_radius=24,
+            border_color=QColor(72, 204, 242, 130),
+            glow_color=QColor(0, 0, 0, 110),
+            glow_radius=18,
+            inner_aura=QColor(18, 92, 130),
         )
-        card.setFixedWidth(480)
+        card.setFixedWidth(404)
         c_lay = QVBoxLayout(card)
-        c_lay.setContentsMargins(24, 22, 24, 22)
-        c_lay.setSpacing(12)
+        c_lay.setContentsMargins(26, 24, 26, 20)
+        c_lay.setSpacing(13)
 
-        tabs = QHBoxLayout()
-        tabs.setSpacing(8)
-        self.tab_login_btn = QPushButton("Iniciar sesión")
-        self.tab_reg_btn = QPushButton("Crear cuenta")
+        tabs_capsule = QFrame(card)
+        tabs_capsule.setFixedHeight(44)
+        tabs_capsule.setStyleSheet("""
+            QFrame {
+                background: rgba(6, 18, 29, 0.72);
+                border: 1px solid rgba(105, 175, 212, 0.30);
+                border-radius: 22px;
+            }
+        """)
+        tabs = QHBoxLayout(tabs_capsule)
+        tabs.setContentsMargins(3, 3, 3, 3)
+        tabs.setSpacing(4)
+
+        self.tab_login_btn = QPushButton("  Iniciar sesión")
+        self.tab_login_btn.setIcon(QIcon(_make_auth_vector_icon("login_enter", 16, QColor(255, 255, 255))))
+        self.tab_login_btn.setIconSize(QSize(16, 16))
+
+        self.tab_reg_btn = QPushButton("  Crear cuenta")
+        self.tab_reg_btn.setIcon(QIcon(_make_auth_vector_icon("user_plus", 16, QColor(210, 232, 248))))
+        self.tab_reg_btn.setIconSize(QSize(16, 16))
+
         for btn, mode in ((self.tab_login_btn, "login"), (self.tab_reg_btn, "register")):
             btn.setFixedHeight(36)
             btn.setCursor(Qt.PointingHandCursor)
             btn.clicked.connect(lambda _, m=mode: self.set_mode(m))
-            tabs.addWidget(btn)
-        c_lay.addLayout(tabs)
+            tabs.addWidget(btn, 1)
+
+        c_lay.addWidget(tabs_capsule)
+        c_lay.addSpacing(2)
+
+        self.form_title_lbl = QLabel("Iniciar sesión")
+        self.form_title_lbl.setStyleSheet("font-size: 25px; font-weight: 800; color: #FFFFFF; background: transparent;")
+        self.form_sub_lbl = QLabel("Accede a tu cuenta de C.C.I. SYSTEM.")
+        self.form_sub_lbl.setStyleSheet("font-size: 12.5px; color: rgba(195, 222, 240, 0.88); background: transparent;")
+        c_lay.addWidget(self.form_title_lbl)
+        c_lay.addWidget(self.form_sub_lbl)
+        c_lay.addSpacing(2)
 
         self.form_stack = QStackedWidget()
 
-        # Tab 0: Login
+        # ── Tab 0: Login ──
         login_w = QWidget()
         login_l = QVBoxLayout(login_w)
-        login_l.setContentsMargins(0, 6, 0, 0)
-        login_l.setSpacing(10)
-        self.login_identifier = _styled_input("Usuario o email")
+        login_l.setContentsMargins(0, 2, 0, 0)
+        login_l.setSpacing(12)
+
+        self.login_identifier = _styled_input("Usuario o correo")
         self.login_password = _styled_input("Contraseña", password=True)
         self.login_password.returnPressed.connect(self._do_login)
-        self.login_btn = QPushButton("Entrar a Comunidades")
-        self.login_btn.setFixedHeight(40)
-        self.login_btn.setCursor(Qt.PointingHandCursor)
-        self.login_btn.setStyleSheet(
-            "QPushButton { background: #35C8F1; border: none; border-radius: 10px; color: #051624; font-size: 13px; font-weight: 800; }"
-            "QPushButton:hover { background: #64d8f7; }"
+
+        self.pwd_eye_btn = QPushButton()
+        self.pwd_eye_btn.setFixedSize(28, 28)
+        self.pwd_eye_btn.setCursor(Qt.PointingHandCursor)
+        self.pwd_eye_btn.setIcon(QIcon(_make_auth_vector_icon("eye", 17, QColor(180, 212, 232))))
+        self.pwd_eye_btn.setIconSize(QSize(17, 17))
+        self.pwd_eye_btn.setStyleSheet("QPushButton { background: transparent; border: none; } QPushButton:hover { background: rgba(255,255,255,0.08); border-radius: 14px; }")
+        self.pwd_eye_btn.clicked.connect(self._toggle_pwd_visibility)
+
+        ident_capsule = _build_icon_input_capsule(self.login_identifier, "mail")
+        pwd_capsule = _build_icon_input_capsule(self.login_password, "lock", trailing_widget=self.pwd_eye_btn)
+
+        login_l.addWidget(ident_capsule)
+        login_l.addWidget(pwd_capsule)
+
+        opts_row = QHBoxLayout()
+        opts_row.setContentsMargins(2, 2, 2, 2)
+        chk_on = (ROOT / "assets_omnidash" / "communities" / "chk_checked.png").as_posix()
+        chk_off = (ROOT / "assets_omnidash" / "communities" / "chk_unchecked.png").as_posix()
+        self.remember_chk = QCheckBox("Recordar sesión")
+        self.remember_chk.setChecked(True)
+        self.remember_chk.setCursor(Qt.PointingHandCursor)
+        self.remember_chk.setStyleSheet(f"""
+            QCheckBox {{
+                color: rgba(230, 244, 255, 0.95);
+                font-size: 12px;
+                font-weight: 600;
+                spacing: 8px;
+                background: transparent;
+            }}
+            QCheckBox::indicator {{
+                width: 18px;
+                height: 18px;
+            }}
+            QCheckBox::indicator:unchecked {{
+                image: url("{chk_off}");
+            }}
+            QCheckBox::indicator:checked {{
+                image: url("{chk_on}");
+            }}
+        """)
+        opts_row.addWidget(self.remember_chk)
+        opts_row.addStretch(1)
+
+        self.forgot_btn = QPushButton("¿Olvidaste tu contraseña?")
+        self.forgot_btn.setCursor(Qt.PointingHandCursor)
+        self.forgot_btn.setStyleSheet("""
+            QPushButton {
+                background: transparent;
+                border: none;
+                color: #29E4FF;
+                font-size: 12px;
+                font-weight: 600;
+                text-decoration: underline;
+            }
+            QPushButton:hover {
+                color: #7CF4FF;
+            }
+        """)
+        self.forgot_btn.clicked.connect(
+            lambda: self.show_error("Para recuperar tu acceso local, registrá o restablecé tu cuenta desde el panel.")
         )
+        opts_row.addWidget(self.forgot_btn)
+        login_l.addLayout(opts_row)
+
+        self.login_btn = QPushButton("  Entrar a Comunidades")
+        self.login_btn.setIcon(QIcon(_make_auth_vector_icon("login_enter", 18, QColor(4, 22, 36))))
+        self.login_btn.setIconSize(QSize(18, 18))
+        self.login_btn.setFixedHeight(46)
+        self.login_btn.setCursor(Qt.PointingHandCursor)
+        self.login_btn.setStyleSheet("""
+            QPushButton {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #14D4FF, stop:0.5 #2CEEFF, stop:1 #16D8FA);
+                border: 1px solid rgba(180, 252, 255, 0.85);
+                border-radius: 23px;
+                color: #041827;
+                font-size: 14px;
+                font-weight: 800;
+            }
+            QPushButton:hover {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #3CE0FF, stop:0.5 #68F4FF, stop:1 #3CE0FF);
+            }
+        """)
         self.login_btn.clicked.connect(self._do_login)
-        login_l.addWidget(QLabel("Usuario o correo"))
-        login_l.addWidget(self.login_identifier)
-        login_l.addWidget(QLabel("Contraseña"))
-        login_l.addWidget(self.login_password)
         login_l.addSpacing(4)
         login_l.addWidget(self.login_btn)
         self.form_stack.addWidget(login_w)
 
-        # Tab 1: Register
+        # ── Tab 1: Register ──
         reg_w = QWidget()
         reg_l = QVBoxLayout(reg_w)
-        reg_l.setContentsMargins(0, 6, 0, 0)
-        reg_l.setSpacing(8)
+        reg_l.setContentsMargins(0, 2, 0, 0)
+        reg_l.setSpacing(10)
+
         self.reg_email = _styled_input("Correo electrónico")
         self.reg_username = _styled_input("Nombre de usuario (único)")
         self.reg_password = _styled_input("Contraseña (mín. 8 caracteres)", password=True)
         self.reg_password.returnPressed.connect(self._do_register)
-        self.reg_btn = QPushButton("Registrar cuenta")
-        self.reg_btn.setFixedHeight(40)
+
+        reg_l.addWidget(_build_icon_input_capsule(self.reg_email, "mail"))
+        reg_l.addWidget(_build_icon_input_capsule(self.reg_username, "user_plus"))
+        reg_l.addWidget(_build_icon_input_capsule(self.reg_password, "lock"))
+
+        self.reg_btn = QPushButton("  Registrar cuenta")
+        self.reg_btn.setIcon(QIcon(_make_auth_vector_icon("user_plus", 18, QColor(4, 22, 36))))
+        self.reg_btn.setIconSize(QSize(18, 18))
+        self.reg_btn.setFixedHeight(46)
         self.reg_btn.setCursor(Qt.PointingHandCursor)
-        self.reg_btn.setStyleSheet(
-            "QPushButton { background: #32D875; border: none; border-radius: 10px; color: #051624; font-size: 13px; font-weight: 800; }"
-            "QPushButton:hover { background: #5be692; }"
-        )
+        self.reg_btn.setStyleSheet("""
+            QPushButton {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #14D4FF, stop:0.5 #2CEEFF, stop:1 #16D8FA);
+                border: 1px solid rgba(180, 252, 255, 0.85);
+                border-radius: 23px;
+                color: #041827;
+                font-size: 14px;
+                font-weight: 800;
+            }
+            QPushButton:hover {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #3CE0FF, stop:0.5 #68F4FF, stop:1 #3CE0FF);
+            }
+        """)
         self.reg_btn.clicked.connect(self._do_register)
-        reg_l.addWidget(QLabel("Email"))
-        reg_l.addWidget(self.reg_email)
-        reg_l.addWidget(QLabel("Usuario"))
-        reg_l.addWidget(self.reg_username)
-        reg_l.addWidget(QLabel("Contraseña"))
-        reg_l.addWidget(self.reg_password)
         reg_l.addSpacing(4)
         reg_l.addWidget(self.reg_btn)
         self.form_stack.addWidget(reg_w)
@@ -6130,28 +6691,105 @@ class CommunityAuthView(AcrylicGlassCard):
         self.error_lbl.setVisible(False)
         self.error_lbl.setStyleSheet(
             "background: rgba(233, 75, 86, 0.22); border: 1px solid rgba(233, 75, 86, 0.65); "
-            "border-radius: 10px; color: #ffd6d9; font-size: 12px; font-weight: 600; padding: 8px 10px;"
+            "border-radius: 10px; color: #ffd6d9; font-size: 12px; font-weight: 600; padding: 7px 10px;"
         )
         c_lay.addWidget(self.error_lbl)
+        c_lay.addStretch(1)
 
-        center_row.addWidget(card)
-        center_row.addStretch(1)
-        root.addLayout(center_row, 1)
+        footer_row = QHBoxLayout()
+        footer_row.setContentsMargins(0, 6, 0, 0)
+        footer_row.setSpacing(8)
+
+        line_l = QFrame()
+        line_l.setFixedHeight(1)
+        line_l.setStyleSheet("background: rgba(110, 178, 215, 0.22); border: none;")
+        line_r = QFrame()
+        line_r.setFixedHeight(1)
+        line_r.setStyleSheet("background: rgba(110, 178, 215, 0.22); border: none;")
+
+        self.backend_lbl = QLabel("● Servidor conectado")
+        self.backend_lbl.setAlignment(Qt.AlignCenter)
+        self.backend_lbl.setStyleSheet("font-size: 12px; font-weight: 700; color: #32D875; background: transparent;")
+
+        self.retry_btn = QPushButton("↻")
+        self.retry_btn.setFixedSize(22, 22)
+        self.retry_btn.setCursor(Qt.PointingHandCursor)
+        self.retry_btn.setToolTip("Reintentar conexión con el servidor")
+        self.retry_btn.setVisible(False)
+        self.retry_btn.setStyleSheet(
+            "QPushButton { background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.2); "
+            "border-radius: 11px; color: #ffffff; font-size: 11px; font-weight: 800; }"
+        )
+        self.retry_btn.clicked.connect(lambda: self.controller.check_backend_async(auto_start=True))
+
+        footer_row.addWidget(line_l, 1)
+        footer_row.addWidget(self.backend_lbl)
+        footer_row.addWidget(self.retry_btn)
+        footer_row.addWidget(line_r, 1)
+        c_lay.addLayout(footer_row)
+
+        right_wrap = QVBoxLayout()
+        right_wrap.setContentsMargins(0, 14, 10, 0)
+        right_wrap.addWidget(card, 0, Qt.AlignTop)
+        right_wrap.addStretch(1)
+        body_row.addLayout(right_wrap, 0)
+        root.addLayout(body_row, 1)
 
         self.controller.backend_status_changed.connect(self.set_backend_status)
         self.set_mode("login")
+
+    def _select_feature_card(self, active_idx: int):
+        for i, fc in enumerate(self._feature_cards):
+            fc.set_active(i == active_idx)
+
+    def _toggle_pwd_visibility(self):
+        self._pwd_visible = not self._pwd_visible
+        self.login_password.setEchoMode(QLineEdit.Normal if self._pwd_visible else QLineEdit.Password)
+
+    def paintEvent(self, event):
+        if not self._hero_bg.isNull():
+            p = QPainter(self)
+            p.setRenderHint(QPainter.Antialiasing, True)
+            p.setRenderHint(QPainter.SmoothPixmapTransform, True)
+            rect = QRectF(self.rect()).adjusted(2.0, 2.0, -2.0, -2.0)
+            clip = QPainterPath()
+            clip.addRoundedRect(rect, 26.0, 26.0)
+            p.save()
+            p.setClipPath(clip)
+            scaled = self._hero_bg.scaled(
+                int(rect.width()),
+                int(rect.height()),
+                Qt.IgnoreAspectRatio,
+                Qt.SmoothTransformation,
+            )
+            p.drawPixmap(int(rect.left()), int(rect.top()), scaled)
+            p.restore()
+            p.setPen(QPen(QColor(82, 195, 235, 115), 1.4))
+            p.drawPath(clip)
+            p.end()
+        else:
+            super().paintEvent(event)
 
     def set_mode(self, mode: str):
         self._mode = "register" if mode == "register" else "login"
         self.form_stack.setCurrentIndex(1 if self._mode == "register" else 0)
         self.show_error("")
+        if self._mode == "login":
+            self.form_title_lbl.setText("Iniciar sesión")
+            self.form_sub_lbl.setText("Accede a tu cuenta de C.C.I. SYSTEM.")
+        else:
+            self.form_title_lbl.setText("Crear cuenta")
+            self.form_sub_lbl.setText("Registra tu cuenta en C.C.I. SYSTEM.")
+
         active_css = (
-            "QPushButton { background: rgba(53,200,241,0.28); border: 1.5px solid #35C8F1; "
-            "border-radius: 10px; color: #ffffff; font-size: 13px; font-weight: 800; }"
+            "QPushButton { background: qlineargradient(x1:0, y1:0, x2:1, y2:0, "
+            "stop:0 rgba(25, 185, 232, 0.36), stop:1 rgba(18, 132, 185, 0.28)); "
+            "border: 1.6px solid #2AE8FF; border-radius: 18px; color: #ffffff; font-size: 13px; font-weight: 800; }"
         )
         idle_css = (
-            "QPushButton { background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.16); "
-            "border-radius: 10px; color: #BDD4E4; font-size: 13px; font-weight: 700; }"
+            "QPushButton { background: transparent; border: 1px solid transparent; "
+            "border-radius: 18px; color: rgba(205, 228, 245, 0.85); font-size: 13px; font-weight: 700; }"
+            "QPushButton:hover { color: #ffffff; background: rgba(255,255,255,0.05); }"
         )
         self.tab_login_btn.setStyleSheet(active_css if self._mode == "login" else idle_css)
         self.tab_reg_btn.setStyleSheet(active_css if self._mode == "register" else idle_css)
@@ -6160,17 +6798,17 @@ class CommunityAuthView(AcrylicGlassCard):
         if online:
             self.backend_lbl.setText("● Servidor conectado")
             self.backend_lbl.setStyleSheet(
-                "font-size: 12px; font-weight: 700; color: #32D875; padding: 6px 12px; "
-                "background: rgba(50,216,117,0.14); border-radius: 12px;"
+                "font-size: 12px; font-weight: 700; color: #32D875; background: transparent;"
             )
             self.backend_lbl.setToolTip(detail or self.controller.api_url)
+            self.retry_btn.setVisible(False)
         else:
             self.backend_lbl.setText("● Servidor sin conexión")
             self.backend_lbl.setStyleSheet(
-                "font-size: 12px; font-weight: 700; color: #ffb3b8; padding: 6px 12px; "
-                "background: rgba(233,75,86,0.22); border-radius: 12px;"
+                "font-size: 12px; font-weight: 700; color: #ff858d; background: transparent;"
             )
             self.backend_lbl.setToolTip(detail or "Backend no accesible")
+            self.retry_btn.setVisible(True)
 
     def show_error(self, message: str):
         if message:
@@ -6184,12 +6822,12 @@ class CommunityAuthView(AcrylicGlassCard):
         self.reg_btn.setEnabled(not busy)
         if busy:
             if mode == "register":
-                self.reg_btn.setText("Registrando...")
+                self.reg_btn.setText("  Registrando...")
             else:
-                self.login_btn.setText("Entrando...")
+                self.login_btn.setText("  Entrando...")
         else:
-            self.login_btn.setText("Entrar a Comunidades")
-            self.reg_btn.setText("Registrar cuenta")
+            self.login_btn.setText("  Entrar a Comunidades")
+            self.reg_btn.setText("  Registrar cuenta")
 
     def _do_login(self):
         ident = self.login_identifier.text().strip()
