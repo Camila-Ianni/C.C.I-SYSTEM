@@ -18,13 +18,13 @@ from pathlib import Path
 import socket
 import threading
 import time
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any, Callable, Dict, List, Optional, Sequence, Tuple
 from urllib.parse import urlparse
 import weakref
 
 import requests
 import socketio
-from PySide6.QtCore import QObject, QRunnable, QThreadPool, QTimer, Signal
+from PySide6.QtCore import QObject, QRunnable, QThreadPool, QTimer, Qt, Signal
 
 logger = logging.getLogger(__name__)
 
@@ -1044,6 +1044,9 @@ class CommunityController(QObject):
     activity_feed_updated = Signal(list)
     notifications_updated = Signal(list, int)    # notifications, unread_count
     presence_self_changed = Signal(str, str)     # status, activity_visibility
+    game_activity_changed = Signal(dict)         # {"action": "started"|"stopped", "game_id": ..., "title": ...}
+    _watcher_started_sig = Signal(dict)
+    _watcher_stopped_sig = Signal(dict)
     voice_state_changed = Signal(dict)
     voice_participants_updated = Signal(list)
     stream_state_changed = Signal(dict)
@@ -1062,6 +1065,8 @@ class CommunityController(QObject):
         parent=None,
         heartbeat_interval_ms: int = 18000,
         enable_voice_audio_io: Optional[bool] = None,
+        enable_game_watcher: bool = True,
+        game_watch_interval_sec: float = 1.0,
     ):
         super().__init__(parent)
         self.api_url = api_url.rstrip("/")
@@ -1123,7 +1128,30 @@ class CommunityController(QObject):
         self._last_synced_msg_id: Optional[str] = None
         self._active_game_id: Optional[str] = None
         self._active_game_title: Optional[str] = None
+        self._active_game_pid: Optional[int] = None
+        self._enable_game_watcher: bool = bool(enable_game_watcher)
+        self._catalog_synced_to_watcher: bool = False
         self.last_health: Dict[str, Any] = {}
+
+        from backend.communities.game_watcher import GameProcessWatcher
+
+        def _on_watch_started(payload: Dict[str, Any]) -> None:
+            ctrl = ctrl_ref()
+            if ctrl is not None:
+                ctrl._watcher_started_sig.emit(dict(payload))
+
+        def _on_watch_stopped(payload: Dict[str, Any]) -> None:
+            ctrl = ctrl_ref()
+            if ctrl is not None:
+                ctrl._watcher_stopped_sig.emit(dict(payload))
+
+        self.game_watcher = GameProcessWatcher(
+            on_game_started=_on_watch_started,
+            on_game_stopped=_on_watch_stopped,
+            poll_interval_sec=game_watch_interval_sec,
+        )
+        self._watcher_started_sig.connect(self._on_watcher_game_started, Qt.QueuedConnection)
+        self._watcher_stopped_sig.connect(self._on_watcher_game_stopped, Qt.QueuedConnection)
 
         self._heartbeat_interval_ms = max(0, int(heartbeat_interval_ms))
         self._heartbeat_timer = QTimer(self)
@@ -1511,9 +1539,8 @@ class CommunityController(QObject):
                 except Exception:
                     pass
 
-    def logout(self) -> None:
-        self._heartbeat_timer.stop()
-        self.cancel_pending()
+    def _stop_active_game_sync(self) -> None:
+        self.game_watcher.stop()
         if self._active_game_title and self.session:
             try:
                 self.api.report_game_activity(
@@ -1524,8 +1551,14 @@ class CommunityController(QObject):
                 )
             except Exception:
                 pass
-            self._active_game_id = None
-            self._active_game_title = None
+        self._active_game_id = None
+        self._active_game_title = None
+        self._active_game_pid = None
+
+    def logout(self) -> None:
+        self._heartbeat_timer.stop()
+        self.cancel_pending()
+        self._stop_active_game_sync()
         self._cleanup_active_stream_sync()
         self.voice_engine.disconnect()
         if self.active_voice_channel and self.session:
@@ -1568,18 +1601,7 @@ class CommunityController(QObject):
         """Cierra timers, workers pendientes, actividad de juego y conexión realtime sin borrar la sesión persistida."""
         self._heartbeat_timer.stop()
         self.cancel_pending()
-        if self._active_game_title and self.session:
-            try:
-                self.api.report_game_activity(
-                    "stopped",
-                    game_id=self._active_game_id,
-                    title=self._active_game_title,
-                    visibility=self.activity_visibility,
-                )
-            except Exception:
-                pass
-            self._active_game_id = None
-            self._active_game_title = None
+        self._stop_active_game_sync()
         self._cleanup_active_stream_sync()
         self.voice_engine.disconnect()
         if self.active_voice_channel and self.session:
@@ -1613,6 +1635,10 @@ class CommunityController(QObject):
         self.realtime.connect_with_token(self.api_url, sess.token)
         if self._heartbeat_interval_ms > 0:
             self._heartbeat_timer.start()
+        if self._enable_game_watcher:
+            if not self._catalog_synced_to_watcher:
+                self.sync_library_games_to_watcher()
+            self.game_watcher.start()
         self.session_changed.emit(sess)
         self.presence_self_changed.emit(self.current_presence_status, self.activity_visibility)
         self.refresh_activity_and_notifications_async()
@@ -2105,6 +2131,219 @@ class CommunityController(QObject):
     def set_activity_visibility(self, visibility: str) -> Dict[str, Any]:
         return self.set_status(self.current_presence_status, activity_visibility=visibility)
 
+    # ------------------------------------------------------------------
+    # Watcher real de juegos (P1-D: launcher + procesos del SO)
+    # ------------------------------------------------------------------
+
+    def register_watched_game(
+        self,
+        game_id: str,
+        title: str,
+        executable_names: Sequence[str] = (),
+        cmdline_tokens: Sequence[str] = (),
+        rom_paths: Sequence[str] = (),
+    ) -> None:
+        self.game_watcher.register_game_rule(
+            game_id=game_id,
+            title=title,
+            executable_names=executable_names,
+            cmdline_tokens=cmdline_tokens,
+            rom_paths=rom_paths,
+        )
+
+    def set_watched_games(self, games: List[Dict[str, Any]]) -> int:
+        self._catalog_synced_to_watcher = True
+        return self.game_watcher.set_catalog_games(games)
+
+    def sync_library_games_to_watcher(self, games: Optional[List[Dict[str, Any]]] = None) -> None:
+        if games is not None:
+            self.set_watched_games(games)
+            return
+
+        def _load_catalog() -> List[Dict[str, Any]]:
+            from backend.games.scanner_service import GameLibraryScannerService
+            return list(GameLibraryScannerService.get_instance().get_games())
+
+        try:
+            from backend.games.scanner_service import GameLibraryScannerService
+            if GameLibraryScannerService._instance is not None:
+                self.set_watched_games(list(GameLibraryScannerService._instance.get_games()))
+                return
+        except Exception:
+            return
+
+        self.run_async(
+            "sync_game_watcher_catalog",
+            _load_catalog,
+            on_success=lambda items: self.set_watched_games(items),
+            on_error=lambda _e: None,
+            category="game_watcher_catalog",
+        )
+
+    def set_game_watcher_enabled(self, enabled: bool) -> None:
+        self._enable_game_watcher = bool(enabled)
+        if self._enable_game_watcher and self.session is not None:
+            if not self._catalog_synced_to_watcher:
+                self.sync_library_games_to_watcher()
+            self.game_watcher.start()
+        else:
+            self.game_watcher.stop()
+
+    def poll_game_watcher(self) -> List[Tuple[str, Dict[str, Any]]]:
+        """Ejecuta un barrido inmediato del watcher (útil en tests deterministas o bajo demanda)."""
+        transitions = self.game_watcher.poll_once()
+        return transitions
+
+    def _apply_local_game_state(
+        self,
+        action: str,
+        game_id: Optional[str],
+        title: Optional[str],
+        source: str = "manual",
+        pid: Optional[int] = None,
+    ) -> Tuple[str, Optional[str], Optional[str]]:
+        act = str(action or "").strip().lower()
+        if act == "started":
+            gid = str(game_id or title or "").strip() or None
+            clean_title = str(title or gid or "").strip() or None
+            self._active_game_id = gid
+            self._active_game_title = clean_title
+            self._active_game_pid = pid
+        else:
+            gid = str(game_id or self._active_game_id or title or "").strip() or None
+            clean_title = str(title or self._active_game_title or gid or "Juego").strip()
+            self._active_game_id = None
+            self._active_game_title = None
+            self._active_game_pid = None
+        self.game_activity_changed.emit({
+            "action": act,
+            "game_id": gid,
+            "title": clean_title,
+            "source": source,
+            "pid": pid,
+        })
+        return act, gid, clean_title
+
+    def _on_watcher_game_started(self, payload: Dict[str, Any]) -> None:
+        self.report_game_activity_async(
+            "started",
+            game_id=payload.get("game_id"),
+            title=payload.get("title"),
+            source=str(payload.get("source") or "process"),
+            pid=payload.get("pid"),
+        )
+
+    def _on_watcher_game_stopped(self, payload: Dict[str, Any]) -> None:
+        self.report_game_activity_async(
+            "stopped",
+            game_id=payload.get("game_id"),
+            title=payload.get("title"),
+            source=str(payload.get("source") or "process"),
+            pid=payload.get("pid"),
+        )
+
+    def notify_game_launched(
+        self,
+        game_id: str,
+        title: str,
+        pid: Optional[int] = None,
+        rom_path: Optional[str] = None,
+        executable: Optional[str] = None,
+        cmdline_tokens: Sequence[str] = (),
+    ) -> Optional[Dict[str, Any]]:
+        if rom_path or executable or cmdline_tokens:
+            self.game_watcher.register_game_rule(
+                game_id=str(game_id or title),
+                title=str(title or game_id),
+                executable_names=(executable,) if executable else (),
+                cmdline_tokens=tuple(cmdline_tokens),
+                rom_paths=(rom_path,) if rom_path else (),
+            )
+        payload = self.game_watcher.notify_launcher_started(
+            game_id=str(game_id or title),
+            title=str(title or game_id),
+            pid=pid,
+        )
+        if payload is not None:
+            self.report_game_activity_async(
+                "started",
+                game_id=payload.get("game_id"),
+                title=payload.get("title"),
+                source="launcher",
+                pid=pid,
+            )
+        return payload
+
+    def notify_game_exited(
+        self,
+        game_id: Optional[str] = None,
+        title: Optional[str] = None,
+        pid: Optional[int] = None,
+        force: bool = False,
+    ) -> Optional[Dict[str, Any]]:
+        payload = self.game_watcher.notify_launcher_stopped(
+            game_id=game_id,
+            title=title,
+            pid=pid,
+            force=force,
+        )
+        if payload is not None:
+            self.report_game_activity_async(
+                "stopped",
+                game_id=payload.get("game_id"),
+                title=payload.get("title"),
+                source="launcher",
+                pid=pid,
+            )
+        return payload
+
+    def report_game_activity_async(
+        self,
+        action: str,
+        game_id: Optional[str] = None,
+        title: Optional[str] = None,
+        source: str = "manual",
+        pid: Optional[int] = None,
+    ) -> int:
+        if not self.session:
+            return 0
+        act = str(action or "").strip().lower()
+        if act == "started":
+            clean_gid = str(game_id or title or "").strip() or None
+            clean_title = str(title or clean_gid or "").strip() or None
+            if (
+                self._active_game_title == clean_title
+                and self._active_game_id == clean_gid
+                and clean_title is not None
+            ):
+                return 0
+        act, gid, clean_title = self._apply_local_game_state(act, game_id, title, source=source, pid=pid)
+        vis = self.activity_visibility
+
+        def _work():
+            return self.api.report_game_activity(
+                action=act,
+                game_id=gid,
+                title=clean_title,
+                visibility=vis,
+            )
+
+        def _done(_res: Dict[str, Any]) -> None:
+            if not self.session:
+                return
+            self.refresh_activity_and_notifications_async()
+            self.refresh_friends_async()
+            if self.active_community:
+                self.refresh_members_async()
+
+        return self.run_async(
+            "report_game_activity",
+            _work,
+            on_success=_done,
+            on_error=lambda _e: None,
+            category="activity_game",
+        )
+
     def report_game_activity(
         self,
         action: str,
@@ -2113,17 +2352,12 @@ class CommunityController(QObject):
     ) -> Optional[Dict[str, Any]]:
         if not self.session:
             return None
-        if action == "started":
-            self._active_game_id = game_id
-            self._active_game_title = title
-        else:
-            self._active_game_id = None
-            self._active_game_title = None
+        act, gid, clean_title = self._apply_local_game_state(action, game_id, title, source="manual")
         try:
             res = self.api.report_game_activity(
-                action=action,
-                game_id=game_id,
-                title=title,
+                action=act,
+                game_id=gid,
+                title=clean_title,
                 visibility=self.activity_visibility,
             )
             self.refresh_activity_and_notifications()
@@ -3041,6 +3275,26 @@ class CommunityController(QObject):
         if changed:
             self.members_updated.emit(list(self.active_members))
 
+        friends_changed = False
+        raw_status = str(presence.get("status") or "offline")
+        legacy_status = {"idle": "away", "dnd": "busy"}.get(raw_status, raw_status)
+        if legacy_status == "invisible":
+            legacy_status = "offline"
+        raw_game = presence.get("activity_title") or presence.get("game")
+        game_title = None if legacy_status == "offline" else raw_game
+        for f in self.active_friends:
+            fid = str(f.get("friend_id") or f.get("user_id") or "")
+            if fid == uid:
+                f["presence"] = legacy_status
+                f["presence_status"] = raw_status
+                f["current_game"] = game_title
+                f["activity_type"] = None if legacy_status == "offline" else presence.get("activity_type")
+                f["activity_title"] = game_title
+                f["activity_game_id"] = None if legacy_status == "offline" else presence.get("activity_game_id")
+                friends_changed = True
+        if friends_changed:
+            self.friends_updated.emit(list(self.active_friends), list(self.incoming_friend_requests))
+
     def _on_rt_typing_updated(self, payload: Dict[str, Any]) -> None:
         if self.active_channel and payload.get("channel_id") == self.active_channel["id"]:
             self.typing_updated.emit(payload)
@@ -3061,6 +3315,23 @@ class CommunityController(QObject):
                 updated_feed = [item] + existing
                 self.active_activity_feed = updated_feed[:30]
                 self.activity_feed_updated.emit(list(self.active_activity_feed))
+
+            uid = str(item.get("user_id") or "")
+            ev_kind = str(item.get("event") or item.get("event_type") or "")
+            is_start = "started" in ev_kind
+            is_stop = "stopped" in ev_kind
+            if uid and (is_start or is_stop):
+                friends_changed = False
+                for f in self.active_friends:
+                    fid = str(f.get("friend_id") or f.get("user_id") or "")
+                    if fid == uid:
+                        f["current_game"] = (item.get("game_title") or item.get("title")) if is_start else None
+                        f["activity_title"] = f["current_game"]
+                        f["activity_type"] = "playing" if is_start else None
+                        f["activity_game_id"] = item.get("game_id") if is_start else None
+                        friends_changed = True
+                if friends_changed:
+                    self.friends_updated.emit(list(self.active_friends), list(self.incoming_friend_requests))
         self.refresh_activity_and_notifications_async()
 
     def _on_rt_notification_received(self, payload: Dict[str, Any]) -> None:

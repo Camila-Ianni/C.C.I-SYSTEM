@@ -6972,11 +6972,16 @@ class CommunityExploreView(QWidget):
         if friends:
             for f in friends[:6]:
                 fname = str(f.get("username") or f.get("friend_id") or f.get("user_id") or "Amigo")
-                fst = str(f.get("status") or "offline")
-                fgame = f.get("current_game")
-                desc = f"🎮 {fgame}" if fgame else fst
+                raw_st = str(
+                    f.get("presence")
+                    or f.get("presence_status")
+                    or ("" if f.get("status") in ("accepted", "pending", "blocked", None, "") else f.get("status"))
+                    or "offline"
+                ).lower()
+                fgame = f.get("current_game") or f.get("activity_title")
+                desc = f"🎮 {fgame}" if fgame else raw_st
                 lbl = QLabel(f"● @{fname} — {desc}")
-                col = "#32D875" if fst == "online" else "#91A5B3"
+                col = "#32D875" if (fgame or raw_st in ("online", "playing", "in_game")) else "#91A5B3"
                 lbl.setStyleSheet(f"font-size: 12px; color: {col};")
                 self.friends_list_box.addWidget(lbl)
         elif not incoming_requests:
@@ -7425,6 +7430,7 @@ class OmniDashMainWindow(QMainWindow):
         self._sync_session_ui()
         if self._auto_connect:
             QTimer.singleShot(50, self._restore_community_session)
+            QTimer.singleShot(150, self.community_controller.sync_library_games_to_watcher)
 
     def _restore_community_session(self):
         if self.community_controller.session is None:
@@ -7589,11 +7595,89 @@ class OmniDashMainWindow(QMainWindow):
 
         super().keyPressEvent(event)
 
+    def _start_game_qprocess(
+        self,
+        title: str,
+        game_id: str,
+        program: str,
+        arguments: list[str],
+        rom_path: str | None = None,
+        executable_name: str | None = None,
+        cmdline_tokens: list[str] | tuple[str, ...] = (),
+        warn_on_error: bool = True,
+    ):
+        """Lanza un juego/emulador vía QProcess y notifica su PID real al watcher de actividad."""
+        proc = QProcess(self)
+        proc.setWorkingDirectory(str(ROOT))
+        proc.setProcessChannelMode(QProcess.MergedChannels)
+        self._game_process = proc
+        launched_pid: dict[str, int | None] = {"pid": None}
+
+        def _on_started():
+            pid_val = int(proc.processId() or 0)
+            launched_pid["pid"] = pid_val if pid_val > 0 else None
+            if hasattr(self, "community_controller") and self.community_controller:
+                self.community_controller.notify_game_launched(
+                    game_id=game_id,
+                    title=title,
+                    pid=launched_pid["pid"],
+                    rom_path=rom_path,
+                    executable=executable_name,
+                    cmdline_tokens=cmdline_tokens,
+                )
+
+        def _on_finished(exit_code: int, exit_status):
+            if hasattr(self, "community_controller") and self.community_controller:
+                self.community_controller.notify_game_exited(
+                    game_id=game_id,
+                    title=title,
+                    pid=launched_pid["pid"],
+                    force=(exit_code != 0),
+                )
+            raw_out = bytes(proc.readAllStandardOutput()).decode("utf-8", errors="ignore").strip()
+            if warn_on_error and exit_code != 0:
+                err_line = raw_out.splitlines()[-1] if raw_out else f"Código de salida {exit_code}"
+                print(f"[OmniDash-Qt] Error al ejecutar core para {title}: {err_line}")
+                QMessageBox.warning(
+                    self,
+                    f"Error al ejecutar {title}",
+                    f"El núcleo Libretro no pudo cargar este juego:\n{err_line}",
+                )
+            self._game_process = None
+            proc.deleteLater()
+            self.activateWindow()
+            self.raise_()
+
+        def _on_error(proc_err):
+            if hasattr(self, "community_controller") and self.community_controller:
+                self.community_controller.notify_game_exited(
+                    game_id=game_id,
+                    title=title,
+                    pid=launched_pid["pid"],
+                    force=True,
+                )
+            print(f"[OmniDash-Qt] Error de proceso lanzando {title}: {proc_err}")
+            if warn_on_error:
+                QMessageBox.warning(
+                    self,
+                    f"Error al iniciar {title}",
+                    "No se pudo iniciar el proceso emulador.",
+                )
+            self._game_process = None
+            proc.deleteLater()
+
+        proc.started.connect(_on_started)
+        proc.finished.connect(_on_finished)
+        proc.errorOccurred.connect(_on_error)
+        proc.start(program, arguments)
+        return proc
+
     def launch_game(self, game: dict):
         core = game.get("core")
         rom = game.get("rom")
+        exe_cmd = game.get("executable") or game.get("exe") or game.get("command")
         title = game.get("title", "Game")
-        gid = game.get("id")
+        gid = str(game.get("id") or title)
 
         if getattr(self, "_game_process", None) and self._game_process.state() != QProcess.NotRunning:
             print(f"[OmniDash-Qt] Ya hay un juego en ejecución; cerralo antes de abrir {title}.")
@@ -7601,71 +7685,20 @@ class OmniDashMainWindow(QMainWindow):
 
         if core and rom:
             # H-08: Verificación física de integridad de ROM y Core antes de invocar Libretro
-            if gid:
+            if game.get("id"):
                 from backend.games.scanner_service import GameLibraryScannerService
-                ok, msg = GameLibraryScannerService.get_instance().verify_game_file(gid)
+                ok, msg = GameLibraryScannerService.get_instance().verify_game_file(str(game["id"]))
                 if not ok:
                     print(f"[OmniDash-Qt] Verificación de lanzamiento denegada para {title}: {msg}")
                     QMessageBox.warning(self, f"No se pudo iniciar {title}", msg)
                     return
 
             print(f"[OmniDash-Qt] Lanzando emulador Libretro 60 FPS en subproceso aislado: {title} ({core})...")
-            proc = QProcess(self)
-            proc.setWorkingDirectory(str(ROOT))
-            proc.setProcessChannelMode(QProcess.MergedChannels)
-            self._game_process = proc
-
-            def _on_started():
-                if hasattr(self, "community_controller") and self.community_controller:
-                    self.community_controller.report_game_activity(
-                        "started",
-                        game_id=str(gid or title),
-                        title=title,
-                    )
-
-            def _on_finished(exit_code: int, exit_status):
-                if hasattr(self, "community_controller") and self.community_controller:
-                    self.community_controller.report_game_activity(
-                        "stopped",
-                        game_id=str(gid or title),
-                        title=title,
-                    )
-                raw_out = bytes(proc.readAllStandardOutput()).decode("utf-8", errors="ignore").strip()
-                if exit_code != 0:
-                    err_line = raw_out.splitlines()[-1] if raw_out else f"Código de salida {exit_code}"
-                    print(f"[OmniDash-Qt] Error al ejecutar core para {title}: {err_line}")
-                    QMessageBox.warning(
-                        self,
-                        f"Error al ejecutar {title}",
-                        f"El núcleo Libretro no pudo cargar este juego:\n{err_line}",
-                    )
-                self._game_process = None
-                proc.deleteLater()
-                self.activateWindow()
-                self.raise_()
-
-            def _on_error(proc_err):
-                if hasattr(self, "community_controller") and self.community_controller:
-                    self.community_controller.report_game_activity(
-                        "stopped",
-                        game_id=str(gid or title),
-                        title=title,
-                    )
-                print(f"[OmniDash-Qt] Error de proceso lanzando {title}: {proc_err}")
-                QMessageBox.warning(
-                    self,
-                    f"Error al iniciar {title}",
-                    "No se pudo iniciar el proceso emulador.",
-                )
-                self._game_process = None
-                proc.deleteLater()
-
-            proc.started.connect(_on_started)
-            proc.finished.connect(_on_finished)
-            proc.errorOccurred.connect(_on_error)
-            proc.start(
-                sys.executable,
-                [
+            self._start_game_qprocess(
+                title=title,
+                game_id=gid,
+                program=sys.executable,
+                arguments=[
                     str(ROOT / "retro_core_runner.py"),
                     "--core", str(core),
                     "--rom", str(rom),
@@ -7673,6 +7706,30 @@ class OmniDashMainWindow(QMainWindow):
                     "--width", "1280",
                     "--height", "720",
                 ],
+                rom_path=str(rom),
+                executable_name=None,
+                warn_on_error=True,
+            )
+        elif exe_cmd:
+            if isinstance(exe_cmd, (list, tuple)) and exe_cmd:
+                program = str(exe_cmd[0])
+                args = [str(a) for a in exe_cmd[1:]]
+            else:
+                program = str(exe_cmd)
+                args = [str(a) for a in (game.get("args") or ())]
+            prog_base = Path(program).name.lower().removesuffix(".exe").removesuffix(".app")
+            generic_interps = {"python", "python3", "py", "sh", "bash", "zsh", "fish", "cmd", "node", "env"}
+            safe_exe = None if prog_base in generic_interps else program
+            tokens = tuple(str(t) for t in (game.get("cmdline_tokens") or ()))
+            print(f"[OmniDash-Qt] Lanzando juego nativo C.C.I.: {title} ({program})...")
+            self._start_game_qprocess(
+                title=title,
+                game_id=gid,
+                program=program,
+                arguments=args,
+                executable_name=safe_exe,
+                cmdline_tokens=tokens,
+                warn_on_error=False,
             )
         else:
             print(f"[OmniDash-Qt] Ejecutando juego nativo C.C.I.: {title}")

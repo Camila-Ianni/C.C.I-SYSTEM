@@ -78,11 +78,14 @@ class FriendsService:
             legacy_st = {"idle": "away", "dnd": "busy"}.get(st, st)
             if legacy_st == "invisible":
                 legacy_st = "offline"
-            game = p.get("activity_title") or p.get("custom_status")
+            hide_activity = (legacy_st == "offline") or (p.get("activity_visibility") == "private")
+            game = None if hide_activity else (p.get("activity_title") or p.get("custom_status"))
             return {
                 "user_id": user_id,
                 "status": legacy_st,
-                "current_game": None if legacy_st == "offline" else game,
+                "current_game": game,
+                "activity_type": None if hide_activity else p.get("activity_type"),
+                "activity_game_id": None if hide_activity else p.get("activity_game_id"),
                 "last_seen": float(p.get("last_seen") or 0.0),
             }
         except Exception:
@@ -184,6 +187,8 @@ class FriendsService:
                 "since": f["updated_at"],
                 "presence": presence["status"],
                 "current_game": presence["current_game"],
+                "activity_type": presence.get("activity_type"),
+                "activity_game_id": presence.get("activity_game_id"),
             })
         return result
 
