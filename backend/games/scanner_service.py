@@ -99,6 +99,11 @@ class GameLibraryScannerService:
         },
     }
 
+    ARCADE_FBNEO_OVERRIDES = {
+        "mame_mslug2",
+        "mame_ffightub",
+    }
+
     ARCADE_TITLE_BEAUTIFY = {
         "mame_crusnusa": "Cruis'n USA",
         "mame_ffightub": "Final Fight",
@@ -667,6 +672,11 @@ class GameLibraryScannerService:
                     except ValueError:
                         rel_rom = str(f)
 
+                    selected_core = (
+                        "cores/fbneo_libretro.dylib"
+                        if game_id in self.ARCADE_FBNEO_OVERRIDES
+                        else spec["core"]
+                    )
                     item = {
                         "id": game_id,
                         "title": display_title,
@@ -675,7 +685,7 @@ class GameLibraryScannerService:
                         "console": spec["name"],
                         "badge": spec["badge"],
                         "type": "libretro",
-                        "core": spec["core"],
+                        "core": selected_core,
                         "rom": rel_rom,
                         "cover": cover_path,
                         "cover_is_fallback": is_fallback,

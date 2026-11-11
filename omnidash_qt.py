@@ -17,16 +17,16 @@ from pathlib import Path
 from datetime import datetime
 
 from PySide6.QtCore import (
-    Qt, QSize, QTimer, QRectF, QPropertyAnimation, QEasingCurve, Signal, Slot, QPoint, QByteArray
+    Qt, QSize, QTimer, QRectF, QPropertyAnimation, QEasingCurve, Signal, Slot, QPoint, QByteArray, QProcess
 )
 from PySide6.QtGui import (
-    QColor, QFont, QIcon, QPainter, QPainterPath, QPixmap, QLinearGradient, QBrush, QPen, QImage, QPalette
+    QColor, QFont, QIcon, QPainter, QPainterPath, QPixmap, QLinearGradient, QRadialGradient, QBrush, QPen, QImage, QPalette
 )
 from PySide6.QtSvg import QSvgRenderer
 from PySide6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QStackedWidget,
     QLabel, QPushButton, QLineEdit, QScrollArea, QGridLayout, QFrame, QSizePolicy,
-    QProgressBar, QSlider, QFileDialog, QGraphicsDropShadowEffect, QDialog
+    QProgressBar, QSlider, QFileDialog, QGraphicsDropShadowEffect, QDialog, QMessageBox
 )
 
 from cci_console import CATALOG, UserData
@@ -229,6 +229,8 @@ class AcrylicGlassCard(QFrame):
         show_specular: bool = True,
         bg_image: QPixmap | None = None,
         inner_padding: int = 0,
+        inner_aura: QColor | None = None,
+        aura_strength: float = 1.0,
     ):
         super().__init__(parent)
         self.border_radius = border_radius
@@ -239,6 +241,8 @@ class AcrylicGlassCard(QFrame):
         self.show_specular = show_specular
         self.bg_image = bg_image
         self.inner_padding = inner_padding
+        self.inner_aura = inner_aura
+        self.aura_strength = aura_strength
         self.is_hovered = False
         self.is_focused = False
         self.setAttribute(Qt.WA_Hover, is_interactive)
@@ -377,31 +381,99 @@ class AcrylicGlassCard(QFrame):
                 tint = QColor(0, 0, 0, 25 if active else 45)
                 painter.fillRect(0, 0, w, h, tint)
 
+        # 2.8 Aura luminosa interior temática (difuminación centrada + halo suave en bordes)
+        if self.inner_aura and self.inner_aura.alpha() > 0:
+            r_col, g_col, b_col, base_a = (
+                self.inner_aura.red(),
+                self.inner_aura.green(),
+                self.inner_aura.blue(),
+                self.inner_aura.alpha(),
+            )
+            strength = max(0.25, self.aura_strength * (1.20 if active else 1.0))
+
+            # Sutil profundidad periférica para que el brillo nazca en el centro del cristal
+            edge_vig = QRadialGradient(w * 0.5, h * 0.44, max(w, h) * 0.64)
+            edge_vig.setColorAt(0.0, QColor(0, 0, 0, 0))
+            edge_vig.setColorAt(0.55, QColor(5, 12, 22, 18))
+            edge_vig.setColorAt(1.0, QColor(4, 10, 20, 72))
+            painter.fillRect(0, 0, w, h, QBrush(edge_vig))
+
+            # Difuminación radial suave centrada detrás del icono y el título
+            rad = max(w, h) * 0.52
+            aura_rad = QRadialGradient(w * 0.5, h * 0.42, rad)
+            core_r = min(255, int(r_col * 0.85 + 255 * 0.15))
+            core_g = min(255, int(g_col * 0.85 + 255 * 0.15))
+            core_b = min(255, int(b_col * 0.85 + 255 * 0.15))
+            aura_rad.setColorAt(0.0, QColor(core_r, core_g, core_b, min(235, int(base_a * 1.20 * strength))))
+            aura_rad.setColorAt(0.36, QColor(r_col, g_col, b_col, min(190, int(base_a * 0.74 * strength))))
+            aura_rad.setColorAt(0.72, QColor(r_col, g_col, b_col, min(95, int(base_a * 0.24 * strength))))
+            aura_rad.setColorAt(1.0, QColor(r_col, g_col, b_col, 0))
+            painter.fillRect(0, 0, w, h, QBrush(aura_rad))
+
+            # Halo interior suave mezclado hacia blanco para fundir el borde sin línea marcada
+            rim_r = min(255, int(r_col * 0.45 + 255 * 0.55))
+            rim_g = min(255, int(g_col * 0.45 + 255 * 0.55))
+            rim_b = min(255, int(b_col * 0.45 + 255 * 0.55))
+            for pen_w, mult in ((14.0, 0.08), (7.5, 0.15), (3.0, 0.26)):
+                painter.setPen(QPen(QColor(rim_r, rim_g, rim_b, min(195, int(base_a * mult * strength))), pen_w))
+                painter.drawPath(path)
+
         # 3. Reflejo especular Liquid Glass (curva o gradiente superior sobre todo el cristal)
         if self.show_specular:
-            spec_h = int(h * 0.45)
+            spec_h = int(h * 0.42)
             if spec_h > 8:
                 spec_grad = QLinearGradient(0, 0, 0, spec_h)
-                spec_grad.setColorAt(0.0, QColor(255, 255, 255, 65 if active else 35))
-                spec_grad.setColorAt(0.35, QColor(255, 255, 255, 15))
+                spec_grad.setColorAt(0.0, QColor(255, 255, 255, 58 if active else 30))
+                spec_grad.setColorAt(0.38, QColor(255, 255, 255, 12))
                 spec_grad.setColorAt(1.0, QColor(255, 255, 255, 0))
                 painter.fillRect(0, 0, w, spec_h, QBrush(spec_grad))
 
         # 4. Línea de brillo inset superior (hairline de cristal líquido)
-        painter.setPen(QColor(255, 255, 255, 195 if active else 135))
+        painter.setPen(QColor(255, 255, 255, 190 if active else 125))
         painter.drawLine(self.border_radius, 1, w - self.border_radius, 1)
 
         painter.restore()
 
-        # 5. Borde transparente con glow de color temático permanente
-        if self.border_color:
+        # 5. Borde luminoso suave integrado con el aura exterior e interior
+        if self.inner_aura:
+            b_col = self.border_color if self.border_color else self.inner_aura
+            br, bg, bb = b_col.red(), b_col.green(), b_col.blue()
+            top_c = QColor(
+                min(255, int(br * 0.30 + 255 * 0.70)),
+                min(255, int(bg * 0.30 + 255 * 0.70)),
+                min(255, int(bb * 0.30 + 255 * 0.70)),
+                245 if active else 225,
+            )
+            mid_c = QColor(
+                min(255, int(br * 0.62 + 255 * 0.38)),
+                min(255, int(bg * 0.62 + 255 * 0.38)),
+                min(255, int(bb * 0.62 + 255 * 0.38)),
+                215 if active else 185,
+            )
+            bot_c = QColor(
+                min(255, int(br * 0.48 + 255 * 0.52)),
+                min(255, int(bg * 0.48 + 255 * 0.52)),
+                min(255, int(bb * 0.48 + 255 * 0.52)),
+                235 if active else 205,
+            )
+            rim_grad = QLinearGradient(0, 0, 0, h)
+            rim_grad.setColorAt(0.0, top_c)
+            rim_grad.setColorAt(0.45, mid_c)
+            rim_grad.setColorAt(1.0, bot_c)
+            # Halo sutil sobre el propio borde para eliminar aspecto de trazo plano
+            painter.setPen(QPen(QColor(mid_c.red(), mid_c.green(), mid_c.blue(), 80), 3.0))
+            painter.drawPath(path)
+            painter.setPen(QPen(QBrush(rim_grad), 1.45 if active else 1.25))
+            painter.drawPath(path)
+        elif self.border_color:
             painter.setPen(QPen(self.border_color, 2.2 if active else 1.8))
+            painter.drawPath(path)
         elif active:
-            painter.setPen(QPen(QColor(0, 210, 255, 250), 2.2))
+            painter.setPen(QPen(QColor(0, 210, 255, 230), 1.6))
+            painter.drawPath(path)
         else:
-            painter.setPen(QPen(QColor(255, 255, 255, 140), 1.4))
-
-        painter.drawPath(path)
+            painter.setPen(QPen(QColor(255, 255, 255, 130), 1.3))
+            painter.drawPath(path)
 
 
 # ==============================================================================
@@ -764,48 +836,55 @@ class HomeView(QWidget):
                 f"{len(ALL_GAMES)} juegos listos para jugar",
                 "LIBRARY",
                 "controller_outline_white.png",
-                QColor(0, 217, 255, 220),
-                QColor(0, 217, 255, 140),
+                QColor(55, 215, 255, 195),
+                QColor(0, 190, 255, 225),
+                QColor(0, 185, 255, 128),
             ),
             (
                 "Amigos",
                 "Seeker & Night Raid • 3 en línea",
                 "COMMUNITY",
                 "friends_duo_white.png",
-                QColor(60, 160, 240, 200),
-                QColor(60, 160, 240, 120),
+                QColor(180, 222, 250, 205),
+                QColor(135, 200, 245, 180),
+                QColor(110, 185, 235, 82),
             ),
             (
                 "GAME PASS",
                 "Descubre cientos de juegos",
                 "LIBRARY",
                 "xbox_gamepass_white.png",
-                QColor(0, 210, 120, 230),
-                QColor(0, 210, 120, 140),
+                QColor(50, 235, 160, 200),
+                QColor(0, 220, 130, 230),
+                QColor(0, 210, 125, 138),
             ),
             (
                 "Logros",
                 "18,450 G • 110 trofeos",
                 "PROFILE",
                 "trophy_white.png",
-                QColor(180, 100, 255, 230),
-                QColor(180, 100, 255, 140),
+                QColor(190, 125, 255, 200),
+                QColor(165, 85, 255, 230),
+                QColor(160, 80, 255, 138),
             ),
         ]
 
         self.main_cards = []
-        for title, subtitle, dest, icon_file, border_c, glow_c in widgets_data:
+        for title, subtitle, dest, icon_file, border_c, glow_c, aura_c in widgets_data:
             c = AcrylicGlassCard(
                 self,
                 border_radius=28,
                 is_interactive=True,
                 glow_color=glow_c,
-                glow_radius=20,
+                glow_radius=32,
                 border_color=border_c,
+                inner_aura=aura_c,
+                aura_strength=1.0,
             )
             c._orig_border_color = border_c
             c._orig_glow_color = glow_c
-            c._orig_glow_radius = 20
+            c._orig_glow_radius = 32
+            c._orig_inner_aura = aura_c
             c.setFixedHeight(175)
 
             c_lay = QHBoxLayout(c)
@@ -929,17 +1008,24 @@ class HomeView(QWidget):
         self.recent_cards_widgets = []
 
         for slot_idx in range(3):
+            is_first = (slot_idx == 0)
+            b_col = QColor(45, 220, 255, 205) if is_first else QColor(165, 195, 215, 135)
+            g_col = QColor(0, 200, 255, 215) if is_first else QColor(90, 155, 205, 105)
+            a_col = QColor(0, 195, 255, 115) if is_first else QColor(105, 175, 225, 42)
+            g_rad = 30 if is_first else 18
             c = AcrylicGlassCard(
                 self,
                 border_radius=24,
                 is_interactive=True,
-                glow_color=QColor(0, 217, 255, 180) if slot_idx == 0 else QColor(145, 165, 179, 70),
-                glow_radius=22 if slot_idx == 0 else 14,
-                border_color=QColor(0, 217, 255, 240) if slot_idx == 0 else QColor(145, 165, 179, 130),
+                glow_color=g_col,
+                glow_radius=g_rad,
+                border_color=b_col,
+                inner_aura=a_col,
             )
-            c._orig_border_color = QColor(0, 217, 255, 240) if slot_idx == 0 else QColor(145, 165, 179, 130)
-            c._orig_glow_color = QColor(0, 217, 255, 180) if slot_idx == 0 else QColor(145, 165, 179, 70)
-            c._orig_glow_radius = 22 if slot_idx == 0 else 14
+            c._orig_border_color = b_col
+            c._orig_glow_color = g_col
+            c._orig_glow_radius = g_rad
+            c._orig_inner_aura = a_col
             c.setFixedHeight(138)
 
             c_lay = QHBoxLayout(c)
@@ -1021,6 +1107,7 @@ class HomeView(QWidget):
 
         # Indicadores de página de Actividad reciente (Pills & Dots)
         dots_box = QHBoxLayout()
+        dots_box.setContentsMargins(0, 2, 0, 5)
         dots_box.setSpacing(8)
         dots_box.setAlignment(Qt.AlignCenter)
         self.dots = []
@@ -1075,17 +1162,22 @@ class HomeView(QWidget):
 
         self.news_cards = []
         for title, subtitle, dest, icon_file, is_live in news_data:
+            b_col = QColor(155, 195, 225, 140)
+            g_col = QColor(80, 160, 225, 115)
+            a_col = QColor(90, 170, 230, 48)
             c = AcrylicGlassCard(
                 self,
                 border_radius=24,
                 is_interactive=True,
-                glow_color=QColor(145, 165, 179, 70),
-                glow_radius=14,
-                border_color=QColor(145, 165, 179, 120),
+                glow_color=g_col,
+                glow_radius=20,
+                border_color=b_col,
+                inner_aura=a_col,
             )
-            c._orig_border_color = QColor(145, 165, 179, 120)
-            c._orig_glow_color = QColor(145, 165, 179, 70)
-            c._orig_glow_radius = 14
+            c._orig_border_color = b_col
+            c._orig_glow_color = g_col
+            c._orig_glow_radius = 20
+            c._orig_inner_aura = a_col
             c.setFixedHeight(114)
 
             c_lay = QHBoxLayout(c)
@@ -1148,6 +1240,7 @@ class HomeView(QWidget):
             news_row.addWidget(c, 1)
 
         self.layout.addLayout(news_row)
+        self.layout.addStretch(1)
 
         # Sistema de foco por teclado unificado
         self.focus_idx = 0
@@ -1205,6 +1298,48 @@ class HomeView(QWidget):
         painter.setRenderHint(QPainter.SmoothPixmapTransform)
         if getattr(self, "_cached_home_bg", None) and not self._cached_home_bg.isNull():
             painter.drawPixmap(0, 0, self._cached_home_bg)
+
+        # Halo luminoso exterior real alrededor de cada tarjeta sobre el fondo
+        cards = []
+        if hasattr(self, "main_cards"):
+            cards.extend((c, 1.0) for c in self.main_cards)
+        if hasattr(self, "recent_cards_widgets"):
+            cards.extend((s["card"], 1.0 if s["card"].is_focused or (s["card"].glow_color and s["card"].glow_color.alpha() > 160) else 0.55) for s in self.recent_cards_widgets)
+        if hasattr(self, "news_cards"):
+            cards.extend((c, 0.55) for c in self.news_cards)
+
+        painter.save()
+        painter.setBrush(Qt.NoBrush)
+        for card, base_strength in cards:
+            if not card.isVisible() or not card.glow_color or card.glow_color.alpha() <= 0:
+                continue
+            r = card.geometry()
+            if r.width() <= 0 or r.height() <= 0:
+                continue
+            gc = card.glow_color
+            strength = base_strength * (1.28 if (card.is_focused or card.is_hovered) else 1.0)
+            gr, gg, gb, ga = gc.red(), gc.green(), gc.blue(), gc.alpha()
+            br = card.border_radius
+            rf = QRectF(r)
+            for expand, pen_w, mult, white_mix in (
+                (10.0, 14.0, 0.05, 0.10),
+                (6.5, 10.0, 0.09, 0.18),
+                (3.8, 7.0, 0.14, 0.28),
+                (1.8, 4.5, 0.21, 0.40),
+                (0.5, 2.5, 0.30, 0.54),
+            ):
+                cr = min(255, int(gr * (1.0 - white_mix) + 255 * white_mix))
+                cg = min(255, int(gg * (1.0 - white_mix) + 255 * white_mix))
+                cb = min(255, int(gb * (1.0 - white_mix) + 255 * white_mix))
+                alpha = min(195, int(ga * mult * strength))
+                if alpha <= 1:
+                    continue
+                halo_rect = rf.adjusted(-expand, -expand, expand, expand)
+                halo_rad = br + expand * 0.72
+                painter.setPen(QPen(QColor(cr, cg, cb, alpha), pen_w))
+                painter.drawRoundedRect(halo_rect, halo_rad, halo_rad)
+        painter.restore()
+
         super().paintEvent(event)
 
     def set_recent_page(self, page: int):
@@ -1250,13 +1385,15 @@ class HomeView(QWidget):
             slot["play_btn"].clicked.connect(lambda _, gm=matched: self.launch_game.emit(gm))
             slot["connected"] = True
 
-            # Borde activo de la primera tarjeta en la página 0
+            # Aura y borde activo de la primera tarjeta en la página 0
             if slot_idx == 0 and self.recent_page == 0:
-                slot["card"].border_color = QColor(0, 217, 255, 240)
-                slot["card"].set_glow(QColor(0, 217, 255, 180), 22)
+                slot["card"].border_color = QColor(45, 220, 255, 205)
+                slot["card"].inner_aura = QColor(0, 195, 255, 115)
+                slot["card"].set_glow(QColor(0, 200, 255, 215), 30)
             else:
-                slot["card"].border_color = QColor(145, 165, 179, 130)
-                slot["card"].set_glow(QColor(145, 165, 179, 70), 14)
+                slot["card"].border_color = QColor(165, 195, 215, 135)
+                slot["card"].inner_aura = QColor(105, 175, 225, 42)
+                slot["card"].set_glow(QColor(90, 155, 205, 105), 18)
             slot["card"].update()
 
     def _update_focus(self):
@@ -1265,10 +1402,16 @@ class HomeView(QWidget):
             card.set_focused(is_active)
             if hasattr(card, "_orig_border_color"):
                 if is_active:
-                    card.border_color = QColor(0, 217, 255, 245)
-                    card.set_glow(QColor(0, 217, 255, 220), 24)
+                    orig_aura = getattr(card, "_orig_inner_aura", None)
+                    card.border_color = QColor(55, 220, 255, 215) if idx != 0 else card._orig_border_color
+                    card.inner_aura = orig_aura if (orig_aura and idx == 0) else (orig_aura or QColor(0, 190, 255, 120))
+                    card.set_glow(
+                        card._orig_glow_color if idx == 0 else QColor(0, 200, 255, 225),
+                        max(32, getattr(card, "_orig_glow_radius", 28) + 4),
+                    )
                 else:
                     card.border_color = card._orig_border_color
+                    card.inner_aura = getattr(card, "_orig_inner_aura", None)
                     card.set_glow(card._orig_glow_color, card._orig_glow_radius)
             card.update()
 
@@ -1297,9 +1440,9 @@ class HomeView(QWidget):
             c.setFixedHeight(int(114 * s))
 
         side_margin = max(38, int(52 * sw))
-        top_margin = max(6, int(10 * sh))
-        bottom_margin = max(26, int(42 * sh))
-        spacing = max(10, int(14 * sh))
+        top_margin = max(8, int(12 * sh))
+        bottom_margin = max(14, int(22 * sh))
+        spacing = max(9, int(13 * sh))
         self.layout.setContentsMargins(side_margin, top_margin, side_margin, bottom_margin)
         self.layout.setSpacing(spacing)
 
@@ -5096,6 +5239,10 @@ class OmniDashMainWindow(QMainWindow):
         title = game.get("title", "Game")
         gid = game.get("id")
 
+        if getattr(self, "_game_process", None) and self._game_process.state() != QProcess.NotRunning:
+            print(f"[OmniDash-Qt] Ya hay un juego en ejecución; cerralo antes de abrir {title}.")
+            return
+
         if core and rom:
             # H-08: Verificación física de integridad de ROM y Core antes de invocar Libretro
             if gid:
@@ -5103,22 +5250,53 @@ class OmniDashMainWindow(QMainWindow):
                 ok, msg = GameLibraryScannerService.get_instance().verify_game_file(gid)
                 if not ok:
                     print(f"[OmniDash-Qt] Verificación de lanzamiento denegada para {title}: {msg}")
+                    QMessageBox.warning(self, f"No se pudo iniciar {title}", msg)
                     return
 
-            print(f"[OmniDash-Qt] Lanzando emulador Libretro 60 FPS: {title} ({core})...")
-            try:
-                runner = LibretroRunner(
-                    core_path=core,
-                    rom_path=rom,
-                    screen_w=1280,
-                    screen_h=720
-                )
-                runner.run_standalone(title=f"C.C.I. SYSTEM — {title} (60 FPS)")
-            except Exception as exc:
-                print(f"[OmniDash-Qt] Error al ejecutar core: {exc}")
-            finally:
+            print(f"[OmniDash-Qt] Lanzando emulador Libretro 60 FPS en subproceso aislado: {title} ({core})...")
+            proc = QProcess(self)
+            proc.setWorkingDirectory(str(ROOT))
+            proc.setProcessChannelMode(QProcess.MergedChannels)
+            self._game_process = proc
+
+            def _on_finished(exit_code: int, exit_status):
+                raw_out = bytes(proc.readAllStandardOutput()).decode("utf-8", errors="ignore").strip()
+                if exit_code != 0:
+                    err_line = raw_out.splitlines()[-1] if raw_out else f"Código de salida {exit_code}"
+                    print(f"[OmniDash-Qt] Error al ejecutar core para {title}: {err_line}")
+                    QMessageBox.warning(
+                        self,
+                        f"Error al ejecutar {title}",
+                        f"El núcleo Libretro no pudo cargar este juego:\n{err_line}",
+                    )
+                self._game_process = None
+                proc.deleteLater()
                 self.activateWindow()
                 self.raise_()
+
+            def _on_error(proc_err):
+                print(f"[OmniDash-Qt] Error de proceso lanzando {title}: {proc_err}")
+                QMessageBox.warning(
+                    self,
+                    f"Error al iniciar {title}",
+                    "No se pudo iniciar el proceso emulador.",
+                )
+                self._game_process = None
+                proc.deleteLater()
+
+            proc.finished.connect(_on_finished)
+            proc.errorOccurred.connect(_on_error)
+            proc.start(
+                sys.executable,
+                [
+                    str(ROOT / "retro_core_runner.py"),
+                    "--core", str(core),
+                    "--rom", str(rom),
+                    "--title", f"C.C.I. SYSTEM — {title} (60 FPS)",
+                    "--width", "1280",
+                    "--height", "720",
+                ],
+            )
         else:
             print(f"[OmniDash-Qt] Ejecutando juego nativo C.C.I.: {title}")
 
