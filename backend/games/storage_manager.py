@@ -456,13 +456,19 @@ class GameStorageManager:
         os_prof = self.detect_target_os_profile(target_os)
         plat_key = str(game.get("platform_key") or "ps3")
         spec = svc.PLATFORM_SPECS.get(plat_key, svc.PLATFORM_SPECS["ps3"])
-        default_ext = (spec.get("extensions") or (".pkg",))[0]
+        fmt_upper = str(game.get("format") or "").upper()
+        if fmt_upper == "XCI":
+            default_ext = ".xci"
+        elif fmt_upper == "NSP":
+            default_ext = ".nsp"
+        else:
+            default_ext = (spec.get("extensions") or (".pkg",))[0]
 
         expected_rom = game.get("expected_rom")
         if expected_rom:
             dest_name = Path(expected_rom).name
         else:
-            clean = re.sub(r"[^a-zA-Z0-9._ -]", "_", game.get("clean_title") or game["title"]).strip()
+            clean = re.sub(r"[^a-zA-Z0-9._ -]", "_", game["title"]).strip()
             dest_name = f"{clean}{default_ext}"
 
         # Construir paquete de consola C.C.I. multi-OS (macOS / Windows)

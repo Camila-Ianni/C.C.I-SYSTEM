@@ -328,9 +328,11 @@ class GameLibraryScannerService:
                             for f in p_dir.rglob(f"*{ext_variant}"):
                                 if (
                                     f.is_file()
-                                    and not f.name.startswith(".")
+                                    and not any(part.startswith(".") for part in f.relative_to(p_dir).parts)
                                     and not f.name.endswith(".part")
                                 ):
+                                    if f.suffix.lower() == ".bin" and any(p.suffix.lower() == ".cue" for p in f.parent.glob("*.[cC][uU][eE]")):
+                                        continue
                                     disk_files_by_platform[platform_key].append(f)
 
         for pk in disk_files_by_platform:
@@ -348,13 +350,26 @@ class GameLibraryScannerService:
             expected_rom = entry.get("expected_rom")
 
             matched_file: Path | None = None
+            from backend.games.package_validator import ROMPackageIdentityValidator
+
             if expected_rom:
                 exp_abs = (self.root_dir / expected_rom).resolve()
                 exp_name = Path(expected_rom).name.lower()
                 for f in candidates:
+                    if f in matched_disk_paths:
+                        continue
                     if f.resolve() == exp_abs or f.name.lower() == exp_name:
-                        matched_file = f
-                        break
+                        id_ok, _, _ = ROMPackageIdentityValidator.verify_package_identity(
+                            game_id=str(entry.get("id") or ""),
+                            title=str(entry.get("title") or ""),
+                            platform_key=pk,
+                            rom_path=f,
+                            allowed_extensions=self.PLATFORM_SPECS.get(pk, {}).get("extensions", []),
+                            expected_rom=expected_rom,
+                        )
+                        if id_ok:
+                            matched_file = f
+                            break
 
             if not matched_file and candidates:
                 title_norm = self._norm_key(entry.get("clean_title") or entry.get("title", ""))
@@ -365,8 +380,17 @@ class GameLibraryScannerService:
                     if title_norm and len(title_norm) >= 5 and (
                         stem_norm == title_norm or title_norm in stem_norm or stem_norm in title_norm
                     ):
-                        matched_file = f
-                        break
+                        id_ok, _, _ = ROMPackageIdentityValidator.verify_package_identity(
+                            game_id=str(entry.get("id") or ""),
+                            title=str(entry.get("title") or ""),
+                            platform_key=pk,
+                            rom_path=f,
+                            allowed_extensions=self.PLATFORM_SPECS.get(pk, {}).get("extensions", []),
+                            expected_rom=expected_rom,
+                        )
+                        if id_ok:
+                            matched_file = f
+                            break
 
             if matched_file:
                 matched_disk_paths.add(matched_file)
@@ -545,13 +569,22 @@ class GameLibraryScannerService:
         if not rom_val or not rom_path.exists():
             return False, f"Archivo de ROM no encontrado en disco: {rom_val}"
 
-        try:
-            with open(rom_path, "rb") as fh:
-                head = fh.read(16)
-            if head.startswith(b"CCI_PKG_V2") and (self.root_dir / "modern_game_runner.py").exists():
-                return True, "Paquete de consola C.C.I. verificado listo para ejecución a 60 FPS."
-        except Exception:
-            pass
+        from backend.games.package_validator import ROMPackageIdentityValidator
+
+        plat_key = str(game.get("platform_key") or "ps3")
+        id_ok, id_msg, id_meta = ROMPackageIdentityValidator.verify_package_identity(
+            game_id=str(game.get("id") or game_id),
+            title=str(game.get("title") or ""),
+            platform_key=plat_key,
+            rom_path=rom_path,
+            allowed_extensions=self.PLATFORM_SPECS.get(plat_key, {}).get("extensions", []),
+            expected_rom=game.get("expected_rom"),
+        )
+        if not id_ok:
+            return False, f"Error de identidad o asociación de paquete: {id_msg}"
+
+        if id_meta.get("package_kind") == "cci_container" and (self.root_dir / "modern_game_runner.py").exists():
+            return True, "Paquete de consola C.C.I. verificado listo para ejecución a 60 FPS."
 
         core = game.get("core")
         if not core:

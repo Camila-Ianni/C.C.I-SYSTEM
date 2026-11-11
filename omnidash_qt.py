@@ -8898,7 +8898,7 @@ class OmniDashMainWindow(QMainWindow):
         return ok
 
     def _launch_modern_console_runner(self, game: dict):
-        """Ejecuta el juego moderno instalado a 60 FPS en el runtime nativo de consola para macOS o Windows."""
+        """Ejecuta el juego moderno instalado tras verificar estrictamente su identidad, plataforma y emulador."""
         title = game.get("title", "Juego")
         gid = str(game.get("id") or title)
         console_name = game.get("console", "Consola Moderna")
@@ -8906,6 +8906,21 @@ class OmniDashMainWindow(QMainWindow):
         genre = game.get("genre", "Acción / Aventura")
         cover = str(game.get("cover") or "")
         rom = str(game.get("rom") or "")
+
+        from modern_game_runner import resolve_playable_engine
+
+        engine_path, validated_rom, status_msg = resolve_playable_engine(
+            game_id=gid,
+            title=title,
+            genre=genre,
+            rom_arg=rom,
+            root_dir=ROOT,
+        )
+        if engine_path is None or validated_rom is None:
+            print(f"[OmniDash-Qt] Lanzamiento bloqueado para {title} [{badge}]: {status_msg}")
+            QMessageBox.information(self, f"{title} — Estado de compatibilidad", status_msg)
+            return None
+
         print(f"[OmniDash-Qt] Lanzando runtime moderno C.C.I. 60 FPS para {title} [{badge}]...")
         return self._start_game_qprocess(
             title=title,

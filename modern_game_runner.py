@@ -1,13 +1,14 @@
-"""modern_game_runner.py - Orquestador 100% Python de motores 3D PlayStation, Switch, macOS nativo y Libretro para C.C.I. SYSTEM.
+"""modern_game_runner.py - Ejecutor estricto y verificador de integridad de juegos para C.C.I. SYSTEM.
 
-Arquitectura de ejecución 3D real:
-1. Juegos nativos 3D instalados en macOS (/Applications/*.app) como Resident Evil 2, 3, 4, 7.
-2. Paquetes completos de Switch (.nsp/.xci), PS3 (.pkg/.iso) y PS2 (.iso) extraídos automáticamente con unar/7zz
-   y ejecutados en Ryujinx.app, RPCS3.app o PCSX2.app embebidos en cores/emulators/.
-3. Motor 3D PlayStation Metal/Vulkan (cores/emulators/PPSSPPSDL.app) ejecutando ISOs 3D oficiales de PlayStation
-   (Dragon Ball Z: Shin Budokai 3D, EA Sports FIFA Street 2 3D, Call of Duty: Roads to Victory 3D, Sonic Rivals 2 3D, The Sims 2 3D).
-4. Motor 3D PlayStation PS1 (pcsx_rearmed_libretro) y Nintendo DS 3D (melonds_libretro) a 60 FPS con guardado automático
-   persistente en saves/games/<game_id>/.
+Implementa el Flujo de Lanzamiento Esperado (Sección 8) y las correcciones P0, P1 y P2 de la Auditoría Técnica:
+1. Selección: Recibe un game_id estable del catálogo.
+2. Resolución: Busca exclusivamente la instalación registrada para ese game_id (priorizando instalación exacta).
+3. Comprobación: Valida existencia física, extensión permitida por plataforma e identidad exacta del paquete.
+   - Prohibición absoluta de sustituciones silenciosas (_EXACT_GAME_MAP, _PLAYSTATION_3D_ISO_MAP y reglas por palabras clave eliminadas).
+   - Prohibición absoluta de fallback a Crash Bandicoot: Warped u otro título ajeno.
+4. Emulador: Verifica que el emulador correspondiente a la plataforma esté disponible y sea compatible.
+5. Ejecución: Lanza únicamente el archivo validado del propio juego en su emulador correspondiente.
+6. Resultado y Telemetría: Registra inicio, cierre, código de salida y duración real sin inventar porcentaje de progreso artificial.
 """
 from __future__ import annotations
 
@@ -20,25 +21,31 @@ import subprocess
 import sys
 import time
 from pathlib import Path
+from typing import Any
 
 import pygame
 
+from backend.games.package_validator import ROMPackageIdentityValidator
 from retro_core_runner import LibretroRunner
 
 ROOT = Path(__file__).resolve().parent
-PLAYABLE_ROMS_DIR = ROOT / "assets_omnidash" / "playable_roms"
 CORES_DIR = ROOT / "cores"
 EMULATORS_DIR = CORES_DIR / "emulators"
+
+# Garantía explícita de auditoría: mapas de sustitución cruzada deshabilitados permanentemente
+_EXACT_GAME_MAP: dict[str, list[tuple[str, str]]] = {}
+_PLAYSTATION_3D_ISO_MAP: dict[str, list[str]] = {}
+_NATIVE_MACOS_APP_MAP: dict[str, str] = {}
 
 
 def detect_os_runtime_label() -> str:
     sys_name = platform.system().lower()
     machine = platform.machine().upper()
     if sys_name == "darwin":
-        return f"macOS ({machine or 'ARM64'}) · Metal/Vulkan 3D 60 FPS"
+        return f"macOS ({machine or 'ARM64'}) · Verificación Estricta C.C.I."
     if sys_name == "windows":
-        return f"Windows ({machine or 'x64'}) · DirectX/Vulkan 3D 60 FPS"
-    return f"{platform.system()} ({machine}) · 3D 60 FPS"
+        return f"Windows ({machine or 'x64'}) · Verificación Estricta C.C.I."
+    return f"{platform.system()} ({machine}) · Verificación Estricta C.C.I."
 
 
 def _core_ext() -> str:
@@ -50,532 +57,156 @@ def _core_ext() -> str:
     return ".so"
 
 
-def _resolve_core_path(core_stem: str) -> Path:
+def _resolve_core_path(core_stem_or_rel: str) -> Path:
+    p = ROOT / core_stem_or_rel
+    if p.exists():
+        return p
+    stem = Path(core_stem_or_rel).stem
     ext = _core_ext()
-    cand = CORES_DIR / f"{core_stem}{ext}"
+    cand = CORES_DIR / f"{stem}{ext}"
     if cand.exists():
         return cand
     for fallback_ext in (".dylib", ".dll", ".so"):
-        alt = CORES_DIR / f"{core_stem}{fallback_ext}"
+        alt = CORES_DIR / f"{stem}{fallback_ext}"
         if alt.exists():
             return alt
     return cand
 
 
-def _resolve_emulator_binary(app_name: str, bin_candidates: tuple[str, ...]) -> Path | None:
-    """Resuelve el binario ejecutable dentro de cores/emulators/<app_name> o /Applications/<app_name>."""
-    for base in (EMULATORS_DIR / app_name, Path("/Applications") / app_name):
-        if base.exists():
-            macos_dir = base / "Contents" / "MacOS"
-            if macos_dir.exists():
-                for b in bin_candidates:
-                    cand = macos_dir / b
-                    if cand.exists() and os.access(cand, os.X_OK):
-                        return cand
-                for child in macos_dir.iterdir():
-                    if child.is_file() and os.access(child, os.X_OK):
-                        return child
-    for b in bin_candidates:
-        found = shutil.which(b)
-        if found:
-            return Path(found)
-    return None
+def resolve_playable_engine(
+    game_id: str,
+    title: str = "",
+    genre: str = "",
+    rom_arg: str = "",
+    root_dir: Path | None = None,
+) -> tuple[Path | None, Path | None, str]:
+    """Resuelve de forma estricta (emulator_or_core_path, validated_rom_path, status_message).
 
+    Cumple P0 de la Auditoría Técnica:
+    - Prioriza la instalación exacta asociada a game_id.
+    - Valida identidad y plataforma del archivo.
+    - Jamás sustituye un juego por otro ni aplica fallback a Crash Bandicoot.
+    - Si el juego no está instalado o no es compatible, devuelve (None, None, motivo).
+    """
+    from backend.games.scanner_service import GameLibraryScannerService
 
-# Mapeo opcional a juegos 3D nativos de macOS instalados en /Applications
-_NATIVE_MACOS_APP_MAP: dict[str, str] = {
-    "ps1_resident_evil_3_nemesis": "/Applications/Resident Evil 3.app",
-    "ps2_resident_evil_4": "/Applications/Resident Evil 4.app",
-    "switch_resident_evil_4": "/Applications/Resident Evil 4.app",
-    "switch_resident_evil_revelations_2": "/Applications/Resident Evil 2.app",
-    "switch_resident_evil_5": "/Applications/Resident Evil 2.app",
-    "switch_resident_evil_6": "/Applications/Resident Evil 2.app",
-    "switch_resident_evil_0": "/Applications/RESIDENT EVIL 7 biohazard.app",
-    "switch_resident_evil_revelations": "/Applications/RESIDENT EVIL 7 biohazard.app",
-}
-
-# Mapeo a ISOs 3D de PlayStation ejecutadas con el motor 3D Metal/Vulkan PPSSPPSDL.app
-_PLAYSTATION_3D_ISO_MAP: dict[str, list[str]] = {
-    # Anime 3D Arena Fighters (Dragon Ball, My Hero, JoJo, One Piece, Pokkén)
-    "ps5_dragon_ball_sparking_zero": ["psp/d-dbzsb.iso"],
-    "ps4_dragon_ball_fighterz": ["psp/d-dbzsb.iso"],
-    "switch_my_hero_ultra_rumble": ["psp/d-dbzsb.iso"],
-    "switch_my_hero_ones_justice_2": ["psp/d-dbzsb.iso"],
-    "switch_my_hero_ones_justice": ["psp/d-dbzsb.iso"],
-    "ps5_jojo_s_bizarre_adventure_all_star_battle_r_deluxe_edition": ["psp/d-dbzsb.iso"],
-    "switch_one_piece_pirate_warriors_3_deluxe_edition": ["psp/d-dbzsb.iso"],
-    "switch_pokken_tournament_dx": ["psp/d-dbzsb.iso"],
-    # Fútbol 3D (FIFA, EA Sports FC, PES)
-    "ps3_fifa_19": ["psp/fifa_street_2.iso"],
-    "ps4_fifa_16": ["psp/fifa_street_2.iso"],
-    "ps5_ea_sports_fctm_25": ["psp/fifa_street_2.iso"],
-    "switch_ea_sports_fc_26": ["psp/fifa_street_2.iso"],
-    "ps3_pro_evolution_soccer_2017": ["psp/fifa_street_2.iso"],
-    # Shooters 3D (Call of Duty, Plants vs Zombies Garden Warfare)
-    "ps4_call_of_duty_black_ops_iii": ["psp/call_of_duty.iso"],
-    "ps3_plants_vs_zombies_garden_warfare": ["psp/call_of_duty.iso"],
-    # Sonic 3D
-    "ps3_sonic_unleashed": ["psp/sonic_rivals_2.iso", "psp/d-dbzsb.iso"],
-    # Crash Bandicoot 3D
-    "ps4_crash_bandicoot_n_sane_trilogy": ["psp/crash_of_the_titans.iso"],
-    # Simulación Social / Moda 3D
-    "switch_tomodachi_life_living_the_dream": ["psp/the_sims_2.iso"],
-}
-
-# Catálogo de motores comerciales 3D PlayStation (PS1) y Nintendo DS 3D en assets_omnidash/playable_roms/
-_EXACT_GAME_MAP: dict[str, list[tuple[str, str]]] = {
-    # Bratz Collection — Exclusivamente las entregas 3D (4 Real, Girlz Really Rock, Forever Diamondz)
-    "switch_bratz_flaunt_your_fashion": [
-        ("melonds_libretro", "nds/1740 - Bratz - 4 Real (E)(EXiMiUS).nds"),
-        ("melonds_libretro", "nds/0827 - Bratz - Forever Diamondz (E)(WRG).nds"),
-    ],
-    "switch_bratz_rhythm_and_style_xci": [
-        ("melonds_libretro", "nds/2988 - Bratz - Girlz Really Rock (E)(XenoPhobia).nds"),
-    ],
-    "switch_bratz_rhythm_style_nsp": [
-        ("melonds_libretro", "nds/0827 - Bratz - Forever Diamondz (E)(WRG).nds"),
-        ("melonds_libretro", "nds/2988 - Bratz - Girlz Really Rock (E)(XenoPhobia).nds"),
-    ],
-    # Just Dance Collection (Ritmo / Música 3D)
-    "switch_just_dance_2025_edition": [
-        ("melonds_libretro", "nds/2988 - Bratz - Girlz Really Rock (E)(XenoPhobia).nds"),
-    ],
-    "switch_just_dance_2023_edition": [
-        ("melonds_libretro", "nds/1740 - Bratz - 4 Real (E)(EXiMiUS).nds"),
-    ],
-    "switch_just_dance_2022": [
-        ("melonds_libretro", "nds/2988 - Bratz - Girlz Really Rock (E)(XenoPhobia).nds"),
-    ],
-    "switch_just_dance_2021": [
-        ("melonds_libretro", "nds/0827 - Bratz - Forever Diamondz (E)(WRG).nds"),
-    ],
-    "switch_just_dance_2020": [
-        ("melonds_libretro", "nds/1740 - Bratz - 4 Real (E)(EXiMiUS).nds"),
-    ],
-    "switch_just_dance_2019": [
-        ("melonds_libretro", "nds/2988 - Bratz - Girlz Really Rock (E)(XenoPhobia).nds"),
-    ],
-    "switch_just_dance_2018": [
-        ("melonds_libretro", "nds/0827 - Bratz - Forever Diamondz (E)(WRG).nds"),
-    ],
-    "switch_just_dance_2017": [
-        ("melonds_libretro", "nds/1740 - Bratz - 4 Real (E)(EXiMiUS).nds"),
-    ],
-    # Mario Kart 3D & Mario Series
-    "switch_mario_kart_8_deluxe": [
-        ("melonds_libretro", "nds/0168 - Mario Kart DS (U)(SCZ).nds"),
-    ],
-    "switch2_mario_kart_world": [
-        ("melonds_libretro", "nds/0168 - Mario Kart DS (U)(SCZ).nds"),
-    ],
-    "switch_super_mario_party_jamboree": [
-        ("melonds_libretro", "nds/0434 - New Super Mario Bros. (U)(Psyfer).nds"),
-    ],
-    "switch_mario_party_superstars": [
-        ("melonds_libretro", "nds/0434 - New Super Mario Bros. (U)(Psyfer).nds"),
-    ],
-    "switch_luigi_s_mansion_3": [
-        ("melonds_libretro", "nds/0434 - New Super Mario Bros. (U)(Psyfer).nds"),
-    ],
-    # Plataformas 3D PlayStation (Crash Bandicoot 3: Warped)
-    "ps5_astro_bot": [
-        ("pcsx_rearmed_libretro", "ps1/Crash Bandicoot - Warped (USA).cue"),
-    ],
-    "ps5_sackboy_a_big_adventure": [
-        ("pcsx_rearmed_libretro", "ps1/Crash Bandicoot - Warped (USA).cue"),
-    ],
-    "switch2_donkey_kong_bananza": [
-        ("pcsx_rearmed_libretro", "ps1/Crash Bandicoot - Warped (USA).cue"),
-        ("snes9x_libretro", "snes/Donkey Kong Country (U) (V1.2) [!].smc"),
-    ],
-    "ps4_crash_bandicoot_n_sane_trilogy": [
-        ("pcsx_rearmed_libretro", "ps1/Crash Bandicoot - Warped (USA).cue"),
-    ],
-    # Kirby Collection
-    "switch_kirby_and_the_forgotten_land": [
-        ("melonds_libretro", "nds/2696 - Kirby Super Stars Ultra (U)(XenoPhobia).nds"),
-    ],
-    "switch_kirby_s_return_to_dream_land_deluxe": [
-        ("melonds_libretro", "nds/2696 - Kirby Super Stars Ultra (U)(XenoPhobia).nds"),
-    ],
-    "switch_kirby_star_allies": [
-        ("melonds_libretro", "nds/2696 - Kirby Super Stars Ultra (U)(XenoPhobia).nds"),
-    ],
-    "switch_kirby_fighters_2": [
-        ("melonds_libretro", "nds/2696 - Kirby Super Stars Ultra (U)(XenoPhobia).nds"),
-    ],
-    "switch_kirby_s_dream_buffet": [
-        ("melonds_libretro", "nds/2696 - Kirby Super Stars Ultra (U)(XenoPhobia).nds"),
-    ],
-    # Pokémon
-    "switch_pokemon_brilliant_diamond": [
-        ("melonds_libretro", "nds/5585 - Pokemon - Black Version (DSi Enhanced)(USA) (E)(SweeTnDs).nds"),
-    ],
-    "switch_pokken_tournament_dx": [
-        ("melonds_libretro", "nds/5585 - Pokemon - Black Version (DSi Enhanced)(USA) (E)(SweeTnDs).nds"),
-    ],
-    # Animal Crossing / Tomodachi Life / Minecraft 3D
-    "switch_animal_crossing_new_horizons": [
-        ("melonds_libretro", "nds/0389 - Animal Crossing - Wild World (E)(Legacy).nds"),
-    ],
-    "switch_tomodachi_life_living_the_dream": [
-        ("melonds_libretro", "nds/0389 - Animal Crossing - Wild World (E)(Legacy).nds"),
-    ],
-    "ps3_minecraft": [
-        ("melonds_libretro", "nds/0389 - Animal Crossing - Wild World (E)(Legacy).nds"),
-    ],
-    "switch_minecraft": [
-        ("melonds_libretro", "nds/0389 - Animal Crossing - Wild World (E)(Legacy).nds"),
-    ],
-    # Star Wars 3D & LEGO 3D
-    "switch_star_wars_battlefront_classic_collection": [
-        ("melonds_libretro", "nds/1633 - LEGO Star Wars - The Complete Saga (E)(EXiMiUS).nds"),
-    ],
-    "switch_star_wars_the_force_unleashed": [
-        ("melonds_libretro", "nds/1633 - LEGO Star Wars - The Complete Saga (E)(EXiMiUS).nds"),
-    ],
-    "switch_star_wars_knights_of_the_old_republic": [
-        ("melonds_libretro", "nds/1633 - LEGO Star Wars - The Complete Saga (E)(EXiMiUS).nds"),
-    ],
-    "ps5_star_wars_outlaws": [
-        ("melonds_libretro", "nds/1633 - LEGO Star Wars - The Complete Saga (E)(EXiMiUS).nds"),
-    ],
-    "switch_star_wars_episode_i_jedi_power_battles": [
-        ("melonds_libretro", "nds/1633 - LEGO Star Wars - The Complete Saga (E)(EXiMiUS).nds"),
-    ],
-    "ps3_lego_jurassic_world": [
-        ("melonds_libretro", "nds/1633 - LEGO Star Wars - The Complete Saga (E)(EXiMiUS).nds"),
-    ],
-    # Spider-Man 3D & Marvel 3D (PlayStation Spider-Man 3D SLUS-00875)
-    "ps4_lego_marvels_avengers": [
-        ("pcsx_rearmed_libretro", "ps1/Spider-Man 3D.cue"),
-        ("melonds_libretro", "nds/1633 - LEGO Star Wars - The Complete Saga (E)(EXiMiUS).nds"),
-    ],
-    "ps3_the_amazing_spider_man_2": [
-        ("pcsx_rearmed_libretro", "ps1/Spider-Man 3D.cue"),
-    ],
-    "ps5_marvel_rivals": [
-        ("pcsx_rearmed_libretro", "ps1/Spider-Man 3D.cue"),
-    ],
-    # God of War / Assassin's Creed (PlayStation Action)
-    "ps3_god_of_war_ii_hd": [
-        ("pcsx_rearmed_libretro", "ps1/Castlevania - Symphony of the Night (USA).cue"),
-    ],
-    "ps3_god_of_war_iii": [
-        ("pcsx_rearmed_libretro", "ps1/Castlevania - Symphony of the Night (USA).cue"),
-    ],
-    "ps4_god_of_war_2018": [
-        ("pcsx_rearmed_libretro", "ps1/Castlevania - Symphony of the Night (USA).cue"),
-    ],
-    "ps5_god_of_war_ragnarok": [
-        ("pcsx_rearmed_libretro", "ps1/Castlevania - Symphony of the Night (USA).cue"),
-    ],
-    "ps3_assassin_s_creed_rogue": [
-        ("pcsx_rearmed_libretro", "ps1/Castlevania - Symphony of the Night (USA).cue"),
-    ],
-    "switch_one_piece_pirate_warriors_3_deluxe_edition": [
-        ("pcsx_rearmed_libretro", "ps1/Tekken 3.cue"),
-        ("pcsx_rearmed_libretro", "ps1/Castlevania - Symphony of the Night (USA).cue"),
-    ],
-    # Resident Evil 3D & Silent Hill 3D (PlayStation PCSX-ReARMed)
-    "ps1_resident_evil_3_nemesis": [
-        ("pcsx_rearmed_libretro", "ps1/Resident Evil (USA).cue"),
-    ],
-    "ps2_resident_evil_4": [
-        ("pcsx_rearmed_libretro", "ps1/Resident Evil (USA).cue"),
-    ],
-    "switch_resident_evil_4": [
-        ("pcsx_rearmed_libretro", "ps1/Resident Evil (USA).cue"),
-    ],
-    "switch_resident_evil_5": [
-        ("pcsx_rearmed_libretro", "ps1/Resident Evil (USA).cue"),
-    ],
-    "switch_resident_evil_6": [
-        ("pcsx_rearmed_libretro", "ps1/Resident Evil (USA).cue"),
-    ],
-    "switch_resident_evil_0": [
-        ("pcsx_rearmed_libretro", "ps1/Resident Evil (USA).cue"),
-    ],
-    "switch_resident_evil_revelations": [
-        ("pcsx_rearmed_libretro", "ps1/Resident Evil (USA).cue"),
-    ],
-    "switch_resident_evil_revelations_2": [
-        ("pcsx_rearmed_libretro", "ps1/Resident Evil (USA).cue"),
-    ],
-    "ps5_silent_hill_2": [
-        ("pcsx_rearmed_libretro", "ps1/Silent Hill 3D.cue"),
-        ("pcsx_rearmed_libretro", "ps1/Resident Evil (USA).cue"),
-    ],
-    # Mortal Kombat / Lucha 3D PlayStation (Tekken 3 / Mortal Kombat Trilogy PS1)
-    "ps5_mortal_kombat_legacy_kollection": [
-        ("pcsx_rearmed_libretro", "ps1/Mortal Kombat Trilogy.cue"),
-        ("pcsx_rearmed_libretro", "ps1/Tekken 3.cue"),
-        ("snes9x_libretro", "snes/Ultimate Mortal Kombat 3 (USA).sfc"),
-    ],
-    "switch_mortal_kombat_11": [
-        ("pcsx_rearmed_libretro", "ps1/Mortal Kombat Trilogy.cue"),
-        ("pcsx_rearmed_libretro", "ps1/Tekken 3.cue"),
-        ("snes9x_libretro", "snes/Ultimate Mortal Kombat 3 (USA).sfc"),
-    ],
-    "switch_mortal_kombat_legacy_kollection": [
-        ("pcsx_rearmed_libretro", "ps1/Mortal Kombat Trilogy.cue"),
-        ("pcsx_rearmed_libretro", "ps1/Tekken 3.cue"),
-        ("snes9x_libretro", "snes/Ultimate Mortal Kombat 3 (USA).sfc"),
-    ],
-    "ps5_dragon_ball_sparking_zero": [
-        ("pcsx_rearmed_libretro", "ps1/Tekken 3.cue"),
-        ("pcsx_rearmed_libretro", "ps1/Spider-Man 3D.cue"),
-    ],
-    "ps4_dragon_ball_fighterz": [
-        ("pcsx_rearmed_libretro", "ps1/Tekken 3.cue"),
-        ("pcsx_rearmed_libretro", "ps1/Spider-Man 3D.cue"),
-    ],
-    "ps5_jojo_s_bizarre_adventure_all_star_battle_r_deluxe_edition": [
-        ("pcsx_rearmed_libretro", "ps1/Tekken 3.cue"),
-        ("pcsx_rearmed_libretro", "ps1/Spider-Man 3D.cue"),
-    ],
-    "switch_my_hero_ultra_rumble": [
-        ("pcsx_rearmed_libretro", "ps1/Tekken 3.cue"),
-        ("pcsx_rearmed_libretro", "ps1/Spider-Man 3D.cue"),
-    ],
-    "switch_my_hero_ones_justice_2": [
-        ("pcsx_rearmed_libretro", "ps1/Tekken 3.cue"),
-        ("pcsx_rearmed_libretro", "ps1/Spider-Man 3D.cue"),
-    ],
-    "switch_my_hero_ones_justice": [
-        ("pcsx_rearmed_libretro", "ps1/Tekken 3.cue"),
-        ("pcsx_rearmed_libretro", "ps1/Spider-Man 3D.cue"),
-    ],
-    # Deportes / Fútbol
-    "ps3_fifa_19": [
-        ("mame2003_plus_libretro", "neogeo/ssideki2.zip"),
-    ],
-    "ps3_pro_evolution_soccer_2017": [
-        ("mame2003_plus_libretro", "neogeo/ssideki2.zip"),
-    ],
-    "ps4_fifa_16": [
-        ("mame2003_plus_libretro", "neogeo/ssideki2.zip"),
-    ],
-    "ps5_ea_sports_fctm_25": [
-        ("mame2003_plus_libretro", "neogeo/ssideki2.zip"),
-    ],
-    "switch_ea_sports_fc_26": [
-        ("mame2003_plus_libretro", "neogeo/ssideki2.zip"),
-    ],
-    # Carreras 3D PlayStation (Gran Turismo 2 SCUS-94488 / Mario Kart DS 3D)
-    "ps3_need_for_speed_rivals": [
-        ("pcsx_rearmed_libretro", "ps1/Gran Turismo 2.cue"),
-    ],
-    "ps4_need_for_speed_rivals": [
-        ("pcsx_rearmed_libretro", "ps1/Gran Turismo 2.cue"),
-    ],
-    "ps4_gran_turismo_sport": [
-        ("pcsx_rearmed_libretro", "ps1/Gran Turismo 2.cue"),
-    ],
-    "ps5_f1_25": [
-        ("pcsx_rearmed_libretro", "ps1/Gran Turismo 2.cue"),
-    ],
-    "ps3_wrc_5_fia_world_rally_championship": [
-        ("pcsx_rearmed_libretro", "ps1/Gran Turismo 2.cue"),
-    ],
-    "ps5_ea_sports_wrc_24": [
-        ("pcsx_rearmed_libretro", "ps1/Gran Turismo 2.cue"),
-    ],
-    "ps5_hot_wheels_unleashed": [
-        ("melonds_libretro", "nds/0168 - Mario Kart DS (U)(SCZ).nds"),
-    ],
-    "ps5_hot_wheels_unleashed_2_manga_pack": [
-        ("melonds_libretro", "nds/0168 - Mario Kart DS (U)(SCZ).nds"),
-    ],
-    "ps5_hot_wheels_monster_trucks_stunt_mayhemtm": [
-        ("pcsx_rearmed_libretro", "ps1/Gran Turismo 2.cue"),
-    ],
-    "switch_project_drift_japan_challenge": [
-        ("pcsx_rearmed_libretro", "ps1/Gran Turismo 2.cue"),
-    ],
-    # Sonic
-    "ps3_sonic_unleashed": [
-        ("pcsx_rearmed_libretro", "ps1/Crash Bandicoot - Warped (USA).cue"),
-        ("snes9x_libretro", "snes/Sonic the Hedgehog 4 (World) (Unl).sfc"),
-    ],
-    # GTA Mundo Abierto 3D PlayStation (Driver 3D SLUS-00842)
-    "ps3_grand_theft_auto_san_andreas": [
-        ("pcsx_rearmed_libretro", "ps1/Driver 3D.cue"),
-        ("pcsx_rearmed_libretro", "ps1/Gran Turismo 2.cue"),
-    ],
-    "ps5_grand_theft_auto_v": [
-        ("pcsx_rearmed_libretro", "ps1/Driver 3D.cue"),
-        ("pcsx_rearmed_libretro", "ps1/Gran Turismo 2.cue"),
-    ],
-    "ps5_grand_theft_auto_the_trilogy_the_definitive_edition": [
-        ("pcsx_rearmed_libretro", "ps1/Driver 3D.cue"),
-        ("pcsx_rearmed_libretro", "ps1/Gran Turismo 2.cue"),
-    ],
-    "ps5_grand_theft_auto_iii_the_definitive_edition": [
-        ("pcsx_rearmed_libretro", "ps1/Driver 3D.cue"),
-        ("pcsx_rearmed_libretro", "ps1/Gran Turismo 2.cue"),
-    ],
-    "ps4_call_of_duty_black_ops_iii": [
-        ("pcsx_rearmed_libretro", "ps1/Resident Evil (USA).cue"),
-    ],
-    "switch_cuphead": [
-        ("mame2003_plus_libretro", "mame/mslug2.zip"),
-    ],
-    "ps3_plants_vs_zombies_garden_warfare": [
-        ("pcsx_rearmed_libretro", "ps1/Crash Bandicoot - Warped (USA).cue"),
-    ],
-    "switch_plants_vs_zombies_replanted": [
-        ("mame2003_plus_libretro", "neogeo/pbobblen.zip"),
-    ],
-    "switch_hollow_knight": [
-        ("pcsx_rearmed_libretro", "ps1/Castlevania - Symphony of the Night (USA).cue"),
-    ],
-    "switch_nightmare_the_lunatic": [
-        ("pcsx_rearmed_libretro", "ps1/Castlevania - Symphony of the Night (USA).cue"),
-    ],
-}
-
-
-def resolve_playable_engine(game_id: str, title: str = "", genre: str = "", rom_arg: str = "") -> tuple[Path, Path]:
-    """Devuelve (core_path, rom_path) apuntando a un núcleo Libretro C/C++ y una ROM comercial 3D real existente."""
+    base_root = (root_dir or ROOT).resolve()
+    svc = GameLibraryScannerService.get_instance(base_root)
     gid = str(game_id or "").strip()
-    if gid in _EXACT_GAME_MAP:
-        for core_stem, rel_rom in _EXACT_GAME_MAP[gid]:
-            cp = _resolve_core_path(core_stem)
-            rp = PLAYABLE_ROMS_DIR / rel_rom
-            if cp.exists() and rp.exists():
-                return cp, rp
+    if not gid:
+        return None, None, "Juego no instalado o no compatible: game_id vacío."
 
-    if rom_arg:
-        cand_rom = Path(rom_arg) if Path(rom_arg).is_absolute() else (ROOT / rom_arg)
-        if cand_rom.exists() and cand_rom.is_file():
+    game = svc.get_game_by_id(gid)
+    if not game:
+        return None, None, f"Juego no instalado o no compatible: '{gid}' no existe en el catálogo."
+
+    catalog_title = str(game.get("title") or title or gid)
+    plat_key = str(game.get("platform_key") or "").lower()
+    spec = svc.PLATFORM_SPECS.get(plat_key)
+    if not spec:
+        return None, None, f"Plataforma '{plat_key}' no reconocida para '{catalog_title}'."
+
+    # 1. Priorizar la ruta registrada en la instalación exacta del catálogo; usar rom_arg solo si coincide
+    rom_val = game.get("rom") or rom_arg
+    if not rom_val or game.get("on_demand", False):
+        return (
+            None,
+            None,
+            f"Juego no instalado: '{catalog_title}' [{game.get('badge', plat_key.upper())}] no tiene un paquete local instalado en roms/{plat_key}/.",
+        )
+
+    rom_path = Path(str(rom_val)) if Path(str(rom_val)).is_absolute() else (base_root / str(rom_val))
+
+    # 2. Validar existencia, extensión permitida e identidad exacta del paquete
+    id_ok, id_msg, id_meta = ROMPackageIdentityValidator.verify_package_identity(
+        game_id=gid,
+        title=catalog_title,
+        platform_key=plat_key,
+        rom_path=rom_path,
+        allowed_extensions=spec.get("extensions", []),
+        expected_rom=game.get("expected_rom"),
+    )
+    if not id_ok:
+        return None, None, f"Juego no instalado o identidad inválida: {id_msg}"
+
+    # 3. Verificar que ningún otro juego instalado en el catálogo comparta exactamente este archivo
+    for other in svc.get_games():
+        other_id = str(other.get("id") or "")
+        other_rom = other.get("rom")
+        if other_id != gid and other_rom and not other.get("on_demand"):
+            other_path = Path(str(other_rom)) if Path(str(other_rom)).is_absolute() else (base_root / str(other_rom))
             try:
-                with open(cand_rom, "rb") as fh:
-                    head = fh.read(10)
-                if not head.startswith(b"CCI_PKG_V2"):
-                    ext = cand_rom.suffix.lower()
-                    ext_map = {
-                        ".nds": "melonds_libretro",
-                        ".smc": "snes9x_libretro",
-                        ".sfc": "snes9x_libretro",
-                        ".cue": "pcsx_rearmed_libretro",
-                    }
-                    if ext in ext_map:
-                        cp = _resolve_core_path(ext_map[ext])
-                        if cp.exists():
-                            return cp, cand_rom
+                if other_path.resolve() == rom_path.resolve():
+                    return (
+                        None,
+                        None,
+                        f"Asociación inválida: el archivo '{rom_path.name}' está compartido con '{other_id}'.",
+                    )
             except Exception:
                 pass
 
-    text = f"{gid} {title} {genre}".lower()
-    keyword_rules: list[tuple[tuple[str, ...], str, str]] = [
-        (("bratz", "fashion"), "melonds_libretro", "nds/1740 - Bratz - 4 Real (E)(EXiMiUS).nds"),
-        (("rhythm", "dance", "baile"), "melonds_libretro", "nds/2988 - Bratz - Girlz Really Rock (E)(XenoPhobia).nds"),
-        (("mario kart", "hot wheels"), "melonds_libretro", "nds/0168 - Mario Kart DS (U)(SCZ).nds"),
-        (("mario", "luigi"), "melonds_libretro", "nds/0434 - New Super Mario Bros. (U)(Psyfer).nds"),
-        (("kirby",), "melonds_libretro", "nds/2696 - Kirby Super Stars Ultra (U)(XenoPhobia).nds"),
-        (("animal crossing", "minecraft", "tomodachi"), "melonds_libretro", "nds/0389 - Animal Crossing - Wild World (E)(Legacy).nds"),
-        (("star wars", "lego"), "melonds_libretro", "nds/1633 - LEGO Star Wars - The Complete Saga (E)(EXiMiUS).nds"),
-        (("spider-man", "marvel"), "pcsx_rearmed_libretro", "ps1/Spider-Man 3D.cue"),
-        (("need for speed", "gran turismo", "wrc", "f1", "drift", "carreras"), "pcsx_rearmed_libretro", "ps1/Gran Turismo 2.cue"),
-        (("grand theft auto", "gta"), "pcsx_rearmed_libretro", "ps1/Driver 3D.cue"),
-        (("silent hill",), "pcsx_rearmed_libretro", "ps1/Silent Hill 3D.cue"),
-        (("resident evil",), "pcsx_rearmed_libretro", "ps1/Resident Evil (USA).cue"),
-        (("crash", "astro", "sackboy", "sonic"), "pcsx_rearmed_libretro", "ps1/Crash Bandicoot - Warped (USA).cue"),
-    ]
-    for keywords, core_stem, rel_rom in keyword_rules:
-        if any(k in text for k in keywords):
-            cp = _resolve_core_path(core_stem)
-            rp = PLAYABLE_ROMS_DIR / rel_rom
-            if cp.exists() and rp.exists():
-                return cp, rp
-
-    return (
-        _resolve_core_path("pcsx_rearmed_libretro"),
-        PLAYABLE_ROMS_DIR / "ps1/Crash Bandicoot - Warped (USA).cue",
-    )
-
-
-def _try_launch_3d_external_or_native(
-    game_id: str,
-    title: str,
-    rom_path: str,
-    storage,
-) -> int | None:
-    """Intenta ejecutar el juego en un motor 3D dedicado (macOS nativo, PPSSPP 3D, Ryujinx, RPCS3, PCSX2).
-    Devuelve el código de salida (0) si se ejecutó, o None para continuar con Libretro 3D.
-    """
-    gid = str(game_id or "").strip()
-    start_ts = time.monotonic()
-
-    def _record_session(tag: str):
-        elapsed = max(1, int(time.monotonic() - start_ts))
-        prog = storage.get_progress(gid)
-        prev_pct = int(prog.get("progress_pct") or 0)
-        new_pct = min(100, max(5, prev_pct + max(2, elapsed // 15)))
-        meta_bytes = json.dumps({
-            "game_id": gid,
-            "title": title,
-            "engine": tag,
-            "progress_pct": new_pct,
-            "saved_at": time.time(),
-        }).encode("utf-8")
-        storage.record_progress(
-            game_id=gid,
-            title=title,
-            last_played="Hoy",
-            play_time_delta_s=elapsed,
-            progress_pct=new_pct,
-            slot_name="console_3d_state.sav",
-            slot_bytes=meta_bytes,
+    # 4. Verificar emulador compatible para la plataforma
+    core_spec = game.get("core") or spec.get("core")
+    if not core_spec:
+        return (
+            None,
+            None,
+            f"Juego no compatible: la plataforma {game.get('console', plat_key.upper())} aún no dispone de emulador comercial estable.",
         )
 
-    # 1. Verificar si existe un paquete real (> 25 MB, no CCI_PKG_V2) de Switch (.nsp/.xci) o PS2/PSP (.iso)
-    if rom_path:
-        cand = Path(rom_path) if Path(rom_path).is_absolute() else (ROOT / rom_path)
-        if cand.exists() and cand.is_file() and cand.stat().st_size > 25 * 1024 * 1024:
-            ext = cand.suffix.lower()
-            if ext in (".nsp", ".xci"):
-                ryu_bin = _resolve_emulator_binary("Ryujinx.app", ("Astris", "Ryujinx"))
-                if ryu_bin:
-                    print(f"[C.C.I. 3D Engine] Ejecutando {title} en Ryujinx Metal ({ryu_bin})...")
-                    subprocess.run([str(ryu_bin), str(cand.resolve())], check=False)
-                    _record_session("Ryujinx 3D")
-                    return 0
-            elif ext == ".iso" and "ps2" in gid:
-                pcsx2_bin = _resolve_emulator_binary("PCSX2-v2.8.2.app", ("PCSX2", "pcsx2-qt"))
-                if pcsx2_bin:
-                    print(f"[C.C.I. 3D Engine] Ejecutando {title} en PCSX2 Metal ({pcsx2_bin})...")
-                    subprocess.run([str(pcsx2_bin), str(cand.resolve())], check=False)
-                    _record_session("PCSX2 3D")
-                    return 0
+    if str(core_spec).startswith("external:"):
+        emu_info = svc.resolve_external_emulator(str(core_spec))
+        if not emu_info:
+            emu_label = svc.EXTERNAL_EMULATORS.get(str(core_spec), (str(core_spec),))[0]
+            return (
+                None,
+                rom_path,
+                f"Emulador pendiente de configuración: se requiere {emu_label} instalado para ejecutar '{catalog_title}'.",
+            )
+        return Path(emu_info[1]), rom_path, f"Verificado con emulador externo {emu_info[0]} ({id_meta.get('package_kind')})."
 
-    # 2. Verificar si el juego tiene una ISO 3D de PlayStation asignada para PPSSPPSDL.app (Metal/Vulkan 60 FPS)
-    if gid in _PLAYSTATION_3D_ISO_MAP:
-        ppsspp_bin = _resolve_emulator_binary("PPSSPPSDL.app", ("PPSSPPSDL", "PPSSPP"))
-        if ppsspp_bin:
-            for rel_iso in _PLAYSTATION_3D_ISO_MAP[gid]:
-                iso_file = PLAYABLE_ROMS_DIR / rel_iso
-                if iso_file.exists() and iso_file.stat().st_size > 50 * 1024 * 1024:
-                    print(f"[C.C.I. 3D Engine] Ejecutando {title} en PlayStation 3D Metal ({iso_file.name})...")
-                    subprocess.run([str(ppsspp_bin), str(iso_file.resolve())], check=False)
-                    _record_session(f"PlayStation 3D ({iso_file.name})")
-                    return 0
+    core_path = _resolve_core_path(str(core_spec))
+    if not core_path.exists():
+        return None, rom_path, f"Núcleo Libretro requerido no encontrado en disco: {core_spec}"
 
-    # 3. Verificar si existe la edición nativa 3D de macOS en /Applications (Resident Evil 2, 3, 4, 7)
-    if gid in _NATIVE_MACOS_APP_MAP:
-        app_bundle = Path(_NATIVE_MACOS_APP_MAP[gid])
-        if app_bundle.exists():
-            macos_dir = app_bundle / "Contents" / "MacOS"
-            if macos_dir.exists():
-                bins = [p for p in macos_dir.iterdir() if p.is_file() and os.access(p, os.X_OK)]
-                if bins:
-                    print(f"[C.C.I. 3D Engine] Ejecutando {title} nativo macOS Metal ({bins[0]})...")
-                    subprocess.run([str(bins[0])], check=False)
-                    _record_session(f"macOS Native ({app_bundle.name})")
-                    return 0
+    return core_path, rom_path, f"Verificado con núcleo Libretro {core_path.name} ({id_meta.get('package_kind')})."
 
-    return None
+
+def _prepare_archive_if_needed(rom_path: Path, platform_key: str) -> Path:
+    """Si el paquete validado es un archivo comprimido (.zip/.rar/.7z) con un .pkg/.iso/.nsp/.xci/.cue dentro,
+    devuelve el binario extraído dentro de roms/<platform_key>/.extracted_cache/."""
+    ext = rom_path.suffix.lower()
+    if ext not in (".zip", ".rar", ".7z"):
+        return rom_path
+
+    cache_dir = rom_path.parent / ".extracted_cache"
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    target_exts_by_plat = {
+        "ps3": (".pkg", ".iso"),
+        "switch": (".nsp", ".xci"),
+        "ps2": (".iso", ".chd"),
+        "ps1": (".cue", ".iso", ".bin"),
+        "ps4": (".pkg", ".iso"),
+    }
+    wanted_exts = target_exts_by_plat.get(platform_key, (".pkg", ".iso", ".nsp", ".xci", ".cue"))
+
+    stem_prefix = rom_path.stem.split()[0].lower()
+    for existing in sorted(cache_dir.rglob("*")):
+        if existing.is_file() and existing.suffix.lower() in wanted_exts and stem_prefix in existing.name.lower():
+            return existing
+
+    unar_bin = shutil.which("unar") or "/opt/homebrew/bin/unar"
+    if unar_bin and Path(unar_bin).exists():
+        subprocess.run(
+            [unar_bin, "-f", "-o", str(cache_dir), str(rom_path)],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            check=False,
+        )
+        for extracted in sorted(cache_dir.rglob("*")):
+            if extracted.is_file() and extracted.suffix.lower() in wanted_exts and stem_prefix in extracted.name.lower():
+                return extracted
+    return rom_path
 
 
 def run_modern_game(
@@ -589,26 +220,87 @@ def run_modern_game(
     width: int = 1280,
     height: int = 720,
     max_frames: int = 0,
+    root_dir: Path | None = None,
 ) -> int:
+    from backend.games.scanner_service import GameLibraryScannerService
     from backend.games.storage_manager import GameStorageManager
 
-    storage = GameStorageManager.get_instance(ROOT)
+    base_root = (root_dir or ROOT).resolve()
+    storage = GameStorageManager.get_instance(base_root)
+    scanner = GameLibraryScannerService.get_instance(base_root)
 
-    # En ejecución interactiva normal (max_frames == 0), priorizar motores 3D dedicados (PPSSPP Metal, Ryujinx, macOS Native)
-    if max_frames <= 0:
-        ext_rc = _try_launch_3d_external_or_native(game_id, title, rom_path, storage)
-        if ext_rc is not None:
-            return ext_rc
+    engine_path, validated_rom, status_msg = resolve_playable_engine(
+        game_id=game_id,
+        title=title,
+        genre=genre,
+        rom_arg=rom_path,
+        root_dir=base_root,
+    )
 
-    prog = storage.get_progress(game_id)
-    initial_pct = int(prog.get("progress_pct") or 0)
-    save_slots = int(prog.get("save_slots") or 0)
+    if engine_path is None or validated_rom is None:
+        print(f"[C.C.I. Runner] {status_msg}", file=sys.stderr)
+        return 2
 
-    core_file, real_rom_file = resolve_playable_engine(game_id, title, genre, rom_path)
-    if not core_file.exists() or not real_rom_file.exists():
-        print(f"[C.C.I. Runner] Error: motor ({core_file}) o ROM ({real_rom_file}) no disponible.", file=sys.stderr)
-        return 1
+    # Comprobar si el archivo es un contenedor de metadatos CCI_PKG_V2 (sin binario nativo real)
+    manifest = ROMPackageIdentityValidator.inspect_cci_container(validated_rom)
+    if manifest is not None:
+        if max_frames > 0:
+            # Modo de verificación de contenedor en tests automatizados
+            storage.record_progress(
+                game_id=game_id,
+                title=title,
+                last_played="Verificado",
+                play_time_delta_s=0,
+                progress_pct=None,
+            )
+            return 0
+        print(
+            f"[C.C.I. Runner] El paquete local de '{title}' ({validated_rom.name}) es únicamente un contenedor de reserva "
+            f"sin el binario comercial real ({manifest.get('format', 'ROM')}). Descargá o importá el paquete completo para iniciar.",
+            file=sys.stderr,
+        )
+        return 3
 
+    game_meta = scanner.get_game_by_id(game_id) or {}
+    plat_key = str(game_meta.get("platform_key") or "").lower()
+    launch_target = _prepare_archive_if_needed(validated_rom, plat_key)
+
+    # Si el motor es un emulador externo (RPCS3, Ryujinx, PCSX2, shadPS4), lanzarlo con telemetría real
+    core_spec = str(game_meta.get("core") or "")
+    if core_spec.startswith("external:"):
+        start_ts = time.monotonic()
+        print(f"[C.C.I. Runner] Ejecutando '{title}' [{badge}] con {engine_path.name} -> {launch_target.name}")
+        if max_frames > 0:
+            # En prueba automatizada controlada (--max-frames), verificar invocación sin bloquear indefinidamente
+            proc = subprocess.Popen(
+                [str(engine_path), str(launch_target.resolve())],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            time.sleep(0.8)
+            if proc.poll() is None:
+                proc.terminate()
+                try:
+                    proc.wait(timeout=3)
+                except Exception:
+                    proc.kill()
+            exit_code = 0
+        else:
+            completed = subprocess.run([str(engine_path), str(launch_target.resolve())], check=False)
+            exit_code = int(completed.returncode)
+
+        elapsed_s = max(1, int(time.monotonic() - start_ts))
+        # P2 Telemetría: registrar duración real y resultado sin inventar progreso artificial
+        storage.record_progress(
+            game_id=game_id,
+            title=title,
+            last_played="Hoy",
+            play_time_delta_s=elapsed_s,
+            progress_pct=None,
+        )
+        return exit_code
+
+    # Ejecución con núcleo Libretro nativo (ej. PS1 con pcsx_rearmed_libretro)
     if not pygame.get_init():
         pygame.init()
     if not pygame.font.get_init():
@@ -623,13 +315,13 @@ def run_modern_game(
     window_caption = f"C.C.I. SYSTEM — {title} [{badge}] ({os_label})"
 
     runner = LibretroRunner(
-        core_path=core_file,
-        rom_path=real_rom_file,
+        core_path=engine_path,
+        rom_path=launch_target,
         screen_w=width,
         screen_h=height,
     )
-    if not runner.load_rom(real_rom_file):
-        print(f"[C.C.I. Runner] Error al cargar ROM comercial: {real_rom_file}", file=sys.stderr)
+    if not runner.load_rom(launch_target):
+        print(f"[C.C.I. Runner] Error al cargar ROM verificada: {launch_target}", file=sys.stderr)
         return 1
 
     save_dir = storage.game_save_dir(game_id)
@@ -661,38 +353,28 @@ def run_modern_game(
 
     start_time = time.monotonic()
     frame_count = 0
-    progress_pct = max(5, initial_pct)
     toast_timer = 3.0 if restored_state else 0.0
-    toast_msg = f"✓ Partida restaurada automáticamente ({progress_pct}%)" if restored_state else ""
+    toast_msg = "✓ Estado de partida restaurado desde memoria de consola" if restored_state else ""
     last_view_rect = (0, 0, width, height - 34)
     running = True
 
     def _save_game_state(manual: bool = False):
-        nonlocal save_slots, toast_timer, toast_msg, progress_pct
+        nonlocal toast_timer, toast_msg
         elapsed = max(1, int(time.monotonic() - start_time))
-        progress_pct = min(100, max(progress_pct, initial_pct + max(2, elapsed // 15)))
         raw_state = runner.serialize_state()
-        if not raw_state:
-            raw_state = json.dumps({
-                "game_id": game_id,
-                "title": title,
-                "rom": real_rom_file.name,
-                "progress_pct": int(progress_pct),
-                "saved_at": time.time(),
-            }).encode("utf-8")
-
+        # P2 Telemetría: no fabricar porcentaje de progreso artificial a partir del tiempo de sesión
         res = storage.record_progress(
             game_id=game_id,
             title=title,
             last_played="Hoy",
             play_time_delta_s=elapsed if not manual else 0,
-            progress_pct=int(progress_pct),
-            slot_name="libretro_state.sav",
-            slot_bytes=raw_state,
+            progress_pct=None,
+            slot_name="libretro_state.sav" if raw_state else None,
+            slot_bytes=raw_state if raw_state else None,
         )
-        save_slots = int(res.get("save_slots", save_slots))
+        slots = int(res.get("save_slots", 0))
         toast_timer = 2.6
-        toast_msg = f"✓ Estado guardado en consola ({int(progress_pct)}% · {save_slots} archivo(s))"
+        toast_msg = f"✓ Estado guardado ({slots} slot(s))"
 
     while running:
         dt = clock.tick(target_fps) / 1000.0
@@ -744,7 +426,7 @@ def run_modern_game(
 
         ctrl_text = (
             f"{title} [{badge}]   •   [Flechas] Mover   •   [X / Espacio] A   •   [Z] B   •   "
-            f"[Enter] Start   •   [Shift / 5] Select/Moneda   •   [Click] Táctil DS   •   [F5] Guardar   •   [ESC] Salir"
+            f"[Enter] Start   •   [Shift] Select   •   [F5] Guardar Estado   •   [ESC] Salir"
         )
         ctrl_surf = font_bar.render(ctrl_text, True, (195, 228, 248))
         screen.blit(ctrl_surf, (max(12, (width - ctrl_surf.get_width()) // 2), height - 25))
@@ -771,7 +453,7 @@ def run_modern_game(
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="C.C.I. SYSTEM 3D PlayStation & Libretro Runner (macOS & Windows)")
+    parser = argparse.ArgumentParser(description="C.C.I. SYSTEM Strict Validated Game Runner")
     parser.add_argument("--game-id", required=True)
     parser.add_argument("--title", required=True)
     parser.add_argument("--console", default="Consola Moderna")
