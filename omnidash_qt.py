@@ -16,6 +16,9 @@ import sqlite3
 from pathlib import Path
 from datetime import datetime
 
+os.environ.setdefault("QT_LOGGING_RULES", "qt.qpa.fonts=false")
+os.environ.setdefault("PYGAME_HIDE_SUPPORT_PROMPT", "1")
+
 from PySide6.QtCore import (
     Qt, QSize, QTimer, QRectF, QPropertyAnimation, QEasingCurve, Signal, Slot, QPoint, QByteArray, QProcess
 )
@@ -95,7 +98,7 @@ def get_rounded_pixmap(pix: QPixmap, w: int, h: int, radius: int = 10) -> QPixma
 # ==============================================================================
 AERO_STYLE_SHEET = """
 QWidget {
-    font-family: "Helvetica Neue", Arial, sans-serif;
+    font-family: "Helvetica Neue", "Segoe UI", Arial;
     color: #ffffff;
 }
 
@@ -4204,7 +4207,7 @@ class ServerRailItem(QPushButton):
             p.drawPixmap((w - ico_size) // 2, (h - ico_size) // 2, scaled)
         elif self.badge_text:
             p.setPen(QColor("#ffffff"))
-            p.setFont(QFont("Sans-Serif", 13, QFont.Bold))
+            p.setFont(QFont("Helvetica Neue", 13, QFont.Bold))
             p.drawText(self.rect(), Qt.AlignCenter, self.badge_text)
 
         p.setPen(QPen(QColor(53, 200, 241), 2.2) if self.is_active else QPen(QColor(145, 165, 179, 70), 1.0))

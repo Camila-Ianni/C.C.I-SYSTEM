@@ -8,8 +8,10 @@ import sys
 import os
 from pathlib import Path
 
-# Configurar variables de entorno Qt
+# Configurar variables de entorno Qt y silenciar banner de soporte de Pygame
 os.environ["QT_AUTO_SCREEN_SCALE_FACTOR"] = "1"
+os.environ.setdefault("QT_LOGGING_RULES", "qt.qpa.fonts=false")
+os.environ.setdefault("PYGAME_HIDE_SUPPORT_PROMPT", "1")
 
 from PySide6.QtWidgets import QApplication
 from omnidash_qt import OmniDashMainWindow, AERO_STYLE_SHEET

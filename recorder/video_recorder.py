@@ -9,11 +9,25 @@ from __future__ import annotations
 import os
 import queue
 import secrets
+import sys
 import threading
 import time
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Optional
+
+os.environ.setdefault("PYGAME_HIDE_SUPPORT_PROMPT", "1")
+
+# Silenciar warnings de símbolos Objective-C SDL2 duplicados entre pygame y opencv-python en macOS
+_old_stderr_fd = None
+try:
+    sys.stderr.flush()
+    _old_stderr_fd = os.dup(2)
+    _devnull_fd = os.open(os.devnull, os.O_WRONLY)
+    os.dup2(_devnull_fd, 2)
+    os.close(_devnull_fd)
+except Exception:
+    _old_stderr_fd = None
 
 try:
     import cv2
@@ -29,6 +43,13 @@ try:
     import pygame
 except ImportError:
     pygame = None  # type: ignore
+
+if _old_stderr_fd is not None:
+    try:
+        os.dup2(_old_stderr_fd, 2)
+        os.close(_old_stderr_fd)
+    except Exception:
+        pass
 
 import cci_database
 from backend.config import config

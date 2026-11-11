@@ -162,8 +162,12 @@ def resolve_communities_backend(
 
             def _serve(listen_port: int = target_port):
                 try:
+                    import flask.cli
                     import cci_database
                     from backend.server import app as srv_app, socketio as srv_sio
+
+                    flask.cli.show_server_banner = lambda *a, **kw: None
+                    logging.getLogger("werkzeug").setLevel(logging.ERROR)
                     cci_database.init_db()
                     srv_sio.run(
                         srv_app,
@@ -910,11 +914,18 @@ class CommunityRealtimeBridge(QObject):
 
         def _connect_worker():
             try:
-                sio.connect(
-                    self._api_url,
-                    auth={"token": self._token},
-                    wait_timeout=5,
+                parsed_u = urlparse(self._api_url)
+                is_local_embedded = (
+                    (parsed_u.hostname in ("127.0.0.1", "localhost"))
+                    and int(parsed_u.port or 0) in _started_local_ports
                 )
+                connect_kwargs: Dict[str, Any] = {
+                    "auth": {"token": self._token},
+                    "wait_timeout": 5,
+                }
+                if is_local_embedded:
+                    connect_kwargs["transports"] = ["polling"]
+                sio.connect(self._api_url, **connect_kwargs)
             except Exception as exc:
                 if not self._stop_flag:
                     self.disconnected.emit(str(exc))
