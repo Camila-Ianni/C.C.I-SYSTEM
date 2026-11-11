@@ -1,45 +1,38 @@
-"""web/landing_page.py - Generador 100% Python de la Landing Page de C.C.I. SYSTEM.
-Estética oficial: Glassmorphism oscuro profundo, curvas suaves estilo píldora, iluminación sutil
-blanco/plateado, tipografía moderna y minimalismo sci-fi de alta gama.
-Autora: Camila Carolina Ianni
 """
-from __future__ import annotations
+C.C.I. SYSTEM — Landing Page Web (Frutiger Aero / Cristal Acrílico Cian-Aguamarina)
+Sincronizada con la consola virtual OmniDash (PySide6 Qt6), los 90 juegos modernos
+(PS5, PS4, Nintendo Switch, Switch 2, PS3, PS2, PS1), gestión de almacenamiento
+estilo PS5 sin perder progreso y C.C.I. Communities en tiempo real.
+"""
 
-import html
+from html import escape
+import json
 
 CYBER_CSS = """
-/* ==============================================================================
-   C.C.I. SYSTEM VIRTUAL CONSOLE — OFFICIAL UI STYLESHEET (GLASSMORPHISM SCI-FI)
-   Paleta oficial: Obsidian Dark Glass, Silver-White Gradient Highlights,
-   Capsule Pills (border-radius: 9999px), Clean Modern Typography.
-   Autora: Camila Carolina Ianni
-   ============================================================================== */
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Outfit:wght@500;600;700;800;900&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
 
 :root {
-  --cci-bg-void: #050608;
-  --cci-bg-base: #08090c;
-  --cci-bg-panel: rgba(13, 16, 23, 0.72);
-  --cci-bg-surface: rgba(18, 22, 31, 0.62);
-  --cci-bg-surface-hover: rgba(28, 33, 46, 0.82);
-  --cci-bg-elevated: rgba(255, 255, 255, 0.04);
-  --cci-bg-pill: rgba(255, 255, 255, 0.08);
-  --cci-bg-pill-hover: rgba(255, 255, 255, 0.15);
-  --cci-border-dim: rgba(255, 255, 255, 0.08);
-  --cci-border-panel: rgba(255, 255, 255, 0.12);
-  --cci-border-bright: rgba(255, 255, 255, 0.22);
-  --cci-border-active: #ffffff;
-  --cci-white: #ffffff;
-  --cci-light: #e5e7eb;
-  --cci-muted: #9ca3af;
-  --cci-dim: #6b7280;
-  --cci-green: #22c55e;
-  --cci-green-dim: rgba(34, 197, 94, 0.15);
-  --cci-green-glow: rgba(34, 197, 94, 0.4);
-  --cci-glow-soft: rgba(255, 255, 255, 0.18);
-  --font-display: 'Space Grotesk', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  --font-ui: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  --font-mono: 'JetBrains Mono', 'SF Mono', Consolas, monospace;
-  --container-w: 1240px;
+  --bg-deep: #05111d;
+  --bg-ocean: #091d30;
+  --bg-panel: rgba(13, 31, 49, 0.72);
+  --bg-panel-strong: rgba(10, 25, 41, 0.86);
+  --bg-glass-light: rgba(34, 82, 118, 0.28);
+  --border-glass: rgba(86, 201, 233, 0.34);
+  --border-glass-bright: rgba(126, 238, 255, 0.68);
+  --specular-top: rgba(255, 255, 255, 0.24);
+  --cyan-aero: #27bde7;
+  --cyan-bright: #5ce6ff;
+  --aqua-mint: #56f0c8;
+  --azure-glow: #1b88ca;
+  --text-main: #f0faff;
+  --text-soft: #b8dceebb;
+  --text-muted: #7ea8c4;
+  --radius-xl: 26px;
+  --radius-lg: 20px;
+  --radius-md: 14px;
+  --radius-pill: 999px;
+  --shadow-aero: 0 20px 50px rgba(2, 10, 20, 0.65), inset 0 1px 1px rgba(255, 255, 255, 0.22);
+  --shadow-glow: 0 0 28px rgba(39, 189, 231, 0.32);
 }
 
 *, *::before, *::after {
@@ -50,1781 +43,1766 @@ CYBER_CSS = """
 
 html {
   scroll-behavior: smooth;
-  background-color: var(--cci-bg-void);
-  color: var(--cci-white);
-  font-family: var(--font-ui);
-  font-size: 16px;
-  line-height: 1.5;
-  -webkit-font-smoothing: antialiased;
+  background-color: var(--bg-deep);
+  color: var(--text-main);
+  font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, sans-serif;
 }
 
 body {
-  position: relative;
-  overflow-x: hidden;
-  background-color: var(--cci-bg-void);
-  background-image: 
-    radial-gradient(ellipse 90% 45% at 50% -10%, rgba(255, 255, 255, 0.08), transparent),
-    radial-gradient(circle 600px at 80% 20%, rgba(255, 255, 255, 0.03), transparent),
-    radial-gradient(circle 500px at 15% 65%, rgba(255, 255, 255, 0.02), transparent);
   min-height: 100vh;
-}
-
-.container {
-  width: 100%;
-  max-width: var(--container-w);
-  margin: 0 auto;
-  padding: 0 28px;
+  background:
+    radial-gradient(circle at 18% 12%, rgba(39, 189, 231, 0.24), transparent 38%),
+    radial-gradient(circle at 84% 18%, rgba(86, 240, 200, 0.18), transparent 40%),
+    radial-gradient(circle at 50% 85%, rgba(27, 136, 202, 0.22), transparent 48%),
+    linear-gradient(180deg, #061423 0%, #081b2e 45%, #05101c 100%);
+  color: var(--text-main);
+  overflow-x: hidden;
+  line-height: 1.6;
   position: relative;
-  z-index: 2;
 }
 
-/* ==============================================================================
-   CONSOLE TOP HUD BAR (Sleek Frosted Glass Capsule Style)
-   ============================================================================== */
-.top-hud {
+body::before {
+  content: "";
   position: fixed;
-  top: 0; left: 0; right: 0;
-  height: 72px;
-  background: rgba(8, 10, 15, 0.78);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border-bottom: 1px solid var(--cci-border-panel);
-  z-index: 100;
-  display: flex;
-  align-items: center;
+  inset: 0;
+  background: url('/assets/welcome.png') center center / cover no-repeat;
+  opacity: 0.18;
+  filter: saturate(1.2) blur(4px);
+  pointer-events: none;
+  z-index: -2;
 }
 
-.hud-container {
+body::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  background:
+    linear-gradient(180deg, rgba(5, 17, 29, 0.55) 0%, rgba(7, 22, 37, 0.82) 60%, rgba(5, 16, 28, 0.94) 100%);
+  pointer-events: none;
+  z-index: -1;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+/* ── NAVBAR CÁPSULA FRUTIGER AERO ── */
+.aero-nav-wrap {
+  position: sticky;
+  top: 16px;
+  z-index: 100;
+  max-width: 1320px;
+  margin: 0 auto;
+  padding: 0 22px;
+}
+
+.aero-nav {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 18px;
+  padding: 12px 22px;
+  background: rgba(11, 29, 46, 0.76);
+  backdrop-filter: blur(24px) saturate(160%);
+  -webkit-backdrop-filter: blur(24px) saturate(160%);
+  border: 1px solid var(--border-glass);
+  border-radius: var(--radius-pill);
+  box-shadow: var(--shadow-aero);
 }
 
-.hud-brand {
+.brand-pill {
   display: flex;
   align-items: center;
-  gap: 16px;
-  text-decoration: none;
-  color: inherit;
+  gap: 12px;
+  font-family: 'Outfit', sans-serif;
 }
 
-.brand-badge {
-  font-family: var(--font-display);
-  font-size: 1.35rem;
+.brand-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: 12px;
+  background: linear-gradient(145deg, rgba(39, 189, 231, 0.35), rgba(86, 240, 200, 0.18));
+  border: 1px solid var(--border-glass-bright);
+  display: grid;
+  place-items: center;
+  font-size: 18px;
+  box-shadow: var(--shadow-glow);
+}
+
+.brand-title {
   font-weight: 800;
-  font-style: italic;
-  letter-spacing: 2px;
-  color: #fff;
-  display: flex;
-  flex-direction: column;
-  line-height: 1;
+  font-size: 1.05rem;
+  letter-spacing: 0.06em;
+  color: #ffffff;
+  line-height: 1.1;
 }
 
-.brand-badge span {
-  font-size: 0.62rem;
-  font-weight: 600;
-  letter-spacing: 4px;
-  color: var(--cci-muted);
-  margin-top: 3px;
-  font-style: normal;
+.brand-sub {
+  display: block;
+  font-size: 0.68rem;
+  font-family: 'JetBrains Mono', monospace;
+  color: var(--cyan-bright);
+  letter-spacing: 0.12em;
 }
 
-.hud-sys-status {
+.nav-pills {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 5px 12px;
-  border-radius: 9999px;
-  background: var(--cci-bg-elevated);
-  border: 1px solid var(--cci-border-dim);
-  font-family: var(--font-mono);
-  font-size: 0.72rem;
-  letter-spacing: 1px;
-  color: var(--cci-light);
+  gap: 6px;
+  background: rgba(6, 19, 32, 0.62);
+  padding: 5px;
+  border-radius: var(--radius-pill);
+  border: 1px solid rgba(86, 201, 233, 0.22);
+  flex-wrap: wrap;
 }
 
-.led-indicator {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--cci-green);
-  box-shadow: 0 0 10px var(--cci-green);
-}
-
-.hud-burger {
-  display: none;
-  flex-direction: column;
-  justify-content: space-around;
-  width: 38px;
-  height: 38px;
-  padding: 8px;
-  background: var(--cci-bg-pill);
-  border: 1px solid var(--cci-border-panel);
-  border-radius: 9999px;
-  cursor: pointer;
-  z-index: 101;
-}
-
-.hud-burger span {
-  width: 100%;
-  height: 2px;
-  background: #ffffff;
-  border-radius: 2px;
-  transition: all 0.25s ease;
-}
-
-.hud-nav {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.hud-tab {
+.nav-link {
   padding: 8px 16px;
-  border-radius: 9999px;
-  color: var(--cci-muted);
-  text-decoration: none;
-  font-size: 0.88rem;
-  font-weight: 500;
-  transition: all 0.2s ease;
-  border: 1px solid transparent;
+  border-radius: var(--radius-pill);
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: var(--text-soft);
+  transition: all 0.22s ease;
 }
 
-.hud-tab:hover {
-  color: #fff;
-  background: var(--cci-bg-pill-hover);
-  border-color: var(--cci-border-dim);
+.nav-link:hover,
+.nav-link.active {
+  color: #ffffff;
+  background: linear-gradient(135deg, rgba(39, 189, 231, 0.34), rgba(27, 136, 202, 0.22));
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.3), 0 0 16px rgba(39, 189, 231, 0.28);
 }
 
-.hud-cta-download {
-  background: #ffffff !important;
-  color: #000000 !important;
-  font-weight: 700 !important;
-  box-shadow: 0 0 20px rgba(255, 255, 255, 0.22);
+.nav-status {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 14px;
+  border-radius: var(--radius-pill);
+  background: rgba(14, 38, 59, 0.72);
+  border: 1px solid rgba(86, 240, 200, 0.35);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.74rem;
+  color: var(--aqua-mint);
 }
 
-.hud-cta-download:hover {
-  background: #f0f0f0 !important;
-  transform: translateY(-1px);
-  box-shadow: 0 0 28px rgba(255, 255, 255, 0.4);
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--aqua-mint);
+  box-shadow: 0 0 10px var(--aqua-mint);
 }
 
-/* ==============================================================================
-   HERO STAGE (Sci-Fi Dark Glass)
-   ============================================================================== */
-.hero {
-  padding-top: 140px;
-  padding-bottom: 70px;
+/* ── CONTENEDOR GENERAL ── */
+.container {
+  max-width: 1320px;
+  margin: 0 auto;
+  padding: 0 24px;
+}
+
+section {
+  padding: 68px 0;
+}
+
+/* ── PANELES DE CRISTAL ACRÍLICO ── */
+.glass-panel {
+  background: var(--bg-panel);
+  backdrop-filter: blur(22px) saturate(155%);
+  -webkit-backdrop-filter: blur(22px) saturate(155%);
+  border: 1px solid var(--border-glass);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-aero);
   position: relative;
+  overflow: hidden;
 }
 
-.hero-layout {
+.glass-panel::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 16px;
+  right: 16px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--specular-top), transparent);
+  pointer-events: none;
+}
+
+/* ── HERO SECTION ── */
+.hero-section {
+  padding-top: 44px;
+  padding-bottom: 56px;
+}
+
+.hero-grid {
   display: grid;
   grid-template-columns: 1.15fr 0.85fr;
-  gap: 48px;
-  align-items: center;
+  gap: 28px;
+  align-items: stretch;
 }
 
-.telemetry-tag {
+.hero-main {
+  padding: 46px 44px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  background:
+    radial-gradient(circle at 88% 14%, rgba(39, 189, 231, 0.25), transparent 45%),
+    linear-gradient(155deg, rgba(14, 36, 58, 0.84), rgba(8, 22, 37, 0.88));
+}
+
+.aero-badge {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  font-family: var(--font-mono);
-  font-size: 0.75rem;
-  letter-spacing: 1.5px;
-  color: var(--cci-light);
-  padding: 5px 14px;
-  border-radius: 9999px;
-  background: var(--cci-bg-elevated);
-  border: 1px solid var(--cci-border-panel);
+  gap: 10px;
+  align-self: flex-start;
+  padding: 7px 16px;
+  border-radius: var(--radius-pill);
+  background: rgba(39, 189, 231, 0.16);
+  border: 1px solid var(--border-glass-bright);
+  color: var(--cyan-bright);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.76rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
   margin-bottom: 22px;
 }
 
-.hero-headline {
-  font-family: var(--font-display);
-  font-size: 2.85rem;
-  font-weight: 800;
-  line-height: 1.12;
-  letter-spacing: -0.5px;
-  margin-bottom: 20px;
+.hero-title {
+  font-family: 'Outfit', sans-serif;
+  font-size: clamp(2.4rem, 4.4vw, 3.85rem);
+  font-weight: 900;
+  line-height: 1.06;
+  letter-spacing: -0.02em;
   color: #ffffff;
+  margin-bottom: 18px;
 }
 
-.hero-headline span {
-  background: linear-gradient(180deg, #ffffff 30%, #a1a1aa 100%);
+.hero-title span {
+  background: linear-gradient(95deg, #ffffff 0%, var(--cyan-bright) 52%, var(--aqua-mint) 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
 }
 
 .hero-lead {
-  font-size: 1.05rem;
-  line-height: 1.7;
-  color: var(--cci-muted);
-  margin-bottom: 32px;
+  font-size: 1.06rem;
+  color: var(--text-soft);
+  max-width: 64ch;
+  margin-bottom: 28px;
 }
 
-.hero-lead strong {
-  color: var(--cci-light);
+.hero-pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 30px;
+}
+
+.spec-chip {
+  padding: 7px 14px;
+  border-radius: var(--radius-pill);
+  background: rgba(16, 43, 67, 0.72);
+  border: 1px solid rgba(86, 201, 233, 0.28);
+  font-size: 0.8rem;
   font-weight: 600;
+  color: #d9f4ff;
 }
 
 .hero-actions {
   display: flex;
-  gap: 14px;
   flex-wrap: wrap;
-  margin-bottom: 38px;
+  gap: 14px;
+  align-items: center;
 }
 
-.btn-cci {
+.btn-aero-primary {
   display: inline-flex;
   align-items: center;
-  justify-content: center;
   gap: 10px;
-  padding: 12px 24px;
-  border-radius: 9999px;
-  font-family: var(--font-ui);
-  font-weight: 600;
-  font-size: 0.92rem;
-  text-decoration: none;
-  transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+  padding: 14px 28px;
+  border-radius: var(--radius-pill);
+  background: linear-gradient(135deg, #29c4ee 0%, #1789cb 55%, #24d9b5 100%);
+  color: #031320;
+  font-weight: 800;
+  font-size: 0.94rem;
+  letter-spacing: 0.03em;
+  border: 1px solid rgba(255, 255, 255, 0.55);
+  box-shadow: 0 10px 28px rgba(39, 189, 231, 0.42), inset 0 1px 1px rgba(255, 255, 255, 0.65);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
   cursor: pointer;
-  border: 1px solid transparent;
 }
 
-.btn-primary-action {
-  background: #ffffff;
-  color: #07080b;
-  box-shadow: 0 4px 20px rgba(255, 255, 255, 0.2);
-}
-
-.btn-primary-action:hover {
-  background: #f5f5f7;
+.btn-aero-primary:hover {
   transform: translateY(-2px);
-  box-shadow: 0 8px 28px rgba(255, 255, 255, 0.35);
+  box-shadow: 0 14px 34px rgba(39, 189, 231, 0.58), inset 0 1px 2px rgba(255, 255, 255, 0.8);
 }
 
-.btn-secondary-action {
-  background: rgba(255, 255, 255, 0.06);
-  color: #ffffff;
-  border: 1px solid var(--cci-border-panel);
-  backdrop-filter: blur(12px);
-}
-
-.btn-secondary-action:hover {
-  background: rgba(255, 255, 255, 0.12);
-  border-color: rgba(255, 255, 255, 0.3);
-  transform: translateY(-2px);
-}
-
-.btn-gamepad-key {
+.btn-aero-glass {
   display: inline-flex;
   align-items: center;
-  justify-content: center;
-  padding: 2px 8px;
-  border-radius: 9999px;
-  font-family: var(--font-mono);
-  font-size: 0.72rem;
+  gap: 10px;
+  padding: 14px 24px;
+  border-radius: var(--radius-pill);
+  background: rgba(17, 45, 70, 0.68);
+  color: #e8f8ff;
   font-weight: 700;
-  background: rgba(0, 0, 0, 0.12);
-  border: 1px solid rgba(0, 0, 0, 0.15);
+  font-size: 0.92rem;
+  border: 1px solid var(--border-glass-bright);
+  box-shadow: inset 0 1px 1px rgba(255, 255, 255, 0.22);
+  transition: all 0.2s ease;
+  cursor: pointer;
 }
 
-.btn-secondary-action .btn-gamepad-key {
-  background: rgba(255, 255, 255, 0.1);
-  border-color: rgba(255, 255, 255, 0.2);
+.btn-aero-glass:hover {
+  background: rgba(39, 189, 231, 0.25);
+  transform: translateY(-2px);
 }
 
-.spec-strip {
-  display: flex;
-  align-items: center;
-  gap: 20px;
-  padding: 16px 24px;
-  border-radius: 20px;
-  background: var(--cci-bg-surface);
-  backdrop-filter: blur(20px);
-  border: 1px solid var(--cci-border-panel);
-}
-
-.spec-cell {
+/* ── HERO SIDE: CONSOLE PREVIEW & METRICS ── */
+.hero-showcase {
+  padding: 28px;
   display: flex;
   flex-direction: column;
+  justify-content: space-between;
+  gap: 20px;
 }
 
-.spec-val {
-  font-family: var(--font-display);
-  font-size: 1.5rem;
-  font-weight: 700;
-  color: #ffffff;
-  line-height: 1.1;
-}
-
-.spec-lbl {
-  font-family: var(--font-mono);
-  font-size: 0.68rem;
-  letter-spacing: 1px;
-  color: var(--cci-muted);
-}
-
-.spec-divider {
-  width: 1px;
-  height: 32px;
-  background: var(--cci-border-panel);
-}
-
-/* ==============================================================================
-   CONSOLE CHASSIS (Video / Live Demo Display)
-   ============================================================================== */
-.console-chassis {
-  background: var(--cci-bg-panel);
-  backdrop-filter: blur(24px);
-  -webkit-backdrop-filter: blur(24px);
-  border: 1px solid var(--cci-border-panel);
-  border-radius: 24px;
+.console-preview-window {
+  border-radius: var(--radius-lg);
   overflow: hidden;
-  box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  border: 1px solid var(--border-glass-bright);
+  background: rgba(6, 17, 29, 0.9);
+  box-shadow: 0 16px 38px rgba(0, 0, 0, 0.55);
+  position: relative;
 }
 
-.chassis-header {
-  padding: 12px 18px;
-  background: rgba(255, 255, 255, 0.02);
-  border-bottom: 1px solid var(--cci-border-panel);
+.console-topbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  font-family: var(--font-mono);
+  padding: 10px 16px;
+  background: rgba(12, 33, 52, 0.92);
+  border-bottom: 1px solid rgba(86, 201, 233, 0.25);
+  font-family: 'JetBrains Mono', monospace;
   font-size: 0.72rem;
-  color: var(--cci-muted);
+  color: var(--cyan-bright);
 }
 
-.chassis-header-left {
+.window-dots {
   display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.chassis-led {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--cci-green);
-  box-shadow: 0 0 8px var(--cci-green);
-}
-
-.chassis-screen {
-  position: relative;
-  background: #000000;
-  aspect-ratio: 16/9;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  overflow: hidden;
-}
-
-.chassis-screen video, .chassis-screen img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
-}
-
-.chassis-live-badge {
-  position: absolute;
-  top: 12px; right: 12px;
-  padding: 4px 10px;
-  border-radius: 9999px;
-  background: rgba(0, 0, 0, 0.65);
-  backdrop-filter: blur(8px);
-  border: 1px solid rgba(255, 255, 255, 0.15);
-  font-family: var(--font-mono);
-  font-size: 0.68rem;
-  color: #fff;
-  display: flex;
-  align-items: center;
   gap: 6px;
 }
 
-.blink-dot {
-  width: 6px;
-  height: 6px;
+.window-dots span {
+  width: 10px;
+  height: 10px;
   border-radius: 50%;
-  background: var(--cci-green);
-  box-shadow: 0 0 6px var(--cci-green);
+  background: rgba(86, 201, 233, 0.45);
 }
 
-.chassis-footer {
-  padding: 12px 18px;
-  background: rgba(255, 255, 255, 0.02);
-  border-top: 1px solid var(--cci-border-panel);
+.window-dots span:nth-child(1) { background: #ff6b81; }
+.window-dots span:nth-child(2) { background: #ffd166; }
+.window-dots span:nth-child(3) { background: #56f0c8; }
+
+.console-preview-body {
+  padding: 20px;
+  background:
+    radial-gradient(circle at 80% 20%, rgba(39, 189, 231, 0.28), transparent 55%),
+    url('/assets/welcome.png') center center / cover no-repeat;
+  min-height: 225px;
   display: flex;
-  justify-content: space-between;
-  font-family: var(--font-mono);
-  font-size: 0.7rem;
-  color: var(--cci-dim);
-}
-
-/* ==============================================================================
-   SECTIONS GENERAL STYLES
-   ============================================================================== */
-.section {
-  padding: 85px 0;
+  flex-direction: column;
+  justify-content: flex-end;
   position: relative;
 }
 
-.section-dark {
-  background: rgba(6, 8, 12, 0.45);
+.console-preview-body::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(180deg, rgba(6, 18, 31, 0.25) 0%, rgba(6, 18, 31, 0.88) 100%);
 }
 
-.section-tag {
-  display: inline-block;
-  font-family: var(--font-mono);
-  font-size: 0.75rem;
-  letter-spacing: 2px;
-  color: var(--cci-light);
-  margin-bottom: 12px;
+.console-overlay-card {
+  position: relative;
+  z-index: 1;
+  background: rgba(10, 28, 45, 0.82);
+  backdrop-filter: blur(14px);
+  border: 1px solid var(--border-glass-bright);
+  border-radius: 16px;
+  padding: 16px 18px;
 }
 
-.section-title {
-  font-family: var(--font-display);
-  font-size: 2.2rem;
-  font-weight: 700;
-  letter-spacing: -0.3px;
+.console-overlay-title {
+  font-family: 'Outfit', sans-serif;
+  font-weight: 800;
+  font-size: 1.08rem;
   color: #ffffff;
-  margin-bottom: 14px;
+  margin-bottom: 4px;
 }
 
-.section-desc {
-  font-size: 1.02rem;
-  line-height: 1.7;
-  color: var(--cci-muted);
-  max-width: 780px;
-  margin-bottom: 40px;
+.console-overlay-sub {
+  font-size: 0.82rem;
+  color: var(--text-soft);
 }
 
-.section-desc strong {
-  color: var(--cci-light);
-}
-
-/* ==============================================================================
-   ACADEMIC PILLARS GRID
-   ============================================================================== */
-.academic-pillars-grid {
+.metrics-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-  gap: 22px;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
 }
 
-.academic-pillar-card {
-  background: var(--cci-bg-surface);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border: 1px solid var(--cci-border-panel);
-  border-radius: 20px;
-  padding: 28px 24px;
-  transition: all 0.22s ease;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+.metric-box {
+  padding: 16px 18px;
+  border-radius: 16px;
+  background: rgba(11, 29, 47, 0.76);
+  border: 1px solid rgba(86, 201, 233, 0.26);
 }
 
-.academic-pillar-card:hover {
-  transform: translateY(-4px);
-  border-color: var(--cci-border-bright);
-  background: var(--cci-bg-surface-hover);
-  box-shadow: 0 14px 32px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.12);
+.metric-val {
+  font-family: 'Outfit', sans-serif;
+  font-size: 1.65rem;
+  font-weight: 800;
+  color: var(--cyan-bright);
+  line-height: 1.1;
 }
 
-.pillar-num {
-  font-family: var(--font-mono);
-  font-size: 0.85rem;
-  font-weight: 700;
-  color: var(--cci-muted);
-  margin-bottom: 14px;
-}
-
-.pillar-title {
-  font-family: var(--font-display);
-  font-size: 1.15rem;
+.metric-lbl {
+  font-size: 0.76rem;
+  color: var(--text-muted);
+  margin-top: 4px;
   font-weight: 600;
-  color: #ffffff;
-  margin-bottom: 12px;
 }
 
-.pillar-desc {
-  font-size: 0.9rem;
-  line-height: 1.65;
-  color: var(--cci-muted);
-}
-
-/* ==============================================================================
-   PROFILE SCREEN CARD (Camila Carolina Ianni)
-   ============================================================================== */
-.profile-screen-card {
-  background: var(--cci-bg-surface);
-  backdrop-filter: blur(24px);
-  -webkit-backdrop-filter: blur(24px);
-  border: 1px solid var(--cci-border-panel);
-  border-radius: 24px;
-  padding: 40px;
-  box-shadow: 0 16px 45px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.08);
-}
-
-.profile-hud-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-family: var(--font-mono);
-  font-size: 0.72rem;
-  color: var(--cci-dim);
-  border-bottom: 1px solid var(--cci-border-panel);
-  padding-bottom: 16px;
-  margin-bottom: 28px;
-}
-
-.profile-grid {
-  display: grid;
-  grid-template-columns: 220px 1fr;
-  gap: 36px;
-  align-items: center;
-}
-
-.profile-avatar-block {
+/* ── ENCABEZADOS DE SECCIÓN ── */
+.section-header {
+  margin-bottom: 36px;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  gap: 14px;
+  gap: 10px;
 }
 
-.profile-avatar-frame {
-  width: 200px;
-  height: 280px;
-  border-radius: 20px;
-  border: 1px solid var(--cci-border-bright);
-  overflow: hidden;
-  box-shadow: 0 12px 30px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.12);
-}
-
-.profile-avatar-frame img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  object-position: center;
-  display: block;
-}
-
-.profile-badge-pill {
-  padding: 4px 14px;
-  border-radius: 9999px;
-  background: #ffffff;
-  color: #000000;
-  font-family: var(--font-mono);
-  font-size: 0.72rem;
-  font-weight: 700;
-  letter-spacing: 1px;
-}
-
-.profile-name {
-  font-family: var(--font-display);
-  font-size: 1.85rem;
-  font-weight: 700;
-  color: #ffffff;
-  margin-bottom: 4px;
-}
-
-.profile-inst {
-  font-family: var(--font-mono);
-  font-size: 0.82rem;
-  color: var(--cci-light);
-  margin-bottom: 14px;
-}
-
-.profile-bio {
-  font-size: 0.95rem;
-  line-height: 1.65;
-  color: var(--cci-muted);
-  margin-bottom: 24px;
-}
-
-.profile-specs-row {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 16px;
-  margin-bottom: 26px;
-  padding: 16px;
-  background: rgba(255, 255, 255, 0.02);
-  border: 1px solid var(--cci-border-dim);
-  border-radius: 16px;
-}
-
-.profile-spec-item strong {
-  display: block;
-  font-family: var(--font-mono);
-  font-size: 0.72rem;
-  color: var(--cci-muted);
-  margin-bottom: 4px;
-}
-
-.profile-spec-item span {
-  font-size: 0.88rem;
-  color: #ffffff;
-}
-
-.btn-profile-link {
+.section-eyebrow {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  padding: 10px 22px;
-  border-radius: 9999px;
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid var(--cci-border-panel);
-  color: #fff;
-  text-decoration: none;
-  font-family: var(--font-mono);
-  font-size: 0.82rem;
-  font-weight: 600;
-  transition: all 0.2s ease;
+  align-self: flex-start;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.76rem;
+  font-weight: 700;
+  color: var(--aqua-mint);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  padding: 5px 13px;
+  border-radius: var(--radius-pill);
+  background: rgba(86, 240, 200, 0.12);
+  border: 1px solid rgba(86, 240, 200, 0.32);
 }
 
-.btn-profile-link:hover {
-  background: #ffffff;
-  color: #000;
-}
-
-/* ==============================================================================
-   SUBSYSTEMS / ARCHITECTURE
-   ============================================================================== */
-.subsystems-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-  gap: 22px;
-}
-
-.subsystem-card {
-  background: var(--cci-bg-surface);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border: 1px solid var(--cci-border-panel);
-  border-radius: 20px;
-  padding: 28px 24px;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.06);
-}
-
-.subsystem-code {
-  font-family: var(--font-mono);
-  font-size: 0.72rem;
-  letter-spacing: 1px;
-  color: var(--cci-muted);
-  display: block;
-  margin-bottom: 10px;
-}
-
-.subsystem-title {
-  font-family: var(--font-display);
-  font-size: 1.15rem;
-  font-weight: 600;
+.section-title {
+  font-family: 'Outfit', sans-serif;
+  font-size: clamp(1.85rem, 3vw, 2.55rem);
+  font-weight: 800;
   color: #ffffff;
-  margin-bottom: 12px;
+  letter-spacing: -0.01em;
 }
 
-.subsystem-text {
-  font-size: 0.88rem;
-  line-height: 1.65;
-  color: var(--cci-muted);
+.section-desc {
+  color: var(--text-soft);
+  max-width: 74ch;
+  font-size: 1rem;
 }
 
-/* ==============================================================================
-   GAMES CATALOG (BIBLIOTECA)
-   ============================================================================== */
-.catalog-header-bar {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-end;
-  margin-bottom: 24px;
-  flex-wrap: wrap;
-  gap: 16px;
-}
-
-.filter-chips-rack {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-  margin-bottom: 32px;
-}
-
-.filter-chip {
-  padding: 8px 18px;
-  border-radius: 9999px;
-  font-family: var(--font-ui);
-  font-size: 0.85rem;
-  font-weight: 500;
-  color: var(--cci-muted);
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid var(--cci-border-dim);
-  backdrop-filter: blur(10px);
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.filter-chip:hover {
-  color: #fff;
-  background: rgba(255, 255, 255, 0.09);
-  border-color: var(--cci-border-bright);
-}
-
-.filter-chip.active {
-  background: #ffffff;
-  color: #000000;
-  font-weight: 700;
-  border-color: #ffffff;
-  box-shadow: 0 0 16px rgba(255, 255, 255, 0.3);
-}
-
-.games-rack-grid {
+/* ── PROYECTO & EVOLUCIÓN + ALMACENAMIENTO PS5 ── */
+.project-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-  gap: 24px;
+  grid-template-columns: 1.1fr 0.9fr;
+  gap: 26px;
 }
 
-.cartridge-card {
-  position: relative;
-  background: var(--cci-bg-surface);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border: 1px solid var(--cci-border-panel);
-  border-radius: 20px;
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
-  cursor: pointer;
-  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+.project-card {
+  padding: 34px;
 }
 
-.cartridge-card:hover {
-  transform: translateY(-6px);
-  border-color: var(--cci-border-bright);
-  background: var(--cci-bg-surface-hover);
-  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.55), 0 0 24px rgba(255, 255, 255, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.16);
-}
-
-.cartridge-header {
-  padding: 10px 14px;
-  background: rgba(255, 255, 255, 0.02);
-  border-bottom: 1px solid var(--cci-border-dim);
-  display: flex;
-  justify-content: space-between;
-  font-family: var(--font-mono);
-  font-size: 0.68rem;
-  color: var(--cci-dim);
-}
-
-.cartridge-art {
-  position: relative;
-  width: 100%;
-  aspect-ratio: 4/3;
-  overflow: hidden;
-  background: #000;
-}
-
-.cartridge-art img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  transition: transform 0.3s ease;
-  display: block;
-}
-
-.cartridge-card:hover .cartridge-art img {
-  transform: scale(1.04);
-}
-
-.cartridge-overlay {
-  position: absolute;
-  top: 0; left: 0; right: 0; bottom: 0;
-  background: rgba(0, 0, 0, 0.45);
-  backdrop-filter: blur(4px);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  opacity: 0;
-  transition: opacity 0.2s ease;
-}
-
-.cartridge-card:hover .cartridge-overlay {
-  opacity: 1;
-}
-
-.overlay-action-btn {
-  padding: 8px 18px;
-  border-radius: 9999px;
-  background: #ffffff;
-  color: #000000;
-  font-family: var(--font-ui);
-  font-size: 0.8rem;
-  font-weight: 700;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
-}
-
-.cartridge-body {
-  padding: 18px 16px;
-  display: flex;
-  flex-direction: column;
-  flex: 1;
-}
-
-.cartridge-meta {
-  display: flex;
-  justify-content: space-between;
-  font-family: var(--font-mono);
-  font-size: 0.72rem;
-  color: var(--cci-muted);
-  margin-bottom: 6px;
-}
-
-.cartridge-title {
-  font-family: var(--font-display);
-  font-size: 1.12rem;
-  font-weight: 700;
+.project-card h3 {
+  font-family: 'Outfit', sans-serif;
+  font-size: 1.38rem;
+  margin-bottom: 14px;
   color: #ffffff;
+}
+
+.project-card p {
+  color: var(--text-soft);
+  margin-bottom: 16px;
+  font-size: 0.96rem;
+}
+
+.feature-list {
+  list-style: none;
+  display: grid;
+  gap: 12px;
+  margin-top: 18px;
+}
+
+.feature-list li {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 15px;
+  border-radius: 14px;
+  background: rgba(9, 25, 41, 0.66);
+  border: 1px solid rgba(86, 201, 233, 0.22);
+  font-size: 0.9rem;
+  color: #e4f6ff;
+}
+
+.feature-list li strong {
+  color: var(--cyan-bright);
+}
+
+.author-meta-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+  margin-top: 20px;
+}
+
+.meta-tile {
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: rgba(8, 22, 36, 0.72);
+  border: 1px solid rgba(86, 201, 233, 0.22);
+}
+
+.meta-tile span {
+  display: block;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
   margin-bottom: 4px;
 }
 
-.cartridge-sub {
+.meta-tile strong {
+  font-size: 0.92rem;
+  color: #ffffff;
+}
+
+/* ── COMUNIDADES & TIEMPO REAL ── */
+.communities-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 20px;
+}
+
+.comm-card {
+  padding: 28px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  transition: transform 0.22s ease, border-color 0.22s ease;
+}
+
+.comm-card:hover {
+  transform: translateY(-4px);
+  border-color: var(--border-glass-bright);
+}
+
+.comm-icon {
+  width: 48px;
+  height: 48px;
+  border-radius: 14px;
+  display: grid;
+  place-items: center;
+  font-size: 1.35rem;
+  background: linear-gradient(135deg, rgba(39, 189, 231, 0.28), rgba(86, 240, 200, 0.16));
+  border: 1px solid var(--border-glass-bright);
+}
+
+.comm-card h3 {
+  font-family: 'Outfit', sans-serif;
+  font-size: 1.15rem;
+  color: #ffffff;
+}
+
+.comm-card p {
+  font-size: 0.88rem;
+  color: var(--text-soft);
+  flex: 1;
+}
+
+.comm-tag {
+  align-self: flex-start;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.72rem;
+  color: var(--aqua-mint);
+  padding: 4px 10px;
+  border-radius: var(--radius-pill);
+  background: rgba(86, 240, 200, 0.12);
+  border: 1px solid rgba(86, 240, 200, 0.28);
+}
+
+/* ── ARQUITECTURA DE SOFTWARE 100% PYTHON ── */
+.arch-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 22px;
+}
+
+.arch-card {
+  padding: 30px;
+}
+
+.arch-code {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.75rem;
+  color: var(--cyan-bright);
+  letter-spacing: 0.08em;
+  margin-bottom: 8px;
+  display: block;
+}
+
+.arch-card h3 {
+  font-family: 'Outfit', sans-serif;
+  font-size: 1.28rem;
+  color: #ffffff;
+  margin-bottom: 10px;
+}
+
+.arch-card p {
+  color: var(--text-soft);
+  font-size: 0.92rem;
+  margin-bottom: 16px;
+}
+
+.arch-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.arch-tags span {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.73rem;
+  padding: 5px 11px;
+  border-radius: 8px;
+  background: rgba(6, 19, 32, 0.78);
+  border: 1px solid rgba(86, 201, 233, 0.26);
+  color: #bfeaff;
+}
+
+/* ── BIBLIOTECA DE 90 VIDEOJUEGOS MODERNOS ── */
+.catalog-controls {
+  padding: 22px 26px;
+  margin-bottom: 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.search-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.search-input-wrap {
+  flex: 1;
+  min-width: 260px;
+  position: relative;
+}
+
+.search-input {
+  width: 100%;
+  padding: 13px 18px 13px 44px;
+  border-radius: var(--radius-pill);
+  background: rgba(6, 18, 30, 0.82);
+  border: 1px solid var(--border-glass);
+  color: #ffffff;
+  font-size: 0.94rem;
+  font-family: inherit;
+  outline: none;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.search-input:focus {
+  border-color: var(--cyan-bright);
+  box-shadow: 0 0 0 3px rgba(39, 189, 231, 0.22);
+}
+
+.search-icon {
+  position: absolute;
+  left: 16px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--cyan-bright);
+  font-size: 0.95rem;
+  pointer-events: none;
+}
+
+.catalog-counter {
+  font-family: 'JetBrains Mono', monospace;
   font-size: 0.82rem;
-  color: var(--cci-muted);
-  line-height: 1.45;
-  margin-bottom: 14px;
+  color: var(--aqua-mint);
+  padding: 10px 16px;
+  border-radius: var(--radius-pill);
+  background: rgba(8, 24, 39, 0.76);
+  border: 1px solid rgba(86, 240, 200, 0.3);
+}
+
+.filter-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.filter-btn {
+  padding: 8px 16px;
+  border-radius: var(--radius-pill);
+  background: rgba(9, 25, 41, 0.72);
+  border: 1px solid rgba(86, 201, 233, 0.25);
+  color: var(--text-soft);
+  font-size: 0.8rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.18s ease;
+}
+
+.filter-btn:hover,
+.filter-btn.active {
+  background: linear-gradient(135deg, rgba(39, 189, 231, 0.38), rgba(86, 240, 200, 0.22));
+  color: #ffffff;
+  border-color: var(--border-glass-bright);
+  box-shadow: 0 0 18px rgba(39, 189, 231, 0.32);
+}
+
+.games-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(235px, 1fr));
+  gap: 20px;
+}
+
+.game-card {
+  border-radius: 20px;
+  background: rgba(11, 28, 45, 0.76);
+  border: 1px solid rgba(86, 201, 233, 0.28);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  transition: transform 0.24s ease, border-color 0.24s ease, box-shadow 0.24s ease;
+  cursor: pointer;
+  position: relative;
+}
+
+.game-card:hover {
+  transform: translateY(-6px);
+  border-color: var(--border-glass-bright);
+  box-shadow: 0 18px 40px rgba(2, 12, 24, 0.75), 0 0 24px rgba(39, 189, 231, 0.28);
+}
+
+.game-cover-wrap {
+  position: relative;
+  aspect-ratio: 3 / 4;
+  width: 100%;
+  background: linear-gradient(145deg, #0b2238, #071524);
+  overflow: hidden;
+}
+
+.game-cover-wrap img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: transform 0.35s ease;
+}
+
+.game-card:hover .game-cover-wrap img {
+  transform: scale(1.05);
+}
+
+.platform-badge {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  padding: 5px 11px;
+  border-radius: var(--radius-pill);
+  background: rgba(7, 20, 34, 0.86);
+  backdrop-filter: blur(10px);
+  border: 1px solid var(--border-glass-bright);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.7rem;
+  font-weight: 700;
+  color: var(--cyan-bright);
+  letter-spacing: 0.05em;
+}
+
+.size-badge {
+  position: absolute;
+  bottom: 10px;
+  right: 10px;
+  padding: 4px 10px;
+  border-radius: var(--radius-pill);
+  background: rgba(6, 18, 30, 0.88);
+  border: 1px solid rgba(86, 240, 200, 0.38);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.68rem;
+  color: var(--aqua-mint);
+}
+
+.game-body {
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: 1;
+}
+
+.game-title {
+  font-family: 'Outfit', sans-serif;
+  font-size: 1.02rem;
+  font-weight: 700;
+  color: #ffffff;
+  line-height: 1.25;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
 
-.cartridge-tags {
-  display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
+.game-genre {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+
+.game-footer {
   margin-top: auto;
-}
-
-.cartridge-tag {
-  padding: 3px 10px;
-  border-radius: 9999px;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid var(--cci-border-dim);
-  font-family: var(--font-mono);
-  font-size: 0.65rem;
-  color: var(--cci-light);
-}
-
-/* ==============================================================================
-   DOWNLOADS SECTION
-   ============================================================================== */
-.downloads-panel-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-  gap: 28px;
-  margin-bottom: 40px;
-}
-
-.download-hardware-card {
-  background: var(--cci-bg-surface);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border: 1px solid var(--cci-border-panel);
-  border-radius: 24px;
-  padding: 36px 30px;
-  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.08);
-  display: flex;
-  flex-direction: column;
-}
-
-.hw-icon-box {
-  width: 54px;
-  height: 54px;
-  border-radius: 16px;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid var(--cci-border-bright);
+  padding-top: 10px;
   display: flex;
   align-items: center;
-  justify-content: center;
-  margin-bottom: 20px;
-  color: #fff;
-}
-
-.hw-title {
-  font-family: var(--font-display);
-  font-size: 1.35rem;
-  font-weight: 700;
-  color: #ffffff;
-  margin-bottom: 6px;
-}
-
-.hw-sub {
-  font-size: 0.88rem;
-  color: var(--cci-muted);
-  margin-bottom: 20px;
-}
-
-.hw-checklist {
-  list-style: none;
-  margin-bottom: 28px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.hw-checklist li {
-  font-size: 0.88rem;
-  color: var(--cci-light);
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.hw-checklist li::before {
-  content: "✓";
-  color: var(--cci-green);
-  font-weight: 700;
-}
-
-.hw-btn-wrap {
-  margin-top: auto;
-}
-
-.hw-hint {
-  display: block;
-  font-family: var(--font-mono);
+  justify-content: space-between;
+  border-top: 1px solid rgba(86, 201, 233, 0.16);
+  font-family: 'JetBrains Mono', monospace;
   font-size: 0.72rem;
-  color: var(--cci-dim);
-  text-align: center;
-  margin-top: 10px;
+  color: var(--cyan-bright);
 }
 
-/* ==============================================================================
-   GAMEPAD LEGEND BAR
-   ============================================================================== */
-.gamepad-legend-bar {
-  background: rgba(10, 12, 17, 0.85);
-  backdrop-filter: blur(18px);
-  -webkit-backdrop-filter: blur(18px);
-  border-top: 1px solid var(--cci-border-panel);
-  border-bottom: 1px solid var(--cci-border-panel);
-  padding: 14px 0;
-  font-family: var(--font-mono);
-  font-size: 0.76rem;
-  color: var(--cci-light);
+/* ── DESCARGA DEL EMULADOR ── */
+.download-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 26px;
 }
 
-.legend-container {
+.download-card {
+  padding: 38px 34px;
   display: flex;
-  justify-content: space-around;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 22px;
+  background:
+    radial-gradient(circle at 90% 12%, rgba(39, 189, 231, 0.2), transparent 48%),
+    var(--bg-panel);
+}
+
+.os-header {
+  display: flex;
   align-items: center;
-  flex-wrap: wrap;
-  gap: 14px;
+  gap: 16px;
 }
 
-.legend-key {
-  padding: 2px 8px;
-  border-radius: 9999px;
-  background: rgba(255, 255, 255, 0.1);
-  border: 1px solid var(--cci-border-bright);
-  color: #fff;
-  font-weight: 700;
-  margin-right: 6px;
+.os-badge-icon {
+  width: 58px;
+  height: 58px;
+  border-radius: 18px;
+  display: grid;
+  place-items: center;
+  font-size: 1.65rem;
+  background: linear-gradient(145deg, rgba(39, 189, 231, 0.3), rgba(86, 240, 200, 0.16));
+  border: 1px solid var(--border-glass-bright);
+  box-shadow: var(--shadow-glow);
 }
 
-/* ==============================================================================
-   MODAL FICHA TÉCNICA
-   ============================================================================== */
+.os-title {
+  font-family: 'Outfit', sans-serif;
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: #ffffff;
+}
+
+.os-sub {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.76rem;
+  color: var(--cyan-bright);
+}
+
+.download-specs {
+  list-style: none;
+  display: grid;
+  gap: 10px;
+}
+
+.download-specs li {
+  font-size: 0.9rem;
+  color: var(--text-soft);
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.download-specs li::before {
+  content: "✦";
+  color: var(--aqua-mint);
+}
+
+/* ── MODAL DE FICHA TÉCNICA DE JUEGO ── */
 .modal-backdrop {
   position: fixed;
-  top: 0; left: 0; right: 0; bottom: 0;
-  background: rgba(0, 0, 0, 0.75);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  z-index: 1000;
-  display: flex;
+  inset: 0;
+  background: rgba(3, 10, 18, 0.82);
+  backdrop-filter: blur(16px);
+  z-index: 250;
+  display: none;
   align-items: center;
   justify-content: center;
-  padding: 20px;
+  padding: 24px;
 }
 
-.modal-dialog {
-  position: relative;
-  background: rgba(15, 18, 26, 0.95);
-  backdrop-filter: blur(28px);
-  -webkit-backdrop-filter: blur(28px);
-  border: 1px solid var(--cci-border-bright);
-  border-radius: 24px;
-  max-width: 760px;
+.modal-backdrop.open {
+  display: flex;
+}
+
+.modal-window {
+  max-width: 820px;
   width: 100%;
-  display: grid;
-  grid-template-columns: 280px 1fr;
-  overflow: hidden;
-  box-shadow: 0 25px 60px rgba(0, 0, 0, 0.8), 0 0 35px rgba(255, 255, 255, 0.08);
+  padding: 32px;
+  border-radius: var(--radius-xl);
+  background: rgba(10, 26, 43, 0.94);
+  border: 1px solid var(--border-glass-bright);
+  box-shadow: var(--shadow-aero);
+  position: relative;
 }
 
 .modal-close {
   position: absolute;
-  top: 14px; right: 16px;
-  width: 32px;
-  height: 32px;
+  top: 20px;
+  right: 20px;
+  width: 38px;
+  height: 38px;
   border-radius: 50%;
-  background: rgba(255, 255, 255, 0.1);
-  border: 1px solid var(--cci-border-panel);
-  color: #fff;
-  font-size: 1.3rem;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  border: 1px solid var(--border-glass);
+  background: rgba(16, 42, 66, 0.8);
+  color: #ffffff;
+  font-size: 1.1rem;
   cursor: pointer;
-  z-index: 10;
-  transition: all 0.2s ease;
 }
 
-.modal-close:hover {
-  background: #ffffff;
-  color: #000;
+.modal-content-grid {
+  display: grid;
+  grid-template-columns: 240px 1fr;
+  gap: 28px;
+  align-items: start;
 }
 
-.modal-art-box {
-  background: #000;
+.modal-cover {
   width: 100%;
-  height: 100%;
-}
-
-.modal-art-box img {
-  width: 100%;
-  height: 100%;
+  aspect-ratio: 3 / 4;
   object-fit: cover;
-  display: block;
+  border-radius: 16px;
+  border: 1px solid var(--border-glass-bright);
 }
 
-.modal-info-box {
-  padding: 32px 28px;
-  display: flex;
-  flex-direction: column;
+.modal-meta-list {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+  margin: 18px 0;
 }
 
-.modal-tags-row {
-  display: flex;
-  gap: 12px;
-  font-family: var(--font-mono);
-  font-size: 0.75rem;
-  margin-bottom: 10px;
-}
-
-.modal-title {
-  font-family: var(--font-display);
-  font-size: 1.6rem;
-  font-weight: 700;
-  color: #ffffff;
-  margin-bottom: 6px;
-}
-
-.modal-dev {
-  font-family: var(--font-mono);
-  font-size: 0.8rem;
-  color: var(--cci-muted);
-  margin-bottom: 16px;
-}
-
-.modal-desc {
-  font-size: 0.92rem;
-  line-height: 1.65;
-  color: var(--cci-light);
-  margin-bottom: 24px;
-}
-
-.modal-launch-note {
-  margin-top: auto;
-  padding: 10px 16px;
+.modal-meta-item {
+  padding: 10px 14px;
   border-radius: 12px;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid var(--cci-border-dim);
-  font-family: var(--font-mono);
-  font-size: 0.72rem;
-  letter-spacing: 1px;
-  color: var(--cci-muted);
-  text-align: center;
+  background: rgba(6, 18, 30, 0.78);
+  border: 1px solid rgba(86, 201, 233, 0.24);
 }
 
-/* ==============================================================================
-   FOOTER
-   ============================================================================== */
-.footer {
-  background: rgba(8, 10, 14, 0.9);
-  border-top: 1px solid var(--cci-border-panel);
-  padding: 40px 0;
-  position: relative;
-  z-index: 2;
-}
-
-.footer-content {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 24px;
-}
-
-.footer-left {
-  max-width: 540px;
-}
-
-.footer-logo {
-  font-family: var(--font-display);
-  font-size: 1.25rem;
-  font-weight: 800;
-  font-style: italic;
-  letter-spacing: 2px;
-  color: #ffffff;
+.modal-meta-item span {
   display: block;
-  margin-bottom: 6px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 0.68rem;
+  color: var(--text-muted);
 }
 
-.footer-copy {
-  font-size: 0.85rem;
-  line-height: 1.6;
-  color: var(--cci-muted);
-}
-
-.footer-links {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  flex-wrap: wrap;
-}
-
-.footer-links a {
-  color: var(--cci-light);
-  text-decoration: none;
+.modal-meta-item strong {
   font-size: 0.88rem;
-  transition: color 0.2s ease;
-}
-
-.footer-links a:hover {
   color: #ffffff;
 }
 
-.footer-sep {
-  color: var(--cci-dim);
+/* ── FOOTER ── */
+.aero-footer {
+  padding: 42px 0 56px;
+  border-top: 1px solid rgba(86, 201, 233, 0.2);
+  margin-top: 40px;
+  color: var(--text-muted);
+  font-size: 0.86rem;
 }
 
-/* Responsive */
-@media (max-width: 900px) {
-  .hero-layout {
+.footer-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+
+@media (max-width: 1024px) {
+  .hero-grid,
+  .project-grid,
+  .arch-grid,
+  .download-grid {
     grid-template-columns: 1fr;
   }
-  .hud-burger {
-    display: flex;
+  .communities-grid {
+    grid-template-columns: repeat(2, 1fr);
   }
-  .hud-nav {
-    display: none;
-    position: absolute;
-    top: 72px; left: 0; right: 0;
-    background: rgba(10, 12, 17, 0.98);
-    backdrop-filter: blur(24px);
-    border-bottom: 1px solid var(--cci-border-panel);
+}
+
+@media (max-width: 680px) {
+  .communities-grid,
+  .modal-content-grid {
+    grid-template-columns: 1fr;
+  }
+  .hero-main {
+    padding: 30px 24px;
+  }
+  .aero-nav {
     flex-direction: column;
-    padding: 20px 28px;
-    gap: 12px;
-  }
-  .hud-nav.open {
-    display: flex;
-  }
-  .profile-grid {
-    grid-template-columns: 1fr;
-    text-align: center;
-  }
-  .modal-dialog {
-    grid-template-columns: 1fr;
-  }
-  .modal-art-box {
-    height: 220px;
+    border-radius: 22px;
   }
 }
 """
+
 
 CLIENT_JS = """
-document.addEventListener('DOMContentLoaded', () => {
-  const hudBurger = document.getElementById('hudBurger');
-  const hudNav = document.getElementById('hudNav');
+(function() {
+  const cards = Array.from(document.querySelectorAll('.game-card'));
+  const filterBtns = Array.from(document.querySelectorAll('.filter-btn'));
+  const searchInput = document.getElementById('catalogSearch');
+  const counterEl = document.getElementById('catalogCounter');
+  const modal = document.getElementById('gameModal');
+  const modalClose = document.getElementById('modalCloseBtn');
 
-  if (hudBurger && hudNav) {
-    hudBurger.addEventListener('click', (e) => {
-      e.stopPropagation();
-      hudNav.classList.toggle('open');
-      hudBurger.classList.toggle('active');
-    });
-    hudNav.querySelectorAll('.hud-tab').forEach(tab => {
-      tab.addEventListener('click', () => {
-        hudNav.classList.remove('open');
-        hudBurger.classList.remove('active');
-      });
-    });
-    document.addEventListener('click', (e) => {
-      if (!hudNav.contains(e.target) && !hudBurger.contains(e.target) && hudNav.classList.contains('open')) {
-        hudNav.classList.remove('open');
-        hudBurger.classList.remove('active');
+  let activeCategory = 'TODOS';
+  let searchQuery = '';
+
+  function normalizeText(str) {
+    return (str || '')
+      .toString()
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\\u0300-\\u036f]/g, '');
+  }
+
+  function applyFilters() {
+    let visibleCount = 0;
+    const q = normalizeText(searchQuery);
+
+    cards.forEach((card) => {
+      const cat = (card.getAttribute('data-category') || '').toUpperCase();
+      const catsList = (card.getAttribute('data-categories') || '').toUpperCase().split('|');
+      const plat = (card.getAttribute('data-platform') || '').toUpperCase();
+      const title = normalizeText(card.getAttribute('data-title') || '');
+      const genre = normalizeText(card.getAttribute('data-genre') || '');
+      const dev = normalizeText(card.getAttribute('data-developer') || '');
+
+      let matchesCat = false;
+      if (activeCategory === 'TODOS') {
+        matchesCat = true;
+      } else if (catsList.includes(activeCategory)) {
+        matchesCat = true;
+      } else if (activeCategory === 'PS1 / PS2') {
+        matchesCat = (plat === 'PS1' || plat === 'PS2' || cat === 'PS1 / PS2');
+      } else {
+        matchesCat = (cat === activeCategory || plat === activeCategory);
+      }
+
+      const matchesSearch = !q || title.includes(q) || genre.includes(q) || dev.includes(q) || normalizeText(plat).includes(q);
+
+      if (matchesCat && matchesSearch) {
+        card.style.display = '';
+        visibleCount++;
+      } else {
+        card.style.display = 'none';
       }
     });
+
+    if (counterEl) {
+      counterEl.textContent = visibleCount + ' / ' + cards.length + ' JUEGOS';
+    }
   }
 
-  const filterBtns = document.querySelectorAll('.filter-chip');
-  const gameCards = document.querySelectorAll('.cartridge-card');
-
-  filterBtns.forEach(btn => {
+  filterBtns.forEach((btn) => {
     btn.addEventListener('click', () => {
-      filterBtns.forEach(b => b.classList.remove('active'));
+      filterBtns.forEach((b) => b.classList.remove('active'));
       btn.classList.add('active');
-      const selectedCat = (btn.dataset.cat || '').toUpperCase();
-
-      gameCards.forEach(card => {
-        const cardCats = (card.dataset.categories || '').toUpperCase().split(' ');
-        if (selectedCat === 'TODOS' || cardCats.includes(selectedCat)) {
-          card.style.display = 'flex';
-        } else {
-          card.style.display = 'none';
-        }
-      });
+      activeCategory = (btn.getAttribute('data-filter') || 'TODOS').toUpperCase();
+      applyFilters();
     });
   });
 
-  const modal = document.getElementById('gameModal');
-  const modalClose = document.getElementById('modalClose');
-  const modalImg = document.getElementById('modalImg');
-  const modalTitle = document.getElementById('modalTitle');
-  const modalYear = document.getElementById('modalYear');
-  const modalPlayers = document.getElementById('modalPlayers');
-  const modalDev = document.getElementById('modalDev');
-  const modalDesc = document.getElementById('modalDesc');
-
-  function openModal(card) {
-    modalTitle.textContent = card.dataset.title;
-    modalDev.textContent = 'Desarrollador: ' + card.dataset.dev;
-    modalYear.textContent = card.dataset.year;
-    modalPlayers.textContent = card.dataset.players + ' Jugador(es)';
-    modalDesc.textContent = card.dataset.desc;
-    modalImg.src = card.querySelector('img').src;
-    modalImg.alt = card.dataset.title;
-
-    modal.style.display = 'flex';
-    document.body.style.overflow = 'hidden';
+  if (searchInput) {
+    searchInput.addEventListener('input', (e) => {
+      searchQuery = e.target.value || '';
+      applyFilters();
+    });
   }
 
-  function closeModal() {
-    modal.style.display = 'none';
-    document.body.style.overflow = '';
+  function openGameModal(card) {
+    if (!modal) return;
+    const title = card.getAttribute('data-title') || '';
+    const platform = card.getAttribute('data-platform-label') || card.getAttribute('data-platform') || '';
+    const genre = card.getAttribute('data-genre') || '';
+    const developer = card.getAttribute('data-developer') || '';
+    const release = card.getAttribute('data-release') || '';
+    const players = card.getAttribute('data-players') || '';
+    const format = card.getAttribute('data-format') || '';
+    const sizeLabel = card.getAttribute('data-size') || '';
+    const desc = card.getAttribute('data-description') || '';
+    const cover = card.getAttribute('data-cover') || '';
+
+    const elTitle = document.getElementById('modalTitle');
+    const elPlat = document.getElementById('modalPlatform');
+    const elDesc = document.getElementById('modalDesc');
+    const elGenre = document.getElementById('modalGenre');
+    const elDev = document.getElementById('modalDeveloper');
+    const elRelease = document.getElementById('modalRelease');
+    const elPlayers = document.getElementById('modalPlayers');
+    const elFormat = document.getElementById('modalFormat');
+    const elCover = document.getElementById('modalCover');
+
+    if (elTitle) elTitle.textContent = title;
+    if (elPlat) elPlat.textContent = platform + ' · ' + format + ' (' + sizeLabel + ')';
+    if (elDesc) elDesc.textContent = desc;
+    if (elGenre) elGenre.textContent = genre;
+    if (elDev) elDev.textContent = developer;
+    if (elRelease) elRelease.textContent = release;
+    if (elPlayers) elPlayers.textContent = players;
+    if (elFormat) elFormat.textContent = format + ' · ' + sizeLabel;
+    if (elCover) elCover.src = cover;
+
+    modal.classList.add('open');
   }
 
-  gameCards.forEach(card => card.addEventListener('click', () => openModal(card)));
-  if (modalClose) modalClose.addEventListener('click', closeModal);
-  if (modal) {
+  cards.forEach((card) => {
+    card.addEventListener('click', () => openGameModal(card));
+  });
+
+  if (modalClose && modal) {
+    modalClose.addEventListener('click', () => modal.classList.remove('open'));
     modal.addEventListener('click', (e) => {
-      if (e.target === modal) closeModal();
+      if (e.target === modal) modal.classList.remove('open');
     });
   }
-  document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape' && modal && modal.style.display === 'flex') closeModal();
-  });
-});
+})();
 """
 
 
-def _render_game_card(g: dict) -> str:
-    cats_str = " ".join(g.get("categories", []))
-    tags_html = "".join(f'<span class="cartridge-tag">{html.escape(t)}</span>' for t in g.get("tags", []))
-    slot_num = f"{g.get('slot', 0):02d}"
-    return f"""
-    <div class="cartridge-card" data-categories="{html.escape(cats_str)}" data-title="{html.escape(g.get('title',''))}" data-genre="{html.escape(g.get('genre',''))}" data-dev="{html.escape(g.get('developer',''))}" data-year="{html.escape(str(g.get('year','')))}" data-players="{html.escape(str(g.get('players','')))}" data-desc="{html.escape(g.get('subtitle',''))}">
-      <div class="cartridge-header">
-        <span class="cartridge-slot">SLOT {slot_num} // 19</span>
-        <span>C.C.I SYSTEM</span>
-      </div>
-      <div class="cartridge-art">
-        <img src="{html.escape(g.get('card_url',''))}" alt="{html.escape(g.get('title',''))}" loading="lazy">
-        <div class="cartridge-overlay">
-          <span class="overlay-action-btn">[ ⌧ A ] VER FICHA</span>
-        </div>
-      </div>
-      <div class="cartridge-body">
-        <div class="cartridge-meta">
-          <span class="cartridge-year">[ {html.escape(str(g.get('year','')))} ]</span>
-          <span class="cartridge-players">{html.escape(str(g.get('players','')))} JUGADOR(ES)</span>
-        </div>
-        <h3 class="cartridge-title">{html.escape(g.get("title",""))}</h3>
-        <p class="cartridge-sub">{html.escape(g.get("subtitle",""))}</p>
-        <div class="cartridge-tags">
-          {tags_html}
-        </div>
-      </div>
-    </div>
-    """
+def _render_game_cards(games: list[dict]) -> str:
+    cards_html = []
+    for g in games:
+        gid = escape(str(g.get("id", "")))
+        title = escape(str(g.get("title", "Juego")))
+        platform = escape(str(g.get("badge") or g.get("platform") or g.get("category") or "PS5").upper())
+        category = escape(str(g.get("category") or platform).upper())
+        cats_list = g.get("categories") or [category, platform]
+        cats_pipe = escape("|".join(str(c).upper() for c in cats_list))
+        platform_label = escape(str(g.get("console") or g.get("platform_label") or platform))
+        genre = escape(str(g.get("genre") or category))
+        developer = escape(str(g.get("developer") or "Official Studio"))
+        release = escape(str(g.get("year") or g.get("release") or "2024"))
+        players = escape(str(g.get("players") or "1-4 Jugadores"))
+        pkg_format = escape(str(g.get("format") or "PKG"))
+        size_label = escape(str(g.get("size") or g.get("size_label") or "Cloud"))
+        desc = escape(str(g.get("subtitle") or g.get("description") or ""))
+        cover = escape(str(g.get("card_url") or g.get("image_url") or "/assets/welcome.png"))
+
+        cards_html.append(
+            f"""
+            <article class="game-card"
+                     data-id="{gid}"
+                     data-title="{title}"
+                     data-category="{category}"
+                     data-categories="{cats_pipe}"
+                     data-platform="{platform}"
+                     data-platform-label="{platform_label}"
+                     data-genre="{genre}"
+                     data-developer="{developer}"
+                     data-release="{release}"
+                     data-players="{players}"
+                     data-format="{pkg_format}"
+                     data-size="{size_label}"
+                     data-description="{desc}"
+                     data-cover="{cover}">
+              <div class="game-cover-wrap">
+                <img src="{cover}" alt="{title}" loading="lazy" />
+                <span class="platform-badge">{platform}</span>
+                <span class="size-badge">{pkg_format} · {size_label}</span>
+              </div>
+              <div class="game-body">
+                <h3 class="game-title">{title}</h3>
+                <p class="game-genre">{genre} · {developer}</p>
+                <div class="game-footer">
+                  <span>{platform_label}</span>
+                  <span>INSTALACIÓN DIRECTA →</span>
+                </div>
+              </div>
+            </article>
+            """
+        )
+    return "\n".join(cards_html)
+
+
+def _render_filter_buttons(categories: list[str]) -> str:
+    btns = []
+    for idx, cat in enumerate(categories):
+        cat_esc = escape(str(cat).upper())
+        active_cls = "active" if idx == 0 else ""
+        btns.append(
+            f'<button type="button" class="filter-btn {active_cls}" data-filter="{cat_esc}">{cat_esc}</button>'
+        )
+    return "\n".join(btns)
 
 
 def build_landing_page(
-    games: list[dict],
-    categories: list[str],
-    author: dict,
-    stats: dict,
-    highscores: list[dict] = None
+    author_info: dict | None = None,
+    stats: dict | None = None,
+    games: list[dict] | None = None,
+    categories: list[str] | None = None,
+    leaderboards: dict | None = None,
+    author: dict | None = None,
 ) -> str:
-    """Construye y retorna el documento HTML completo generado al 100% en Python."""
-    filters_html = "".join(
-        f'<button class="filter-chip {"active" if cat == "TODOS" else ""}" data-cat="{html.escape(cat)}">{html.escape(cat)}</button>'
-        for cat in categories
+    info = author or author_info or {}
+    stats = stats or {}
+    games = games or []
+    categories = categories or ["TODOS", "PS5", "PS4", "SWITCH", "SWITCH 2", "PS3", "PS1 / PS2"]
+
+    total_games = int(stats.get("total_games", len(games) or 90))
+    version = escape(str(stats.get("version", "4.0.0")))
+    fps_target = int(stats.get("fps_target", 60))
+
+    author_name = escape(str(info.get("name", "Camila Carolina Ianni")))
+    author_title = escape(str(info.get("title", "Desarrolladora & Arquitecta de Software — C.C.I. SYSTEM")))
+    author_inst = escape(str(info.get("institution", "Escuela Da Vinci — Analista de Sistemas · Arquitectura de Software")))
+    author_year = escape(str(info.get("year", "2026")))
+    author_stack = escape(
+        str(
+            info.get(
+                "stack",
+                stats.get(
+                    "architecture",
+                    "Python 3 · PySide6 (Qt6 Frutiger Aero) · LiveKit WebRTC · Flask-SocketIO · SQLite · Keyring",
+                ),
+            )
+        )
     )
-    games_cards_html = "".join(_render_game_card(g) for g in games)
+    author_bio = escape(str(info.get("bio", "")))
+    author_motiv = escape(
+        str(
+            info.get(
+                "motivation",
+                "Arquitectura enfocada en ofrecer una experiencia de consola moderna multiplataforma (macOS y Windows) con estética Frutiger Aero, gestión inteligente de almacenamiento en la nube y comunidades de voz/streaming en tiempo real.",
+            )
+        )
+    )
+
+    filter_buttons_html = _render_filter_buttons(categories)
+    game_cards_html = _render_game_cards(games)
 
     return f"""<!DOCTYPE html>
 <html lang="es">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-  <title>C.C.I. SYSTEM — Consola Virtual & Emulador Retro Multiplataforma</title>
-  <meta name="description" content="Consola virtual y emulador multiplataforma 100% Python con 19 clásicos retro arcade. Autora: Camila Carolina Ianni.">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/static/css/style.css">
-  <link rel="stylesheet" href="/style.css">
-  <style>
-{CYBER_CSS}
-  </style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>C.C.I. SYSTEM — OmniDash Virtual Console (Frutiger Aero)</title>
+  <link rel="stylesheet" href="/static/css/style.css" />
 </head>
 <body>
 
-  <!-- HUD Top Bar (Estilo Consola) -->
-  <header class="top-hud">
-    <div class="container hud-container">
-      <a href="#" class="hud-brand">
-        <div class="brand-badge">C.C.I. <span>— SYSTEM —</span></div>
-        <div class="hud-sys-status">
-          <span class="led-indicator"></span>
-          <span>SYS.ONLINE // 100% PYTHON</span>
+  <!-- BARRA DE NAVEGACIÓN CÁPSULA FRUTIGER AERO -->
+  <div class="aero-nav-wrap">
+    <nav class="aero-nav">
+      <a href="#inicio" class="brand-pill">
+        <div class="brand-icon">🎮</div>
+        <div>
+          <span class="brand-title">C.C.I. SYSTEM</span>
+          <span class="brand-sub">OMNIDASH FRUTIGER AERO · v{version}</span>
         </div>
       </a>
-      <button class="hud-burger" id="hudBurger" aria-label="Abrir menú de navegación">
-        <span></span><span></span><span></span>
-      </button>
-      <nav class="hud-nav" id="hudNav">
-        <a href="#proyecto" class="hud-tab">Proyecto</a>
-        <a href="#autora" class="hud-tab">Autora</a>
-        <a href="#arquitectura" class="hud-tab">Arquitectura</a>
-        <a href="#catalogo" class="hud-tab">Biblioteca ({len(games)})</a>
-        <a href="#descarga" class="hud-tab hud-cta-download">DESCARGAR EMULADOR</a>
-      </nav>
-    </div>
-  </header>
 
-  <!-- Hero: Virtual Console Stage -->
-  <section class="hero">
-    <div class="container hero-layout">
-      <div class="hero-left">
-        <span class="telemetry-tag">// PROYECTO ACADÉMICO · ANALISTA DE SISTEMAS · 100% PYTHON</span>
-        <h1 class="hero-headline">CONSOLA VIRTUAL RETRO &amp; <span>EMULADOR</span></h1>
-        <p class="hero-lead">
-          <strong>C.C.I. SYSTEM</strong> es una plataforma de investigación y desarrollo concebida por
-          <strong>Camila Carolina Ianni</strong> en la carrera de <strong>Analista de Sistemas</strong> (Escuela Da Vinci).
-          Unifica <strong>19 videojuegos arcade clásicos</strong> en una consola virtual integral con arquitectura de estados en Python puro,
-          renderizado a 60 FPS, sistema multiusuario con gestión de estadísticas independientes,
-          soporte de joystick plug &amp; play y capturador HD sin dependencias externas.
+      <div class="nav-pills">
+        <a href="#inicio" class="nav-link active">Inicio</a>
+        <a href="#proyecto" class="nav-link">Consola &amp; Almacenamiento</a>
+        <a href="#comunidades" class="nav-link">Comunidades WebRTC</a>
+        <a href="#arquitectura" class="nav-link">Arquitectura</a>
+        <a href="#catalogo" class="nav-link">Biblioteca ({total_games})</a>
+        <a href="#descarga" class="nav-link">Descargar</a>
+      </div>
+
+      <div class="nav-status">
+        <span class="status-dot"></span>
+        <span>QT6 PYSIDE6 · {total_games} JUEGOS</span>
+      </div>
+    </nav>
+  </div>
+
+  <main class="container">
+
+    <!-- HERO SECTION -->
+    <section id="inicio" class="hero-section">
+      <div class="hero-grid">
+        <div class="glass-panel hero-main">
+          <div>
+            <div class="aero-badge">
+              <span>✦</span>
+              <span>CONSOLA VIRTUAL MULTIMEDIA · ESTÉTICA FRUTIGER AERO</span>
+            </div>
+            <h1 class="hero-title">
+              OmniDash Virtual Console:<br />
+              <span>{total_games} Juegos Modernos &amp; Comunidades en Vivo</span>
+            </h1>
+            <p class="hero-lead">
+              Diseñada sobre <strong>PySide6 (Qt6)</strong> con paneles de cristal acrílico cian-aguamarina,
+              catálogo moderno de <strong>{total_games} títulos de PS5, PS4, Nintendo Switch, Switch 2, PS3, PS2 y PS1</strong>,
+              instalación directa en consola para <strong>macOS y Windows</strong>, gestión de espacio estilo PlayStation 5
+              sin perder tu progreso y canales de voz/streaming <strong>LiveKit WebRTC</strong> en tiempo real.
+            </p>
+            <div class="hero-pills">
+              <span class="spec-chip">✦ {total_games} Juegos (PS5 · PS4 · Switch · Switch 2 · PS3)</span>
+              <span class="spec-chip">✦ Desinstalación sin perder Save Data</span>
+              <span class="spec-chip">✦ Voz &amp; Streaming 60 FPS (LiveKit WebRTC)</span>
+              <span class="spec-chip">✦ Soundboard RTC &amp; Spotify OAuth 2.0</span>
+            </div>
+          </div>
+
+          <div class="hero-actions">
+            <a href="#descarga" class="btn-aero-primary">
+              <span>⬇</span>
+              <span>DESCARGAR CONSOLA (macOS / Windows)</span>
+            </a>
+            <a href="#catalogo" class="btn-aero-glass">
+              <span>EXPLORAR BIBLIOTECA ({total_games} JUEGOS)</span>
+            </a>
+          </div>
+        </div>
+
+        <div class="glass-panel hero-showcase">
+          <div class="console-preview-window">
+            <div class="console-topbar">
+              <div class="window-dots">
+                <span></span><span></span><span></span>
+              </div>
+              <span>C.C.I. SYSTEM — OmniDash (Frutiger Aero)</span>
+              <span>{fps_target} FPS</span>
+            </div>
+            <div class="console-preview-body">
+              <div class="console-overlay-card">
+                <div class="console-overlay-title">Interfaz Acrílica Translúcida &amp; Motor Híbrido</div>
+                <div class="console-overlay-sub">
+                  Instalación directa según tu sistema operativo, conservación perpetua de partidas en
+                  <code>saves/games/</code> y presencia automática de juego en tiempo real.
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="metrics-grid">
+            <div class="metric-box">
+              <div class="metric-val">{total_games}</div>
+              <div class="metric-lbl">Juegos Modernos (PS5 / Switch / PS4 / PS3)</div>
+            </div>
+            <div class="metric-box">
+              <div class="metric-val">100%</div>
+              <div class="metric-lbl">Progreso Protegido al Desinstalar</div>
+            </div>
+            <div class="metric-box">
+              <div class="metric-val">{fps_target} FPS</div>
+              <div class="metric-lbl">Runner Nativo + Streaming WebRTC</div>
+            </div>
+            <div class="metric-box">
+              <div class="metric-val">macOS &amp; Win</div>
+              <div class="metric-lbl">Instaladores Oficiales Auto-Actualizados</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SOBRE EL PROYECTO & GESTIÓN DE ALMACENAMIENTO ESTILO PS5 -->
+    <section id="proyecto">
+      <div class="section-header">
+        <span class="section-eyebrow">EVOLUCIÓN DEL ECOSISTEMA</span>
+        <h2 class="section-title">Estética Frutiger Aero &amp; Gestión Inteligente estilo PlayStation 5</h2>
+        <p class="section-desc">
+          OmniDash evoluciona hacia una consola de escritorio de última generación en PySide6 (Qt6),
+          reemplazando los antiguos minijuegos arcade por un catálogo completo de {total_games} entregas modernas
+          con administración de almacenamiento en la nube y preservación total de partidas.
         </p>
-        <div class="hero-actions">
-          <a href="#descarga" class="btn-cci btn-primary-action">
-            <span class="btn-gamepad-key">⌧ A</span> DESCARGAR EMULADOR
-          </a>
-          <a href="#catalogo" class="btn-cci btn-secondary-action">
-            <span class="btn-gamepad-key">△ Y</span> VER BIBLIOTECA ({len(games)} JUEGOS)
-          </a>
-        </div>
-        <div class="spec-strip">
-          <div class="spec-cell">
-            <span class="spec-val">{len(games)}</span>
-            <span class="spec-lbl">JUEGOS ARCADE</span>
-          </div>
-          <div class="spec-divider"></div>
-          <div class="spec-cell">
-            <span class="spec-val">0</span>
-            <span class="spec-lbl">PERFILES DE FÁBRICA</span>
-          </div>
-          <div class="spec-divider"></div>
-          <div class="spec-cell">
-            <span class="spec-val">100%</span>
-            <span class="spec-lbl">PYTHON PURO</span>
-          </div>
-          <div class="spec-divider"></div>
-          <div class="spec-cell">
-            <span class="spec-val">60</span>
-            <span class="spec-lbl">FPS ESTABLES</span>
-          </div>
-        </div>
       </div>
 
-      <div class="hero-right">
-        <div class="console-chassis">
-          <div class="chassis-header">
-            <div class="chassis-header-left">
-              <span class="chassis-led"></span>
-              <span class="chassis-title">CCI_SYSTEM_VIRTUAL_CORE</span>
-            </div>
-            <span class="chassis-res">1280x720 @ 60FPS</span>
-          </div>
-          <div class="chassis-screen">
-            <video autoplay loop muted playsinline poster="/assets/welcome.png">
-              <source src="/assets/video/CCI_INTRO.mp4" type="video/mp4">
-              <img src="/assets/welcome.png" alt="Pantalla C.C.I. SYSTEM">
-            </video>
-            <div class="chassis-live-badge">
-              <span class="blink-dot"></span> EN VIVO // 60 FPS
-            </div>
-          </div>
-          <div class="chassis-footer">
-            <span>MOTOR: PYGAME-CE // STATE_MACHINE</span>
-            <span>PLATAFORMA: MAC &amp; WINDOWS</span>
-          </div>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- Proyecto Académico & Preservación Digital -->
-  <section id="proyecto" class="section section-dark">
-    <div class="container">
-      <span class="section-tag">// PROYECTO ACADÉMICO · PARCIAL 2</span>
-      <h2 class="section-title">¿QUÉ ES C.C.I. SYSTEM Y POR QUÉ NACE?</h2>
-      <p class="section-desc">
-        C.C.I. SYSTEM surge como un proyecto académico para el <strong>Parcial 2</strong> en la carrera de
-        <strong>Analista de Sistemas</strong> (<strong>Escuela Da Vinci</strong>), orientado a la preservación del patrimonio del videojuego retro
-        y a la aplicación práctica de arquitectura de software determinista en Python.
-      </p>
-
-      <div class="academic-pillars-grid">
-        <div class="academic-pillar-card">
-          <div class="pillar-num">01</div>
-          <h3 class="pillar-title">Demostración Académica en Python</h3>
-          <p class="pillar-desc">
-            Desafiar el mito de que Python es inadecuado para software interactivo de alta demanda temporal.
-            El sistema demuestra que con diseño orientado a objetos riguroso, sincronización precisa de ciclos y
-            gestión de memoria eficiente, es factible mantener 60 FPS estables, control de hilos y renderizado fluido sin recurrir a motores comerciales prediseñados.
-          </p>
-        </div>
-
-        <div class="academic-pillar-card">
-          <div class="pillar-num">02</div>
-          <h3 class="pillar-title">Preservación Digital de Clásicos</h3>
-          <p class="pillar-desc">
-            Rescate y adaptación de 19 obras maestras del arcade (1978–2009). Cada título ha sido
-            integrado respetando su identidad estética original (desde resoluciones nativas Neo-Geo 320x224 hasta 720p),
-            incorporando soporte para mandos modernos con vibración háptica y controles configurables.
-          </p>
-        </div>
-
-        <div class="academic-pillar-card">
-          <div class="pillar-num">03</div>
-          <h3 class="pillar-title">Aislamiento &amp; Máquina de Estados (FSM)</h3>
-          <p class="pillar-desc">
-            Resolución de colisiones de namespaces globales y recarga dinámica de módulos en tiempo de ejecución.
-            Al cambiar de juego o volver al menú principal, el sandbox de C.C.I. SYSTEM limpia descriptores, restablece canales de audio y restaura el estado determinista sin fugas de memoria.
-          </p>
-        </div>
-
-        <div class="academic-pillar-card">
-          <div class="pillar-num">04</div>
-          <h3 class="pillar-title">Filosofía de Distribución Limpia</h3>
-          <p class="pillar-desc">
-            Diseño centrado en la experiencia del usuario: instaladores nativos de 1-clic (.dmg en macOS y .exe en Windows),
-            arranque de fábrica con <strong>0 perfiles precargados</strong> para que cada jugador inicie su partida desde cero, y una plataforma web cloud ligera desplegada de forma continua.
-          </p>
-        </div>
-      </div>
-    </div>
-  </section>
-
-  <!-- Author Section (Estilo pantalla 'PERFIL' de la consola) -->
-  <section id="autora" class="section">
-    <div class="container">
-      <div class="profile-screen-card">
-        <div class="profile-hud-header">
-          <span>// C.C.I. SYSTEM · FICHA OFICIAL DE AUTORÍA Y DIRECCIÓN</span>
-          <span>DEV_ID: CCI-2026-001</span>
-        </div>
-        <div class="profile-grid">
-          <div class="profile-avatar-block">
-            <div class="profile-avatar-frame">
-              <img src="{html.escape(author.get('avatar_url', '/assets/fotos_web/Cami.jpg'))}" alt="{html.escape(author.get('name',''))}">
-            </div>
-            <span class="profile-badge-pill">DESARROLLADORA</span>
-          </div>
-          <div class="profile-details-block">
-            <h2 class="profile-name">{html.escape(author.get("name",""))}</h2>
-            <p class="profile-inst">{html.escape(author.get("institution",""))} · {html.escape(author.get("year",""))}</p>
-            <p class="profile-bio">{html.escape(author.get("bio",""))}</p>
-            <div class="profile-specs-row">
-              <div class="profile-spec-item">
-                <strong>ARQUITECTURA CORE</strong>
-                <span>100% Python nativo sin dependencias externas</span>
+      <div class="project-grid">
+        <div class="glass-panel project-card">
+          <h3>Almacenamiento inteligente sin perder tu progreso</h3>
+          <p>{author_bio}</p>
+          <p>{author_motiv}</p>
+          <ul class="feature-list">
+            <li>
+              <span>💾</span>
+              <div>
+                <strong>Desinstalación limpia estilo PS5 (`GameStorageManager`):</strong>
+                Puedes liberar gigabytes eliminando los paquetes pesados de <code>roms/</code> cuando necesites espacio,
+                mientras tus partidas guardadas en <code>saves/games/&lt;game_id&gt;/</code> y tu historial en SQLite
+                permanecen 100% intactos para cuando vuelvas a instalar el título.
               </div>
-              <div class="profile-spec-item">
-                <strong>PRESERVACIÓN ARCADE</strong>
-                <span>19 títulos adaptados a resolución 720p</span>
+            </li>
+            <li>
+              <span>⚡</span>
+              <div>
+                <strong>Instalación directa según tu Sistema Operativo:</strong>
+                Al pulsar <em>Instalar en Consola</em> dentro de OmniDash, el sistema aprovisiona automáticamente el paquete
+                optimizado para <strong>macOS</strong> o <strong>Windows</strong> sin abrir selectores manuales de archivos.
               </div>
-              <div class="profile-spec-item">
-                <strong>SISTEMA MULTIUSUARIO</strong>
-                <span>0 perfiles de fábrica, guardado en JSON local</span>
+            </li>
+            <li>
+              <span>🎮</span>
+              <div>
+                <strong>Ejecución a {fps_target} FPS &amp; Emuladores Nativos:</strong>
+                Compatible con el motor interactivo integrado multiplataforma y con emuladores externos instalados en el equipo
+                (Ryujinx, ShadPS4, RPCS3, PCSX2 y DuckStation).
               </div>
+            </li>
+          </ul>
+        </div>
+
+        <div class="glass-panel project-card">
+          <h3>Ficha Técnica &amp; Autoría</h3>
+          <p>
+            Desarrollo integral de ingeniería de software combinando interfaz gráfica acelerada por hardware,
+            comunicaciones WebRTC de baja latencia, persistencia transaccional y seguridad criptográfica en el llavero del SO.
+          </p>
+          <div class="author-meta-grid">
+            <div class="meta-tile">
+              <span>AUTORA</span>
+              <strong>{author_name}</strong>
             </div>
-            <div class="profile-actions-bar">
-              <a href="{html.escape(author.get('github_url', 'https://github.com/Camila-Ianni/C.C.I-SYSTEM'))}" target="_blank" rel="noopener noreferrer" class="btn-profile-link">
-                ⬡ REPOSITORIO GITHUB
-              </a>
+            <div class="meta-tile">
+              <span>PROYECTO</span>
+              <strong>{author_inst} ({author_year})</strong>
             </div>
+            <div class="meta-tile">
+              <span>INTERFAZ GRÁFICA</span>
+              <strong>PySide6 (Qt6) Frutiger Aero</strong>
+            </div>
+            <div class="meta-tile">
+              <span>PLATAFORMAS DEL CATÁLOGO</span>
+              <strong>PS5 · PS4 · Switch · Switch 2 · PS3 · PS2 · PS1</strong>
+            </div>
+          </div>
+          <div class="meta-tile" style="margin-top: 12px;">
+            <span>STACK TECNOLÓGICO</span>
+            <strong>{author_stack}</strong>
           </div>
         </div>
       </div>
-    </div>
-  </section>
+    </section>
 
-  <!-- Subsystems / Architecture -->
-  <section id="arquitectura" class="section section-dark">
-    <div class="container">
-      <span class="section-tag">// INGENIERÍA DE LA CONSOLA</span>
-      <h2 class="section-title">ARQUITECTURA DE SOFTWARE 100% PYTHON</h2>
-      <p class="section-desc">
-        Diseñada y desarrollada sin empaquetadores binarios opacos ni wrappers.
-        Cada pantalla, transición, controlador de audio y sistema de entrada funciona íntegramente en Python.
-      </p>
+    <!-- COMUNIDADES & TIEMPO REAL -->
+    <section id="comunidades">
+      <div class="section-header">
+        <span class="section-eyebrow">C.C.I. COMMUNITIES · REAL-TIME</span>
+        <h2 class="section-title">Comunidades, Voz WebRTC, Soundboard &amp; Presencia Automática</h2>
+        <p class="section-desc">
+          Integrado directamente en la consola OmniDash: conéctate con tus amigos en salas de voz de baja latencia,
+          transmite tu partida en vivo y comparte tu actividad de juego y música en tiempo real.
+        </p>
+      </div>
 
-      <div class="subsystems-grid">
-        <div class="subsystem-card">
-          <span class="subsystem-code">// KERNEL_01: STATE MACHINE</span>
-          <h3 class="subsystem-title">Motor de Estados Finitos</h3>
-          <p class="subsystem-text">
-            Flujo determinista desacoplado gestionado por máquina de estados (<code>StateMachine</code>):
-            <code>INTRO_VIDEO</code> &rarr; <code>USER_SELECT</code> &rarr; <code>MENU</code> &rarr; <code>GAME_RUNNER</code>.
-            Cero fugas de memoria y bucle de eventos a 60 FPS estables.
+      <div class="communities-grid">
+        <div class="glass-panel comm-card">
+          <div class="comm-icon">🎙️</div>
+          <span class="comm-tag">LIVEKIT WEBRTC SFU</span>
+          <h3>Voz &amp; Streaming 60 FPS</h3>
+          <p>
+            Canales de voz full-duplex con cancelación de eco, supresión de ruido y transmisión de pantalla o ventana de juego
+            en alta definición mediante LiveKit WebRTC.
           </p>
         </div>
 
-        <div class="subsystem-card">
-          <span class="subsystem-code">// SUBSYSTEM_02: MULTI-USER</span>
-          <h3 class="subsystem-title">Gestión de Perfiles Limpia</h3>
-          <p class="subsystem-text">
-            Arranque oficial con 0 perfiles de fábrica. Al iniciar por primera vez, el asistente
-            te invita a crear tu usuario, elegir tu avatar y guardar estadísticas de forma aislada.
+        <div class="glass-panel comm-card">
+          <div class="comm-icon">🔊</div>
+          <span class="comm-tag">RTC AUDIO MIXER</span>
+          <h3>Soundboard en el Canal</h3>
+          <p>
+            Mezclador PCM en tiempo real (`SoundboardMixer`) que inyecta efectos de sonido directamente sobre el track de audio
+            WebRTC saliente para que todos los participantes del canal lo escuchen al instante.
           </p>
         </div>
 
-        <div class="subsystem-card">
-          <span class="subsystem-code">// SUBSYSTEM_03: INPUT ENGINE</span>
-          <h3 class="subsystem-title">Control Universal Plug &amp; Play</h3>
-          <p class="subsystem-text">
-            Mapeo universal con <code>pygame.joystick</code> para DualShock 4, DualSense (PS5), mandos Xbox Series/One
-            y joysticks USB arcade. Soporta reconexión en caliente y vibración háptica.
+        <div class="glass-panel comm-card">
+          <div class="comm-icon">🛰️</div>
+          <span class="comm-tag">GAME PROCESS WATCHER</span>
+          <h3>Detección Automática</h3>
+          <p>
+            Monitor en segundo plano (`GameProcessWatcher`) que detecta la apertura y cierre real de procesos de juegos en el SO
+            y publica eventos <code>started / stopped</code> automáticamente a tus amigos.
           </p>
         </div>
 
-        <div class="subsystem-card">
-          <span class="subsystem-code">// SUBSYSTEM_04: CAPTURE &amp; AUDIO</span>
-          <h3 class="subsystem-title">Captura F12 &amp; Sintetizador</h3>
-          <p class="subsystem-text">
-            Capturador nativo F12 a 720p sin compresión con guardado instantáneo y notificación toast.
-            Sintetizador de audio en tiempo real y banda sonora ambiental BGM.
+        <div class="glass-panel comm-card">
+          <div class="comm-icon">🎵</div>
+          <span class="comm-tag">OAUTH 2.0 + KEYRING</span>
+          <h3>Spotify &amp; Tokens Seguros</h3>
+          <p>
+            Vinculación Spotify OAuth 2.0 con PKCE opt-in/revocable y almacenamiento seguro de credenciales JWT/OAuth en el
+            Keychain de macOS o Credential Locker de Windows.
           </p>
         </div>
       </div>
+    </section>
 
-      <!-- Demostración en Video & Pipeline Técnico -->
-      <div style="margin-top: 48px; background: var(--cci-bg-surface); border: 1px solid var(--cci-border-panel); border-radius: 24px; padding: 32px 28px; box-shadow: 0 10px 30px rgba(0,0,0,0.4);">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 12px; border-bottom: 1px solid var(--cci-border-panel); padding-bottom: 14px;">
-          <div>
-            <span class="subsystem-code">// DEMOSTRACIÓN TÉCNICA EN EJECUCIÓN // PYGAME-CE KERNEL</span>
-            <h3 style="margin: 4px 0 0; font-family: var(--font-display); font-size: 1.35rem; color: #fff; letter-spacing: -0.2px;">DEMO EN VIVO: ORQUESTACIÓN A 60 FPS &amp; AISLAMIENTO DE MEMORIA</h3>
-          </div>
-          <span style="font-family: var(--font-mono); font-size: 0.75rem; color: var(--cci-green); background: var(--cci-green-dim); border: 1px solid rgba(34,197,94,0.3); padding: 5px 14px; border-radius: 9999px;">60.0 FPS ESTABLES · 0 MEMORY LEAKS</span>
-        </div>
+    <!-- ARQUITECTURA DE SOFTWARE 100% PYTHON -->
+    <section id="arquitectura">
+      <div class="section-header">
+        <span class="section-eyebrow">INGENIERÍA DE SISTEMAS</span>
+        <h2 class="section-title">ARQUITECTURA DE SOFTWARE 100% PYTHON</h2>
+        <p class="section-desc">
+          Diseño modular distribuido en cuatro subsistemas principales que articulan la interfaz Frutiger Aero en Qt6,
+          el gestor de almacenamiento de los {total_games} juegos modernos y la infraestructura de red en tiempo real.
+        </p>
+      </div>
 
-        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 28px; align-items: center;">
-          <div style="border: 1px solid var(--cci-border-panel); border-radius: 20px; background: #000; box-shadow: 0 10px 30px rgba(0,0,0,0.6); overflow: hidden;">
-            <video controls playsinline poster="/assets/welcome.png" style="width: 100%; display: block; aspect-ratio: 16/9; background: #000;">
-              <source src="/assets/video/CCI_INTRO.mp4" type="video/mp4">
-              Tu navegador no soporta reproducción de video HTML5.
-            </video>
-            <div style="padding: 12px 16px; background: rgba(13, 16, 23, 0.9); border-top: 1px solid var(--cci-border-panel); display: flex; justify-content: space-between; font-family: var(--font-mono); font-size: 0.72rem; color: var(--cci-muted);">
-              <span>REPRODUCCIÓN DEMO // CAPTURA REAL DE CONSOLA</span>
-              <span style="color: #fff;">RESOLUCIÓN: 1280x720 NATIVA</span>
-            </div>
-          </div>
-
-          <div>
-            <h4 style="font-family: var(--font-display); font-size: 1.1rem; color: #fff; margin: 0 0 12px; text-transform: uppercase;">PIPELINE DE PROCESAMIENTO DETERMINISTA</h4>
-            <div style="font-family: var(--font-mono); font-size: 0.8rem; line-height: 1.7; color: var(--cci-light); background: rgba(10, 12, 17, 0.6); border: 1px solid var(--cci-border-dim); border-radius: 16px; padding: 18px;">
-              <div style="color: #ffffff; font-weight: 700; margin-bottom: 6px;">[01] INICIALIZACIÓN DEL NÚCLEO</div>
-              <div>▸ Pygame-CE Runtime (1280x720, VSync ON)</div>
-              <div>▸ Asignación de canales estéreo &amp; sintetizador BGM</div>
-              <div style="color: #ffffff; font-weight: 700; margin: 10px 0 6px;">[02] STATE MACHINE DETERMINISTA</div>
-              <div>▸ INTRO_VIDEO → USER_SELECT → MENU → GAME</div>
-              <div>▸ Reciclaje estricto de sprites y recolector de basura</div>
-              <div style="color: #ffffff; font-weight: 700; margin: 10px 0 6px;">[03] PERSISTENCIA 100% LOCAL &amp; PRIVACIDAD</div>
-              <div>▸ Almacenamiento seguro en disco local (.cci-user-data)</div>
-              <div>▸ Partidas, logros y récords guardados en tu propia máquina</div>
-              <div>▸ Sin cuentas en la nube ni telemetría: privacidad absoluta</div>
-            </div>
+      <div class="arch-grid">
+        <div class="glass-panel arch-card">
+          <span class="arch-code">KERNEL_01 // OMNIDASH QT6 FRUTIGER AERO</span>
+          <h3>Motor Visual Acrílico en PySide6 (Qt6)</h3>
+          <p>
+            Interfaz de consola con paneles translúcidos, iluminación especular cian-aguamarina, navegación fluida por pestañas
+            (Inicio, Biblioteca, Comunidades, Amigos y Ajustes), reproductor de música integrado y soporte de mandos Bluetooth/USB.
+          </p>
+          <div class="arch-tags">
+            <span>omnidash_qt.py</span>
+            <span>PySide6 / Qt6</span>
+            <span>Frutiger Aero UI</span>
+            <span>60 FPS Hardware Accel</span>
           </div>
         </div>
-      </div>
-    </div>
-  </section>
 
-  <!-- Games Catalog Section -->
-  <section id="catalogo" class="section">
-    <div class="container">
-      <div class="catalog-header-bar">
-        <div>
-          <span class="section-tag">// CATÁLOGO DE VIDEOJUEGOS RETRO</span>
-          <h2 class="section-title">BIBLIOTECA ({len(games)} JUEGOS)</h2>
-          <p class="section-desc" style="margin-bottom: 0;">
-            Cada título cuenta con adaptación precisa a 60 FPS, control analógico/digital y preservación de mecánicas originales.
+        <div class="glass-panel arch-card">
+          <span class="arch-code">SUBSYSTEM_02 // STORAGE MANAGER &amp; CATÁLOGO MODERNO</span>
+          <h3>Catálogo de {total_games} Juegos &amp; Persistencia de Partidas</h3>
+          <p>
+            Separación estricta entre binarios de instalación (`roms/`) y datos de progreso del jugador (`saves/games/` + tabla
+            SQLite `game_progress`). Permite instalar directamente según el SO y desinstalar juegos pesados sin perder avances.
           </p>
+          <div class="arch-tags">
+            <span>modern_catalog.py</span>
+            <span>storage_manager.py</span>
+            <span>modern_game_runner.py</span>
+            <span>PS5 / PS4 / Switch / PS3</span>
+          </div>
+        </div>
+
+        <div class="glass-panel arch-card">
+          <span class="arch-code">SUBSYSTEM_03 // LIVEKIT WEBRTC &amp; SOUNDBOARD MIXER</span>
+          <h3>Canales de Voz, Video-Streaming &amp; Mezcla PCM</h3>
+          <p>
+            Cliente nativo WebRTC (`media_client.py`) conectado a LiveKit SFU con captura de micrófono a 48 kHz, mezcla aditiva
+            con `SoundboardMixer` y publicación de frames de pantalla/juego (`ScreenStreamer`) en tiempo real.
+          </p>
+          <div class="arch-tags">
+            <span>media_client.py</span>
+            <span>LiveKit WebRTC</span>
+            <span>SoundboardMixer</span>
+            <span>ScreenStreamer</span>
+          </div>
+        </div>
+
+        <div class="glass-panel arch-card">
+          <span class="arch-code">SUBSYSTEM_04 // GAME WATCHER, SPOTIFY OAUTH &amp; KEYRING</span>
+          <h3>Presencia Real, Seguridad Criptográfica &amp; API</h3>
+          <p>
+            Backend Flask + Socket.IO con salas por comunidad y usuario, monitor automático de procesos de juegos (`game_watcher.py`),
+            flujo Spotify OAuth 2.0 PKCE revocable y resguardo de tokens en el llavero nativo del sistema operativo (`secret_store.py`).
+          </p>
+          <div class="arch-tags">
+            <span>game_watcher.py</span>
+            <span>spotify_oauth.py</span>
+            <span>secret_store.py</span>
+            <span>Flask-SocketIO</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- BIBLIOTECA DE 90 VIDEOJUEGOS MODERNOS -->
+    <section id="catalogo">
+      <div class="section-header">
+        <span class="section-eyebrow">CATÁLOGO OFICIAL SINCRONIZADO CON OMNIDASH</span>
+        <h2 class="section-title">BIBLIOTECA ({total_games} JUEGOS)</h2>
+        <p class="section-desc">
+          Explora las {total_games} entregas modernas disponibles en la consola: títulos de PlayStation 5, PlayStation 4,
+          Nintendo Switch, Nintendo Switch 2, PlayStation 3, PlayStation 2 y PlayStation 1 con carátulas originales,
+          instalación directa en consola y guardado persistente.
+        </p>
+      </div>
+
+      <div class="glass-panel catalog-controls">
+        <div class="search-row">
+          <div class="search-input-wrap">
+            <span class="search-icon">🔍</span>
+            <input type="search"
+                   id="catalogSearch"
+                   class="search-input"
+                   placeholder="Buscar por título, consola (PS5, Switch, PS4, PS3) o estudio..." />
+          </div>
+          <div id="catalogCounter" class="catalog-counter">
+            {len(games)} / {len(games)} JUEGOS
+          </div>
+        </div>
+
+        <div class="filter-bar">
+          {filter_buttons_html}
         </div>
       </div>
 
-      <div class="filter-chips-rack">
-        {filters_html}
+      <div class="games-grid" id="gamesGrid">
+        {game_cards_html}
       </div>
+    </section>
 
-      <div class="games-rack-grid">
-        {games_cards_html}
-      </div>
-    </div>
-  </section>
-
-  <!-- Downloads Section -->
-  <section id="descarga" class="section section-dark">
-    <div class="container">
-      <div class="text-center" style="max-width: 720px; margin: 0 auto 30px; text-align: center;">
-        <span class="section-tag">// HARDWARE RELEASES</span>
+    <!-- DESCARGA DEL EMULADOR -->
+    <section id="descarga">
+      <div class="section-header">
+        <span class="section-eyebrow">INSTALADORES OFICIALES AUTO-ACTUALIZADOS</span>
         <h2 class="section-title">DESCARGA DEL EMULADOR</h2>
-        <p class="section-desc" style="margin: 0 auto;">
-          Elige tu sistema operativo. Ambas descargas incluyen los 19 juegos, el asistente gráfico de 1-clic
-          y <strong>0 perfiles precargados</strong> para que crees tu partida desde cero.
+        <p class="section-desc">
+          Descarga la consola virtual C.C.I. SYSTEM (OmniDash Frutiger Aero) lista para ejecutar en tu sistema operativo.
+          Ambos instaladores incluyen la biblioteca de {total_games} juegos modernos, instalación directa desde la interfaz,
+          gestión de almacenamiento sin perder progreso y C.C.I. Communities integrado.
         </p>
       </div>
 
-      <div class="downloads-panel-grid">
-        <!-- macOS -->
-        <div class="download-hardware-card">
-          <div class="hw-icon-box">
-            <svg class="os-svg" width="28" height="28" viewBox="0 0 24 24" fill="currentColor"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M15.97 6.37c.63-.77 1.06-1.85.94-2.93-.91.04-2.02.61-2.67 1.37-.58.67-.99 1.77-.85 2.83 1.02.08 2.05-.51 2.58-1.27z"/></svg>
+      <div class="download-grid">
+        <div class="glass-panel download-card">
+          <div>
+            <div class="os-header">
+              <div class="os-badge-icon">🍎</div>
+              <div>
+                <h3 class="os-title">macOS Universal (.DMG)</h3>
+                <span class="os-sub">Apple Silicon (M1 / M2 / M3 / M4) &amp; Intel · macOS 12+</span>
+              </div>
+            </div>
+            <ul class="download-specs" style="margin-top: 20px;">
+              <li>Interfaz nativa <strong>OmniDash Frutiger Aero (PySide6 Qt6)</strong> acelerada por Metal.</li>
+              <li>Catálogo completo de <strong>{total_games} juegos modernos</strong> con instalación directa para macOS.</li>
+              <li>Desinstalación inteligente de paquetes pesados conservando el 100% de tus partidas en <code>saves/games/</code>.</li>
+              <li>Canales de voz LiveKit WebRTC, Soundboard RTC y Keychain nativo de macOS.</li>
+            </ul>
           </div>
-          <h3 class="hw-title">C.C.I. SYSTEM para macOS (.dmg)</h3>
-          <p class="hw-sub">Instalador nativo Apple Disk Image con C.C.I. SYSTEM.app</p>
-          <ul class="hw-checklist">
-            <li>Imagen de disco nativa Apple Disk Image (.dmg)</li>
-            <li>App bundle C.C.I. SYSTEM.app de 1-clic</li>
-            <li>Asistente pop-up de destino (Escritorio por defecto)</li>
-            <li>0 perfiles de fábrica (creación de jugador en primer boot)</li>
-          </ul>
-          <div class="hw-btn-wrap">
-            <a href="/download/mac" class="btn-cci btn-primary-action" style="width: 100%;">
-              <span class="btn-gamepad-key">⌧ A</span> DESCARGAR INSTALADOR DMG (MAC)
+          <div>
+            <a href="/download/mac" class="btn-aero-primary" style="width: 100%; justify-content: center;">
+              <span>⬇</span>
+              <span>DESCARGAR PARA macOS (CCI_System_macOS.dmg)</span>
             </a>
-            <span class="hw-hint">Abre el archivo .dmg y ejecuta C.C.I. SYSTEM</span>
-          </div>
-          <div class="mac-security-notice" style="margin-top: 18px; padding: 14px 16px; background: rgba(255, 255, 255, 0.03); border: 1px solid var(--cci-border-dim); border-radius: 16px; font-size: 0.8rem; text-align: left; line-height: 1.45;">
-            <div style="color: #ffffff; font-weight: 700; margin-bottom: 4px; display: flex; align-items: center; gap: 6px;">
-              <span>ⓘ</span> Primer inicio en macOS (Gatekeeper):
-            </div>
-            <div style="color: var(--cci-muted);">
-              Al ser un emulador independiente, si macOS muestra verificación: haz <strong>Clic derecho (o Control + Clic)</strong> en <code style="color: #fff; background: rgba(255,255,255,0.08); padding: 1px 6px; border-radius: 4px;">C.C.I. SYSTEM</code> y selecciona <strong>«Abrir»</strong>. ¡Solo la primera vez!
-            </div>
           </div>
         </div>
 
-        <!-- Windows -->
-        <div class="download-hardware-card">
-          <div class="hw-icon-box">
-            <svg class="os-svg" width="28" height="28" viewBox="0 0 24 24" fill="currentColor"><path d="M0 3.449L9.75 2.1v9.451H0m10.949-9.602L24 0v11.4H10.949M0 12.6h9.75v9.451L0 20.699M10.949 12.6H24V24l-12.9-1.801"/></svg>
+        <div class="glass-panel download-card">
+          <div>
+            <div class="os-header">
+              <div class="os-badge-icon">🪟</div>
+              <div>
+                <h3 class="os-title">Windows 10 / 11 (64-bit)</h3>
+                <span class="os-sub">Instalador Oficial (.EXE / .ZIP) · x86_64</span>
+              </div>
+            </div>
+            <ul class="download-specs" style="margin-top: 20px;">
+              <li>Consola <strong>OmniDash Frutiger Aero (PySide6 Qt6)</strong> lista para ejecutar sin dependencias externas.</li>
+              <li>Biblioteca de <strong>{total_games} videojuegos</strong> con aprovisionamiento e instalación directa en Windows.</li>
+              <li>Gestión de espacio estilo PS5 con preservación perpetua de Save Slots y progreso SQLite.</li>
+              <li>Comunidades en tiempo real, streaming a 60 FPS y resguardo en Windows Credential Locker.</li>
+            </ul>
           </div>
-          <h3 class="hw-title">C.C.I. SYSTEM para Windows (.exe)</h3>
-          <p class="hw-sub">Instalador ejecutable nativo PE32 con asistente interactivo</p>
-          <ul class="hw-checklist">
-            <li>Instalador ejecutable nativo .exe (PE32 GUI)</li>
-            <li>Ejecución directa sin terminal ni comandos</li>
-            <li>Asistente pop-up con ubicación por defecto en Escritorio</li>
-            <li>0 perfiles de fábrica (crea tu jugador al instante)</li>
-          </ul>
-          <div class="hw-btn-wrap">
-            <a href="/download/windows" class="btn-cci btn-secondary-action" style="width: 100%;">
-              <span class="btn-gamepad-key">⌧ A</span> DESCARGAR INSTALADOR EXE (WINDOWS)
+          <div>
+            <a href="/download/windows" class="btn-aero-primary" style="width: 100%; justify-content: center;">
+              <span>⬇</span>
+              <span>DESCARGAR PARA WINDOWS (CCI_System_Windows)</span>
             </a>
-            <span class="hw-hint">Ejecuta el archivo .exe y sigue el asistente interactivo</span>
-          </div>
-          <div class="win-security-notice" style="margin-top: 18px; padding: 14px 16px; background: rgba(255, 255, 255, 0.03); border: 1px solid var(--cci-border-dim); border-radius: 16px; font-size: 0.8rem; text-align: left; line-height: 1.45;">
-            <div style="color: #ffffff; font-weight: 700; margin-bottom: 4px; display: flex; align-items: center; gap: 6px;">
-              <span>🛡️</span> Primer inicio en Windows (SmartScreen):
-            </div>
-            <div style="color: var(--cci-muted);">
-              Si Windows SmartScreen advierte aplicación desconocida: haz clic en <strong>«Más información»</strong> y luego en <strong>«Ejecutar de todas formas»</strong>.
-            </div>
           </div>
         </div>
       </div>
-    </div>
-  </section>
+    </section>
 
-  <!-- Gamepad Legend Bar (Barra de comandos de la consola) -->
-  <div class="gamepad-legend-bar">
-    <div class="container legend-container">
-      <div><span class="legend-key">⌧ A</span> SELECCIONAR / INICIAR</div>
-      <div><span class="legend-key">◯ B</span> VOLVER</div>
-      <div><span class="legend-key">△ Y</span> DETALLES DE JUEGO</div>
-      <div><span class="legend-key">F12</span> CAPTURADOR HD</div>
-      <div><span class="legend-key">🕹️ STICK / D-PAD</span> NAVEGACIÓN</div>
+  </main>
+
+  <!-- MODAL DE DETALLE TÉCNICO DE JUEGO -->
+  <div class="modal-backdrop" id="gameModal">
+    <div class="modal-window">
+      <button type="button" class="modal-close" id="modalCloseBtn" aria-label="Cerrar">✕</button>
+      <div class="modal-content-grid">
+        <img id="modalCover" class="modal-cover" src="/assets/welcome.png" alt="Carátula" />
+        <div>
+          <span class="aero-badge" id="modalPlatform">PS5 · PKG</span>
+          <h3 id="modalTitle" style="font-family: 'Outfit', sans-serif; font-size: 1.7rem; margin-bottom: 10px;">Título del Juego</h3>
+          <p id="modalDesc" style="color: var(--text-soft); font-size: 0.94rem;">Descripción técnica del título.</p>
+
+          <div class="modal-meta-list">
+            <div class="modal-meta-item">
+              <span>GÉNERO</span>
+              <strong id="modalGenre">-</strong>
+            </div>
+            <div class="modal-meta-item">
+              <span>ESTUDIO / DESARROLLADOR</span>
+              <strong id="modalDeveloper">-</strong>
+            </div>
+            <div class="modal-meta-item">
+              <span>LANZAMIENTO</span>
+              <strong id="modalRelease">-</strong>
+            </div>
+            <div class="modal-meta-item">
+              <span>JUGADORES</span>
+              <strong id="modalPlayers">-</strong>
+            </div>
+            <div class="modal-meta-item">
+              <span>FORMATO &amp; TAMAÑO</span>
+              <strong id="modalFormat">-</strong>
+            </div>
+            <div class="modal-meta-item">
+              <span>GUARDADO PERSISTENTE</span>
+              <strong>Protegido en saves/games/</strong>
+            </div>
+          </div>
+
+          <a href="#descarga" class="btn-aero-primary" onclick="document.getElementById('gameModal').classList.remove('open')">
+            <span>⚡</span>
+            <span>INSTALAR Y JUGAR DESDE LA CONSOLA OMNIDASH</span>
+          </a>
+        </div>
+      </div>
     </div>
   </div>
 
-  <!-- Modal Ficha Técnica -->
-  <div class="modal-backdrop" id="gameModal" style="display: none;">
-    <div class="modal-dialog">
-      <button class="modal-close" id="modalClose">&times;</button>
-      <div class="modal-art-box">
-        <img src="" id="modalImg" alt="Juego">
+  <!-- FOOTER -->
+  <footer class="aero-footer">
+    <div class="container footer-inner">
+      <div>
+        <strong>C.C.I. SYSTEM v{version}</strong> — OmniDash Virtual Console (Estética Frutiger Aero · PySide6 Qt6)
       </div>
-      <div class="modal-info-box">
-        <div class="modal-tags-row">
-          <span style="color: #ffffff; font-weight: 700;" id="modalYear"></span>
-          <span style="color: var(--cci-muted);" id="modalPlayers"></span>
-        </div>
-        <h2 class="modal-title" id="modalTitle"></h2>
-        <p class="modal-dev" id="modalDev"></p>
-        <p class="modal-desc" id="modalDesc"></p>
-        <div class="modal-launch-note">DISPONIBLE EN C.C.I. SYSTEM VIRTUAL CONSOLE</div>
-      </div>
-    </div>
-  </div>
-
-  <!-- Footer -->
-  <footer class="footer">
-    <div class="container footer-content">
-      <div class="footer-left">
-        <span class="footer-logo">C.C.I. — SYSTEM —</span>
-        <p class="footer-copy">
-          Virtual Console &amp; Multiplatform Retro Emulator · Diseñado y desarrollado por <strong>Camila Carolina Ianni</strong>.
-          <br>Arquitectura 100% Python puro con fines de preservación y divulgación académica (2026).
-        </p>
-      </div>
-      <div class="footer-links">
-        <a href="#proyecto">Proyecto</a>
-        <a href="#arquitectura">Arquitectura</a>
-        <a href="#catalogo">Biblioteca</a>
-        <a href="#autora">Autora</a>
-        <a href="#descarga">Descargas</a>
-        <span class="footer-sep">·</span>
-        <a href="{html.escape(author.get('github_url', 'https://github.com/Camila-Ianni/C.C.I-SYSTEM'))}" target="_blank" rel="noopener noreferrer">GitHub</a>
+      <div>
+        {author_name} · {author_inst} ({author_year})
       </div>
     </div>
   </footer>
 
-  <script>{CLIENT_JS}</script>
+  <script src="/static/js/main.js"></script>
 </body>
-</html>"""
+</html>
+"""
