@@ -6,8 +6,10 @@ Autora: Camila Carolina Ianni
 from __future__ import annotations
 
 import os
+import re
 import sqlite3
 import threading
+import unicodedata
 from pathlib import Path
 from typing import Any, Callable
 
@@ -113,51 +115,92 @@ class GameLibraryScannerService:
     }
 
     OFFICIAL_GAME_COVERS = {
+        # SNES
+        "snes_Aladdin (U) [!]": "fotos juegos/Aladdin.jpg",
+        "snes_BS Mario Collection 3 (J)": "fotos juegos/BS Mario Collection 3.webp",
+        "snes_Donkey Kong Country (U) (V1.2) [!]": "fotos juegos/Donkey Kong Country.jpg",
+        "snes_Donkey Kong Country 2 - Diddy's Kong Quest (U) (V1.1) [!]": "fotos juegos/Donkey Kong Country 2- Diddy's Kong Quest.webp",
+        "snes_Donkey Kong Country 3 - Dixie Kong's Double Trouble (U) [!]": "fotos juegos/Donkey Kong Country 3- Dixie Kong's Double Trouble.jpg",
+        "snes_Doom (USA)": "fotos juegos/Doom.jpg",
+        "snes_Kirby Super Star (U) [!]": "fotos juegos/Kirby Super Star.webp",
+        "snes_Legend of Zelda, The - A Link to the Past (U) [!]": "fotos juegos/The Legend of Zelda- A Link to the Past.jpg",
+        "snes_Megaman X3 (USA)": "fotos juegos/Mega Man X3.png",
+        "snes_Mortal Kombat (USA)": "fotos juegos/Mortal Kombat.webp",
+        "snes_Sonic the Hedgehog 4 (World) (Unl)": "fotos juegos/Sonic the Hedgehog 4.jpg",
+        "snes_Street Fighter II - The World Warrior (Europe)": "fotos juegos/Street Fighter II- The World Warrior.jpg",
+        "snes_Street Fighter II Turbo - Hyper Fighting (USA)": "fotos juegos/Street Fighter II Turbo- Hyper Fighting.webp",
+        "snes_Sunset Riders (USA)": "fotos juegos/Sunset Riders.jpeg",
+        "snes_Super Bomberman 4": "fotos juegos/Super Bomberman 4.webp",
+        "snes_Super Mario All-Stars (U) [!]": "fotos juegos/Super Mario All-Stars Online.jpeg",
+        "snes_Super Mario All-Stars + Super Mario World (USA)": "fotos juegos/Super Mario All-Stars + Super Mario World.webp",
+        "snes_Super Mario Kart (U) [!]": "fotos juegos/Super Mario Kart.jpg",
+        "snes_Super Mario World 2 - Yoshi's Island (U) (V1.1)": "fotos juegos/Super Mario World 2- Yoshi's Island.jpg",
+        "snes_Super Metroid (JU) [!]": "fotos juegos/Super Metroid.jpg",
+        "snes_Ultimate Mortal Kombat 3 (USA)": "fotos juegos/Ultimate Mortal Kombat 3.jpeg",
+
+        # MAME / ARCADE
+        "mame_crusnusa": "fotos juegos/Cruis'n USA.jpg",
+        "mame_ffightub": "fotos juegos/Final Fight.jpg",
         "mame_mslug2": "fotos juegos/Metal Slug 2- Super Vehicle-001:II.jpg",
         "mame_mslug6": "fotos juegos/Metal Slug 6.png",
-        "ps1_Castlevania - Symphony of the Night (USA)": "fotos juegos/Castlevania- Symphony of the Night.webp",
-        "ps1_Metal Slug X (USA)": "fotos juegos/Metal Slug X.jpg",
-        "nds_0168 - Mario Kart DS (U)(SCZ)": "fotos juegos/Mario Kart DS.jpg",
-        "snes_Super Mario World 2 - Yoshi's Island (U) (V1.1)": "fotos juegos/Super Mario World 2- Yoshi's Island.jpg",
-        "snes_Donkey Kong Country (U) (V1.2) [!]": "fotos juegos/Donkey Kong Country.jpg",
-        "snes_Donkey Kong Country 2 - Diddy's Kong Quest (U) (V1.1)": "fotos juegos/Donkey Kong Country 2- Diddy's Kong Quest.jpg",
-        "snes_Donkey Kong Country 3 - Dixie Kong's Double Trouble (U) [!]": "fotos juegos/Donkey Kong Country 3- Dixie Kong's Double Trouble!.jpg",
+        "mame_mvscu": "fotos juegos/Marvel vs. Capcom- Clash of Super Heroes.png",
+        "mame_pacman": "fotos juegos/Pac-Man.png",
+        "mame_simpsons": "fotos juegos/The Simpsons.webp",
+
+        # N64
         "n64_Donkey Kong 64 (U) [!]": "fotos juegos/Donkey Kong 64.jpg",
-        "snes_Super Mario Kart (U) [!]": "fotos juegos/Super Mario Kart.jpg",
         "n64_Mario Kart 64 (E) (V1.1) [!]": "fotos juegos/Mario Kart 64.jpg",
-        "snes_Doom (USA)": "fotos juegos/Doom.jpg",
-        "snes_Super Metroid (JU) [!]": "fotos juegos/Super Metroid.jpg",
-        "snes_Street Fighter II - The World Warrior (Europe)": "fotos juegos/Street Fighter II- The World Warrior.jpg",
-        "snes_Street Fighter II Turbo - Hyper Fighting (USA)": "fotos juegos/Street Fighter II Turbo- Hyper Fighting.jpg",
-        "snes_Super Mario All-Stars (U) [!]": "fotos juegos/Super Mario All-Stars.jpg",
-        "snes_Super Mario All-Stars + Super Mario World (USA)": "fotos juegos/Super Mario All-Stars + Super Mario World.jpg",
-        "snes_Kirby Super Star (U) [!]": "fotos juegos/Kirby Super Star.jpg",
-        "snes_Aladdin (U) [!]": "fotos juegos/Aladdin.jpg",
-        "snes_Megaman X3 (USA)": "fotos juegos/Mega Man X3.jpg",
-        "snes_Mortal Kombat (USA)": "fotos juegos/Mortal Kombat.jpg",
-        "snes_Ultimate Mortal Kombat 3 (USA)": "fotos juegos/Ultimate Mortal Kombat 3.jpg",
-        "snes_Sunset Riders (USA)": "fotos juegos/Sunset Riders.jpg",
-        "snes_Sonic the Hedgehog 4 (World) (Unl)": "fotos juegos/Sonic The Hedgehog 4- Episode 1.jpg",
-        "snes_Super Bomberman 4": "fotos juegos/Super Bomberman 4.jpg",
-        "snes_Legend of Zelda, The - A Link to the Past (U) [!]": "fotos juegos/The Legend of Zelda- A Link to the Past.jpg",
-        "n64_Legend of Zelda, The - Ocarina of Time (U) (V1.2) [!]": "fotos juegos/The Legend of Zelda- Ocarina of Time.jpg",
+        "n64_Super Smash Bros. (U) [!]": "fotos juegos/Super Smash Bros..png",
         "n64_Super Mario 64 (U) [!]": "fotos juegos/Super Mario 64.jpg",
-        "n64_Super Smash Bros. (U) [!]": "fotos juegos/Super Smash Bros..jpg",
-        "ps1_Crash Bandicoot (USA)": "fotos juegos/Crash Bandicoot.webp",
+        "n64_Legend of Zelda, The - Ocarina of Time (U) (V1.2) [!]": "fotos juegos/The Legend of Zelda- Ocarina of Time.jpg",
+
+        # PS1
+        "ps1_Castlevania - Symphony of the Night (USA)": "fotos juegos/Castlevania- Symphony of the Night.webp",
+        "ps1_Crash Bandicoot (USA)": "fotos juegos/Crash Bandicoot.png",
         "ps1_Crash Bandicoot - Warped (USA)": "fotos juegos/Crash Bandicoot 3- Warped.webp",
+        "ps1_Metal Slug X (USA)": "fotos juegos/Metal Slug X.jpg",
         "ps1_Resident Evil (USA)": "fotos juegos/Resident Evil.webp",
-        "ps1_Resident Evil 2 (USA) (Disc 2)": "fotos juegos/Resident Evil 2.webp",
+        "ps1_Resident Evil 2 (USA) (Disc 2)": "fotos juegos/Resident Evil 2.jpg",
         "ps1_Yu-Gi-Oh! Forbidden Memories (USA)": "fotos juegos/Yu-Gi-Oh! Forbidden Memories.webp",
+
+        # NDS
+        "nds_0168 - Mario Kart DS (U)(SCZ)": "fotos juegos/Mario Kart DS.jpg",
+        "nds_0389 - Animal Crossing - Wild World (E)(Legacy)": "fotos juegos/Animal Crossing- Wild World.webp",
         "nds_0434 - New Super Mario Bros. (U)(Psyfer)": "fotos juegos/New Super Mario Bros..jpg",
-        "nds_0389 - Animal Crossing - Wild World (E)(Legacy)": "fotos juegos/Animal Crossing- Wild World.jpg",
+        "nds_0827 - Bratz - Forever Diamondz (E)(WRG)": "fotos juegos/Bratz- Forever Diamondz.jpeg",
         "nds_1633 - LEGO Star Wars - The Complete Saga (E)(EXiMiUS)": "fotos juegos/LEGO Star Wars- The Complete Saga.jpg",
-        "nds_0827 - Bratz - Forever Diamondz (E)(WRG)": "fotos juegos/Bratz- Forever Diamondz.jpg",
-        "nds_1740 - Bratz - 4 Real (E)(EXiMiUS)": "fotos juegos/Bratz- 4 Real.jpg",
-        "nds_2988 - Bratz - Girlz Really Rock (E)(XenoPhobia)": "fotos juegos/Bratz- Girlz Really Rock.jpg",
-        "nds_6148 - Bratz Fashion Boutique (U)(frieNDS)": "fotos juegos/Bratz Fashion Boutique.jpg",
+        "nds_1740 - Bratz - 4 Real (E)(EXiMiUS)": "fotos juegos/Bratz 4 Real.jpeg",
+        "nds_2988 - Bratz - Girlz Really Rock (E)(XenoPhobia)": "fotos juegos/Bratz- Girlz Really Rock.webp",
+        "nds_6148 - Bratz Fashion Boutique (U)(frieNDS)": "fotos juegos/Bratz- Fashion Boutique.jpg",
+        "nds_Pokemon White Version 2 (DSi Enhanced)(U)(frieNDS)": "fotos juegos/Pokémon White 2.jpg",
+
+        # GBA
         "gba_1645 - Barbie as the Princess and the Pauper (U)(Chameleon)": "fotos juegos/Barbie as The Princess and the Pauper.jpg",
-        "gba_1955 - Disney's Girls Pack (E)(Independent)": "fotos juegos/Disney Princess.jpg",
-        "wii_Wii Sports [RSPE01]": "fotos juegos/Wii Sports.jpg",
+        "gba_1955 - Disney's Girls Pack (E)(Independent)": "fotos juegos/Disney's Girls Pack.jpeg",
+
+        # Neo-Geo
+        "neogeo_pbobblen": "fotos juegos/Puzzle Bobble- Bust-A-Move.jpg",
+        "neogeo_snowbro2": "fotos juegos/Snow Bros. 2.png",
+        "neogeo_ssideki2": "fotos juegos/Super Sidekicks 2- The World Championship.png",
+
+        # Wii
+        "wii_Wii Sports [RSPE01]": "fotos juegos/Wii Sports.webp",
+
+        # On-Demand (Instalador Base < 1 GB)
+        "gow_ps2_1": "fotos juegos/God of War.jpg",
+        "gow_ps2_2": "fotos juegos/God of War II.jpg",
+        "gow_psp_chains": "fotos juegos/God of War- Chains of Olympus.jpg",
+        "gow_psp_sparta": "fotos juegos/God of War- Ghost of Sparta.webp",
+        "wii_monster_high": "fotos juegos/Monster High- 13 Wishes.webp",
+        "nds_mh_13_wishes": "fotos juegos/Monster High- 13 Wishes.jpg",
+        "nds_mh_ghoul_spirit": "fotos juegos/Monster High- Ghoul Spirit.jpg",
+        "nds_mh_roller_maze": "fotos juegos/Monster High- Skultimate Roller Maze.jpg",
+        "gba_herbie": "fotos juegos/Disney's Herbie- Fully Loaded.webp",
+        "nds_kirby_ultra": "fotos juegos/Kirby Super Star Ultra.webp",
+        "nds_lego_marvel": "fotos juegos/LEGO Marvel Super Heroes- Universe in Peril.jpg",
+        "nds_pokemon_black": "fotos juegos/Pokémon Black Version.jpg",
+        "ps1_re3_nemesis": "fotos juegos/Resident Evil 3- Nemesis.webp",
+        "arcade_wonderboy": "fotos juegos/Wonder Boy.jpg",
     }
 
     # Catálogo Remoto / On-Demand con metadatos neutros y sin enlaces de terceros
@@ -170,7 +213,7 @@ class GameLibraryScannerService:
             "type": "on_demand",
             "core": None,  # PS2 requiere core PCSX2/Play! dedicado no instalado
             "rom": None,
-            "cover": "assets_omnidash/covers/gow_ps2.png",
+            "cover": "fotos juegos/God of War.jpg",
             "year": "2005",
             "developer": "Santa Monica Studio / Sony",
             "desc": "Kratos desata su furia contra los dioses del Olimpo en Grecia clásica a 60 FPS.",
@@ -188,7 +231,7 @@ class GameLibraryScannerService:
             "type": "on_demand",
             "core": None,
             "rom": None,
-            "cover": "assets_omnidash/covers/gow_2.png",
+            "cover": "fotos juegos/God of War II.jpg",
             "year": "2007",
             "developer": "Santa Monica Studio / Sony",
             "desc": "Segunda entrega épica de Kratos desafiando a las Moiras y a Zeus.",
@@ -206,7 +249,7 @@ class GameLibraryScannerService:
             "type": "on_demand",
             "core": None,  # PSP requiere core PPSSPP no instalado
             "rom": None,
-            "cover": "assets_omnidash/covers/gow_chains.png",
+            "cover": "fotos juegos/God of War- Chains of Olympus.jpg",
             "year": "2008",
             "developer": "Ready at Dawn / Santa Monica Studio",
             "desc": "Aventura portátil aclamada de Kratos antes de los eventos del primer God of War.",
@@ -224,7 +267,7 @@ class GameLibraryScannerService:
             "type": "on_demand",
             "core": None,
             "rom": None,
-            "cover": "assets_omnidash/covers/gow_sparta.png",
+            "cover": "fotos juegos/God of War- Ghost of Sparta.webp",
             "year": "2010",
             "developer": "Ready at Dawn / Santa Monica Studio",
             "desc": "Kratos en busca de su hermano Deimos revelando el origen de sus cicatrices.",
@@ -242,7 +285,7 @@ class GameLibraryScannerService:
             "type": "on_demand",
             "core": "cores/dolphin_libretro.dylib",
             "rom": None,
-            "cover": "assets_omnidash/covers/mh_13_wishes.png",
+            "cover": "fotos juegos/Monster High- 13 Wishes.webp",
             "year": "2013",
             "developer": "Little Orbit / Mattel",
             "desc": "Aventura mágica en el mundo de Monster High explorando la lámpara maravillosa.",
@@ -260,7 +303,7 @@ class GameLibraryScannerService:
             "type": "on_demand",
             "core": "cores/melonds_libretro.dylib",
             "rom": None,
-            "cover": "assets_omnidash/covers/mh_13_wishes.png",
+            "cover": "fotos juegos/Monster High- 13 Wishes.jpg",
             "year": "2013",
             "developer": "Little Orbit / Mattel",
             "desc": "Versión táctil portátil de Monster High 13 Wishes para Nintendo DS.",
@@ -278,7 +321,7 @@ class GameLibraryScannerService:
             "type": "on_demand",
             "core": "cores/melonds_libretro.dylib",
             "rom": None,
-            "cover": "assets_omnidash/covers/mh_ghoul_spirit.png",
+            "cover": "fotos juegos/Monster High- Ghoul Spirit.jpg",
             "year": "2011",
             "developer": "ImaginEngine / Mattel",
             "desc": "Conviértete en nueva estudiante monstruosa en Monster High Ghoul Spirit.",
@@ -296,7 +339,7 @@ class GameLibraryScannerService:
             "type": "on_demand",
             "core": "cores/melonds_libretro.dylib",
             "rom": None,
-            "cover": "assets_omnidash/covers/mh_roller.png",
+            "cover": "fotos juegos/Monster High- Skultimate Roller Maze.jpg",
             "year": "2012",
             "developer": "Little Orbit / Mattel",
             "desc": "Carreras sobre patines monstruosas en laberintos vertiginosos.",
@@ -314,7 +357,7 @@ class GameLibraryScannerService:
             "type": "on_demand",
             "core": "cores/vba_next_libretro.dylib",
             "rom": None,
-            "cover": "assets_omnidash/covers/herbie.png",
+            "cover": "fotos juegos/Disney's Herbie- Fully Loaded.webp",
             "year": "2005",
             "developer": "Disney Interactive / Climax",
             "desc": "Conduce al icónico Herbie #53 en carreras 32-Bit de alta velocidad.",
@@ -454,8 +497,9 @@ class GameLibraryScannerService:
     def get_scan_directories(self) -> list[str]:
         return [str(p) for p in self._scan_directories]
 
-    def resolve_cover(self, game_id: str, clean_name: str, console_badge: str) -> tuple[str, bool]:
+    def resolve_cover(self, game_id: str, clean_name: str, console_badge: str, alt_title: str | None = None) -> tuple[str, bool]:
         """Encuentra la mejor carátula física disponible y retorna (ruta, es_fallback)."""
+        # 1. Mapeo oficial verificado por ID
         if game_id in self.OFFICIAL_GAME_COVERS:
             p = self.root_dir / self.OFFICIAL_GAME_COVERS[game_id]
             if p.exists():
@@ -463,19 +507,36 @@ class GameLibraryScannerService:
 
         fj_dir = self.root_dir / "fotos juegos"
         if fj_dir.exists():
-            for ext in [".jpg", ".webp", ".png", ".jpeg"]:
-                exact = fj_dir / f"{clean_name}{ext}"
-                if exact.exists():
-                    return str(exact.relative_to(self.root_dir)), False
+            candidates = [c for c in [clean_name, alt_title] if c]
 
-            n_low = clean_name.lower()
-            for cand in fj_dir.glob("*.*"):
-                if cand.stem.lower() == n_low:
+            # 2. Coincidencia directa con extensiones
+            for cand_name in candidates:
+                for ext in [".jpg", ".webp", ".png", ".jpeg"]:
+                    exact = fj_dir / f"{cand_name}{ext}"
+                    if exact.exists():
+                        return str(exact.relative_to(self.root_dir)), False
+
+            # 3. Búsqueda normalizada (insensible a diacríticos, mayúsculas, símbolos y espaciado)
+            import unicodedata
+            def _norm(s: str) -> str:
+                t = unicodedata.normalize('NFKD', s or '').encode('ASCII', 'ignore').decode('utf-8')
+                return re.sub(r'[^a-z0-9]', '', t.lower())
+
+            all_fj = list(fj_dir.glob("*.*"))
+            target_norms = [_norm(c) for c in candidates if _norm(c)]
+
+            # Coincidencia exacta de stems normalizados
+            for cand in all_fj:
+                cand_norm = _norm(cand.stem)
+                if cand_norm in target_norms:
                     return str(cand.relative_to(self.root_dir)), False
 
-            for cand in fj_dir.glob("*.*"):
-                if n_low in cand.stem.lower() or cand.stem.lower() in n_low:
-                    return str(cand.relative_to(self.root_dir)), False
+            # Coincidencia por contención de nombre significativo (mínimo 5 caracteres)
+            for cand in all_fj:
+                cand_norm = _norm(cand.stem)
+                for tn in target_norms:
+                    if len(cand_norm) >= 5 and len(tn) >= 5 and (cand_norm in tn or tn in cand_norm):
+                        return str(cand.relative_to(self.root_dir)), False
 
         # Fallbacks por consola (marcados como fallback=True)
         if console_badge == "SNES":
@@ -598,7 +659,7 @@ class GameLibraryScannerService:
                     if f.suffix.lower() == ".cue":
                         integrity_ok, integrity_notes = ROMMetadataExtractor.verify_cue_bin_integrity(f)
 
-                    cover_path, is_fallback = self.resolve_cover(game_id, clean_title, spec["badge"])
+                    cover_path, is_fallback = self.resolve_cover(game_id, clean_title, spec["badge"], alt_title=display_title)
                     fingerprint = ROMMetadataExtractor.compute_file_fingerprint(f)
 
                     try:
@@ -750,6 +811,21 @@ class GameLibraryScannerService:
                     );
                 """)
 
+                # Migración automática de columnas
+                cur.execute("PRAGMA table_info(installed_roms)")
+                existing_cols = {col[1] for col in cur.fetchall()}
+                for c_name, c_type in [
+                    ("internal_title", "TEXT"),
+                    ("metadata_source", "TEXT"),
+                    ("region", "TEXT"),
+                    ("revision", "TEXT"),
+                ]:
+                    if c_name not in existing_cols:
+                        try:
+                            cur.execute(f"ALTER TABLE installed_roms ADD COLUMN {c_name} {c_type}")
+                        except Exception:
+                            pass
+
                 for g in current_games:
                     cur.execute("""
                         INSERT OR REPLACE INTO installed_roms
@@ -762,9 +838,9 @@ class GameLibraryScannerService:
                         g.get("metadata_source", "filename"),
                         g.get("console"),
                         g.get("badge"),
-                        g.get("core"),
-                        g.get("rom"),
-                        g.get("cover"),
+                        g.get("core") or "",
+                        g.get("rom") or "",
+                        g.get("cover") or "",
                         g.get("region", "Unknown"),
                         g.get("revision", "1.0"),
                         g.get("fingerprint", ""),
