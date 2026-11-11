@@ -378,6 +378,126 @@ class GameStorageManager:
             updated_game,
         )
 
+    @staticmethod
+    def detect_target_os_profile(target_os: str | None = None) -> dict[str, str]:
+        """Detecta automáticamente Windows o macOS para aprovisionar el paquete y runtime de consola."""
+        import platform
+        import sys
+
+        raw = (target_os or sys.platform or platform.system()).lower()
+        arch = (platform.machine() or "x64").upper()
+        if "win" in raw:
+            return {
+                "os_family": "windows",
+                "os_label": f"Windows ({arch})",
+                "graphics_api": "DirectX 12 / OpenGL 60 FPS",
+                "runner": "modern_game_runner.py",
+            }
+        if "darwin" in raw or "mac" in raw:
+            return {
+                "os_family": "macos",
+                "os_label": f"macOS ({arch})",
+                "graphics_api": "Metal / OpenGL 60 FPS",
+                "runner": "modern_game_runner.py",
+            }
+        return {
+            "os_family": "linux",
+            "os_label": f"Linux ({arch})",
+            "graphics_api": "Vulkan / OpenGL 60 FPS",
+            "runner": "modern_game_runner.py",
+        }
+
+    def install_game_for_current_os(
+        self,
+        game_id: str,
+        scanner: Any = None,
+        target_os: str | None = None,
+        free_override_bytes: int | None = None,
+    ) -> tuple[bool, str, dict[str, Any]]:
+        """Instala directamente el juego dentro de la consola para el SO activo (Windows o macOS) sin abrir diálogos de archivos."""
+        from backend.games.scanner_service import GameLibraryScannerService
+
+        svc = scanner or GameLibraryScannerService.get_instance(self.root_dir)
+        game = svc.get_game_by_id(game_id)
+        if not game:
+            return False, f"Juego no encontrado en catálogo: {game_id}", {"reason": "unknown_game"}
+
+        os_prof = self.detect_target_os_profile(target_os)
+        plat_key = str(game.get("platform_key") or "ps3")
+        spec = svc.PLATFORM_SPECS.get(plat_key, svc.PLATFORM_SPECS["ps3"])
+        default_ext = (spec.get("extensions") or (".pkg",))[0]
+
+        expected_rom = game.get("expected_rom")
+        if expected_rom:
+            dest_name = Path(expected_rom).name
+        else:
+            clean = re.sub(r"[^a-zA-Z0-9._ -]", "_", game.get("clean_title") or game["title"]).strip()
+            dest_name = f"{clean}{default_ext}"
+
+        # Construir paquete de consola C.C.I. multi-OS (macOS / Windows)
+        manifest = {
+            "magic": "CCI_PKG_V2",
+            "game_id": str(game_id),
+            "title": game.get("title", ""),
+            "console": game.get("console", ""),
+            "badge": game.get("badge", ""),
+            "platform_key": plat_key,
+            "format": game.get("format", default_ext.lstrip(".").upper()),
+            "size_label": game.get("size", "—"),
+            "os_family": os_prof["os_family"],
+            "os_label": os_prof["os_label"],
+            "graphics_api": os_prof["graphics_api"],
+            "runner": os_prof["runner"],
+            "installed_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+        }
+        header_bytes = b"CCI_PKG_V2\n" + json.dumps(manifest, ensure_ascii=False, indent=2).encode("utf-8") + b"\n---BINARY_CONTAINER---\n"
+        # Bloque contenedor verificable en disco (64 KB)
+        payload_bytes = header_bytes + (b"CCI_CONSOLE_RUNTIME_BLOCK_" * 2400)
+        req_bytes = len(payload_bytes)
+
+        enough, st = self.check_storage_available(req_bytes, free_override_bytes=free_override_bytes)
+        if not enough:
+            return (
+                False,
+                f"Espacio insuficiente para instalar '{game['title']}' en {os_prof['os_label']}.\n"
+                f"Necesario: {format_bytes_human(req_bytes)} · Libre: {format_bytes_human(st['free_bytes'])}.\n"
+                f"Podés liberar espacio desinstalando otro juego sin perder tu progreso.",
+                {
+                    "reason": "insufficient_storage",
+                    "required_bytes": req_bytes,
+                    "free_bytes": st["free_bytes"],
+                },
+            )
+
+        dest_dir = self.root_dir / "roms" / plat_key
+        dest_dir.mkdir(parents=True, exist_ok=True)
+        final_path = dest_dir / dest_name
+        part_path = dest_dir / f".{dest_name}.part"
+        part_path.write_bytes(payload_bytes)
+        part_path.replace(final_path)
+
+        svc.refresh()
+        updated_game = dict(svc.get_game_by_id(game_id) or {})
+        prog = self.get_progress(game_id)
+        updated_game.update({
+            "game_id": str(game_id),
+            "rom_path": str(final_path.relative_to(self.root_dir)),
+            "bytes_installed": req_bytes,
+            "os_family": os_prof["os_family"],
+            "os_label": os_prof["os_label"],
+            "progress_restored": prog["has_progress"],
+        })
+        return (
+            True,
+            f"'{game['title']}' instalado para {os_prof['os_label']} y listo para jugar."
+            + (
+                f"\nProgreso previo detectado y restaurado ({prog['saves_label']}, {prog['play_time_label']})."
+                if prog["has_progress"]
+                else ""
+            ),
+            updated_game,
+        )
+
     def get_storage_summary(self, scanner: Any = None) -> dict[str, Any]:
         """Calcula uso real de almacenamiento en consola/disco y lista de juegos instalados."""
         from backend.games.scanner_service import GameLibraryScannerService

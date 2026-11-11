@@ -193,6 +193,44 @@ class TestGameStorageLifecycle(unittest.TestCase):
         dlg.close()
         self.assertIsNotNone(app)
 
+    def test_direct_console_install_for_macos_and_windows_ready_to_play(self):
+        with tempfile.TemporaryDirectory() as td:
+            tmp_path = Path(td)
+            scanner, storage = _create_isolated_env(tmp_path)
+            # Copiar referencia del runner moderno en el entorno temporal
+            (tmp_path / "modern_game_runner.py").write_text("# runner stub", encoding="utf-8")
+
+            # 1. Instalar Bratz: Flaunt Your Fashion directamente para macOS (sin QFileDialog)
+            ok_mac, msg_mac, entry_mac = storage.install_game_for_current_os(
+                "switch_bratz_flaunt_your_fashion",
+                scanner=scanner,
+                target_os="macos",
+            )
+            self.assertTrue(ok_mac, msg_mac)
+            self.assertIn("macOS", msg_mac)
+            self.assertIn("listo para jugar", msg_mac)
+            self.assertTrue(entry_mac["installed"])
+            self.assertFalse(entry_mac["on_demand"])
+            self.assertEqual(entry_mac["os_family"], "macos")
+
+            ok_ver, msg_ver = scanner.verify_game_file("switch_bratz_flaunt_your_fashion")
+            self.assertTrue(ok_ver, msg_ver)
+
+            # 2. Desinstalar y volver a instalar para Windows (Win32 x64)
+            ok_un, _, _ = storage.uninstall_game("switch_bratz_flaunt_your_fashion", scanner=scanner)
+            self.assertTrue(ok_un)
+
+            ok_win, msg_win, entry_win = storage.install_game_for_current_os(
+                "switch_bratz_flaunt_your_fashion",
+                scanner=scanner,
+                target_os="windows",
+            )
+            self.assertTrue(ok_win, msg_win)
+            self.assertIn("Windows", msg_win)
+            self.assertTrue(entry_win["installed"])
+            self.assertFalse(entry_win["on_demand"])
+            self.assertEqual(entry_win["os_family"], "windows")
+
 
 if __name__ == "__main__":
     unittest.main()

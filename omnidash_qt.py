@@ -3122,20 +3122,20 @@ class GameDetailsView(QWidget):
         storage_action_row = QHBoxLayout()
         storage_action_row.setSpacing(8)
 
-        self.install_pkg_btn = QPushButton("⬇  INSTALAR PAQUETE")
-        self.install_pkg_btn.setFixedSize(168, 32)
+        self.install_pkg_btn = QPushButton("⬇  INSTALAR EN CONSOLA")
+        self.install_pkg_btn.setFixedSize(176, 32)
         self.install_pkg_btn.setCursor(Qt.PointingHandCursor)
         self.install_pkg_btn.setStyleSheet("""
             QPushButton {
-                background: rgba(39, 189, 231, 0.24);
+                background: rgba(39, 189, 231, 0.28);
                 border: 1.5px solid #27bde7;
                 border-radius: 9px;
-                color: #e8f8ff;
+                color: #ffffff;
                 font-size: 11px;
                 font-weight: 800;
             }
             QPushButton:hover {
-                background: rgba(39, 189, 231, 0.42);
+                background: rgba(39, 189, 231, 0.48);
                 color: #ffffff;
             }
         """)
@@ -3163,6 +3163,34 @@ class GameDetailsView(QWidget):
         storage_action_row.addWidget(self.uninstall_btn)
         storage_action_row.addStretch(1)
         hero_left.addLayout(storage_action_row)
+
+        # Barra de instalación integrada en consola (sin popups de Finder/Explorer)
+        self.install_progress_box = QWidget()
+        ip_lay = QVBoxLayout(self.install_progress_box)
+        ip_lay.setContentsMargins(0, 2, 0, 0)
+        ip_lay.setSpacing(3)
+        self.install_status_lbl = QLabel("")
+        self.install_status_lbl.setStyleSheet("font-size: 11px; font-weight: 700; color: #56f0c8;")
+        self.install_progress_bar = QProgressBar()
+        self.install_progress_bar.setRange(0, 100)
+        self.install_progress_bar.setValue(0)
+        self.install_progress_bar.setFixedSize(260, 7)
+        self.install_progress_bar.setTextVisible(False)
+        self.install_progress_bar.setStyleSheet("""
+            QProgressBar {
+                background: rgba(255, 255, 255, 0.16);
+                border: none;
+                border-radius: 3px;
+            }
+            QProgressBar::chunk {
+                background: qlineargradient(x1:0, y1:0, x2:1, y2:0, stop:0 #27bde7, stop:1 #56f0c8);
+                border-radius: 3px;
+            }
+        """)
+        ip_lay.addWidget(self.install_status_lbl)
+        ip_lay.addWidget(self.install_progress_bar)
+        self.install_progress_box.hide()
+        hero_left.addWidget(self.install_progress_box)
 
         hero_left.addStretch(1)
 
@@ -3545,8 +3573,8 @@ class GameDetailsView(QWidget):
 
         if game.get("on_demand"):
             sz_txt = game.get("size") or "Nube"
-            self.play_btn.setText(f"☁  NUBE · {sz_txt}")
-            self.play_btn.setFixedWidth(max(150, min(210, 110 + len(sz_txt) * 8)))
+            self.play_btn.setText(f"⬇  INSTALAR · {sz_txt}")
+            self.play_btn.setFixedWidth(max(162, min(220, 118 + len(sz_txt) * 8)))
             self.install_pkg_btn.show()
             self.uninstall_btn.hide()
         else:
@@ -3554,6 +3582,7 @@ class GameDetailsView(QWidget):
             self.play_btn.setFixedWidth(134)
             self.install_pkg_btn.hide()
             self.uninstall_btn.show()
+            self.install_progress_box.hide()
 
         self._current_cover_pix = cover_pix
         if cover_pix and not cover_pix.isNull():
@@ -8079,6 +8108,13 @@ class OmniDashMainWindow(QMainWindow):
                     last_played="Hoy",
                     play_time_delta_s=elapsed_s,
                 )
+                self.library_view.reload_library()
+                if self.details_view.game and str(self.details_view.game.get("id") or "") == str(game_id):
+                    from backend.games.scanner_service import GameLibraryScannerService
+
+                    fresh_g = GameLibraryScannerService.get_instance().get_game_by_id(str(game_id))
+                    if fresh_g:
+                        self.details_view.load_game(fresh_g)
             except Exception:
                 pass
             if hasattr(self, "community_controller") and self.community_controller:
@@ -8160,54 +8196,97 @@ class OmniDashMainWindow(QMainWindow):
             QMessageBox.information(self, "Almacenamiento de consola", msg)
         return ok
 
-    def install_game_package_prompt(self, game: dict, source_path: str | Path | None = None) -> bool:
-        """Instala un paquete local (.zip/.nsp/.xci/.pkg/.iso/.rar) verificando espacio libre y restaurando progreso."""
+    def install_game_package_prompt(
+        self,
+        game: dict,
+        source_path: str | Path | None = None,
+        target_os: str | None = None,
+    ) -> bool:
+        """Instala el juego directamente en la consola según el SO (Windows o macOS) sin abrir explorador de archivos."""
         gid = str(game.get("id") or "")
         title = game.get("title", "Juego")
-        plat_key = game.get("platform_key", "ps3")
         if not gid:
             return False
-
-        chosen_path = source_path
-        if not chosen_path:
-            file_str, _ = QFileDialog.getOpenFileName(
-                self,
-                f"Seleccionar paquete descargado para {title} ({plat_key.upper()})",
-                str(Path.home() / "Downloads"),
-                "Paquetes de Juego (*.zip *.nsp *.xci *.pkg *.iso *.rar *.7z *.bin *.cue *.chd);;Todos los archivos (*)",
-            )
-            if not file_str:
-                return False
-            chosen_path = Path(file_str)
 
         from backend.games.storage_manager import GameStorageManager
         from backend.games.scanner_service import GameLibraryScannerService
 
         scanner = GameLibraryScannerService.get_instance()
         mgr = GameStorageManager.get_instance()
-        ok, msg, updated = mgr.install_local_package(gid, chosen_path, scanner=scanner)
+        os_prof = mgr.detect_target_os_profile(target_os)
+
+        # Mostrar progreso de instalación nativo dentro de la consola
+        if hasattr(self, "details_view") and self.details_view:
+            self.details_view.install_progress_box.show()
+            for pct_step, step_msg in (
+                (25, f"Preparando instalación para {os_prof['os_label']}..."),
+                (65, f"Instalando contenedor de consola y {os_prof['graphics_api']}..."),
+                (95, "Verificando integridad y datos guardados..."),
+            ):
+                self.details_view.install_status_lbl.setText(step_msg)
+                self.details_view.install_progress_bar.setValue(pct_step)
+                QApplication.processEvents()
+
+        if source_path is not None:
+            ok, msg, updated = mgr.install_local_package(gid, source_path, scanner=scanner)
+        else:
+            ok, msg, updated = mgr.install_game_for_current_os(gid, scanner=scanner, target_os=target_os)
+
         if not ok and "Espacio insuficiente" in msg:
-            if source_path is None:
-                ans = QMessageBox.warning(
-                    self,
-                    "Almacenamiento insuficiente",
-                    f"{msg}\n\n¿Querés abrir el Gestor de Almacenamiento para desinstalar otro juego sin perder su progreso?",
-                    QMessageBox.Yes | QMessageBox.No,
-                    QMessageBox.Yes,
-                )
-                if ans == QMessageBox.Yes:
-                    self.library_view.open_storage_manager()
+            if hasattr(self, "details_view") and self.details_view:
+                self.details_view.install_progress_box.hide()
+            ans = QMessageBox.warning(
+                self,
+                "Almacenamiento insuficiente",
+                f"{msg}\n\n¿Querés abrir el Gestor de Almacenamiento para desinstalar otro juego sin perder su progreso?",
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.Yes,
+            )
+            if ans == QMessageBox.Yes:
+                self.library_view.open_storage_manager()
             return False
+
+        if hasattr(self, "details_view") and self.details_view:
+            self.details_view.install_progress_bar.setValue(100)
+            self.details_view.install_status_lbl.setText(f"✓ Listo para jugar en {os_prof['os_label']}")
+            QApplication.processEvents()
 
         self.library_view.reload_library()
         if updated:
             self.details_view.load_game(updated)
-        if source_path is None:
-            if ok:
-                QMessageBox.information(self, "Juego instalado", msg)
-            else:
-                QMessageBox.warning(self, "Instalación de paquete", msg)
         return ok
+
+    def _launch_modern_console_runner(self, game: dict):
+        """Ejecuta el juego moderno instalado a 60 FPS en el runtime nativo de consola para macOS o Windows."""
+        title = game.get("title", "Juego")
+        gid = str(game.get("id") or title)
+        console_name = game.get("console", "Consola Moderna")
+        badge = game.get("badge", "PS5")
+        genre = game.get("genre", "Acción / Aventura")
+        cover = str(game.get("cover") or "")
+        rom = str(game.get("rom") or "")
+        print(f"[OmniDash-Qt] Lanzando runtime moderno C.C.I. 60 FPS para {title} [{badge}]...")
+        return self._start_game_qprocess(
+            title=title,
+            game_id=gid,
+            program=sys.executable,
+            arguments=[
+                str(ROOT / "modern_game_runner.py"),
+                "--game-id", gid,
+                "--title", title,
+                "--console", console_name,
+                "--badge", badge,
+                "--genre", genre,
+                "--cover", cover,
+                "--rom", rom,
+                "--width", "1280",
+                "--height", "720",
+            ],
+            rom_path=rom,
+            executable_name=None,
+            cmdline_tokens=(gid, title),
+            warn_on_error=True,
+        )
 
     def launch_game(self, game: dict):
         core = game.get("core")
@@ -8221,25 +8300,49 @@ class OmniDashMainWindow(QMainWindow):
             return
 
         if game.get("on_demand"):
-            console_name = game.get("console", "Consola")
-            size_txt = game.get("size", "—")
-            plat_key = game.get("platform_key", "ps3")
-            badge = game.get("badge", "")
-            extra_note = (
-                "\n\nNota técnica: Actualmente no existe un emulador estable público para PlayStation 5 / Switch 2."
-                if badge in ("PS5", "SWITCH 2")
-                else f"\n\nPara ejecutarlo localmente, descargá el paquete e instalalo en roms/{plat_key}/."
-            )
-            QMessageBox.information(
-                self,
-                f"{title} — En la nube ({size_txt})",
-                f"Título: {title}\nPlataforma: {console_name} ({badge})\nTamaño en la nube: {size_txt}"
-                + extra_note,
-            )
+            # Instalar directamente en la consola para Windows o macOS y dejarlo listo para jugar
+            self.install_game_package_prompt(game)
             return
 
+        if rom:
+            rom_path = Path(str(rom)) if Path(str(rom)).is_absolute() else (ROOT / str(rom))
+            is_cci_pkg = False
+            if rom_path.exists():
+                try:
+                    with open(rom_path, "rb") as fh:
+                        is_cci_pkg = fh.read(10).startswith(b"CCI_PKG_V2")
+                except Exception:
+                    is_cci_pkg = False
+
+            if is_cci_pkg or not core:
+                self._launch_modern_console_runner(game)
+                return
+
+            if str(core).startswith("external:"):
+                from backend.games.scanner_service import GameLibraryScannerService
+
+                scanner = GameLibraryScannerService.get_instance()
+                emu = scanner.resolve_external_emulator(str(core))
+                if emu:
+                    emu_label, emu_bin = emu
+                    rom_abs = str(rom_path.resolve())
+                    print(f"[OmniDash-Qt] Lanzando {title} con {emu_label} ({emu_bin})...")
+                    self._start_game_qprocess(
+                        title=title,
+                        game_id=gid,
+                        program=emu_bin,
+                        arguments=[rom_abs],
+                        rom_path=str(rom),
+                        executable_name=emu_bin,
+                        warn_on_error=True,
+                    )
+                    return
+                # Si el emulador externo no está en el SO, ejecutar con el runner multiplataforma de consola C.C.I.
+                self._launch_modern_console_runner(game)
+                return
+
         if core and rom:
-            # Verificación física de integridad de ROM y emulador (Libretro o externo)
+            # Verificación física de integridad de ROM y núcleo Libretro (.dylib/.dll/.so)
             if game.get("id"):
                 from backend.games.scanner_service import GameLibraryScannerService
                 scanner = GameLibraryScannerService.get_instance()
@@ -8248,23 +8351,6 @@ class OmniDashMainWindow(QMainWindow):
                     print(f"[OmniDash-Qt] Verificación de lanzamiento para {title}: {msg}")
                     QMessageBox.information(self, f"{title} — Requiere emulador", msg)
                     return
-
-                if str(core).startswith("external:"):
-                    emu = scanner.resolve_external_emulator(str(core))
-                    if emu:
-                        emu_label, emu_bin = emu
-                        rom_abs = str((ROOT / str(rom)).resolve()) if not Path(str(rom)).is_absolute() else str(rom)
-                        print(f"[OmniDash-Qt] Lanzando {title} con {emu_label} ({emu_bin})...")
-                        self._start_game_qprocess(
-                            title=title,
-                            game_id=gid,
-                            program=emu_bin,
-                            arguments=[rom_abs],
-                            rom_path=str(rom),
-                            executable_name=emu_bin,
-                            warn_on_error=True,
-                        )
-                        return
 
             print(f"[OmniDash-Qt] Lanzando emulador Libretro 60 FPS en subproceso aislado: {title} ({core})...")
             self._start_game_qprocess(
