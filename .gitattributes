@@ -2,10 +2,15 @@
 **/* linguist-vendored
 * linguist-detectable=false
 **/* linguist-detectable=false
-
 *.py linguist-vendored=false
 **/*.py linguist-vendored=false
 *.py linguist-detectable=true
 **/*.py linguist-detectable=true
 *.py linguist-language=Python
 **/*.py linguist-language=Python
+roms/** filter=lfs diff=lfs merge=lfs -text
+roms/INSTALL_MANIFEST.json -filter -diff -merge text
+cores/fceumm_libretro.dylib filter=lfs diff=lfs merge=lfs -text
+cores/genesis_plus_gx_libretro.dylib filter=lfs diff=lfs merge=lfs -text
+cores/mame_libretro.dylib filter=lfs diff=lfs merge=lfs -text
+cores/mgba_libretro.dylib filter=lfs diff=lfs merge=lfs -text
