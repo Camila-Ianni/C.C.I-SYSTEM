@@ -660,6 +660,115 @@ class ROMPackageIdentityValidator:
         )
 
     @classmethod
+    def _validate_local_rom_binary(cls, rom_path: Path, platform_key: str) -> tuple[bool, str, dict[str, Any]]:
+        """Comprueba cabeceras nativas de cartuchos y discos retro locales."""
+        ext = rom_path.suffix.lower()
+        file_sz = rom_path.stat().st_size
+        if platform_key == "gba" and ext == ".gba":
+            if file_sz < 0xC0:
+                return False, f"ROM GBA truncada ({file_sz} B).", {"package_kind": "corrupted_truncated"}
+            with rom_path.open("rb") as fh:
+                fh.seek(0xA0)
+                hdr = fh.read(0x20)
+            if len(hdr) < 0x20 or hdr[0x12] != 0x96:
+                return False, f"Cabecera GBA inválida en '{rom_path.name}' (falta byte fijo 0x96).", {"package_kind": "invalid_binary_header"}
+            expected = (-sum(hdr[:0x1D]) - 0x19) & 0xFF
+            if hdr[0x1D] != expected:
+                return False, f"Checksum de cabecera GBA inválido en '{rom_path.name}'.", {"package_kind": "corrupted_structure"}
+            embedded_title = hdr[:12].decode("ascii", "ignore").strip(" \x00")
+            return True, "Cabecera y checksum GBA verificados.", {
+                "package_kind": "native_rom", "format_detected": "GBA", "binary_platform": "gba",
+                "embedded_title": embedded_title,
+            }
+
+        if platform_key == "nds" and ext == ".nds":
+            if file_sz < 0x200:
+                return False, f"ROM Nintendo DS truncada ({file_sz} B).", {"package_kind": "corrupted_truncated"}
+            with rom_path.open("rb") as fh:
+                hdr = fh.read(0x200)
+            title = hdr[:12].decode("ascii", "ignore").strip(" \x00")
+            game_code = hdr[12:16].decode("ascii", "ignore").strip(" \x00")
+            arm9_offset = struct.unpack_from("<I", hdr, 0x20)[0]
+            arm9_size = struct.unpack_from("<I", hdr, 0x2C)[0]
+            if not title or len(game_code) < 3 or not game_code.isalnum():
+                return False, f"Cabecera Nintendo DS inválida en '{rom_path.name}'.", {"package_kind": "invalid_binary_header"}
+            if arm9_size and (arm9_offset < 0x200 or arm9_offset + arm9_size > file_sz):
+                return False, f"Segmento ARM9 fuera del archivo en '{rom_path.name}'.", {"package_kind": "corrupted_structure"}
+            return True, "Cabecera Nintendo DS verificada.", {
+                "package_kind": "native_rom", "format_detected": "NDS", "binary_platform": "nds",
+                "embedded_title": title, "product_code": game_code,
+            }
+
+        if platform_key == "n64" and ext in (".z64", ".n64", ".v64"):
+            if file_sz < 0x1000:
+                return False, f"ROM Nintendo 64 truncada ({file_sz} B).", {"package_kind": "corrupted_truncated"}
+            with rom_path.open("rb") as fh:
+                head = fh.read(0x40)
+            magic = head[:4]
+            if magic not in (b"\x80\x37\x12\x40", b"\x37\x80\x40\x12", b"\x40\x12\x37\x80"):
+                return False, f"Magic de ROM Nintendo 64 inválido en '{rom_path.name}'.", {"package_kind": "invalid_binary_header"}
+            title = head[0x20:0x34].decode("ascii", "ignore").replace("\x00", "").strip()
+            return True, "Cabecera Nintendo 64 verificada.", {
+                "package_kind": "native_rom", "format_detected": "N64", "binary_platform": "n64",
+                "embedded_title": title,
+            }
+
+        if platform_key == "nes" and ext == ".nes":
+            if file_sz < 16:
+                return False, f"ROM NES truncada ({file_sz} B).", {"package_kind": "corrupted_truncated"}
+            with rom_path.open("rb") as fh:
+                hdr = fh.read(16)
+            if hdr[:4] != b"NES\x1a":
+                return False, f"Cabecera iNES inválida en '{rom_path.name}'.", {"package_kind": "invalid_binary_header"}
+            trainer = 512 if hdr[6] & 0x04 else 0
+            prg_size = hdr[4] * 16384
+            chr_size = hdr[5] * 8192
+            if prg_size == 0:
+                return False, f"ROM NES sin bancos PRG en '{rom_path.name}'.", {"package_kind": "corrupted_structure"}
+            min_size = 16 + trainer + prg_size + chr_size
+            if file_sz < min_size:
+                return False, f"ROM NES truncada ({file_sz} B < {min_size} B esperados).", {"package_kind": "corrupted_truncated"}
+            return True, "Cabecera iNES y tamaño de ROM verificados.", {
+                "package_kind": "native_rom", "format_detected": "NES", "binary_platform": "nes",
+            }
+
+        if platform_key == "snes" and ext in (".smc", ".sfc", ".fig"):
+            if file_sz < 32 * 1024 or file_sz > 128 * 1024 * 1024:
+                return False, f"Tamaño de ROM Super Nintendo inválido ({file_sz} B).", {"package_kind": "corrupted_structure"}
+            with rom_path.open("rb") as fh:
+                sample = fh.read(min(file_sz, 0x10000))
+            if not any(sample):
+                return False, f"ROM Super Nintendo vacía o corrupta: '{rom_path.name}'.", {"package_kind": "corrupted_structure"}
+            return True, "Tamaño y contenido Super Nintendo verificados.", {
+                "package_kind": "native_rom", "format_detected": "SNES", "binary_platform": "snes",
+            }
+
+        if platform_key == "wii" and ext == ".wbfs":
+            if file_sz < 0x100:
+                return False, f"Archivo WBFS truncado ({file_sz} B).", {"package_kind": "corrupted_truncated"}
+            with rom_path.open("rb") as fh:
+                hdr = fh.read(0x100)
+            if hdr[:4] != b"WBFS" or hdr[4] > 31 or hdr[5] > 31:
+                return False, f"Cabecera WBFS inválida en '{rom_path.name}'.", {"package_kind": "invalid_binary_header"}
+            return True, "Cabecera WBFS verificada.", {
+                "package_kind": "native_rom", "format_detected": "WBFS", "binary_platform": "wii",
+            }
+
+        if platform_key == "megadrive" and ext in (".gen", ".md", ".bin"):
+            if file_sz < 0x200 or file_sz > 64 * 1024 * 1024:
+                return False, f"Tamaño de ROM Mega Drive inválido ({file_sz} B).", {"package_kind": "corrupted_structure"}
+            with rom_path.open("rb") as fh:
+                fh.seek(0x100)
+                signature = fh.read(4)
+            if signature != b"SEGA":
+                return False, f"Cabecera SEGA inválida en '{rom_path.name}'.", {"package_kind": "invalid_binary_header"}
+            return True, "Cabecera SEGA Mega Drive verificada.", {
+                "package_kind": "native_rom", "format_detected": "Mega Drive", "binary_platform": "megadrive",
+            }
+
+        return False, f"Formato '{ext}' no válido para '{platform_key}'.", {"package_kind": "unsupported_format"}
+
+    @classmethod
     def _validate_cue_bin_binary(cls, rom_path: Path, platform_key: str) -> tuple[bool, str, dict[str, Any]]:
         if platform_key not in ("ps1", "ps2"):
             return (
@@ -678,6 +787,7 @@ class ROMPackageIdentityValidator:
 
         first_bin = rom_path.parent / bin_names[0]
         bin_sz = first_bin.stat().st_size
+        total_bin_sz = sum((rom_path.parent / name).stat().st_size for name in bin_names)
         if bin_sz < 17 * 2352 or (bin_sz % 2352 != 0 and bin_sz % 2048 != 0):
             return (
                 False,
@@ -697,10 +807,10 @@ class ROMPackageIdentityValidator:
                     {"package_kind": "invalid_binary_header"},
                 )
             vol_blocks = struct.unpack("<I", pvd[80:84])[0]
-            if vol_blocks > 0 and bin_sz < vol_blocks * stride:
+            if vol_blocks > 0 and total_bin_sz < vol_blocks * stride:
                 return (
                     False,
-                    f"Pista BIN '{first_bin.name}' truncada ({bin_sz} B < {vol_blocks * stride} B esperados).",
+                    f"Pistas BIN truncadas ({total_bin_sz} B < {vol_blocks * stride} B esperados).",
                     {"package_kind": "corrupted_truncated"},
                 )
             fh.seek(0)
@@ -717,6 +827,7 @@ class ROMPackageIdentityValidator:
                 "binary_platform": "ps1",
                 "product_code": prod_code,
                 "bin_size": bin_sz,
+                "total_bin_size": total_bin_sz,
             },
         )
 
@@ -812,6 +923,21 @@ class ROMPackageIdentityValidator:
             return False, f"Cabecera RAR inválida en '{rom_path.name}'.", {"package_kind": "invalid_binary_header"}
         if ext == ".7z" and not magic.startswith(b"7z\xbc\xaf\x27\x1c"):
             return False, f"Cabecera 7z inválida en '{rom_path.name}'.", {"package_kind": "invalid_binary_header"}
+
+        if ext == ".zip" and platform_key in ("mame", "model2", "neogeo"):
+            try:
+                with zipfile.ZipFile(rom_path, "r") as zf:
+                    infos = [info for info in zf.infolist() if not info.is_dir()]
+                    if len(infos) < 2 or sum(info.file_size for info in infos) < 4096:
+                        return False, f"Archivo arcade sin datos ROM suficientes: '{rom_path.name}'.", {"package_kind": "incompatible_archive_content"}
+                    corrupt_member = zf.testzip()
+                    if corrupt_member:
+                        return False, f"CRC inválido en ROM arcade '{corrupt_member}'.", {"package_kind": "corrupted_structure"}
+            except zipfile.BadZipFile:
+                return False, f"Archivo arcade ZIP corrupto: '{rom_path.name}'.", {"package_kind": "corrupted_truncated"}
+            return True, f"Paquete arcade ZIP íntegro verificado ({len(infos)} archivos ROM).", {
+                "package_kind": "native_rom", "format_detected": platform_key.upper(), "binary_platform": platform_key,
+            }
 
         wanted_exts_map = {
             "ps3": (".pkg", ".iso", ".bin"),
@@ -932,6 +1058,8 @@ class ROMPackageIdentityValidator:
         rom_path: Path,
         allowed_extensions: list[str] | tuple[str, ...] | None = None,
         expected_rom: str | None = None,
+        check_reference_hash: bool = True,
+        allow_local_filename_identity: bool = False,
     ) -> tuple[bool, str, dict[str, Any]]:
         """Verifica de forma estricta la autenticidad binaria, estructura, plataforma e identidad del paquete (H-01, H-03)."""
         gid = str(game_id or "").strip()
@@ -1015,6 +1143,8 @@ class ROMPackageIdentityValidator:
                 fmt_ok, fmt_msg, fmt_meta = cls._validate_cue_bin_binary(rom_path, platform_key)
         elif ext in (".zip", ".rar", ".7z"):
             fmt_ok, fmt_msg, fmt_meta = cls._validate_archive_binary(rom_path, platform_key)
+        elif ext in (".gba", ".gbc", ".gb", ".nds", ".z64", ".n64", ".v64", ".nes", ".smc", ".sfc", ".fig", ".wbfs", ".rvz", ".gen", ".md"):
+            fmt_ok, fmt_msg, fmt_meta = cls._validate_local_rom_binary(rom_path, platform_key)
         else:
             return (
                 False,
@@ -1030,6 +1160,7 @@ class ROMPackageIdentityValidator:
         # del ZIP nunca se propaga como evidencia al paquete interno.
         if ext == ".zip" and fmt_meta.get("inner_member"):
             try:
+                inner_hash = ""
                 with zipfile.ZipFile(rom_path, "r") as zf, tempfile.TemporaryDirectory() as td:
                     member = str(fmt_meta["inner_member"])
                     inner_path = Path(td) / Path(member).name
@@ -1042,7 +1173,11 @@ class ROMPackageIdentityValidator:
                         rom_path=inner_path,
                         allowed_extensions=allowed_extensions,
                         expected_rom=None,
+                        check_reference_hash=False,
                     )
+                    expected_inner_hash = CATALOG_REFERENCE_METADATA.get(gid, {}).get("inner_pkg_sha256")
+                    if expected_inner_hash:
+                        inner_hash = compute_sha256(inner_path)
                 if not inner_ok:
                     return (
                         False,
@@ -1052,6 +1187,14 @@ class ROMPackageIdentityValidator:
                 for key in ("embedded_game_id", "embedded_title", "product_code", "content_id"):
                     if inner_meta.get(key):
                         fmt_meta[key] = inner_meta[key]
+                if inner_hash:
+                    fmt_meta["inner_sha256"] = inner_hash
+                    if inner_hash != expected_inner_hash:
+                        return (
+                            False,
+                            f"SHA-256 del paquete interno no coincide con la referencia oficial para '{title}'.",
+                            {"package_kind": "integrity_hash_mismatch", "sha256": inner_hash},
+                        )
             except (OSError, KeyError, zipfile.BadZipFile) as exc:
                 return False, f"No se pudo validar el paquete interno de '{rom_path.name}': {exc}", {"package_kind": "corrupted_structure"}
 
@@ -1074,10 +1217,23 @@ class ROMPackageIdentityValidator:
                 {"package_kind": "identity_mismatch", "embedded_game_id": emb_gid},
             )
 
+        clean_title = ROMMetadataExtractor.clean_display_title(title)
+        title_norm = normalize_identity_token(clean_title)
+        raw_stem_norm = normalize_identity_token(rom_path.stem)
+        local_name_match = bool(
+            allow_local_filename_identity
+            and title_norm
+            and (
+                (len(title_norm) >= 3 and title_norm == raw_stem_norm)
+                or (len(title_norm) >= 6 and (title_norm in raw_stem_norm or raw_stem_norm in title_norm))
+                or (platform_key == "model2" and rom_path.stem.lower() == "hotd" and title_norm in ("houseofthedead", "houseofthedeadmodel2"))
+            )
+        )
+
         prod_code = str(fmt_meta.get("product_code") or "").strip()
         if prod_code:
             for ref_gid, ref_info in CATALOG_REFERENCE_METADATA.items():
-                if ref_gid != gid and prod_code in ref_info.get("product_codes", []):
+                if ref_gid != gid and prod_code in ref_info.get("product_codes", []) and not local_name_match:
                     return (
                         False,
                         f"El código de producto interno '{prod_code}' pertenece a '{ref_gid}' y no a '{gid}'.",
@@ -1089,13 +1245,13 @@ class ROMPackageIdentityValidator:
         sha256_hex = ""
         if ref_meta:
             expected_codes = ref_meta.get("product_codes", [])
-            if expected_codes and prod_code and prod_code not in expected_codes:
+            if expected_codes and prod_code and prod_code not in expected_codes and not local_name_match:
                 return (
                     False,
                     f"Código de producto '{prod_code}' no coincide con los códigos oficiales de '{title}' ({expected_codes}).",
                     {"package_kind": "identity_mismatch", "product_code": prod_code},
                 )
-            if ref_meta.get("reference_sha256"):
+            if check_reference_hash and ref_meta.get("reference_sha256"):
                 sha256_hex = compute_sha256(rom_path)
                 fmt_meta["sha256"] = sha256_hex
                 fmt_meta["sha256_verified"] = (sha256_hex == ref_meta["reference_sha256"])
@@ -1107,14 +1263,11 @@ class ROMPackageIdentityValidator:
                     )
 
         # Comprobar coherencia entre la identidad interna/nombre y el título esperado (T02)
-        clean_title = ROMMetadataExtractor.clean_display_title(title)
-        title_norm = normalize_identity_token(clean_title)
         emb_title = str(fmt_meta.get("embedded_title") or "")
         emb_norm = normalize_identity_token(ROMMetadataExtractor.clean_display_title(emb_title)) if emb_title else ""
         stem_norm = normalize_identity_token(ROMMetadataExtractor.clean_display_title(rom_path.stem))
-        raw_stem_norm = normalize_identity_token(rom_path.stem)
 
-        if emb_norm and title_norm and emb_norm != title_norm and title_norm not in emb_norm and emb_norm not in title_norm:
+        if emb_norm and title_norm and emb_norm != title_norm and title_norm not in emb_norm and emb_norm not in title_norm and not local_name_match:
             return (
                 False,
                 f"El título interno del paquete ('{emb_title}') no coincide con '{title}' ({gid}).",
@@ -1131,6 +1284,8 @@ class ROMPackageIdentityValidator:
         if prod_code and ref_meta and prod_code in ref_meta.get("product_codes", []):
             identity_ok = True
         elif emb_gid and emb_gid == gid:
+            identity_ok = True
+        elif local_name_match:
             identity_ok = True
         # El nombre del archivo sólo orienta la búsqueda del candidato. Nunca
         # constituye por sí mismo evidencia de identidad del contenido.

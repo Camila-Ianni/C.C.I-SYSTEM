@@ -1,0 +1,305 @@
+{
+  "source": "juegos/",
+  "installed": [
+    {
+      "platform": "gba",
+      "files": [
+        "1645 - Barbie as the Princess and the Pauper (U)(Chameleon).gba",
+        "1955 - Disney's Girls Pack (E)(Independent).gba"
+      ]
+    },
+    {
+      "platform": "mame",
+      "files": [
+        "simpsons.zip"
+      ]
+    },
+    {
+      "platform": "n64",
+      "files": [
+        "Donkey Kong 64 (U) [!].z64",
+        "Legend of Zelda, The - Ocarina of Time (U) (V1.2) [!].z64",
+        "Mario Kart 64 (E) (V1.1) [!].z64",
+        "Super Mario 64 (U) [!].z64",
+        "Super Smash Bros. (U) [!].z64"
+      ]
+    },
+    {
+      "platform": "nds",
+      "files": [
+        "0168 - Mario Kart DS (U)(SCZ).nds",
+        "0389 - Animal Crossing - Wild World (E)(Legacy).nds",
+        "0434 - New Super Mario Bros. (U)(Psyfer).nds",
+        "0827 - Bratz - Forever Diamondz (E)(WRG).nds",
+        "1740 - Bratz - 4 Real (E)(EXiMiUS).nds",
+        "2696 - Kirby Super Stars Ultra (U)(XenoPhobia).nds",
+        "2988 - Bratz - Girlz Really Rock (E)(XenoPhobia).nds",
+        "5585 - Pokemon - Black Version (DSi Enhanced)(USA) (E)(SweeTnDs).nds",
+        "6148 - Bratz Fashion Boutique (U)(frieNDS).nds"
+      ]
+    },
+    {
+      "platform": "neogeo",
+      "files": [
+        "pbobblen.zip",
+        "snowbro2.zip",
+        "ssideki2 (1).zip"
+      ]
+    },
+    {
+      "platform": "ps1",
+      "files": [
+        "Castlevania - Symphony of the Night (USA) (Track 1).bin",
+        "Castlevania - Symphony of the Night (USA) (Track 2).bin",
+        "Castlevania - Symphony of the Night (USA).cue",
+        "Crash Bandicoot (USA).bin",
+        "Crash Bandicoot (USA).cue",
+        "Crash Bandicoot - Warped (USA).bin",
+        "Crash Bandicoot - Warped (USA).cue",
+        "Metal Slug X (USA).bin",
+        "Metal Slug X (USA).cue",
+        "Resident Evil (USA).bin",
+        "Resident Evil (USA).cue",
+        "Yu-Gi-Oh! Forbidden Memories (USA).bin",
+        "Yu-Gi-Oh! Forbidden Memories (USA).cue"
+      ]
+    },
+    {
+      "platform": "wii",
+      "files": [
+        "Wii Sports [RSPE01].wbfs"
+      ]
+    }
+  ],
+  "not_installed": [
+    {
+      "source": "2031 - Disney's Herbie - Fully Loaded (U)(Rising Sun).zip",
+      "reason": "El archivo tiene 172 bytes y contiene una respuesta HTML 400, no un ZIP/ROM válido."
+    },
+    {
+      "source": "5868 - Monster High - Ghoul Spirit (DSi Enhanced) (U).zip",
+      "reason": "El archivo tiene 172 bytes y contiene una respuesta HTML 400, no un ZIP/ROM válido."
+    },
+    {
+      "source": "5945 - Monster High - Ghoul Spirit (DSi Enhanced) (E).zip",
+      "reason": "El archivo tiene 172 bytes y contiene una respuesta HTML 400, no un ZIP/ROM válido."
+    },
+    {
+      "source": "ssideki2.zip",
+      "reason": "Duplicado byte por byte de ssideki2 (1).zip; se instaló una sola copia."
+    }
+  ],
+  "backup": "../roms_reemplazados_2026-11-12",
+  "source_juegos_2": "juegos 2 ",
+  "added_from_juegos_2": [
+    {
+      "source_archive": "game-boy-advance-pokemon-ash-gray-portable.zip",
+      "platform": "gba",
+      "files": [
+        "Pokemon AshGay 1.65 (U).gba"
+      ]
+    },
+    {
+      "source_archive": "mame-snow-bros-2-portable.zip",
+      "platform": "mame",
+      "files": [
+        "snowbro2.zip"
+      ]
+    },
+    {
+      "source_archive": "mame-tumble-pop-portable.zip",
+      "platform": "mame",
+      "files": [
+        "tumblep.zip"
+      ]
+    },
+    {
+      "source_archive": "neogeo-metal-slug-2-portable.zip",
+      "platform": "neogeo",
+      "files": [
+        "mslug2.zip",
+        "neogeo.zip"
+      ]
+    },
+    {
+      "source_archive": "neogeo-metal-slug-3-portable.zip",
+      "platform": "neogeo",
+      "files": [
+        "mslug3.zip",
+        "neogeo.zip"
+      ]
+    },
+    {
+      "source_archive": "neogeo-metal-slug-4-portable.zip",
+      "platform": "neogeo",
+      "files": [
+        "mslug4.zip",
+        "neogeo.zip"
+      ]
+    },
+    {
+      "source_archive": "neogeo-metal-slug-5-portable.zip",
+      "platform": "neogeo",
+      "files": [
+        "mslug5.zip",
+        "neogeo.zip"
+      ]
+    },
+    {
+      "source_archive": "neogeo-metal-slug-portable.zip",
+      "platform": "neogeo",
+      "files": [
+        "mslug.zip",
+        "neogeo.zip"
+      ]
+    },
+    {
+      "source_archive": "nintendo-64-super-mario-64-portable.zip",
+      "platform": "n64",
+      "files": [
+        "Super Mario 64 (E) (M3) [portable].n64"
+      ]
+    },
+    {
+      "source_archive": "nintendo-super-mario-bros-3-2-portable.zip",
+      "platform": "nes",
+      "files": [
+        "SuperMarioBros3.nes"
+      ]
+    },
+    {
+      "source_archive": "nintendo-ds-kirby-mouse-attack-portable.zip",
+      "platform": "nds",
+      "files": [
+        "Kirby - Mouse Attack (E).nds"
+      ]
+    },
+    {
+      "source_archive": "nintendo-ds-mario-kart-ds-portable.zip",
+      "platform": "nds",
+      "files": [
+        "Mario Kart DS (E).nds"
+      ]
+    },
+    {
+      "source_archive": "super-nintendo-top-gear-portable.zip",
+      "platform": "snes",
+      "files": [
+        "Top Gear (U).smc"
+      ]
+    },
+    {
+      "source_archive": "sega-mega-drive-sunset-riders-portable.zip",
+      "platform": "megadrive",
+      "files": [
+        "Sunset Riders (E).gen"
+      ]
+    },
+    {
+      "source_archive": "sega-model-2-house-of-the-dead-portable.zip",
+      "platform": "model2",
+      "files": [
+        "hotd.zip"
+      ],
+      "support_files": [
+        "hd44780.zip",
+        "model1io.zip",
+        "model1io2.zip",
+        "segabill.zip"
+      ]
+    }
+  ],
+  "platform_notes": {
+    "gba": "Núcleo mGBA instalado y plataforma agregada al selector.",
+    "nes": "Núcleo FCEUmm instalado; la ROM de NES de juegos 2 está agregada al selector.",
+    "neogeo": "BIOS neogeo.zip instalada junto a los juegos; oculta en el selector.",
+    "playstation": "Resident Evil 3 se convirtió desde ECM a BIN/CUE y el archivo pasó la comprobación EDC.",
+    "model2": "House of the Dead usa el núcleo MAME actual y requiere los ZIP auxiliares ocultos de Model 2.",
+    "megadrive": "Sunset Riders usa Genesis Plus GX."
+  },
+  "installed_from_juegos": {
+    "Nintendo DS": [
+      "Mario Kart DS",
+      "Animal Crossing: Wild World",
+      "New Super Mario Bros.",
+      "Bratz: Forever Diamondz",
+      "Bratz: 4 Real",
+      "Kirby Super Star Ultra",
+      "Bratz: Girlz Really Rock",
+      "Pokémon Black Version",
+      "Bratz Fashion Boutique"
+    ],
+    "Game Boy Advance": [
+      "Barbie as the Princess and the Pauper",
+      "Disney's Girls Pack"
+    ],
+    "PlayStation": [
+      "Castlevania: Symphony of the Night",
+      "Crash Bandicoot",
+      "Crash Bandicoot: Warped",
+      "Metal Slug X",
+      "Resident Evil",
+      "Resident Evil 3: Nemesis",
+      "Yu-Gi-Oh! Forbidden Memories"
+    ],
+    "Nintendo 64": [
+      "Donkey Kong 64",
+      "The Legend of Zelda: Ocarina of Time",
+      "Mario Kart 64",
+      "Super Mario 64",
+      "Super Smash Bros."
+    ],
+    "Nintendo Wii": [
+      "Wii Sports"
+    ],
+    "Arcade / MAME": [
+      "The Simpsons"
+    ],
+    "Neo Geo": [
+      "Puzzle Bobble",
+      "Snow Bros. 2",
+      "Super Sidekicks 2"
+    ]
+  },
+  "installed_cores": {
+    "gba": "cores/mgba_libretro.dylib (Libretro mGBA, arm64)",
+    "nes": "cores/fceumm_libretro.dylib (Libretro FCEUmm, arm64)",
+    "megadrive": "cores/genesis_plus_gx_libretro.dylib (Libretro Genesis Plus GX, arm64)",
+    "model2": "cores/mame_libretro.dylib (Libretro MAME current, arm64)",
+    "other": "Los núcleos existentes cubren Neo Geo, N64, DS, PS1, SNES, Wii y MAME 2003 Plus."
+  },
+  "active_library_counts": {
+    "nes": 1,
+    "gba": 3,
+    "mame": 3,
+    "neogeo": 8,
+    "n64": 6,
+    "nds": 11,
+    "ps1": 7,
+    "wii": 1,
+    "snes": 1,
+    "megadrive": 1,
+    "model2": 1
+  },
+  "active_library_game_entries": 43,
+  "active_library_scope": "Solo ROMs originados en juegos/ y juegos 2 ; neogeo.zip es BIOS, las pistas BIN y CUE forman los discos, y INSTALL_MANIFEST.json es inventario.",
+  "visible_library_game_count": 43,
+  "visible_library_source_folders": [
+    "juegos/",
+    "juegos 2 "
+  ],
+  "remote_catalog_entries_visible": false,
+  "visible_library_platform_counts": {
+    "ARCADE": 3,
+    "GBA": 3,
+    "N64": 6,
+    "NDS": 11,
+    "NEO-GEO": 8,
+    "NES": 1,
+    "PS1": 7,
+    "WII": 1,
+    "SNES": 1,
+    "MEGA DRIVE": 1,
+    "MODEL 2": 1
+  }
+}

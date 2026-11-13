@@ -576,7 +576,6 @@ class OmniDashNavBar(QWidget):
             ("Inicio", "home", "HOME"),
             ("Biblioteca", "library", "LIBRARY"),
             ("Comunidades", "people", "COMMUNITY"),
-            ("Amigos", "friends_duo", "FRIENDS"),
             ("Ajustes", "settings", "SETTINGS"),
         ]
 
@@ -1961,16 +1960,28 @@ class LibraryView(QWidget):
         self.current_plat_name = "Todas"
         self.current_plat_code = "todas"
 
-        platforms = [
-            (f"Todas ({len(ALL_GAMES)})", "todas", "apps_grid.png"),
-            ("PlayStation 5", "ps5", "disc_ps.png"),
-            ("PlayStation 4", "ps4", "disc_ps.png"),
-            ("Nintendo Switch", "switch", "controller_outline.png"),
-            ("PlayStation 3", "ps3", "disc_ps.png"),
-            ("Instalados locales", "installed", "games.png"),
-            ("En la nube", "cloud", "desktop.png"),
-            ("Clásicos PS1 / PS2", "ps_classic", "disc_ps.png"),
-        ]
+        platforms = [(f"Todas ({len(ALL_GAMES)})", "todas", "apps_grid.png")]
+        platform_counts: dict[str, dict[str, str | int]] = {}
+        for game in ALL_GAMES:
+            badge = str(game.get("badge") or "ROM")
+            platform = platform_counts.setdefault(
+                badge,
+                {
+                    "name": str(game.get("console") or badge),
+                    "code": badge.lower(),
+                    "count": 0,
+                    "icon": "disc_ps.png" if "playstation" in str(game.get("console") or "").lower() else "controller_outline.png",
+                },
+            )
+            platform["count"] = int(platform["count"]) + 1
+        for platform in platform_counts.values():
+            platforms.append(
+                (
+                    f"{platform['name']} ({platform['count']})",
+                    str(platform["code"]),
+                    str(platform["icon"]),
+                )
+            )
 
         self.cat_buttons = []
         for name, code, icon_file in platforms:
@@ -8557,6 +8568,13 @@ class OmniDashMainWindow(QMainWindow):
             self.bg_path = p
             self.bg_pixmap = QPixmap(str(p))
             self._cached_bg = None
+            # HomeView mantenía una copia propia del fondo inicial, por eso al
+            # cambiarlo quedaban visibles dos imágenes superpuestas.
+            self.home_view.bg_path = p
+            self.home_view.bg_pixmap = QPixmap(str(p))
+            self.home_view._cached_home_bg = None
+            self.home_view._update_bg_cache()
+            self.home_view.update()
             update_global_blurred_wallpaper(p, (self.width(), self.height()))
             self.update()
             for child in self.findChildren(AcrylicGlassCard):
@@ -8567,6 +8585,10 @@ class OmniDashMainWindow(QMainWindow):
         self._cached_bg = None
         if hasattr(self, "bg_path") and self.bg_path:
             update_global_blurred_wallpaper(self.bg_path, (self.width(), self.height()))
+            if hasattr(self, "home_view"):
+                self.home_view._cached_home_bg = None
+                self.home_view._update_bg_cache()
+                self.home_view.update()
             self.update()
             for child in self.findChildren(AcrylicGlassCard):
                 child.update()
@@ -8868,23 +8890,75 @@ class OmniDashMainWindow(QMainWindow):
                 self.details_view.install_progress_bar.setValue(pct_step)
                 QApplication.processEvents()
 
-        if source_path is not None:
-            ok, msg, updated = mgr.install_local_package(gid, source_path, scanner=scanner)
-        else:
-            ok, msg, updated = mgr.install_game_for_current_os(gid, scanner=scanner, target_os=target_os)
+        try:
+            if source_path is not None:
+                ok, msg, updated = mgr.install_local_package(gid, source_path, scanner=scanner)
+            else:
+                local_download = mgr._find_matching_user_download(game)
+                if local_download is None:
+                    platform_extensions = {
+                        "ps3": "*.zip *.pkg *.iso *.7z *.rar",
+                        "ps4": "*.zip *.pkg *.iso *.7z *.rar",
+                        "switch": "*.nsp *.xci *.zip *.7z *.rar",
+                        "ps2": "*.iso *.chd *.zip *.7z *.rar",
+                        "ps1": "*.cue *.iso *.bin *.zip *.7z *.rar",
+                    }
+                    platform_key = str(game.get("platform_key") or "")
+                    selected, _ = QFileDialog.getOpenFileName(
+                        self,
+                        f"Seleccionar paquete real — {title}",
+                        str(Path.home() / "Downloads"),
+                        f"Paquetes compatibles ({platform_extensions.get(platform_key, '*.*')});;Todos los archivos (*.*)",
+                    )
+                    local_download = Path(selected) if selected else None
+                if local_download is None:
+                    ok = False
+                    msg = (
+                        f"No se seleccionó ningún paquete para «{title}».\n"
+                        "Descargá un archivo real compatible y elegilo para validar e instalarlo."
+                    )
+                    updated = {"reason": "package_selection_cancelled"}
+                else:
+                    ok, msg, updated = mgr.install_local_package(
+                        gid, local_download, scanner=scanner
+                    )
+        except Exception as exc:
+            ok = False
+            msg = f"Error inesperado durante la instalación: {exc}"
+            updated = {"reason": "installation_exception"}
 
-        if not ok and "Espacio insuficiente" in msg:
+        diagnostic = str(msg or "").strip()
+        if not diagnostic:
+            reason = str(updated.get("reason") or "").strip() if isinstance(updated, dict) else ""
+            diagnostic = (
+                f"La instalación de «{title}» fue rechazada."
+                + (f"\nMotivo técnico: {reason}" if reason else "")
+            )
+
+        if not ok and "Espacio insuficiente" in diagnostic:
             if hasattr(self, "details_view") and self.details_view:
                 self.details_view.install_progress_box.hide()
             ans = QMessageBox.warning(
                 self,
                 "Almacenamiento insuficiente",
-                f"{msg}\n\n¿Querés abrir el Gestor de Almacenamiento para desinstalar otro juego sin perder su progreso?",
+                f"{diagnostic}\n\n¿Querés abrir el Gestor de Almacenamiento para desinstalar otro juego sin perder su progreso?",
                 QMessageBox.Yes | QMessageBox.No,
                 QMessageBox.Yes,
             )
             if ans == QMessageBox.Yes:
                 self.library_view.open_storage_manager()
+            return False
+
+        if not ok:
+            if hasattr(self, "details_view") and self.details_view:
+                self.details_view.install_progress_box.hide()
+                self.details_view.install_status_lbl.setText("Instalación rechazada")
+            self.library_view.reload_library()
+            QMessageBox.warning(
+                self,
+                f"No se pudo instalar {title}",
+                diagnostic,
+            )
             return False
 
         if hasattr(self, "details_view") and self.details_view:
@@ -9024,7 +9098,12 @@ class OmniDashMainWindow(QMainWindow):
                 warn_on_error=False,
             )
         else:
-            print(f"[OmniDash-Qt] Ejecutando juego nativo C.C.I.: {title}")
+            msg = (
+                f"No se puede iniciar '{title}': la ficha no tiene un paquete local "
+                "validado ni un emulador/ejecutable asociado."
+            )
+            print(f"[OmniDash-Qt] Lanzamiento bloqueado: {msg}")
+            QMessageBox.warning(self, f"{title} — No disponible", msg)
 
 
 def run_qt_app():

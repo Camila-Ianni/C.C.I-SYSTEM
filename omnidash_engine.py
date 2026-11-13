@@ -137,11 +137,11 @@ class OmniDashEngine:
         self.gamerscore = 18450
 
         # Botones circulares oficiales del centro de la barra superior:
-        # [ 🏠 Inicio ] [ 📚 Biblioteca ] [ 👥 Amigos ] [ ⚙️ Ajustes ]
+        # [ 🏠 Inicio ] [ 📚 Biblioteca ] [ 👥 Comunidades ] [ ⚙️ Ajustes ]
         self.nav_dock_items = [
             {"id": "home", "label": "Inicio", "icon_name": "home", "action": "HOME"},
             {"id": "library", "label": "Biblioteca", "icon_name": "library", "action": "LIBRARY"},
-            {"id": "friends", "label": "Amigos", "icon_name": "people", "action": "COMMUNITY"},
+            {"id": "communities", "label": "Comunidades", "icon_name": "people", "action": "COMMUNITY"},
             {"id": "settings", "label": "Ajustes", "icon_name": "settings", "action": "SETTINGS"},
         ]
         self.nav_dock_rects: list[pygame.Rect] = []

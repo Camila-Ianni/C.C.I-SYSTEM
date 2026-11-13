@@ -61,6 +61,106 @@ class GameLibraryScannerService:
     _lock = threading.RLock()
 
     PLATFORM_SPECS = {
+        "nes": {
+            "name": "Nintendo Entertainment System",
+            "badge": "NES",
+            "extensions": [".nes", ".zip"],
+            "core": "cores/fceumm_libretro.dylib",
+            "emulator_app": None,
+            "year": "1985",
+            "developer": "Nintendo",
+            "desc": "Juego local de Nintendo Entertainment System.",
+        },
+        "gba": {
+            "name": "Game Boy Advance",
+            "badge": "GBA",
+            "extensions": [".gba", ".gbc", ".gb"],
+            "core": "cores/mgba_libretro.dylib",
+            "emulator_app": None,
+            "year": "2001",
+            "developer": "Nintendo",
+            "desc": "Juego local de Game Boy Advance.",
+        },
+        "snes": {
+            "name": "Super Nintendo",
+            "badge": "SNES",
+            "extensions": [".smc", ".sfc", ".fig"],
+            "core": "cores/snes9x_libretro.dylib",
+            "emulator_app": None,
+            "year": "1992",
+            "developer": "Nintendo",
+            "desc": "Juego local de Super Nintendo.",
+        },
+        "mame": {
+            "name": "Arcade Classics",
+            "badge": "ARCADE",
+            "extensions": [".zip"],
+            "core": "cores/mame2003_plus_libretro.dylib",
+            "emulator_app": None,
+            "year": "1990",
+            "developer": "Varios",
+            "desc": "Juego local arcade.",
+        },
+        "model2": {
+            "name": "Sega Model 2",
+            "badge": "MODEL 2",
+            "extensions": [".zip"],
+            "core": "cores/mame_libretro.dylib",
+            "emulator_app": None,
+            "year": "1996",
+            "developer": "Sega AM1",
+            "desc": "Arcade de Sega Model 2 ejecutado con MAME.",
+        },
+        "neogeo": {
+            "name": "SNK Neo-Geo",
+            "badge": "NEO-GEO",
+            "extensions": [".zip"],
+            "core": "cores/fbneo_libretro.dylib",
+            "emulator_app": None,
+            "year": "1990",
+            "developer": "SNK",
+            "desc": "Juego local de Neo-Geo.",
+        },
+        "n64": {
+            "name": "Nintendo 64",
+            "badge": "N64",
+            "extensions": [".z64", ".n64", ".v64"],
+            "core": "cores/mupen64plus_next_libretro.dylib",
+            "emulator_app": None,
+            "year": "1996",
+            "developer": "Nintendo",
+            "desc": "Juego local de Nintendo 64.",
+        },
+        "nds": {
+            "name": "Nintendo DS",
+            "badge": "NDS",
+            "extensions": [".nds"],
+            "core": "cores/melonds_libretro.dylib",
+            "emulator_app": None,
+            "year": "2004",
+            "developer": "Nintendo",
+            "desc": "Juego local de Nintendo DS.",
+        },
+        "megadrive": {
+            "name": "Sega Mega Drive",
+            "badge": "MEGA DRIVE",
+            "extensions": [".gen", ".md"],
+            "core": "cores/genesis_plus_gx_libretro.dylib",
+            "emulator_app": None,
+            "year": "1988",
+            "developer": "Sega",
+            "desc": "Juego local de Sega Mega Drive.",
+        },
+        "wii": {
+            "name": "Nintendo Wii",
+            "badge": "WII",
+            "extensions": [".iso", ".wbfs", ".rvz"],
+            "core": "cores/dolphin_libretro.dylib",
+            "emulator_app": None,
+            "year": "2006",
+            "developer": "Nintendo",
+            "desc": "Juego local de Nintendo Wii.",
+        },
         "ps5": {
             "name": "PlayStation 5",
             "badge": "PS5",
@@ -341,6 +441,8 @@ class GameLibraryScannerService:
                                     f.is_file()
                                     and not any(part.startswith(".") for part in f.relative_to(p_dir).parts)
                                     and not f.name.endswith(".part")
+                                    and not (platform_key == "neogeo" and f.name.lower() == "neogeo.zip")
+                                    and not (platform_key == "model2" and f.name.lower() in {"hd44780.zip", "model1io.zip", "model1io2.zip", "segabill.zip"})
                                 ):
                                     if f.suffix.lower() == ".bin" and any(p.suffix.lower() == ".cue" for p in f.parent.glob("*.[cC][uU][eE]")):
                                         continue
@@ -394,7 +496,6 @@ class GameLibraryScannerService:
                     allowed_extensions=self.PLATFORM_SPECS.get(pk, {}).get("extensions", []),
                     expected_rom=expected_rom,
                 )
-                matched_disk_paths.add(matched_file)
                 processed += 1
                 try:
                     rel_rom = str(matched_file.relative_to(self.root_dir))
@@ -408,6 +509,11 @@ class GameLibraryScannerService:
                     integrity_ok, notes = ROMMetadataExtractor.verify_cue_bin_integrity(matched_file)
 
                 is_container = id_meta.get("package_kind") == "cci_container"
+                # If catalog metadata does not recognize a user's regional or
+                # custom dump, leave the file for the local filename catalog below.
+                # Valid catalog matches and synthetic containers are consumed here.
+                if id_ok or is_container:
+                    matched_disk_paths.add(matched_file)
                 region, revision = ROMMetadataExtractor.extract_region_and_revision(matched_file.stem)
                 entry.update({
                     "type": "libretro" if str(entry.get("core") or "").endswith(".dylib") else "modern",
@@ -442,6 +548,11 @@ class GameLibraryScannerService:
                 stem = f.stem
                 game_id = f"{pk}_{stem}"
                 clean_title = ROMMetadataExtractor.clean_display_title(stem)
+                if pk == "nds" and f.name.lower() == "mario kart ds (e).nds":
+                    clean_title = "Mario Kart DS - Europe"
+                if pk == "model2" and f.name.lower() == "hotd.zip":
+                    game_id = "model2_house_of_the_dead"
+                    clean_title = "House of the Dead (Model 2)"
                 region, revision = ROMMetadataExtractor.extract_region_and_revision(stem)
                 cover_path, is_fb = self.resolve_cover(game_id, clean_title, spec["badge"], alt_title=clean_title)
                 try:
@@ -501,11 +612,30 @@ class GameLibraryScannerService:
         except Exception:
             pass
 
+        # La biblioteca visible contiene solo paquetes locales instalados en roms/.
+        # La metadata remota sigue disponible por ID para el flujo de instalación,
+        # pero no se mezcla con los juegos que aparecen como parte de la colección.
+        library_games = []
+        roms_root = (self.root_dir / "roms").resolve()
+        for item in catalog_games:
+            if not item.get("installed") or item.get("on_demand") or not item.get("rom"):
+                continue
+            rom_path = Path(str(item["rom"]))
+            if not rom_path.is_absolute():
+                rom_path = self.root_dir / rom_path
+            try:
+                rom_path = rom_path.resolve()
+                rom_path.relative_to(roms_root)
+            except (OSError, ValueError):
+                continue
+            if rom_path.is_file():
+                library_games.append(item)
+
         with self._lock:
-            self._cached_games = catalog_games
+            self._cached_games = library_games
             self._is_scanning = False
 
-        return catalog_games
+        return list(library_games)
 
     def scan_async(
         self,
@@ -538,6 +668,11 @@ class GameLibraryScannerService:
         for g in self.get_games():
             if g.get("id") == game_id:
                 return g
+        # Mantener resolución interna por ID para descargas iniciadas desde
+        # flujos explícitos; estos registros no se publican en la biblioteca.
+        for game in self.REMOTE_CATALOG_METADATA:
+            if str(game.get("id") or "") == str(game_id):
+                return dict(game)
         return None
 
     def refresh(self) -> list[dict]:
@@ -576,6 +711,11 @@ class GameLibraryScannerService:
         from backend.games.package_validator import ROMPackageIdentityValidator
 
         plat_key = str(game.get("platform_key") or "ps3")
+        try:
+            rom_rel = rom_path.resolve().relative_to((self.root_dir / "roms").resolve())
+            is_local_library_rom = bool(rom_rel.parts and rom_rel.parts[0].lower() == plat_key.lower())
+        except (OSError, ValueError):
+            is_local_library_rom = False
         id_ok, id_msg, id_meta = ROMPackageIdentityValidator.verify_package_identity(
             game_id=str(game.get("id") or game_id),
             title=str(game.get("title") or ""),
@@ -583,6 +723,7 @@ class GameLibraryScannerService:
             rom_path=rom_path,
             allowed_extensions=self.PLATFORM_SPECS.get(plat_key, {}).get("extensions", []),
             expected_rom=game.get("expected_rom"),
+            allow_local_filename_identity=is_local_library_rom,
         )
         if not id_ok:
             return False, f"Error de identidad o asociación de paquete: {id_msg}"

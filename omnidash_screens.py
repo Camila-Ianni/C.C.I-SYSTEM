@@ -138,35 +138,12 @@ def load_all_games() -> list[dict]:
 ALL_GAMES = load_all_games()
 
 
-def _find_modern(title_sub: str, badge: str | None = None, fallback_idx: int = 0) -> dict:
-    for g in ALL_GAMES:
-        if title_sub.lower() in g.get("title", "").lower():
-            if not badge or g.get("badge") == badge:
-                return g
-    return ALL_GAMES[fallback_idx] if ALL_GAMES else {"id": "ps3_minecraft", "title": "Minecraft", "console": "PlayStation 3", "badge": "PS3", "cover": ""}
-
-
 FEATURED_RECENT = [
     {
-        **(_g := _find_modern("God of War Ragnar", "PS5", 0)),
-        "subtitle": f"{_g.get('console', 'PlayStation 5')} • {_g.get('size', '103 GB')}",
-    },
-    {
-        **(_g := _find_modern("Mario Kart 8", "SWITCH", 0)),
-        "subtitle": f"{_g.get('console', 'Nintendo Switch')} • {_g.get('size', '6.8 GB')}",
-    },
-    {
-        **(_g := _find_modern("ASTRO BOT", "PS5", 0)),
-        "subtitle": f"{_g.get('console', 'PlayStation 5')} • {_g.get('size', '37.9 GB')}",
-    },
-    {
-        **(_g := _find_modern("Gran Turismo Sport", "PS4", 0)),
-        "subtitle": f"{_g.get('console', 'PlayStation 4')} • {_g.get('size', '40 GB')}",
-    },
-    {
-        **(_g := _find_modern("Minecraft", "PS3", 0)),
-        "subtitle": f"{_g.get('console', 'PlayStation 3')} • {_g.get('size', '100 MB')}",
-    },
+        **game,
+        "subtitle": f"{game.get('console', 'Consola retro')} • {game.get('size', game.get('format', 'ROM'))}",
+    }
+    for game in ALL_GAMES[:5]
 ]
 
 CONSOLES = FEATURED_RECENT
@@ -404,17 +381,16 @@ class OmniDashLibraryView:
         self.back_btn_rect = pygame.Rect(48, 38, 100, 34)
         self.search_rect = pygame.Rect(48, 140, 218, 34)
 
-        self.categories = [
-            {"id": "Games", "label": "Games", "count": len(ALL_GAMES)},
-            {"id": "SNES", "label": "Super Nintendo", "count": 21},
-            {"id": "CCI", "label": "Juegos C.C.I.", "count": 19},
-            {"id": "PS1", "label": "PlayStation 1", "count": 7},
-            {"id": "ARCADE", "label": "Arcade MAME", "count": 6},
-            {"id": "NDS", "label": "Nintendo DS", "count": 6},
-            {"id": "N64", "label": "Nintendo 64", "count": 5},
-            {"id": "NEO-GEO", "label": "Neo-Geo", "count": 3},
-            {"id": "WII", "label": "Nintendo Wii", "count": 1},
-        ]
+        self.categories = [{"id": "Games", "label": "Games", "count": len(ALL_GAMES)}]
+        categories_by_badge: dict[str, dict] = {}
+        for game in ALL_GAMES:
+            badge = str(game.get("badge") or "ROM")
+            category = categories_by_badge.setdefault(
+                badge,
+                {"id": badge, "label": str(game.get("console") or badge), "count": 0},
+            )
+            category["count"] += 1
+        self.categories.extend(categories_by_badge.values())
         self.cat_rects: list[pygame.Rect] = []
         self.game_card_rects: list[tuple[pygame.Rect, dict]] = []
 

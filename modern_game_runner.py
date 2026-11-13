@@ -130,6 +130,11 @@ def resolve_playable_engine(
         )
 
     rom_path = Path(str(rom_val)) if Path(str(rom_val)).is_absolute() else (base_root / str(rom_val))
+    try:
+        rom_rel = rom_path.resolve().relative_to((base_root / "roms").resolve())
+        is_local_library_rom = bool(rom_rel.parts and rom_rel.parts[0].lower() == plat_key)
+    except (OSError, ValueError):
+        is_local_library_rom = False
 
     id_ok, id_msg, id_meta = ROMPackageIdentityValidator.verify_package_identity(
         game_id=gid,
@@ -138,6 +143,7 @@ def resolve_playable_engine(
         rom_path=rom_path,
         allowed_extensions=spec.get("extensions", []),
         expected_rom=game.get("expected_rom"),
+        allow_local_filename_identity=is_local_library_rom,
     )
     if not id_ok:
         return None, None, f"Juego no instalado o identidad inválida: {id_msg}"
@@ -263,7 +269,9 @@ def _run_external_emulator(
     rpcs3_log_offset = rpcs3_log.stat().st_size if (is_rpcs3 and rpcs3_log.exists()) else 0
 
     cmd = [str(engine_path)]
-    if is_rpcs3 and "--no-gui" not in cmd:
+    # La ruta interactiva de OmniDash necesita la ventana de RPCS3. El modo
+    # sin GUI sólo se usa en pruebas temporizadas para no ocultar el juego.
+    if is_rpcs3 and max_frames > 0 and "--no-gui" not in cmd:
         cmd.append("--no-gui")
     cmd.append(str(launch_target.resolve()))
 

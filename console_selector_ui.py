@@ -40,6 +40,28 @@ CONSOLES = [
         "color_accent": (220, 225, 235),
     },
     {
+        "id": "nes",
+        "name": "Nintendo Entertainment System",
+        "badge": "8-BIT // NES",
+        "core": "fceumm_libretro.dylib",
+        "rom_dir": "roms/nes",
+        "extensions": [".nes", ".zip"],
+        "desc": "Clásicos de 8-bits de Nintendo.",
+        "specs": "RICoh 2A03 · 2KB RAM · 256x240 NATIVO",
+        "color_accent": (210, 45, 45),
+    },
+    {
+        "id": "gba",
+        "name": "Game Boy Advance",
+        "badge": "32-BIT // GBA",
+        "core": "mgba_libretro.dylib",
+        "rom_dir": "roms/gba",
+        "extensions": [".gba"],
+        "desc": "Aventuras portátiles de 32-bits.",
+        "specs": "ARM7TDMI @ 16.78MHz · 240x160",
+        "color_accent": (90, 115, 190),
+    },
+    {
         "id": "mame",
         "name": "Arcade Classics",
         "badge": "COIN-OP // MAME & CAPCOM",
@@ -143,7 +165,30 @@ class ConsoleSelectorUI:
             return games
 
         exts = set(console.get("extensions", []))
+        cue_tracks: set[str] = set()
+        if console["id"] == "ps1":
+            for cue in rom_dir.glob("*.cue"):
+                try:
+                    for line in cue.read_text(errors="ignore").splitlines():
+                        line = line.strip()
+                        if line.upper().startswith("FILE "):
+                            parts = line.split('"')
+                            if len(parts) >= 3:
+                                cue_tracks.add(Path(parts[1]).name.casefold())
+                            else:
+                                fields = line.split()
+                                if len(fields) >= 2:
+                                    cue_tracks.add(Path(fields[1]).name.casefold())
+                except OSError:
+                    continue
         for p in sorted(rom_dir.iterdir()):
+            # FBNeo necesita este archivo de sistema junto a los ROMs Neo Geo;
+            # no es un juego y no debe aparecer como elemento seleccionable.
+            if console["id"] == "neogeo" and p.name.lower() == "neogeo.zip":
+                continue
+            # Un BIN referenciado por un CUE es una pista del mismo disco.
+            if console["id"] == "ps1" and p.suffix.lower() == ".bin" and p.name.casefold() in cue_tracks:
+                continue
             if p.suffix.lower() in exts:
                 clean_title = (
                     p.stem.replace("[!]", "")
