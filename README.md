@@ -81,11 +81,15 @@ El motor de catalogación y ejecución separa claramente la experiencia inmediat
 
 ## 💻 Puesta en Marcha
 
-### 1. Clonar el Repositorio
+### 1. Instalar Git LFS y obtener la Consola
+Los juegos y núcleos grandes se distribuyen mediante [Git LFS](https://git-lfs.com/). Instalá Git LFS y activalo antes de clonar; después ejecutá `git lfs pull` para descargar los archivos completos:
 ```bash
+git lfs install
 git clone https://github.com/Camila-Ianni/C.C.I-SYSTEM.git
 cd C.C.I-SYSTEM
+git lfs pull
 ```
+La opción **Download ZIP** de GitHub contiene referencias LFS, no las ROMs completas; usá el clon con Git LFS para tener la biblioteca lista para jugar.
 
 ### 2. Crear Entorno Virtual e Instalar Dependencias
 ```bash
